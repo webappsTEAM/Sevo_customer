@@ -16,6 +16,10 @@ const AcceptInvitePage = lazy(() =>
   import("./pages/AcceptInvitePage.jsx").then(m => ({ default: m.AcceptInvitePage }))
 )
 
+const LandingPage = lazy(() =>
+  import("./pages/LandingPage.jsx").then(m => ({ default: m.LandingPage }))
+)
+
 const ActivationJourneyPage = lazy(() =>
   import("./pages/ActivationJourneyPage.jsx").then(m => ({ default: m.ActivationJourneyPage }))
 )
@@ -332,7 +336,8 @@ export function App() {
             }
           />
 
-          <Route path={routes.booking} element={<BookingPage />} />
+          <Route path={routes.landing} element={<LandingPage />} />
+          <Route path={routes.booking} element={<LandingPage />} />
           <Route path={routes.feedback} element={<FeedbackPage />} />
           <Route path={routes.customer_work_extension} element={<CustomerDecisionPage />} />
           <Route path="/customer/decision/:token" element={<CustomerDecisionPage />} />
