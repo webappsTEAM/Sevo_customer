@@ -1419,51 +1419,21 @@ def resolve_complaint(complaint, admin_actor, resolution_type, resolution_notes,
 def close_complaint(complaint, admin_actor):
     return apply_transition(complaint, "CLOSED", admin_actor)
 
-def list_admin_complaints(admin_actor, filters=None):
-    res = []
-    try:
-        qs = Complaint.objects.select_related("booking", "raised_by", "assigned_admin", "assigned_employee")
-        if filters:
-            status_val = filters.get("status")
-            if status_val:
-                qs = qs.filter(status=status_val.upper())
-            priority_val = filters.get("priority")
-            if priority_val:
-                qs = qs.filter(priority=priority_val.upper())
-            category_val = filters.get("category")
-            if category_val:
-                qs = qs.filter(category=category_val.upper())
-        res = list(qs.order_by("-created_at"))
-    except Exception:
-        res = []
-
-    if not res:
-        try:
-            from django_tenants.utils import schema_context
-            from companies.models import Company
-            all_complaints = []
-            for comp in Company.objects.exclude(schema_name="public"):
-                try:
-                    with schema_context(comp.schema_name):
-                        sub_qs = Complaint.objects.select_related("booking", "raised_by", "assigned_admin", "assigned_employee")
-                        if filters:
-                            status_val = filters.get("status")
-                            if status_val:
-                                sub_qs = sub_qs.filter(status=status_val.upper())
-                            priority_val = filters.get("priority")
-                            if priority_val:
-                                sub_qs = sub_qs.filter(priority=priority_val.upper())
-                            category_val = filters.get("category")
-                            if category_val:
-                                sub_qs = sub_qs.filter(category=category_val.upper())
-                        all_complaints.extend(list(sub_qs))
-                except Exception:
-                    pass
-            all_complaints.sort(key=lambda c: c.created_at, reverse=True)
-            return all_complaints
-        except Exception:
-            pass
-    return res
+def list_admin_complaints(admin_actor, filters=None, company=None):
+    qs = Complaint.objects.select_related("booking", "raised_by", "assigned_admin", "assigned_employee")
+    if company is not None:
+        qs = qs.filter(booking__company=company)
+    if filters:
+        status_val = filters.get("status")
+        if status_val:
+            qs = qs.filter(status=status_val.upper())
+        priority_val = filters.get("priority")
+        if priority_val:
+            qs = qs.filter(priority=priority_val.upper())
+        category_val = filters.get("category")
+        if category_val:
+            qs = qs.filter(category=category_val.upper())
+    return list(qs.order_by("-created_at"))
 
 # --- Employee
 def submit_technician_explanation(complaint, employee, message, attachments=None):

@@ -1,5 +1,6 @@
 from django.db import models
 
+from common.models import CompanyScopedManager
 from employees.models import Employee
 
 
@@ -13,6 +14,8 @@ class Shift(models.Model):
         ("warn", "Allow with warning"),
         ("off", "No enforcement"),
     ]
+
+    objects = CompanyScopedManager()
 
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="shifts")
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name="shifts", null=True, blank=True)

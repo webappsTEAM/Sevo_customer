@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from common.models import CompanyScopedManager
 from employees.models import Employee
 
 
@@ -12,6 +13,7 @@ from employees.models import Employee
 # ---------------------------------------------------------------------------
 
 class PayrollGroup(models.Model):
+    objects = CompanyScopedManager()
     """
     A named group of employees sharing the same payroll customization.
     Admin creates groups (e.g. "Field Engineers", "Office Staff") to apply
@@ -51,6 +53,7 @@ class PayrollGroup(models.Model):
 # ---------------------------------------------------------------------------
 
 class EmployeePayrollConfig(models.Model):
+    objects = CompanyScopedManager()
     """
     Payroll customization config — applied at individual employee level or
     group level. Priority: Individual > Group > Region Default.
@@ -210,6 +213,7 @@ class EmployeePayrollConfig(models.Model):
 
 
 class PayrollPeriod(models.Model):
+    objects = CompanyScopedManager()
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name="payroll_periods", null=True, blank=True)
     start_date = models.DateField()
     end_date = models.DateField()
@@ -235,6 +239,7 @@ class PayrollPeriod(models.Model):
 
 
 class PayrollRecord(models.Model):
+    objects = CompanyScopedManager()
     period = models.ForeignKey(PayrollPeriod, on_delete=models.CASCADE, related_name="records")
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="payroll_records")
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name="payroll_records", null=True, blank=True)
@@ -296,6 +301,7 @@ class PayrollRecord(models.Model):
 
 
 class CurrencyMaster(models.Model):
+    objects = CompanyScopedManager()
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name="currencies", null=True, blank=True)
     currency_code = models.CharField(max_length=10)
     currency_symbol = models.CharField(max_length=10)
@@ -308,6 +314,7 @@ class CurrencyMaster(models.Model):
 
 
 class PayrollRule(models.Model):
+    objects = CompanyScopedManager()
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name="payroll_rules", null=True, blank=True)
     rule_id = models.CharField(max_length=50, blank=True, null=True)
     country = models.CharField(max_length=100)
@@ -328,6 +335,7 @@ class PayrollRule(models.Model):
 
 
 class PayrollGeneration(models.Model):
+    objects = CompanyScopedManager()
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name="payroll_generations", null=True, blank=True)
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="payroll_generations")
     payroll_group = models.ForeignKey(
@@ -362,6 +370,7 @@ class PayrollGeneration(models.Model):
 # ---------------------------------------------------------------------------
 
 class PayrollConfig(models.Model):
+    objects = CompanyScopedManager(company_field="org")
     """
     Org-level payroll calculation config for service split and statutory deductions.
     Only one is_active=True PayrollConfig per org is permitted at a time (enforced in service layer).
@@ -424,6 +433,7 @@ class PayrollConfig(models.Model):
 # ---------------------------------------------------------------------------
 
 class SettlementCycle(models.Model):
+    objects = CompanyScopedManager(company_field="org")
     class Status(models.TextChoices):
         OPEN = "OPEN", "Open"
         PROCESSING = "PROCESSING", "Processing"
@@ -456,6 +466,7 @@ class SettlementCycle(models.Model):
 # ---------------------------------------------------------------------------
 
 class BankAccount(models.Model):
+    objects = CompanyScopedManager(company_field="org")
     class VerificationStatus(models.TextChoices):
         UNVERIFIED = "UNVERIFIED", "Unverified"
         PENDING = "PENDING", "Pending"
@@ -523,6 +534,7 @@ class BankAccount(models.Model):
 # ---------------------------------------------------------------------------
 
 class KYCStatus(models.Model):
+    objects = CompanyScopedManager(company_field="org")
     class OverallStatus(models.TextChoices):
         UNVERIFIED = "UNVERIFIED", "Unverified"
         PARTIAL = "PARTIAL", "Partial"
@@ -556,6 +568,7 @@ class KYCStatus(models.Model):
 # ---------------------------------------------------------------------------
 
 class WalletTransaction(models.Model):
+    objects = CompanyScopedManager(company_field="org")
     """
     Immutable ledger entry for service booking splits credited to employee wallet.
     Snapshots the PayrollConfig active at calculation time.
@@ -646,6 +659,7 @@ class WalletTransaction(models.Model):
 # ---------------------------------------------------------------------------
 
 class EmployeeWalletBalance(models.Model):
+    objects = CompanyScopedManager(company_field="org")
     """
     Denormalized running total wallet balance maintained exclusively by service layer
     when WalletTransactions move to CREDITED and SETTLED.
@@ -685,6 +699,7 @@ class EmployeeWalletBalance(models.Model):
 # ---------------------------------------------------------------------------
 
 class PayoutDispute(models.Model):
+    objects = CompanyScopedManager(company_field="org")
     class Status(models.TextChoices):
         OPEN = "OPEN", "Open"
         IN_REVIEW = "IN_REVIEW", "In Review"

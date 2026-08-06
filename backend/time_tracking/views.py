@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAdminRole, is_admin_role, ADMIN_ROLES, RequireModuleAccess
+from common.permissions import HasCompany, IsCompanyMember
 from employees.models import Employee
 
 from .models import Break, TimeLog, JobSite, TimeLogPhoto, Location, LocationZone, EmployeeLocation
@@ -22,15 +23,13 @@ class JobSiteViewSet(viewsets.ModelViewSet):
     serializer_class = JobSiteSerializer
 
     def get_permissions(self):
+        base = [permissions.IsAuthenticated(), HasCompany(), IsCompanyMember()]
         if self.action in ["list", "retrieve"]:
-            return [permissions.IsAuthenticated()]
-        return [IsAdminRole(), RequireModuleAccess("locations", "modify")]
+            return base
+        return base + [IsAdminRole(), RequireModuleAccess("locations", "modify")]
 
     def get_queryset(self):
-        if not hasattr(self.request, 'company'):
-            return JobSite.objects.none()
-        # Filter by company instead of organization
-        return JobSite.objects.filter(company=self.request.company).order_by("name")
+        return JobSite.objects.for_company(getattr(self.request, "company", None)).order_by("name")
 
     def perform_create(self, serializer):
         if hasattr(self.request, 'company'):
@@ -62,7 +61,7 @@ def _get_employee_for_request(request, employee_id: str | None) -> Employee | No
 
 class TimeLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TimeLogSerializer
-    permission_classes = [permissions.IsAuthenticated, RequireModuleAccess("attendance", "view")]
+    permission_classes = [permissions.IsAuthenticated, HasCompany, RequireModuleAccess("attendance", "view")]
 
     @action(detail=True, methods=['get'])
     def download_pdf(self, request, pk=None):
@@ -74,11 +73,12 @@ class TimeLogViewSet(viewsets.ReadOnlyModelViewSet):
         return response
 
     def get_queryset(self):
-        if not hasattr(self.request, 'company'):
+        company = getattr(self.request, "company", None)
+        if company is None:
             return TimeLog.objects.none()
-            
-        # Filter through employee__company to isolate data
-        qs = TimeLog.objects.filter(employee__company=self.request.company).select_related("employee", "employee__user").prefetch_related("breaks")
+
+        # No direct company FK on TimeLog — scoped through employee__company.
+        qs = TimeLog.objects.filter(employee__company=company).select_related("employee", "employee__user").prefetch_related("breaks")
 
         # Date range filters (work_date)
         date_from = _parse_date(self.request.query_params.get("date_from"))
@@ -90,8 +90,8 @@ class TimeLogViewSet(viewsets.ReadOnlyModelViewSet):
 
         if is_admin_role(self.request.user):
             return qs.order_by("-clock_in")
-            
-        employee = Employee.objects.filter(user=self.request.user, company=self.request.company).first()
+
+        employee = Employee.objects.for_company(company).filter(user=self.request.user).first()
         if not employee:
             return qs.none()
         return qs.filter(employee=employee).order_by("-clock_in")
@@ -720,15 +720,14 @@ class LocationViewSet(viewsets.ModelViewSet):
     serializer_class = LocationSerializer
 
     def get_permissions(self):
+        base = [permissions.IsAuthenticated(), HasCompany(), IsCompanyMember()]
         if self.action in ["list", "retrieve"]:
-            return [permissions.IsAuthenticated(), RequireModuleAccess("locations", "view")]
-        return [IsAdminRole(), RequireModuleAccess("locations", "modify")]
+            return base + [RequireModuleAccess("locations", "view")]
+        return base + [IsAdminRole(), RequireModuleAccess("locations", "modify")]
 
     def get_queryset(self):
         company = getattr(self.request, 'company', None)
-        if not company:
-            return Location.objects.none()
-        qs = Location.objects.filter(company=company)
+        qs = Location.objects.for_company(company)
         archived = self.request.query_params.get("archived", "false").lower()
         if archived == "true":
             return qs.filter(is_archived=True)
@@ -752,15 +751,14 @@ class LocationZoneViewSet(viewsets.ModelViewSet):
     serializer_class = LocationZoneSerializer
 
     def get_permissions(self):
+        base = [permissions.IsAuthenticated(), HasCompany(), IsCompanyMember()]
         if self.action in ["list", "retrieve"]:
-            return [permissions.IsAuthenticated(), RequireModuleAccess("locations", "view")]
-        return [IsAdminRole(), RequireModuleAccess("locations", "modify")]
+            return base + [RequireModuleAccess("locations", "view")]
+        return base + [IsAdminRole(), RequireModuleAccess("locations", "modify")]
 
     def get_queryset(self):
         company = getattr(self.request, 'company', None)
-        if not company:
-            return LocationZone.objects.none()
-        return LocationZone.objects.filter(company=company).prefetch_related("locations")
+        return LocationZone.objects.for_company(company).prefetch_related("locations")
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company)
@@ -769,11 +767,12 @@ class LocationZoneViewSet(viewsets.ModelViewSet):
 class EmployeeLocationViewSet(viewsets.ModelViewSet):
     """Manage which locations an employee is permitted to clock in at."""
     serializer_class = EmployeeLocationSerializer
-    
+
     def get_permissions(self):
+        base = [permissions.IsAuthenticated(), HasCompany()]
         if self.action in ["list", "retrieve"]:
-            return [IsAdminRole(), RequireModuleAccess("locations", "view")]
-        return [IsAdminRole(), RequireModuleAccess("locations", "modify")]
+            return base + [IsAdminRole(), RequireModuleAccess("locations", "view")]
+        return base + [IsAdminRole(), RequireModuleAccess("locations", "modify")]
 
     def get_queryset(self):
         company = getattr(self.request, 'company', None)

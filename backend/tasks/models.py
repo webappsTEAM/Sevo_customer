@@ -3,6 +3,8 @@ from django.db import models
 from django.utils import timezone
 from utils.validators import validate_upload
 
+from common.models import CompanyScopedManager
+
 
 class Task(models.Model):
     """
@@ -10,6 +12,7 @@ class Task(models.Model):
     Designed for field workers (electricians, plumbers, etc.)
     who complete multiple tasks at different locations in a day.
     """
+    objects = CompanyScopedManager()
 
 
     class Priority(models.TextChoices):

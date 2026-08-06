@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from common.permissions import validate_same_company
+
 from .models import Employee
 from .utils import generate_next_employee_id
 
@@ -173,6 +175,18 @@ class EmployeeSerializer(serializers.ModelSerializer):
             return Employee.ExemptStatus.NON_EXEMPT
         return value
 
+    def validate_assigned_job_site(self, value):
+        request = self.context.get("request")
+        if value is not None and request is not None:
+            validate_same_company(value, getattr(request, "company", None), "assigned_job_site")
+        return value
+
+    def validate_payroll_group(self, value):
+        request = self.context.get("request")
+        if value is not None and request is not None:
+            validate_same_company(value, getattr(request, "company", None), "payroll_group")
+        return value
+
     def update(self, instance, validated_data):
         print("UPDATE CALLED WITH VALIDATED DATA:", validated_data)
         user_data = validated_data.pop('user', {})
@@ -235,6 +249,18 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
             "is_active",
         )
 
+    def validate_assigned_job_site(self, value):
+        request = self.context.get("request")
+        if value is not None and request is not None:
+            validate_same_company(value, getattr(request, "company", None), "assigned_job_site")
+        return value
+
+    def validate_payroll_group(self, value):
+        request = self.context.get("request")
+        if value is not None and request is not None:
+            validate_same_company(value, getattr(request, "company", None), "payroll_group")
+        return value
+
     def create(self, validated_data):
         username = validated_data.pop("username")
         password = validated_data.pop("password")
@@ -260,8 +286,8 @@ class EmployeeCreateSerializer(serializers.ModelSerializer):
 
         try:
             if user:
-                # If they are associated with public or None, associate with the new company
-                if not user.company or user.company.schema_name == 'public':
+                # If they have no company yet, associate with the new company
+                if not user.company:
                     user.company = company
                 if first_name:
                     user.first_name = first_name

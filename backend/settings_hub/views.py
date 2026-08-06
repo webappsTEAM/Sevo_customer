@@ -391,7 +391,7 @@ class TeamInviteListCreateView(APIView):
         from django.utils.html import strip_tags
         
         frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
-        invite_link = f"{frontend_url}/accept-invite?token={invite.token}&org={request.user.company.schema_name}"
+        invite_link = f"{frontend_url}/accept-invite?token={invite.token}&org={request.user.company.slug}"
         
         context = {
             'company_name': request.user.company.company_name,

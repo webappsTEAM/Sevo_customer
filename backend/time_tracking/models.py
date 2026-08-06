@@ -1,10 +1,13 @@
 from django.db import models
 from utils.validators import validate_upload
 
+from common.models import CompanyScopedManager
 from employees.models import Employee
 
 
 class JobSite(models.Model):
+    objects = CompanyScopedManager()
+
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name="job_sites", null=True, blank=True)
     name = models.CharField(max_length=255)
     address = models.TextField(blank=True)
@@ -39,6 +42,8 @@ class Location(models.Model):
         ("polygon", "Polygon (GeoJSON)"),
         ("hybrid", "Hybrid (circle OR polygon)"),
     ]
+
+    objects = CompanyScopedManager()
 
     company = models.ForeignKey(
         'companies.Company', on_delete=models.CASCADE,
@@ -95,6 +100,8 @@ class Location(models.Model):
 
 class LocationZone(models.Model):
     """Group of locations forming a zone (e.g. 'North Sites')."""
+    objects = CompanyScopedManager()
+
     company = models.ForeignKey(
         'companies.Company', on_delete=models.CASCADE,
         related_name="location_zones", null=True, blank=True

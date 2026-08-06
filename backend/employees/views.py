@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions import IsAdminRole, is_admin_role
+from common.permissions import HasCompany, IsCompanyMember
 
 from .models import Employee
 from .serializers import EmployeeCreateSerializer, EmployeeSerializer
@@ -23,7 +24,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             return Employee.objects.none()
 
         # Clean up any invalid Employee entries that were auto-created for customer accounts
-        Employee.objects.filter(company=company, user__role="customer").delete()
+        Employee.objects.for_company(company).filter(user__role="customer").delete()
 
         # Ensure active staff/employee Users (roles: employee, manager, admin, kiosk) have an Employee profile
         from django.contrib.auth import get_user_model
@@ -32,7 +33,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         active_users = User.objects.filter(company=company, is_active=True, role__in=staff_roles)
 
         for u in active_users:
-            emp = Employee.objects.filter(company=company, user=u).first()
+            emp = Employee.objects.for_company(company).filter(user=u).first()
             if emp:
                 # Reactivate employee record if the user is still active
                 if not emp.is_active:
@@ -40,9 +41,9 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                     emp.save(update_fields=["is_active"])
             else:
                 # Create a new employee record
-                count = Employee.objects.filter(company=company).count() + 1
+                count = Employee.objects.for_company(company).count() + 1
                 emp_id = f"EMP-{count:03d}"
-                while Employee.objects.filter(company=company, employee_id=emp_id).exists():
+                while Employee.objects.for_company(company).filter(employee_id=emp_id).exists():
                     count += 1
                     emp_id = f"EMP-{count:03d}"
 
@@ -56,14 +57,19 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                     is_active=True
                 )
 
-        return Employee.objects.select_related("user").filter(
-            company=company
-        ).exclude(user__role="customer").order_by("employee_id")
+        return Employee.objects.select_related("user").for_company(company).exclude(
+            user__role="customer"
+        ).order_by("employee_id")
 
     def get_permissions(self):
+        # HasCompany + IsCompanyMember apply to every action — company
+        # isolation isn't an admin-only concern, an employee viewing their
+        # own record must also be blocked from ever resolving a row
+        # outside their own company.
+        base = [permissions.IsAuthenticated(), HasCompany(), IsCompanyMember()]
         if self.action in {"list", "create", "update", "partial_update", "destroy"}:
-            return [permissions.IsAuthenticated(), IsAdminRole()]
-        return [permissions.IsAuthenticated()]
+            base.append(IsAdminRole())
+        return base
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -102,7 +108,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         if not company:
             return Response({"detail": "No company context."}, status=400)
 
-        employee = Employee.objects.filter(user=request.user, company=company).first()
+        employee = Employee.objects.for_company(company).filter(user=request.user).first()
         if not employee:
             return Response({
                 "is_online": False,
@@ -138,8 +144,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                     company=company
                 )
             else:
-                open_logs = PresenceLog.objects.filter(
-                    employee=employee, logout_at__isnull=True, company=company
+                open_logs = PresenceLog.objects.for_company(company).filter(
+                    employee=employee, logout_at__isnull=True
                 )
                 for log in open_logs:
                     log.logout_at = now

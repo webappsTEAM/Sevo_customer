@@ -37,7 +37,7 @@ class CompanySerializer(serializers.ModelSerializer):
             "id",
             "company_name",
             "display_id",
-            "schema_name",
+            "slug",
             "industry",
             "website",
             "timezone",
@@ -59,7 +59,7 @@ class CompanySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "display_id", "schema_name", "region_detail", "created_at", "updated_at", "logo_url"]
+        read_only_fields = ["id", "display_id", "slug", "region_detail", "created_at", "updated_at", "logo_url"]
 
     def get_logo_url(self, obj):
         if obj.logo:

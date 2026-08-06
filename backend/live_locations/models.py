@@ -14,6 +14,7 @@ same FK relationships — so the alias is a pure rename at the Python
 import layer with zero database impact.
 """
 from django.db import models
+from companies.models import Company
 from employees.models import Employee
 from time_tracking.models import TimeLog
 
@@ -21,6 +22,9 @@ from time_tracking.models import TimeLog
 class EmployeeLocation(models.Model):
     """A single GPS ping written while an employee is clocked in."""
 
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name="location_pings"
+    )
     employee = models.ForeignKey(
         Employee, on_delete=models.CASCADE, related_name="locations"
     )
@@ -40,6 +44,7 @@ class EmployeeLocation(models.Model):
     class Meta:
         ordering = ["-timestamp"]
         indexes = [
+            models.Index(fields=['company', 'timestamp']),
             models.Index(fields=['employee', 'timestamp']),
             models.Index(fields=['time_log', 'timestamp']),
             models.Index(fields=['time_log']),
@@ -62,6 +67,9 @@ class GeofenceBreach(models.Model):
     assigned geofence while they are clocked in.
     """
 
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name="geofence_breaches"
+    )
     employee = models.ForeignKey(
         Employee, on_delete=models.CASCADE, related_name="geofence_breaches"
     )
@@ -88,6 +96,7 @@ class GeofenceBreach(models.Model):
     class Meta:
         ordering = ["-timestamp"]
         indexes = [
+            models.Index(fields=["company", "timestamp"]),
             models.Index(fields=["employee", "timestamp"]),
         ]
 
@@ -109,6 +118,9 @@ class SOSAlert(models.Model):
         ACKNOWLEDGED = "acknowledged", "Acknowledged"
         RESOLVED = "resolved", "Resolved"
 
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name="sos_alerts"
+    )
     employee = models.ForeignKey(
         Employee, on_delete=models.CASCADE, related_name="sos_alerts"
     )
@@ -144,6 +156,7 @@ class SOSAlert(models.Model):
     class Meta:
         ordering = ["-triggered_at"]
         indexes = [
+            models.Index(fields=["company", "triggered_at"]),
             models.Index(fields=["employee", "triggered_at"]),
             models.Index(fields=["status"]),
         ]

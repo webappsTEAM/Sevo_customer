@@ -6,6 +6,8 @@ from employees.models import Employee
 from scheduling.models import Shift
 from tasks.models import Task
 
+from common.models import CompanyScopedManager
+
 class InventoryItem(models.Model):
     class Category(models.TextChoices):
         EQUIPMENT = 'equipment', 'Equipment'
@@ -14,6 +16,8 @@ class InventoryItem(models.Model):
         VEHICLE = 'vehicle', 'Vehicle'
         PPE = 'ppe', 'PPE'
         TOOL = 'tool', 'Tool'
+
+    objects = CompanyScopedManager(company_field="org")
 
     org = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='inventory_items')
     name = models.CharField(max_length=255)
@@ -46,6 +50,8 @@ class InventoryIssuance(models.Model):
         FAIR = 'fair', 'Fair'
         DAMAGED = 'damaged', 'Damaged'
 
+    objects = CompanyScopedManager(company_field="org")
+
     org = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='inventory_issuances')
     item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='issuances')
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='issued_items')
@@ -71,6 +77,8 @@ class InventoryAlert(models.Model):
         OVERDUE_RETURN = 'overdue_return', 'Overdue Return'
         DAMAGE_REPORTED = 'damage_reported', 'Damage Reported'
 
+    objects = CompanyScopedManager(company_field="org")
+
     org = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='inventory_alerts')
     alert_type = models.CharField(max_length=50, choices=AlertType.choices)
     item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='alerts')
@@ -88,6 +96,9 @@ class InventoryTransfer(models.Model):
         IN_TRANSIT = 'in_transit', 'In Transit'
         DELIVERED = 'delivered', 'Delivered'
 
+    objects = CompanyScopedManager(company_field="org")
+
+    org = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='inventory_transfers')
     item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='transfers')
     from_location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='outgoing_transfers')
     to_location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='incoming_transfers')

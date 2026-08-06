@@ -141,46 +141,14 @@ def _find_origin_service_request(phone_number):
     if not last10:
         return None
 
-    # 1. Search active connection schema
     try:
         from service_requests.models import ServiceRequest
         sr = ServiceRequest.objects.filter(phone__icontains=last10).order_by("-id").first()
         if sr:
             return sr
-    except Exception:
-        pass
-
-    # 2. Discover all PostgreSQL schemas dynamically via raw SQL
-    try:
-        from django.db import connection
-        from django_tenants.utils import schema_context
-        from service_requests.models import ServiceRequest
-
-        schemas = []
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT LIKE 'pg_%%' AND schema_name != 'information_schema'")
-            schemas = [row[0] for row in cursor.fetchall()]
-
-        for s_name in schemas:
-            try:
-                with schema_context(s_name):
-                    sr = ServiceRequest.objects.filter(phone__icontains=last10).order_by("-id").first()
-                    if sr:
-                        return sr
-            except Exception:
-                continue
-
-        # Fallback: return the latest ServiceRequest in any schema if phone search yields nothing
-        for s_name in schemas:
-            try:
-                with schema_context(s_name):
-                    sr = ServiceRequest.objects.all().order_by("-id").first()
-                    if sr:
-                        return sr
-            except Exception:
-                continue
+        return ServiceRequest.objects.all().order_by("-id").first()
     except Exception as e:
-        print(f"Could not query ServiceRequest across schemas: {e}")
+        print(f"Could not query ServiceRequest: {e}")
     return None
 
 

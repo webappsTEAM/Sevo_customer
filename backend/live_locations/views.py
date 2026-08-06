@@ -285,7 +285,7 @@ class LiveLocationUpdateView(APIView):
             lng_d = round(Decimal(str(lng)), 6)
 
             location = EmployeeLocation.objects.create(
-                employee=employee, time_log=time_log, lat=lat_d, lng=lng_d
+                company=employee.company, employee=employee, time_log=time_log, lat=lat_d, lng=lng_d
             )
             return Response(
                 EmployeeLocationSerializer(location, context={"request": request}).data,
@@ -516,6 +516,7 @@ class SOSView(APIView):
         lng_d = round(Decimal(str(lng)), 6) if lng is not None else None
 
         sos = SOSAlert.objects.create(
+            company=employee.company,
             employee=employee,
             time_log=time_log,
             lat=lat_d,

@@ -277,27 +277,6 @@ class InvoiceDownloadView(APIView):
             sr = ServiceRequest.objects.filter(request_id__iexact=str(req_id)).first()
 
         if not sr:
-            try:
-                from django.db import connection
-                from django_tenants.utils import schema_context
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT table_schema FROM information_schema.tables WHERE table_name = 'service_requests_servicerequest'")
-                    schemas = [row[0] for row in cursor.fetchall()]
-                for s_name in schemas:
-                    try:
-                        with schema_context(s_name):
-                            if isinstance(req_id, int) or (isinstance(req_id, str) and req_id.isdigit()):
-                                sr = ServiceRequest.objects.filter(pk=int(req_id)).first()
-                            if not sr:
-                                sr = ServiceRequest.objects.filter(request_id__iexact=str(req_id)).first()
-                            if sr:
-                                break
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-        if not sr:
             return _error(f"Booking with ID '{req_id}' not found.", 404)
 
         if str(sr.status).lower() in ("cancelled", "rejected"):

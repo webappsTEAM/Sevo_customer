@@ -79,8 +79,29 @@ def _standard_response(success=True, data=None, error=None, meta=None, status_co
 
 
 def _get_company(request):
-    """Return company from request if available (postgres/tenant), else None (sqlite/dev)."""
-    return getattr(request, "company", None)
+    """
+    Return the company this request belongs to.
+
+    request.company is only ever set for staff/admin/employee users — a
+    customer is deliberately never a member of a company (so they can book
+    across vendors once there's more than one). That leaves public/customer
+    endpoints (booking, feedback lookups, etc.) with no way to know which
+    company they're for.
+
+    Single-company fallback: while there is exactly one Company row in the
+    whole system, default to it. This is a temporary bridge for
+    single-company usage, not a marketplace mechanism — the moment a
+    second company is created, this stops resolving anything automatically
+    and callers must be given an explicit company_id instead (see
+    MODEL_CLASSIFICATION.md's notes on ServiceRequest being a Mixed model).
+    """
+    company = getattr(request, "company", None)
+    if company:
+        return company
+    from companies.models import Company
+    if Company.objects.count() == 1:
+        return Company.objects.first()
+    return None
 
 
 def _sr_qs(request):
@@ -248,145 +269,43 @@ class CustomerMyBookingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        all_bookings = []
-        try:
-            from django.db.models import Q
-            user_email = (getattr(request.user, 'email', None) or '').strip()
-            user_phone = (getattr(request.user, 'phone', None) or '').strip()
-            username = (getattr(request.user, 'username', None) or '').strip()
+        from django.db.models import Q
 
-            # Auto-link unattached bookings created with this customer email
-            if user_email:
-                try:
-                    ServiceRequest.objects.filter(
-                        email__iexact=user_email,
-                        customer__isnull=True
-                    ).update(customer=request.user)
-                except Exception:
-                    pass
+        user_email = (getattr(request.user, 'email', None) or '').strip()
+        user_phone = (getattr(request.user, 'phone', None) or '').strip()
+        username = (getattr(request.user, 'username', None) or '').strip()
 
-            digits = re.sub(r'\D', '', user_phone)
-            if not digits and username:
-                digits = re.sub(r'\D', '', username)
-            last10 = digits[-10:] if len(digits) >= 10 else digits
+        # Auto-link unattached bookings created with this customer email
+        if user_email:
+            ServiceRequest.objects.filter(
+                email__iexact=user_email,
+                customer__isnull=True
+            ).update(customer=request.user)
 
-            seen_ids = set()
+        digits = re.sub(r'\D', '', user_phone)
+        if not digits and username:
+            digits = re.sub(r'\D', '', username)
+        last10 = digits[-10:] if len(digits) >= 10 else digits
 
-            def add_sr(sr):
-                if sr.id not in seen_ids:
-                    seen_ids.add(sr.id)
-                    serializer = ServiceRequestListSerializer(sr, context={'request': request})
-                    all_bookings.append(serializer.data)
+        user_full_name = f"{getattr(request.user, 'first_name', '')} {getattr(request.user, 'last_name', '')}".strip()
 
-            user_full_name = f"{getattr(request.user, 'first_name', '')} {getattr(request.user, 'last_name', '')}".strip()
+        # Strict filter — ONLY this specific user's bookings, across every vendor.
+        filters = Q(customer=request.user)
+        if user_email:
+            filters |= Q(email__iexact=user_email)
+        if user_phone and len(digits) >= 8:
+            filters |= Q(phone=user_phone)
+        if last10 and len(last10) >= 10:
+            filters |= Q(phone__icontains=last10)
+        if user_full_name and len(user_full_name) >= 3:
+            filters |= Q(customer_name__iexact=user_full_name)
 
-            # Strict Filter Construction: ONLY match this specific user
-            filters = Q(customer=request.user)
-            if user_email:
-                filters |= Q(email__iexact=user_email)
-            if user_phone and len(digits) >= 8:
-                filters |= Q(phone=user_phone)
-            if last10 and len(last10) >= 10:
-                filters |= Q(phone__icontains=last10)
-            if user_full_name and len(user_full_name) >= 3:
-                filters |= Q(customer_name__iexact=user_full_name)
-
-            # 1. Primary Attempt: Django ORM filter
-            try:
-                qs = ServiceRequest.objects.filter(filters).select_related('assigned_employee', 'assigned_employee__user').order_by("-id")
-                for sr in qs:
-                    add_sr(sr)
-            except Exception as e:
-                print(f"Error in ORM booking query: {e}")
-
-            # 2. Second Attempt: Multi-tenant schema search with strict filter
-            try:
-                from django.db import connection
-                from django_tenants.utils import schema_context
-
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT table_schema FROM information_schema.tables WHERE table_name = 'service_requests_servicerequest'")
-                    schemas = [row[0] for row in cursor.fetchall()]
-
-                for s_name in schemas:
-                    try:
-                        with schema_context(s_name):
-                            qs = ServiceRequest.objects.filter(filters).select_related('assigned_employee', 'assigned_employee__user').order_by("-id")
-                            for sr in qs:
-                                add_sr(sr)
-                    except Exception:
-                        pass
-            except Exception as e:
-                print(f"Error in Tenant Schema ORM iteration: {e}")
-
-            # 3. Fallback Raw SQL with strict WHERE email / phone / customer_id matching
-            if not all_bookings and (user_email or last10):
-                try:
-                    from django.db import connection
-                    with connection.cursor() as cursor:
-                        cursor.execute("""
-                            SELECT table_schema, table_name 
-                            FROM information_schema.tables 
-                            WHERE table_name LIKE '%%servicerequest%%' OR table_name LIKE '%%service_request%%'
-                        """)
-                        schema_tables = cursor.fetchall()
-
-                        for s_name, t_name in schema_tables:
-                            try:
-                                where_clauses = ["customer_id = %s"]
-                                params = [request.user.id]
-                                if user_email:
-                                    where_clauses.append("LOWER(email) = LOWER(%s)")
-                                    params.append(user_email)
-                                if last10:
-                                    where_clauses.append("phone LIKE %s")
-                                    params.append(f"%{last10}%")
-
-                                sql = f'''
-                                    SELECT id, request_id, customer_name, phone, email, address, status, issue_title, service_category, total_amount, preferred_date, created_at
-                                    FROM "{s_name}"."{t_name}"
-                                    WHERE {" OR ".join(where_clauses)}
-                                    ORDER BY id DESC
-                                '''
-                                cursor.execute(sql, params)
-                                rows = cursor.fetchall()
-                                for r in rows:
-                                    sr_id = r[0]
-                                    if sr_id not in seen_ids:
-                                        seen_ids.add(sr_id)
-                                        ext_amt = 0.0
-                                        if sr_id == 5 or r[1] == 'SR-0005':
-                                            ext_amt = 650.0
-                                        base_amt = float(r[9]) if r[9] is not None else 599.0
-                                        sr_dict = {
-                                            "id": sr_id,
-                                            "request_id": r[1] or f"REQ-{sr_id:04d}",
-                                            "customer_name": r[2] or getattr(request.user, "first_name", "Customer"),
-                                            "phone": r[3] or user_phone,
-                                            "email": r[4] or user_email,
-                                            "address": r[5] or "Service Location Address",
-                                            "status": r[6] or "CONFIRMED",
-                                            "status_display": (r[6] or "CONFIRMED").title(),
-                                            "issue_title": r[7] or "Service Request",
-                                            "service_category": r[8] or "General",
-                                            "service_category_display": (r[8] or "General Service").title(),
-                                            "base_amount": base_amt,
-                                            "extension_amount": ext_amt,
-                                            "total_amount": base_amt + ext_amt,
-                                            "preferred_date": str(r[10]) if r[10] else "Scheduled Date",
-                                            "created_at": str(r[11]) if r[11] else None,
-                                            "assigned_employee": None
-                                        }
-                                        all_bookings.append(sr_dict)
-                            except Exception as ex:
-                                print(f"Raw SQL error on table {s_name}.{t_name}: {ex}")
-                except Exception as e:
-                    print(f"Raw SQL execution error in CustomerMyBookingsView: {e}")
-
-        except Exception as main_err:
-            print(f"CustomerMyBookingsView top-level exception handled cleanly: {main_err}")
-            import traceback
-            traceback.print_exc()
+        qs = (
+            ServiceRequest.objects.filter(filters)
+            .select_related('company', 'assigned_employee', 'assigned_employee__user')
+            .order_by("-id")
+        )
+        all_bookings = ServiceRequestListSerializer(qs, many=True, context={'request': request}).data
 
         return _success(data=all_bookings)
 
@@ -1948,26 +1867,12 @@ class AdminComplaintListView(APIView):
     permission_classes = [IsAdminRole]
 
     def get(self, request):
-        qs = sr_services.list_admin_complaints(request.user, request.GET)
+        qs = sr_services.list_admin_complaints(request.user, request.GET, company=request.company)
         return _success([_serialize_complaint(c) for c in qs])
 
 
 def _get_complaint_admin(pk):
-    try:
-        return Complaint.objects.prefetch_related("messages", "status_history", "attachments").get(pk=pk)
-    except Complaint.DoesNotExist:
-        try:
-            from django_tenants.utils import schema_context
-            from companies.models import Company
-            for comp in Company.objects.all():
-                try:
-                    with schema_context(comp.schema_name):
-                        return Complaint.objects.prefetch_related("messages", "status_history", "attachments").get(pk=pk)
-                except Complaint.DoesNotExist:
-                    continue
-        except Exception:
-            pass
-        raise Complaint.DoesNotExist
+    return Complaint.objects.prefetch_related("messages", "status_history", "attachments").get(pk=pk)
 
 
 class AdminComplaintDetailView(APIView):

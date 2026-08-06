@@ -28,17 +28,6 @@ def haversine_meters(lat1, lon1, lat2, lon2):
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-# ── Tenant helper ──────────────────────────────────────────────────────────
-
-def _set_tenant(company):
-    """Switch the current DB connection to the company's schema."""
-    from django.db import connection
-    if company and hasattr(connection, "set_tenant"):
-        connection.set_tenant(company)
-        with connection.cursor() as cursor:
-            cursor.execute(f'SET search_path = "{company.schema_name}"')
-
-
 def _get_active_task_travel_status(user, company):
     """Return travel_status of the employee's active/accepted task, or None."""
     try:
@@ -210,7 +199,6 @@ class EmployeeLocationConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _get_employee(self):
         try:
-            _set_tenant(self.company)
             from employees.models import Employee
             return (
                 Employee.objects.select_related("user", "assigned_job_site")
@@ -222,7 +210,6 @@ class EmployeeLocationConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _save_ping_and_check(self, lat: float, lng: float, accuracy: float):
-        _set_tenant(self.company)
         import traceback
         from decimal import Decimal
 
@@ -241,6 +228,7 @@ class EmployeeLocationConsumer(AsyncWebsocketConsumer):
             )
 
             loc = EmployeeLocation.objects.create(
+                company=self.employee.company,
                 employee=self.employee,
                 time_log=time_log,
                 lat=lat_d,
@@ -277,6 +265,7 @@ class EmployeeLocationConsumer(AsyncWebsocketConsumer):
                 if dist > radius:
                     status = "outside_geofence"
                     gb = GeofenceBreach.objects.create(
+                        company=self.employee.company,
                         employee=self.employee,
                         time_log=time_log,
                         lat=lat_d,
@@ -338,7 +327,6 @@ class EmployeeLocationConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _save_sos(self, lat, lng):
-        _set_tenant(self.company)
         from decimal import Decimal
 
         from time_tracking.models import TimeLog
@@ -355,6 +343,7 @@ class EmployeeLocationConsumer(AsyncWebsocketConsumer):
             lng_d = round(Decimal(str(lng)), 6) if lng is not None else None
 
             sos = SOSAlert.objects.create(
+                company=self.employee.company,
                 employee=self.employee,
                 time_log=time_log,
                 lat=lat_d,
@@ -553,7 +542,6 @@ class AdminMapConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _get_snapshot(self):
         try:
-            _set_tenant(self.company)
             from .views import build_live_snapshot
             return build_live_snapshot(self.company, user=self.user)
         finally:
@@ -561,7 +549,6 @@ class AdminMapConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _assign_task(self, task_id, employee_id):
-        _set_tenant(self.company)
         from tasks.models import Task
         from employees.models import Employee
 
@@ -586,7 +573,6 @@ class AdminMapConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _ack_sos(self, sos_id):
         try:
-            _set_tenant(self.company)
             from .models import SOSAlert
 
             SOSAlert.objects.filter(id=sos_id).update(
@@ -695,7 +681,6 @@ class PresenceConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _set_user_presence(self, is_online):
         try:
-            _set_tenant(self.company)
             from employees.models import Employee, PresenceLog
             from django.utils import timezone
 
@@ -752,7 +737,6 @@ class PresenceConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _update_activity(self):
         try:
-            _set_tenant(self.company)
             from employees.models import Employee
             from django.utils import timezone
 
@@ -780,7 +764,6 @@ class PresenceConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _change_availability(self, availability):
         try:
-            _set_tenant(self.company)
             from employees.models import Employee
             from django.utils import timezone
 

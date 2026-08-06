@@ -4,6 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsAdminRole
+from common.drf import CompanyScopedQuerysetMixin
+from common.permissions import HasCompany, IsCompanyMember, validate_same_company
 from inventory.models import InventoryItem, InventoryIssuance, InventoryAlert, InventoryTransfer
 from inventory.serializers import (
     InventoryItemSerializer, InventoryIssuanceSerializer,
@@ -33,15 +35,11 @@ class StandardResponseMixin:
             "message": message
         }, status=status_code)
 
-class InventoryItemViewSet(StandardResponseMixin, viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+class InventoryItemViewSet(CompanyScopedQuerysetMixin, StandardResponseMixin, viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, HasCompany, IsAdminRole, IsCompanyMember]
     serializer_class = InventoryItemSerializer
-
-    def get_queryset(self):
-        return InventoryItem.objects.filter(org=self.request.company)
-
-    def perform_create(self, serializer):
-        serializer.save(org=self.request.company)
+    queryset = InventoryItem.objects.all()
+    company_field = "org"
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -70,12 +68,10 @@ class InventoryItemViewSet(StandardResponseMixin, viewsets.ModelViewSet):
         return self.success_response(message="Item deleted successfully")
 
 
-class InventoryIssuanceViewSet(StandardResponseMixin, viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+class InventoryIssuanceViewSet(CompanyScopedQuerysetMixin, StandardResponseMixin, viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, HasCompany, IsAdminRole, IsCompanyMember]
     serializer_class = InventoryIssuanceSerializer
-
-    def get_queryset(self):
-        return InventoryIssuance.objects.filter(org=self.request.company)
+    company_field = "org"
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -86,11 +82,19 @@ class InventoryIssuanceViewSet(StandardResponseMixin, viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             return self.error_response(message=str(serializer.errors))
-        
+
+        item = serializer.validated_data['item']
+        employee = serializer.validated_data['employee']
+        try:
+            validate_same_company(item, request.company, "item", company_field="org")
+            validate_same_company(employee, request.company, "employee")
+        except Exception as e:
+            return self.error_response(message=str(e))
+
         try:
             issuance = issue_inventory(
-                item=serializer.validated_data['item'],
-                employee=serializer.validated_data['employee'],
+                item=item,
+                employee=employee,
                 issued_by=request.user,
                 quantity=serializer.validated_data.get('quantity', 1),
                 expected_return_date=serializer.validated_data.get('expected_return_date'),
@@ -125,14 +129,13 @@ class InventoryIssuanceViewSet(StandardResponseMixin, viewsets.ModelViewSet):
 
 
 class MyInventoryViewSet(StandardResponseMixin, viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasCompany]
     serializer_class = InventoryIssuanceSerializer
 
     def get_queryset(self):
         if not hasattr(self.request.user, 'employee_profile'):
             return InventoryIssuance.objects.none()
-        return InventoryIssuance.objects.filter(
-            org=self.request.company,
+        return InventoryIssuance.objects.for_company(self.request.company).filter(
             employee=self.request.user.employee_profile,
             returned_at__isnull=True
         )
@@ -143,12 +146,14 @@ class MyInventoryViewSet(StandardResponseMixin, viewsets.ReadOnlyModelViewSet):
         return self.success_response(data=serializer.data)
 
 
-class InventoryAlertViewSet(StandardResponseMixin, viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+class InventoryAlertViewSet(CompanyScopedQuerysetMixin, StandardResponseMixin, viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, HasCompany, IsAdminRole, IsCompanyMember]
     serializer_class = InventoryAlertSerializer
+    queryset = InventoryAlert.objects.all()
+    company_field = "org"
 
     def get_queryset(self):
-        return InventoryAlert.objects.filter(org=self.request.company, is_resolved=False)
+        return super().get_queryset().filter(is_resolved=False)
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -164,7 +169,7 @@ class InventoryAlertViewSet(StandardResponseMixin, viewsets.ModelViewSet):
 
 
 class NearestStockViewSet(StandardResponseMixin, viewsets.ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasCompany]
 
     def list(self, request, item_id=None):
         try:

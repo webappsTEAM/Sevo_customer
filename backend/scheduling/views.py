@@ -17,6 +17,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from accounts.permissions import IsAdminRole, is_admin_role
+from common.permissions import HasCompany, IsCompanyMember
 from employees.models import Employee
 
 from .models import Shift
@@ -111,27 +112,24 @@ class ShiftViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        if not hasattr(self.request, "company"):
-            return Shift.objects.none()
+        company = getattr(self.request, "company", None)
         qs = (
-            Shift.objects
-            .filter(company=self.request.company)
+            Shift.objects.for_company(company)
             .select_related("employee", "employee__user")
             .order_by("-shift_start")
         )
         if is_admin_role(self.request.user):
             return qs
-        employee = Employee.objects.filter(
-            user=self.request.user, company=self.request.company
-        ).first()
+        employee = Employee.objects.for_company(company).filter(user=self.request.user).first()
         if not employee:
             return qs.none()
         return qs.filter(employee=employee)
 
     def get_permissions(self):
+        base = [permissions.IsAuthenticated(), HasCompany(), IsCompanyMember()]
         if self.action in {"create", "update", "partial_update", "destroy"}:
-            return [permissions.IsAuthenticated(), IsAdminRole()]
-        return [permissions.IsAuthenticated()]
+            return base + [IsAdminRole()]
+        return base
 
     def _run_wtr_checks(self, employee, shift_start, shift_end, exclude_shift_id=None):
         """

@@ -3,14 +3,6 @@ from rest_framework import serializers
 
 from .models import User
 
-try:
-    from django_tenants.utils import schema_context
-except ImportError:
-    from contextlib import contextmanager
-    @contextmanager
-    def schema_context(schema_name):
-        yield
-
 
 class UserSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
@@ -47,11 +39,10 @@ class UserSerializer(serializers.ModelSerializer):
     def get_employee_country(self, obj):
         try:
             if obj.company:
-                with schema_context(obj.company.schema_name):
-                    from employees.models import Employee
-                    employee = Employee.objects.filter(user=obj).first()
-                    if employee and employee.country:
-                        return employee.country
+                from employees.models import Employee
+                employee = Employee.objects.filter(user=obj, company=obj.company).first()
+                if employee and employee.country:
+                    return employee.country
             return obj.company.primary_country if obj.company else None
         except Exception:
             return None
@@ -59,11 +50,10 @@ class UserSerializer(serializers.ModelSerializer):
     def get_employee_roles(self, obj):
         try:
             if obj.role == "employee" and obj.company:
-                with schema_context(obj.company.schema_name):
-                    from employees.models import Employee
-                    employee = Employee.objects.filter(user=obj).first()
-                    if employee and employee.service_roles:
-                        return employee.service_roles
+                from employees.models import Employee
+                employee = Employee.objects.filter(user=obj, company=obj.company).first()
+                if employee and employee.service_roles:
+                    return employee.service_roles
             return []
         except Exception:
             return []
@@ -97,17 +87,12 @@ class UserSerializer(serializers.ModelSerializer):
             return ""
 
     def get_company_domain(self, obj):
-        try:
-            if obj.company:
-                dom = obj.company.domains.first()
-                return dom.domain if dom else ""
-            return ""
-        except Exception:
-            return ""
+        # Per-tenant domains no longer exist — the platform is single-domain.
+        return ""
 
     def get_company_schema(self, obj):
         try:
-            return obj.company.schema_name if obj.company else ""
+            return obj.company.slug if obj.company else ""
         except Exception:
             return ""
 

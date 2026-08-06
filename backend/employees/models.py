@@ -1,26 +1,13 @@
 from django.conf import settings
 from django.db import models
 
-
-# ── Tenant-scoped Manager ─────────────────────────────────────────────────────
-
-class TenantManager(models.Manager):
-    """
-    Drop-in manager that adds a for_company() helper.
-    All views that handle employee data MUST call:
-        Employee.objects.for_company(company)
-    instead of Employee.objects.all() to prevent cross-tenant data leakage.
-    """
-
-    def for_company(self, company):
-        """Return a queryset scoped to a single company (tenant)."""
-        return self.get_queryset().filter(company=company)
-
+from common.models import CompanyScopedManager
 
 
 class Employee(models.Model):
     # ── Managers ───────────────────────────────────────────────────────────────
-    objects = TenantManager()  # default manager — use .for_company(company) to scope
+    # for_company(company) / visible_to(user) / active() — see common/models.py
+    objects = CompanyScopedManager()
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="employee_profile")
     invited_by = models.ForeignKey(
@@ -127,6 +114,8 @@ class Employee(models.Model):
 
 
 class PresenceLog(models.Model):
+    objects = CompanyScopedManager()
+
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="presence_logs")
     login_at = models.DateTimeField(null=True, blank=True)
     logout_at = models.DateTimeField(null=True, blank=True)

@@ -256,9 +256,7 @@ class AdminTaskListCreateView(GenericAPIView):
 
     def get(self, request):
         company = _get_company_for_tasks(request)
-        qs = Task.objects.all().select_related("assigned_to", "assigned_by")
-        if company:
-            qs = qs.filter(company=company)
+        qs = Task.objects.for_company(company).select_related("assigned_to", "assigned_by")
 
         # Optional filters
         employee_id  = request.query_params.get("employee")

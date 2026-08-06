@@ -1,5 +1,4 @@
 from django.db import models
-from django_tenants.models import TenantMixin, DomainMixin
 
 
 class Region(models.Model):
@@ -63,9 +62,10 @@ def default_module_permissions():
     }
 
 
-class Company(TenantMixin):
+class Company(models.Model):
     company_name = models.CharField(max_length=255)
     display_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
+    slug = models.SlugField(max_length=255, unique=True, null=True, blank=True)
 
     class PrimaryCountry(models.TextChoices):
         US = "US", "United States"
@@ -147,16 +147,16 @@ class Company(TenantMixin):
             import uuid
             self.display_id = f"ORG-{uuid.uuid4().hex[:6].upper()}"
 
-        if not self.schema_name:
+        if not self.slug:
             from django.utils.text import slugify
             import uuid
-            base_slug = slugify(self.company_name).replace("-", "_") or f"org_{uuid.uuid4().hex[:8]}"
-            schema = base_slug
+            base_slug = slugify(self.company_name) or f"org-{uuid.uuid4().hex[:8]}"
+            slug = base_slug
             i = 2
-            while Company.objects.filter(schema_name=schema).exists():
-                schema = f"{base_slug}_{i}"
+            while Company.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{i}"
                 i += 1
-            self.schema_name = schema
+            self.slug = slug
 
         # Auto-assign region from primary_country
         if self.primary_country and (not self.region or self.region.code != self.primary_country):
@@ -169,7 +169,3 @@ class Company(TenantMixin):
 
     def __str__(self):
         return self.company_name
-
-
-class Domain(DomainMixin):
-    pass

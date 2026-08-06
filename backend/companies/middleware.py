@@ -1,48 +1,48 @@
 from django.conf import settings
-from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
-from django.db import connection
 
 
 class CompanyMiddleware(MiddlewareMixin):
     """
-    Middleware to switch the DB schema to the user's company tenant.
+    Resolves ``request.company`` for the currently authenticated user.
 
-    ROOT CAUSE FIX:
-    Django's AuthenticationMiddleware only handles session-based auth.
-    DRF JWT authentication runs INSIDE the view — AFTER all Django middleware.
-    So request.user is always AnonymousUser at middleware time for JWT API calls.
+    This platform is single-schema — there is no per-tenant Postgres schema
+    to switch anymore. Every model that needs to be scoped to a vendor
+    carries an explicit ``company`` FK, and callers are responsible for
+    filtering by it (see accounts.permissions.RequireModuleAccess and
+    core.mixins.CompanyScopedQuerysetMixin). This middleware only figures
+    out *which* company (if any) the request belongs to for staff/employee
+    users — it does not gate access, and it deliberately leaves
+    ``request.company`` as None for customer/marketplace requests, which
+    are expected to span multiple vendors rather than belong to one.
 
-    Solution: Read company_id directly from the JWT Bearer token header
-    BEFORE checking request.user. This ensures the correct schema is set
-    before any view code (or DRF authentication) runs.
+    DRF JWT authentication runs INSIDE the view — AFTER all Django
+    middleware — so request.user is still AnonymousUser at middleware time
+    for JWT API calls. We read company_id directly from the JWT Bearer
+    token/cookie instead of waiting for request.user.
     """
 
     def process_request(self, request):
-        # ── Step 0: Bypass tenant schema resolution for public/shared endpoints ──
+        request.company = None
+
         path = request.path
         prefix = getattr(settings, "FORCE_SCRIPT_NAME", "") or ""
         if prefix and path.startswith(prefix):
             path = path[len(prefix):]
 
         if path.startswith('/api/auth/') or path.startswith('/api/company/create'):
-            request.company = None
-            request.tenant = None
-            if hasattr(connection, 'set_schema_to_public'):
-                connection.set_schema_to_public()
-            print(f"DEBUG: CompanyMiddleware - Public/shared path '{request.path}', keeping public schema.")
             return None
 
         company = None
 
-        # ── Step 1: Read company_id directly from JWT Bearer token or Cookie ────
-        # DRF authenticates AFTER middleware, so we decode the token ourselves.
+        # ── Read company_id from JWT Bearer token or cookie ─────────────────
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
         token_str = None
         if auth_header.startswith('Bearer '):
             token_str = auth_header.split(' ')[1]
-        elif 'qt_access' in request.COOKIES:
-            token_str = request.COOKIES['qt_access']
+        else:
+            cookie_name = getattr(settings, "AUTH_COOKIE", "qt_access")
+            token_str = request.COOKIES.get(cookie_name)
 
         if token_str:
             try:
@@ -54,115 +54,19 @@ class CompanyMiddleware(MiddlewareMixin):
                     from django.contrib.auth import get_user_model
                     User = get_user_model()
                     u = User.objects.filter(id=user_id).first()
-                    if u and u.company:
+                    if u and u.company_id:
                         company = u.company
                 if not company and company_id:
                     from companies.models import Company
                     company = Company.objects.filter(id=company_id).first()
-                if company:
-                    print(f"DEBUG: CompanyMiddleware - Found company via JWT: {company.schema_name}")
-            except Exception as e:
-                print(f"DEBUG: CompanyMiddleware - JWT token read failed: {e}")
+            except Exception:
+                pass
 
-        # ── Step 1.5: Read company from query parameter or Referer (for public requests) ──
-        if not company:
-            org_name = request.GET.get('org') or request.POST.get('org')
-            if not org_name:
-                referer = request.META.get('HTTP_REFERER')
-                if referer:
-                    from urllib.parse import urlparse, parse_qs
-                    try:
-                        parsed_url = urlparse(referer)
-                        params = parse_qs(parsed_url.query)
-                        if 'org' in params:
-                            org_name = params['org'][0]
-                    except Exception:
-                        pass
-            if org_name:
-                from companies.models import Company
-                company = Company.objects.filter(schema_name=org_name).first()
-                if company:
-                    print(f"DEBUG: CompanyMiddleware - Found company via parameter/referer: {company.schema_name}")
-
-        # ── Step 1.6: Resolve company for public feedback requests ─────────────────
-        if not company and request.path.startswith('/api/feedback/'):
-            # Extract token from path e.g. /api/feedback/<token>/
-            parts = [p for p in request.path.split('/') if p]
-            if len(parts) >= 3:
-                token = parts[2]
-                try:
-                    from django_tenants.utils import schema_context
-                    from companies.models import Company
-                    from service_requests.models import ServiceFeedback
-
-                    for c in Company.objects.exclude(schema_name='public'):
-                        try:
-                            with schema_context(c.schema_name):
-                                if ServiceFeedback.objects.filter(feedback_token=token).exists():
-                                    company = c
-                                    print(f"DEBUG: CompanyMiddleware - Found company via feedback token in schema {c.schema_name}")
-                                    break
-                        except Exception:
-                            pass
-                except ImportError:
-                    pass
-
-        # ── Step 2: Fallback for session-based auth (admin panel, etc.) ─────────
+        # ── Fallback for session-based auth (Django admin, etc.) ────────────
         if not company:
             user = getattr(request, 'user', None)
             if user and user.is_authenticated:
                 company = getattr(user, 'company', None)
-                if not company:
-                    try:
-                        from companies.models import Company
-                        company = Company.objects.filter(users=user).first()
-                    except Exception:
-                        pass
 
-        # ── Step 2.5: Fallback to request.tenant (django-tenants) ───────────────
-        if not company and getattr(request, 'tenant', None):
-            tenant = request.tenant
-            if tenant.schema_name != 'public':
-                company = tenant
-
-        # ── Step 2.7: Strictly keep public or user company — no cross-tenant fallback ──
-        if not company:
-            # Keep company as None for public requests so cross-tenant leakage never occurs
-            pass
-
-        # ── Step 3: Switch the DB schema to this company's tenant ───────────────
-        if company:
-            request.company = company
-            request.tenant = company
-            if hasattr(connection, 'set_tenant'):
-                connection.set_tenant(company)
-                print(f"DEBUG: CompanyMiddleware - Schema set to: {company.schema_name}")
-            else:
-                print(f"DEBUG: CompanyMiddleware - set_tenant not supported on this backend.")
-        else:
-            request.company = None
-            request.tenant = None
-            print(f"DEBUG: CompanyMiddleware - No tenant resolved for: {request.path}")
-
-        # ── Step 4: Block tenant API calls that arrived without a valid company ──
-        # Applies to requests that provided a Bearer token or cookie.
-        if not company and token_str:
-            excluded_paths = [
-                '/api/auth/',
-                '/api/company/create',
-                '/api/booking/',
-                '/api/feedback/',
-            ]
-            path = request.path
-            prefix = getattr(settings, "FORCE_SCRIPT_NAME", "") or ""
-            if prefix and path.startswith(prefix):
-                path = path[len(prefix):]
-            if path.startswith('/api/') and not any(
-                path.startswith(p) for p in excluded_paths
-            ):
-                return JsonResponse(
-                    {"error": "No company associated with this account."},
-                    status=403
-                )
-
+        request.company = company
         return None

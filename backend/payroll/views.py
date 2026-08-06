@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAdminRole, is_admin_role, RequireModuleAccess
+from common.permissions import HasCompany, IsCompanyMember
 from employees.models import Employee
 from leaves.models import LeaveRequest
 from time_tracking.models import TimeLog
@@ -225,18 +226,17 @@ class PayrollRecordViewSet(viewsets.ReadOnlyModelViewSet):
         return [permissions.IsAuthenticated(), RequireModuleAccess("payroll", "view")]
 
     def get_queryset(self):
-        if not hasattr(self.request, "company"):
+        company = getattr(self.request, "company", None)
+        if company is None:
             return PayrollRecord.objects.none()
         qs = (
-            PayrollRecord.objects.filter(company=self.request.company)
+            PayrollRecord.objects.for_company(company)
             .select_related("employee", "employee__user", "period")
             .order_by("-generated_at")
         )
         if is_admin_role(self.request.user):
             return qs
-        employee = Employee.objects.filter(
-            user=self.request.user, company=self.request.company
-        ).first()
+        employee = Employee.objects.for_company(company).filter(user=self.request.user).first()
         if not employee:
             return qs.none()
         return qs.filter(employee=employee)
@@ -602,32 +602,32 @@ from .serializers import CurrencyMasterSerializer, PayrollRuleSerializer, Payrol
 
 class CurrencyMasterViewSet(viewsets.ModelViewSet):
     serializer_class = CurrencyMasterSerializer
-    
+
     def get_permissions(self):
+        base = [permissions.IsAuthenticated(), HasCompany(), IsCompanyMember()]
         if self.action in ["list", "retrieve"]:
-            return [permissions.IsAuthenticated(), RequireModuleAccess("payroll", "view")]
-        return [IsAdminRole(), RequireModuleAccess("payroll", "modify")]
+            return base + [RequireModuleAccess("payroll", "view")]
+        return base + [IsAdminRole(), RequireModuleAccess("payroll", "modify")]
 
     def get_queryset(self):
-        if not hasattr(self.request, "company"):
-            return CurrencyMaster.objects.none()
-        return CurrencyMaster.objects.filter(company=self.request.company)
+        company = getattr(self.request, "company", None)
+        return CurrencyMaster.objects.for_company(company)
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company)
 
 class PayrollRuleViewSet(viewsets.ModelViewSet):
     serializer_class = PayrollRuleSerializer
-    
+
     def get_permissions(self):
+        base = [permissions.IsAuthenticated(), HasCompany(), IsCompanyMember()]
         if self.action in ["list", "retrieve"]:
-            return [permissions.IsAuthenticated(), RequireModuleAccess("payroll", "view")]
-        return [IsAdminRole(), RequireModuleAccess("payroll", "modify")]
+            return base + [RequireModuleAccess("payroll", "view")]
+        return base + [IsAdminRole(), RequireModuleAccess("payroll", "modify")]
 
     def get_queryset(self):
-        if not hasattr(self.request, "company"):
-            return PayrollRule.objects.none()
-        return PayrollRule.objects.filter(company=self.request.company)
+        company = getattr(self.request, "company", None)
+        return PayrollRule.objects.for_company(company)
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company)
@@ -773,10 +773,10 @@ class PayrollGroupViewSet(viewsets.ModelViewSet):
     Admin creates groups, assigns employees to them for bulk config.
     """
     serializer_class = PayrollGroupSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+    permission_classes = [permissions.IsAuthenticated, HasCompany, IsAdminRole, IsCompanyMember]
 
     def get_queryset(self):
-        return PayrollGroup.objects.filter(company=self.request.company, is_active=True)
+        return PayrollGroup.objects.for_company(self.request.company).active()
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company, created_by=self.request.user)
@@ -836,10 +836,10 @@ class EmployeePayrollConfigViewSet(viewsets.ModelViewSet):
     Supports India service split, PF/ESI/TDS toggles, US/UK OT settings.
     """
     serializer_class = EmployeePayrollConfigSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+    permission_classes = [permissions.IsAuthenticated, HasCompany, IsAdminRole, IsCompanyMember]
 
     def get_queryset(self):
-        qs = EmployeePayrollConfig.objects.filter(company=self.request.company)
+        qs = EmployeePayrollConfig.objects.for_company(self.request.company)
         # Filter by type
         config_type = self.request.query_params.get("type")  # "employee" | "group"
         if config_type == "employee":
@@ -863,9 +863,13 @@ class EmployeePayrollConfigViewSet(viewsets.ModelViewSet):
         company = getattr(request, "company", None) or getattr(request.user, "company", None)
         employee = None
         if company:
-            employee = Employee.objects.filter(employee_id=employee_id, company=company).first()
-        if not employee:
-            employee = Employee.objects.filter(employee_id=employee_id).first() or Employee.objects.filter(id=employee_id).first()
+            # Deliberately no unscoped fallback here — falling back to an
+            # unscoped lookup by employee_id/id would leak another
+            # company's employee payroll config to this admin.
+            from django.db.models import Q
+            employee = Employee.objects.for_company(company).filter(
+                Q(employee_id=employee_id) | Q(id=employee_id if str(employee_id).isdigit() else None)
+            ).first()
         if not employee:
             return Response({"detail": "Employee not found."}, status=404)
 
@@ -1134,14 +1138,13 @@ class PayrollConfigViewSet(viewsets.ModelViewSet):
     Admin-only, org-scoped management of organization PayrollConfig.
     All mutations execute through service layer save_payroll_config().
     """
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+    permission_classes = [permissions.IsAuthenticated, HasCompany, IsAdminRole, IsCompanyMember]
     serializer_class = PayrollConfigSerializer
+    company_field = "org"
 
     def get_queryset(self):
         org = _get_org(self.request)
-        if not org:
-            return PayrollConfig.objects.none()
-        return PayrollConfig.objects.filter(org=org)
+        return PayrollConfig.objects.for_company(org)
 
     def list(self, request, *args, **kwargs):
         org = _get_org(request)
@@ -1536,8 +1539,9 @@ from .services import (
 
 
 class BankAccountViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasCompany, IsCompanyMember]
     serializer_class = BankAccountSerializer
+    company_field = "org"
 
     def get_queryset(self):
         emp = _resolve_employee(self.request.user)
@@ -1648,8 +1652,9 @@ class WalletStatementDownloadView(APIView):
 
 
 class PayoutDisputeViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasCompany, IsCompanyMember]
     serializer_class = PayoutDisputeSerializer
+    company_field = "org"
 
     def get_queryset(self):
         emp = _resolve_employee(self.request.user)

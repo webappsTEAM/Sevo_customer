@@ -8,22 +8,6 @@ from django.db.models import Q
 from companies.models import Company
 from settings_hub.models import TeamInvite
 
-from contextlib import contextmanager
-
-try:
-    from django_tenants.utils import schema_context as _django_tenants_schema_context
-    @contextmanager
-    def schema_context(schema_name):
-        if hasattr(connection, "tenant"):
-            with _django_tenants_schema_context(schema_name):
-                yield
-        else:
-            yield
-except ImportError:
-    @contextmanager
-    def schema_context(schema_name):
-        yield
-
 from rest_framework import permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -155,7 +139,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 
                 if user and not getattr(user, "company", None) and user.role != "admin":
                     from companies.models import Company
-                    company = Company.objects.filter(schema_name="demo_v2").first() or Company.objects.filter(schema_name="demo").first() or Company.objects.first()
+                    company = Company.objects.filter(slug="demo-v2").first() or Company.objects.filter(slug="demo").first() or Company.objects.first()
                     if company:
                         user.company = company
                         user.save(update_fields=["company"])
@@ -219,13 +203,10 @@ class LoginView(TokenObtainPairView):
                 try:
                     from employees.models import Employee, PresenceLog
                     from django.utils import timezone
-                    from django.db import connection
                     from channels.layers import get_channel_layer
                     from asgiref.sync import async_to_sync
 
                     company = user.company
-                    # CRITICAL: switch to tenant schema before querying tenant-scoped models
-                    connection.set_tenant(company)
 
                     emp = Employee.objects.filter(user=user, company=company).first()
                     if emp:
@@ -421,19 +402,8 @@ class GoogleLoginView(APIView):
             or User.objects.filter(email__iexact=email_clean).first()
         )
 
-        # Check if there is a pending team invitation for this email across all companies
-        invite = None
-        try:
-            for company in Company.objects.exclude(schema_name="public"):
-                try:
-                    with schema_context(company.schema_name):
-                        invite = TeamInvite.objects.filter(email__iexact=email_clean, status="pending").first()
-                        if invite:
-                            break
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        # Check if there is a pending team invitation for this email
+        invite = TeamInvite.objects.filter(email__iexact=email_clean, status="pending").first()
 
         # ── HIGH 2: Invite Gate ──────────────────────────────────────────────
         # Block account creation for unknown emails that have no pending invite.
@@ -478,30 +448,28 @@ class GoogleLoginView(APIView):
                 user.save()
 
             # Accept the invitation
-            with schema_context(invite.company.schema_name):
-                invite.status = "accepted"
-                from django.utils import timezone
-                invite.accepted_at = timezone.now()
-                invite.save()
+            invite.status = "accepted"
+            from django.utils import timezone
+            invite.accepted_at = timezone.now()
+            invite.save()
 
-            # Create/Activate Employee profile under the tenant schema
+            # Create/Activate Employee profile
             from employees.models import Employee
-            with schema_context(invite.company.schema_name):
-                employee, created = Employee.objects.get_or_create(
-                    user=user,
-                    company=invite.company,
-                    defaults={
-                        "employee_id": generate_next_employee_id(invite.company),
-                        "title": invite.role.title(),
-                        "hourly_rate": 0.00,
-                        "is_active": True,
-                        "invited_by": invite.invited_by
-                    }
-                )
-                if not created:
-                    employee.is_active = True
-                    employee.invited_by = invite.invited_by
-                    employee.save(update_fields=["is_active", "invited_by"])
+            employee, created = Employee.objects.get_or_create(
+                user=user,
+                company=invite.company,
+                defaults={
+                    "employee_id": generate_next_employee_id(invite.company),
+                    "title": invite.role.title(),
+                    "hourly_rate": 0.00,
+                    "is_active": True,
+                    "invited_by": invite.invited_by
+                }
+            )
+            if not created:
+                employee.is_active = True
+                employee.invited_by = invite.invited_by
+                employee.save(update_fields=["is_active", "invited_by"])
 
         if not user:
             return Response({"detail": "Google login is restricted to pre-approved employee email accounts. Please contact your administrator to register."}, status=status.HTTP_400_BAD_REQUEST)
@@ -539,18 +507,10 @@ class GoogleLoginView(APIView):
                 company = getattr(user, 'company', None)
                 if company:
                     try:
-                        from django.db import connection
-                        if hasattr(connection, "tenant"):
-                            with schema_context(company.schema_name):
-                                employee = Employee.objects.filter(user=user).first()
-                                if employee:
-                                    employee.is_active = True
-                                    employee.save()
-                        else:
-                            employee = Employee.objects.filter(user=user).first()
-                            if employee:
-                                employee.is_active = True
-                                employee.save()
+                        employee = Employee.objects.filter(user=user, company=company).first()
+                        if employee:
+                            employee.is_active = True
+                            employee.save()
                     except Exception as e:
                         print(f"Error activating employee in GoogleLoginView: {e}")
                 
@@ -575,20 +535,19 @@ class GoogleLoginView(APIView):
             else:
                 return Response({"detail": "This account is deactivated."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Update employee online presence in tenant schema
+        # Update employee online presence
         company = getattr(user, 'company', None)
         if company:
             try:
                 from employees.models import Employee
-                with schema_context(company.schema_name):
-                    emp = Employee.objects.filter(user=user).first()
-                    if emp:
-                        now = timezone.now()
-                        emp.is_online = True
-                        emp.current_availability = "available"
-                        emp.last_login_at = now
-                        emp.last_activity_at = now
-                        emp.save(update_fields=["is_online", "current_availability", "last_login_at", "last_activity_at"])
+                emp = Employee.objects.filter(user=user, company=company).first()
+                if emp:
+                    now = timezone.now()
+                    emp.is_online = True
+                    emp.current_availability = "available"
+                    emp.last_login_at = now
+                    emp.last_activity_at = now
+                    emp.save(update_fields=["is_online", "current_availability", "last_login_at", "last_activity_at"])
             except Exception as e:
                 print(f"[GoogleLoginView] Error setting employee online presence: {e}")
 
@@ -666,9 +625,10 @@ class RegisterView(APIView):
         from django.db import transaction
 
         try:
-            # All shared-schema writes in one transaction (Company, Domain, User)
+            # Company, User and Employee are all created in one transaction now
+            # that there's no per-tenant schema to create separately.
             with transaction.atomic():
-                # 1. Create Company (triggers tenant schema creation + migrations)
+                # 1. Create Company
                 from django.utils.text import slugify
                 existing_company = Company.objects.filter(company_name=organization_name).first()
                 if existing_company and existing_company.users.count() == 0:
@@ -682,12 +642,6 @@ class RegisterView(APIView):
                     if request.data.get("start_trial") is False:
                         company._skip_trial_activation = True
                     company.save()
-                    from companies.models import Domain
-                    Domain.objects.create(
-                        domain=f"{company.schema_name}.localhost",
-                        tenant=company,
-                        is_primary=True
-                    )
 
                 # 2. Create User as Org Admin
                 user = User.objects.create_user(
@@ -701,22 +655,17 @@ class RegisterView(APIView):
                 user.company = company
                 user.save()
 
-            # 3. Create Employee in tenant schema (must be outside public transaction)
-            if hasattr(connection, 'set_tenant'):
-                connection.set_tenant(company)
-                
-            from employees.models import Employee
-            Employee.objects.get_or_create(
-                user=user,
-                company=company,
-                defaults={
-                    "employee_id": generate_next_employee_id(company),
-                    "title": "Admin",
-                    "hourly_rate": 0,
-                }
-            )
-            if hasattr(connection, 'set_schema_to_public'):
-                connection.set_schema_to_public()
+                # 3. Create Employee
+                from employees.models import Employee
+                Employee.objects.get_or_create(
+                    user=user,
+                    company=company,
+                    defaults={
+                        "employee_id": generate_next_employee_id(company),
+                        "title": "Admin",
+                        "hourly_rate": 0,
+                    }
+                )
 
         except Exception as e:
             print(f"ERROR in RegisterView: {str(e)}")
@@ -748,7 +697,7 @@ class MeView(APIView):
 
         if user and not getattr(user, "company", None) and user.role != "admin":
             from companies.models import Company
-            company = Company.objects.filter(schema_name="demo_v2").first() or Company.objects.filter(schema_name="demo").first() or Company.objects.first()
+            company = Company.objects.filter(slug="demo-v2").first() or Company.objects.filter(slug="demo").first() or Company.objects.first()
             if company:
                 user.company = company
                 user.save(update_fields=["company"])
@@ -758,16 +707,14 @@ class MeView(APIView):
             try:
                 from employees.models import Employee
                 from django.utils import timezone
-                from django_tenants.utils import schema_context
-                with schema_context(company.schema_name):
-                    emp = Employee.objects.filter(user=user).first()
-                    if emp:
-                        now = timezone.now()
-                        if not emp.is_online:
-                            emp.is_online = True
-                            emp.current_availability = "available"
-                        emp.last_activity_at = now
-                        emp.save(update_fields=["is_online", "current_availability", "last_activity_at"])
+                emp = Employee.objects.filter(user=user, company=company).first()
+                if emp:
+                    now = timezone.now()
+                    if not emp.is_online:
+                        emp.is_online = True
+                        emp.current_availability = "available"
+                    emp.last_activity_at = now
+                    emp.save(update_fields=["is_online", "current_availability", "last_activity_at"])
             except Exception as e:
                 print(f"[MeView] Error updating employee presence: {e}")
 
@@ -916,35 +863,11 @@ class AcceptInviteView(APIView):
 
     def get(self, request):
         token = request.query_params.get("token")
-        org_schema = request.query_params.get("org")
 
         if not token:
             return Response({"detail": "Token is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if org_schema:
-            if hasattr(connection, 'set_tenant'):
-                from companies.models import Company
-                company = Company.objects.filter(schema_name=org_schema).first()
-                if company:
-                    connection.set_tenant(company)
-        
-        invite = None
-        if connection.schema_name != "public":
-            try:
-                invite = TeamInvite.objects.filter(token=token).first()
-            except Exception:
-                pass
-        
-        if not invite:
-            from companies.models import Company
-            for company in Company.objects.exclude(schema_name="public"):
-                with schema_context(company.schema_name):
-                    try:
-                        invite = TeamInvite.objects.filter(token=token).first()
-                        if invite:
-                            break
-                    except Exception:
-                        pass
+        invite = TeamInvite.objects.filter(token=token).first()
 
         if not invite:
             return Response({"detail": "Invalid or expired invitation token."}, status=status.HTTP_400_BAD_REQUEST)
@@ -965,42 +888,13 @@ class AcceptInviteView(APIView):
     def post(self, request):
         token = request.data.get("token")
         password = request.data.get("password")
-        org_schema = request.data.get("org") # Get schema from URL/request
         first_name = request.data.get("first_name", "")
         last_name = request.data.get("last_name", "")
 
         if not token or not password:
             return Response({"detail": "Token and password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Handle multi-tenant lookup
-        if org_schema:
-            if hasattr(connection, 'set_tenant'):
-                from companies.models import Company
-                company = Company.objects.filter(schema_name=org_schema).first()
-                if company:
-                    connection.set_tenant(company)
-        
-        invite = None
-        if connection.schema_name != "public":
-            try:
-                invite = TeamInvite.objects.filter(token=token).first()
-            except Exception:
-                pass
-        
-        # Fallback: if not found in current schema, search all schemas
-        if not invite:
-            from companies.models import Company
-            for company in Company.objects.exclude(schema_name="public"):
-                with schema_context(company.schema_name):
-                    try:
-                        invite = TeamInvite.objects.filter(token=token).first()
-                        if invite:
-                            # Once found, set the tenant for the rest of the transaction
-                            if hasattr(connection, 'set_tenant'):
-                                connection.set_tenant(company)
-                            break
-                    except Exception:
-                        pass
+        invite = TeamInvite.objects.filter(token=token).first()
 
         if not invite:
             return Response({"detail": "Invalid or expired invitation token."}, status=status.HTTP_400_BAD_REQUEST)
@@ -1016,9 +910,8 @@ class AcceptInviteView(APIView):
 
         if invite.status == "expired" or invite.is_expired:
             if invite.status != "expired":
-                with schema_context(invite.company.schema_name):
-                    invite.status = "expired"
-                    invite.save()
+                invite.status = "expired"
+                invite.save()
             return Response({"detail": "This invitation has expired."}, status=status.HTTP_400_BAD_REQUEST)
 
         User = get_user_model()
@@ -1053,34 +946,32 @@ class AcceptInviteView(APIView):
                 user.is_active = True
                 user.save()
 
-                with schema_context(invite.company.schema_name):
-                    invite.status = "accepted"
-                    from django.utils import timezone
-                    invite.accepted_at = timezone.now()
-                    invite.save()
+                invite.status = "accepted"
+                from django.utils import timezone
+                invite.accepted_at = timezone.now()
+                invite.save()
 
             from employees.models import Employee
-            with schema_context(invite.company.schema_name):
-                employee, created = Employee.objects.get_or_create(
-                    user=user,
-                    company=invite.company,
-                    defaults={
-                        "employee_id": generate_next_employee_id(invite.company),
-                        "title": invite.role.title(),
-                        "hourly_rate": 0,
-                        "invited_by": invite.invited_by,
-                        "country": invite.region or invite.company.primary_country,
-                        "state": invite.default_state or getattr(invite.company, "default_state", ""),
-                    }
-                )
-                if not created:
-                    employee.is_active = True
-                    employee.invited_by = invite.invited_by
-                    if not employee.country:
-                        employee.country = invite.region or invite.company.primary_country
-                    if not getattr(employee, "state", None):
-                        employee.state = invite.default_state or getattr(invite.company, "default_state", "")
-                    employee.save(update_fields=["is_active", "invited_by", "country", "state"])
+            employee, created = Employee.objects.get_or_create(
+                user=user,
+                company=invite.company,
+                defaults={
+                    "employee_id": generate_next_employee_id(invite.company),
+                    "title": invite.role.title(),
+                    "hourly_rate": 0,
+                    "invited_by": invite.invited_by,
+                    "country": invite.region or invite.company.primary_country,
+                    "state": invite.default_state or getattr(invite.company, "default_state", ""),
+                }
+            )
+            if not created:
+                employee.is_active = True
+                employee.invited_by = invite.invited_by
+                if not employee.country:
+                    employee.country = invite.region or invite.company.primary_country
+                if not getattr(employee, "state", None):
+                    employee.state = invite.default_state or getattr(invite.company, "default_state", "")
+                employee.save(update_fields=["is_active", "invited_by", "country", "state"])
 
         except Exception as e:
             traceback.print_exc()
@@ -1128,13 +1019,11 @@ class PasswordResetRequestView(APIView):
                 first_name = user.username
                 
             if getattr(user, "company", None):
-                from django_tenants.utils import schema_context
                 try:
-                    with schema_context(user.company.schema_name):
-                        from employees.models import Employee
-                        emp = Employee.objects.filter(user=user).first()
-                        if emp:
-                            employee_id = emp.employee_id
+                    from employees.models import Employee
+                    emp = Employee.objects.filter(user=user, company=user.company).first()
+                    if emp:
+                        employee_id = emp.employee_id
                 except Exception as e:
                     print(f"Error fetching employee for email reset: {e}")
 
@@ -1246,13 +1135,11 @@ class PasswordResetConfirmView(APIView):
             # Resolve employee ID
             employee_id = "EMP1025"
             if getattr(user, "company", None):
-                from django_tenants.utils import schema_context
                 try:
-                    with schema_context(user.company.schema_name):
-                        from employees.models import Employee
-                        emp = Employee.objects.filter(user=user).first()
-                        if emp:
-                            employee_id = emp.employee_id
+                    from employees.models import Employee
+                    emp = Employee.objects.filter(user=user, company=user.company).first()
+                    if emp:
+                        employee_id = emp.employee_id
                 except Exception as e:
                     print(f"Error fetching employee in reset confirm: {e}")
             else:
@@ -1402,7 +1289,7 @@ class RegistrationDossierApproveView(APIView):
             
             if not company:
                 from companies.models import Company
-                company = Company.objects.exclude(schema_name="public").first() or Company.objects.first()
+                company = Company.objects.first()
 
             if not user:
                 user = User.objects.create_user(
@@ -1420,31 +1307,30 @@ class RegistrationDossierApproveView(APIView):
                 user.company = company
                 user.save()
 
-            with schema_context(company.schema_name):
-                employee = Employee.objects.filter(user=user).first()
-                if employee:
-                    # Check if this employee_id is already taken in the target company (excluding this record itself)
-                    collision = Employee.objects.filter(company=company, employee_id=employee.employee_id).exclude(id=employee.id).exists()
-                    if collision or employee.employee_id == "EMP-2048":
-                        employee.employee_id = generate_next_employee_id(company)
-                    employee.company = company
-                    employee.phone = phone
-                    employee.country = region
-                    employee.is_active = False
-                    employee.invited_by = request.user
-                    employee.save()
-                else:
-                    employee = Employee.objects.create(
-                        user=user,
-                        company=company,
-                        employee_id=reg_form.get("employee_id") or generate_next_employee_id(company),
-                        phone=phone,
-                        title="Field Operations Tech (L2)",
-                        hourly_rate=0.00,
-                        country=region,
-                        is_active=False,
-                        invited_by=request.user
-                    )
+            employee = Employee.objects.filter(user=user, company=company).first()
+            if employee:
+                # Check if this employee_id is already taken in the target company (excluding this record itself)
+                collision = Employee.objects.filter(company=company, employee_id=employee.employee_id).exclude(id=employee.id).exists()
+                if collision or employee.employee_id == "EMP-2048":
+                    employee.employee_id = generate_next_employee_id(company)
+                employee.company = company
+                employee.phone = phone
+                employee.country = region
+                employee.is_active = False
+                employee.invited_by = request.user
+                employee.save()
+            else:
+                employee = Employee.objects.create(
+                    user=user,
+                    company=company,
+                    employee_id=reg_form.get("employee_id") or generate_next_employee_id(company),
+                    phone=phone,
+                    title="Field Operations Tech (L2)",
+                    hourly_rate=0.00,
+                    country=region,
+                    is_active=False,
+                    invited_by=request.user
+                )
 
             # Send simulated invitation email
             frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
@@ -1678,11 +1564,10 @@ class RegistrationDossierActivateView(APIView):
         user.save()
 
         if hasattr(user, "company") and user.company:
-            with schema_context(user.company.schema_name):
-                employee = Employee.objects.filter(user=user).first()
-                if employee:
-                    employee.is_active = True
-                    employee.save()
+            employee = Employee.objects.filter(user=user, company=user.company).first()
+            if employee:
+                employee.is_active = True
+                employee.save()
 
         # Update dossier status
         admin_clearance["status"] = "activated"
@@ -1725,31 +1610,23 @@ class PasswordResetVerifyIdentityView(APIView):
         found_user = user
         found_employee = None
         
-        # If not found directly, search all tenant schemas for employee_id or username/email
-        if not found_user and hasattr(connection, 'set_tenant'):
-            from companies.models import Company
+        # If not found directly, search by employee_id (or employee's linked user)
+        if not found_user:
             from employees.models import Employee
-            for company in Company.objects.exclude(schema_name='public'):
-                try:
-                    with schema_context(company.schema_name):
-                        emp = Employee.objects.filter(
-                            Q(employee_id__iexact=identity) |
-                            Q(user__username__iexact=identity) |
-                            Q(user__email__iexact=identity)
-                        ).select_related('user').first()
-                        if emp:
-                            found_user = emp.user
-                            found_employee = emp
-                            break
-                except Exception:
-                    continue
-        
-        # If found user via public model, try to fetch employee details
+            emp = Employee.objects.filter(
+                Q(employee_id__iexact=identity) |
+                Q(user__username__iexact=identity) |
+                Q(user__email__iexact=identity)
+            ).select_related('user').first()
+            if emp:
+                found_user = emp.user
+                found_employee = emp
+
+        # If found user via the User model, try to fetch employee details
         if found_user and not found_employee and getattr(found_user, "company", None):
             try:
-                with schema_context(found_user.company.schema_name):
-                    from employees.models import Employee
-                    found_employee = Employee.objects.filter(user=found_user).first()
+                from employees.models import Employee
+                found_employee = Employee.objects.filter(user=found_user, company=found_user.company).first()
             except Exception:
                 pass
 
@@ -2155,93 +2032,80 @@ class DeleteAccountView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Clean up all foreign key references to target_user in tenant schemas to prevent database IntegrityError
-        from django_tenants.utils import schema_context
-        from companies.models import Company
+        # Clean up all foreign key references to target_user to prevent database IntegrityError
         from django.apps import apps
 
-        companies = Company.objects.exclude(schema_name="public")
-        for comp in companies:
-            with schema_context(comp.schema_name):
-                # 1. Clean up employees
-                if apps.is_installed("employees"):
-                    from employees.models import Employee
-                    Employee.objects.filter(user=target_user).delete()
-                    Employee.objects.filter(invited_by=target_user).update(invited_by=None)
-                
-                # 2. Clean up settings_hub
-                if apps.is_installed("settings_hub"):
-                    from settings_hub.models import TeamInvite, APIKey, Webhook
-                    TeamInvite.objects.filter(invited_by=target_user).update(invited_by=None)
-                    APIKey.objects.filter(created_by=target_user).update(created_by=None)
-                    Webhook.objects.filter(created_by=target_user).update(created_by=None)
+        # 1. Clean up employees
+        if apps.is_installed("employees"):
+            from employees.models import Employee
+            Employee.objects.filter(user=target_user).delete()
+            Employee.objects.filter(invited_by=target_user).update(invited_by=None)
 
-                # 3. Clean up time logs
-                if apps.is_installed("time_tracking"):
-                    from time_tracking.models import TimeLog
-                    TimeLog.objects.filter(approved_by=target_user).update(approved_by=None)
+        # 2. Clean up settings_hub
+        if apps.is_installed("settings_hub"):
+            from settings_hub.models import TeamInvite, APIKey, Webhook
+            TeamInvite.objects.filter(invited_by=target_user).update(invited_by=None)
+            APIKey.objects.filter(created_by=target_user).update(created_by=None)
+            Webhook.objects.filter(created_by=target_user).update(created_by=None)
 
-                # 4. Clean up mileage
-                if apps.is_installed("mileage"):
-                    try:
-                        from mileage.models import MileageTrip
-                        MileageTrip.objects.filter(approved_by=target_user).update(approved_by=None)
-                    except Exception:
-                        pass
+        # 3. Clean up time logs
+        if apps.is_installed("time_tracking"):
+            from time_tracking.models import TimeLog
+            TimeLog.objects.filter(approved_by=target_user).update(approved_by=None)
 
-                # 5. Clean up payroll
-                if apps.is_installed("payroll"):
-                    try:
-                        from payroll.models import PayrollRecord
-                        PayrollRecord.objects.filter(generated_by=target_user).update(generated_by=None)
-                    except Exception:
-                        pass
+        # 4. Clean up mileage
+        if apps.is_installed("mileage"):
+            try:
+                from mileage.models import MileageTrip
+                MileageTrip.objects.filter(approved_by=target_user).update(approved_by=None)
+            except Exception:
+                pass
 
-                # 6. Clean up leaves
-                if apps.is_installed("leaves"):
-                    try:
-                        from leaves.models import LeaveRequest
-                        LeaveRequest.objects.filter(approved_by=target_user).update(approved_by=None)
-                    except Exception:
-                        pass
+        # 5. Clean up payroll
+        if apps.is_installed("payroll"):
+            try:
+                from payroll.models import PayrollRecord
+                PayrollRecord.objects.filter(generated_by=target_user).update(generated_by=None)
+            except Exception:
+                pass
 
-                # 7. Clean up tasks
-                if apps.is_installed("tasks"):
-                    try:
-                        from tasks.models import Task, TaskAttachment, TaskActivityLog
-                        Task.objects.filter(assigned_by=target_user).update(assigned_by=None)
-                        Task.objects.filter(assigned_to=target_user).delete()
-                        TaskAttachment.objects.filter(uploaded_by=target_user).update(uploaded_by=None)
-                        TaskActivityLog.objects.filter(actor=target_user).update(actor=None)
-                    except Exception:
-                        pass
+        # 6. Clean up leaves
+        if apps.is_installed("leaves"):
+            try:
+                from leaves.models import LeaveRequest
+                LeaveRequest.objects.filter(approved_by=target_user).update(approved_by=None)
+            except Exception:
+                pass
 
-                # 8. Clean up service requests
-                if apps.is_installed("service_requests"):
-                    try:
-                        from service_requests.models import ServiceRequest
-                        ServiceRequest.objects.filter(assigned_by=target_user).update(assigned_by=None)
-                    except Exception:
-                        pass
+        # 7. Clean up tasks
+        if apps.is_installed("tasks"):
+            try:
+                from tasks.models import Task, TaskAttachment, TaskActivityLog
+                Task.objects.filter(assigned_by=target_user).update(assigned_by=None)
+                Task.objects.filter(assigned_to=target_user).delete()
+                TaskAttachment.objects.filter(uploaded_by=target_user).update(uploaded_by=None)
+                TaskActivityLog.objects.filter(actor=target_user).update(actor=None)
+            except Exception:
+                pass
 
-                # 9. Clean up inventory
-                if apps.is_installed("inventory"):
-                    try:
-                        from inventory.models import InventoryIssuance, InventoryTransfer
-                        InventoryIssuance.objects.filter(issued_by=target_user).update(issued_by=None)
-                        InventoryTransfer.objects.filter(requested_by=target_user).delete()
-                    except Exception:
-                        pass
+        # 8. Clean up service requests
+        if apps.is_installed("service_requests"):
+            try:
+                from service_requests.models import ServiceRequest
+                ServiceRequest.objects.filter(assigned_by=target_user).update(assigned_by=None)
+            except Exception:
+                pass
 
-        # Delete target user inside their company schema context
-        schema_name = "public"
-        if getattr(target_user, "company", None):
-            schema_name = target_user.company.schema_name
-        elif getattr(request.user, "company", None):
-            schema_name = request.user.company.schema_name
+        # 9. Clean up inventory
+        if apps.is_installed("inventory"):
+            try:
+                from inventory.models import InventoryIssuance, InventoryTransfer
+                InventoryIssuance.objects.filter(issued_by=target_user).update(issued_by=None)
+                InventoryTransfer.objects.filter(requested_by=target_user).delete()
+            except Exception:
+                pass
 
-        with schema_context(schema_name):
-            target_user.delete()
+        target_user.delete()
 
         response_data = {"success": True, "message": "Account successfully deleted."}
 

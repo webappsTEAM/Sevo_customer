@@ -32,9 +32,9 @@ FORCE_SCRIPT_NAME = os.getenv("FORCE_SCRIPT_NAME", "")
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-SHARED_APPS = [
+INSTALLED_APPS = [
     "daphne",
-    "django_tenants",
+    "common",
     "companies",
     "django.contrib.contenttypes",
     "django.contrib.auth",
@@ -46,11 +46,6 @@ SHARED_APPS = [
     "channels",
     "django_celery_beat",
     "trial_management",
-]
-
-
-TENANT_APPS = [
-    "django.contrib.contenttypes",
     "employees",
     "time_tracking",
     "leaves",
@@ -66,24 +61,8 @@ TENANT_APPS = [
     "service_requests",
 ]
 
-# Preserve order and ensure daphne is at the very beginning for ASGI/WebSocket support
-_installed = []
-for app in SHARED_APPS + TENANT_APPS:
-    if app not in _installed:
-        _installed.append(app)
-if "daphne" in _installed:
-    _installed.remove("daphne")
-    _installed.insert(0, "daphne")
-INSTALLED_APPS = _installed
-
-TENANT_MODEL = "companies.Company"
-TENANT_DOMAIN_MODEL = "companies.Domain"
-TEST_RUNNER = "django_tenants.test.runners.TenantTestSuiteRunner"
-FAST_TENANT_TESTS = True
-
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
-    "django_tenants.middleware.main.TenantMainMiddleware",
     "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -95,8 +74,6 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-SHOW_PUBLIC_IF_NO_TENANT_FOUND = True
-
 # Allow Google Sign-In popup to return tokens properly
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
@@ -105,28 +82,26 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 # ---------------------------------------------------------------------------
 
 USE_POSTGRES = os.getenv("DB_NAME") or os.getenv("DB_HOST")
-USE_TENANTS = os.getenv("USE_TENANTS", "1") == "1"
 
 if USE_POSTGRES:
-    if USE_TENANTS:
-        DATABASE_ROUTERS = ('django_tenants.routers.TenantSyncRouter',)
-    else:
-        DATABASE_ROUTERS = ()
-        MIDDLEWARE = [m for m in MIDDLEWARE if "django_tenants" not in m]
-        if "django_tenants" in INSTALLED_APPS:
-            INSTALLED_APPS.remove("django_tenants")
-
     _db_options = {}
     _sslmode = os.getenv("DB_SSLMODE", "")
     if _sslmode:
         _db_options["sslmode"] = _sslmode
+
+    # Pin the schema explicitly — the platform is single-schema (public) now
+    # that django-tenants is gone, and nothing else sets the active schema
+    # per-request anymore. Without this, connections fall back to whatever
+    # search_path the DB role defaults to, which may not be "public".
+    _connection_opts = [f'-c search_path={os.getenv("DB_SCHEMA", "public")}']
     _stmt_timeout = os.getenv("DB_STATEMENT_TIMEOUT", "")
     if _stmt_timeout:
-        _db_options["options"] = f"-c statement_timeout={_stmt_timeout}"
+        _connection_opts.append(f"-c statement_timeout={_stmt_timeout}")
+    _db_options["options"] = " ".join(_connection_opts)
 
     DATABASES = {
         "default": {
-            "ENGINE": "django_tenants.postgresql_backend" if USE_TENANTS else "django.db.backends.postgresql",
+            "ENGINE": "django.db.backends.postgresql",
             "NAME": os.getenv("DB_NAME", "postgres"),
             "USER": os.getenv("DB_USER", "postgres"),
             "PASSWORD": os.getenv("DB_PASSWORD", ""),
@@ -139,18 +114,12 @@ if USE_POSTGRES:
     }
 else:
     # Local Development Fallback to SQLite
-    DATABASE_ROUTERS = ()
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
-    # Remove tenant middleware if using SQLite
-    MIDDLEWARE = [m for m in MIDDLEWARE if "django_tenants" not in m]
-    # Remove django_tenants from installed apps if using SQLite
-    if "django_tenants" in INSTALLED_APPS:
-        INSTALLED_APPS.remove("django_tenants")
 
 
 
@@ -372,12 +341,5 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True") == "True"
-
-# ── Auth Cookies ──────────────────────────────────────────────────────────────
-AUTH_COOKIE = "access_token"
-AUTH_COOKIE_REFRESH = "refresh_token"
-AUTH_COOKIE_SECURE = False
-AUTH_COOKIE_SAMESITE = "Lax"
-SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 

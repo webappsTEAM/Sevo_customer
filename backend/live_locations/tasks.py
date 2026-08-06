@@ -33,7 +33,6 @@ def check_missed_clock_ins():
          shift location → log a 'potential missed clock-in' warning.
       4. Optionally push a WebSocket alert to the admin group.
     """
-    from django_tenants.utils import schema_context
     from companies.models import Company
 
     now = timezone.now()
@@ -42,10 +41,9 @@ def check_missed_clock_ins():
 
     for company in Company.objects.filter(is_active=True):
         try:
-            with schema_context(company.schema_name):
-                flagged.extend(_check_company(company, now, window_start))
+            flagged.extend(_check_company(company, now, window_start))
         except Exception as exc:
-            print(f"[Celery] check_missed_clock_ins failed for {company.schema_name}: {exc}")
+            print(f"[Celery] check_missed_clock_ins failed for {company.company_name}: {exc}")
 
     return {"flagged": flagged}
 
