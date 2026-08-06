@@ -34,7 +34,7 @@ const CATEGORIES = [
   { id: "plumbing", name: "Plumbing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop", desc: "Leaks, pipes & fixtures", rating: "4.7", jobs: "30K+" },
   { id: "electrical", name: "Electrical", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop", desc: "Wiring, panels & lighting", rating: "4.8", jobs: "40K+" },
   { id: "carpentry", name: "Carpentry", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=500&q=80&fit=crop", desc: "Furniture & wood repairs", rating: "4.6", jobs: "15K+" },
-  { id: "hvac", name: "AC & Heating", image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=500&q=80&fit=crop", desc: "AC service & installation", rating: "4.9", jobs: "60K+" },
+  { id: "hvac", name: "AC & Heating", image: "/mockups/service_hvac.png", desc: "AC service & installation", rating: "4.9", jobs: "60K+" },
   { id: "pest_control", name: "Pest Control", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=500&q=80&fit=crop", desc: "Termites, cockroaches & more", rating: "4.7", jobs: "25K+" },
   { id: "painting", name: "Painting", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&q=80&fit=crop", desc: "Walls, ceilings & textures", rating: "4.6", jobs: "20K+" },
   { id: "appliance_repair", name: "Appliances", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop", desc: "Fridge, washer & oven repairs", rating: "4.8", jobs: "35K+" },
