@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react"
-import { useSearchParams, useLocation } from "react-router-dom"
+import { useSearchParams, useLocation, useNavigate } from "react-router-dom"
 import { useGoogleLogin } from "@react-oauth/google"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -592,6 +592,8 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
           {filtered.map((cat, i) => (
             <motion.button
               key={cat.id}
+              id={`cat-card-${cat.id}`}
+              data-cat-id={cat.id}
               className="uc-cat-card"
               onClick={() => onSelect(cat)}
               initial={{ opacity: 0, y: 20 }}
@@ -767,64 +769,161 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
    STEP 3 •” SCHEDULE
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
-function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTimeChange, onNext, onBack }) {
+function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTimeChange, onNext, onBack, cart }) {
   const dateScrollRef = useRef()
   const canContinue = selectedDate && selectedTime
+  const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
+  const taxFee = 99
+  const grandTotal = totalPrice + taxFee
+
+  // Urban time slots: Morning / Afternoon / Evening
+  const UC_TIME_SLOTS = [
+    { period: 'Morning', icon: '🌅', slots: ['07:00','08:00','09:00','10:00','11:00','12:00'] },
+    { period: 'Afternoon', icon: '☀️', slots: ['12:00','13:00','14:00','15:00','16:00','17:00'] },
+    { period: 'Evening', icon: '🌙', slots: ['17:00','18:00','19:00','20:00','21:00'] },
+  ]
+  const formatSlot = t => {
+    const [h] = t.split(':').map(Number)
+    const ampm = h < 12 ? 'AM' : 'PM'
+    const h12 = h % 12 === 0 ? 12 : h % 12
+    return `${h12}:00 ${ampm}`
+  }
 
   return (
-    <div className="uc-step-page">
-      <div className="uc-step-back" onClick={onBack}><ArrowLeft size={16} /> Back</div>
-      <h2 className="uc-step-h2">When should we come?</h2>
-      <p className="uc-step-sub">Pick a date and time that works for you</p>
+    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 960, margin: '0 auto', padding: '0 0 80px' }}>
+      {/* LEFT: Slot Picker */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 99, border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem', color: '#64748b', transition: 'all 0.18s' }}>
+            <ArrowLeft size={14} /> Back
+          </button>
+        </div>
 
-      {/* Date Scroll */}
-      <div className="uc-date-section">
-        <div className="uc-subsection-label"><Calendar size={14} /> Select Date</div>
-        <div className="uc-date-scroll" ref={dateScrollRef}>
-          {DAYS_LIST.map(d => (
-            <button
-              key={d.iso}
-              className={`uc-date-pill ${selectedDate === d.iso ? "uc-date-pill--sel" : ""}`}
-              onClick={() => onDateChange(d.iso)}
-            >
-              {d.today && <div className="uc-date-today-tag">Today</div>}
-              <div className="uc-date-day">{d.day}</div>
-              <div className="uc-date-num">{d.date}</div>
-              <div className="uc-date-mon">{d.month}</div>
-            </button>
+        {/* Service info row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc', borderRadius: 14, padding: '14px 16px', marginBottom: 22, border: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: '1.8rem' }}>{category?.emoji || '🔧'}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{category?.name || 'Service'}</div>
+            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>
+              {cart && cart.length > 0 ? cart.map(c => `${c.quantity}x ${c.name}`).join(' · ') : 'Selected services'}
+            </div>
+          </div>
+          <div style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.1rem' }}>₹{totalPrice.toLocaleString()}</div>
+        </div>
+
+        {/* Date Section */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Calendar size={15} color="#7C3AED" /> Select Date
+          </div>
+          <div ref={dateScrollRef} style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8, scrollbarWidth: 'none' }}>
+            {DAYS_LIST.map(d => (
+              <button
+                key={d.iso}
+                onClick={() => onDateChange(d.iso)}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  minWidth: 62, padding: '10px 8px', borderRadius: 14, border: `2px solid ${selectedDate === d.iso ? '#7C3AED' : '#e2e8f0'}`,
+                  background: selectedDate === d.iso ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : 'white',
+                  cursor: 'pointer', transition: 'all 0.18s', flexShrink: 0, position: 'relative'
+                }}
+              >
+                {d.today && (
+                  <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: '#7C3AED', color: 'white', fontSize: '0.52rem', fontWeight: 800, padding: '2px 7px', borderRadius: 99, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>TODAY</div>
+                )}
+                <div style={{ fontSize: '0.68rem', fontWeight: 700, color: selectedDate === d.iso ? 'rgba(255,255,255,0.85)' : '#94a3b8', marginBottom: 4 }}>{d.day}</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 900, color: selectedDate === d.iso ? 'white' : '#0f172a', lineHeight: 1 }}>{d.date}</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 700, color: selectedDate === d.iso ? 'rgba(255,255,255,0.8)' : '#94a3b8', marginTop: 3 }}>{d.month}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Time Section */}
+        <div>
+          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Clock size={15} color="#7C3AED" /> Select Time Slot
+          </div>
+          {UC_TIME_SLOTS.map(group => (
+            <div key={group.period} style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {group.icon} {group.period}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {group.slots.map(t => (
+                  <button
+                    key={`${group.period}-${t}`}
+                    onClick={() => onTimeChange(t)}
+                    style={{
+                      padding: '8px 18px', borderRadius: 99,
+                      border: `2px solid ${selectedTime === t ? '#7C3AED' : '#e2e8f0'}`,
+                      background: selectedTime === t ? '#7C3AED' : 'white',
+                      color: selectedTime === t ? 'white' : '#374151',
+                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.18s'
+                    }}
+                  >
+                    {formatSlot(t)}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
+        </div>
+
+        {/* CTA */}
+        <div style={{ position: 'sticky', bottom: 0, background: 'white', padding: '16px 0', borderTop: '1px solid #e2e8f0', marginTop: 8 }}>
+          <button
+            onClick={onNext}
+            disabled={!canContinue}
+            style={{
+              width: '100%', padding: '14px', borderRadius: 14,
+              background: canContinue ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#e2e8f0',
+              color: canContinue ? 'white' : '#94a3b8',
+              fontWeight: 800, fontSize: '1rem', border: 'none', cursor: canContinue ? 'pointer' : 'not-allowed',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              boxShadow: canContinue ? '0 4px 20px rgba(124,58,237,0.3)' : 'none', transition: 'all 0.18s'
+            }}
+          >
+            <Calendar size={17} /> Select {selectedDate && selectedTime ? `${selectedDate} at ${formatSlot(selectedTime)}` : 'Date & Time'}
+            <ChevronRight size={17} />
+          </button>
         </div>
       </div>
 
-      {/* Time Slots */}
-      <div className="uc-time-section">
-        <div className="uc-subsection-label"><Clock size={14} /> Select Time Slot</div>
-        {TIME_SLOTS.map(group => (
-          <div key={group.period} className="uc-time-group">
-            <div className="uc-time-period-label">{group.icon} {group.period}</div>
-            <div className="uc-time-slots">
-              {group.slots.map(s => (
-                <button
-                  key={s.t}
-                  className={`uc-time-slot ${selectedTime === s.t ? "uc-time-slot--sel" : ""}`}
-                  onClick={() => onTimeChange(s.t)}
-                >
-                  {s.l}
-                </button>
-              ))}
+      {/* RIGHT: Order Summary */}
+      <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 24 }}>
+        <div style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 20px rgba(0,0,0,0.06)' }}>
+          <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>Order Summary</div>
+          {cart && cart.map((c, i) => (
+            <div key={i} style={{ padding: '12px 18px', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b' }}>{c.name}</div>
+                <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 2 }}>Qty: {c.quantity}</div>
+              </div>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.85rem' }}>₹{(c.price * c.quantity).toLocaleString()}</div>
+            </div>
+          ))}
+          <div style={{ padding: '12px 18px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}>
+              <span>Item total</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{totalPrice.toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}>
+              <span>Taxes & Fee</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span>
             </div>
           </div>
-        ))}
-      </div>
-
-      <div className="uc-step-footer">
-        <button className="uc-btn-primary" onClick={onNext} disabled={!canContinue}>
-          Continue <ChevronRight size={16} />
-        </button>
+          <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>Total Amount</span>
+            <span style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.05rem' }}>₹{grandTotal.toLocaleString()}</span>
+          </div>
+          <div style={{ padding: '0 18px 14px', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Shield size={11} /> SSL Secured · Pay at doorstep
+          </div>
+        </div>
       </div>
     </div>
   )
 }
+
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    STEP 4 •” PHONE OTP IDENTITY
@@ -1109,6 +1208,7 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
   const fileRef = useRef()
   const { user } = useAuth()
   const phoneClean = (formData.phone || "").replace(/[\s\-\(\)\+]/g, "")
+
   const phoneValid = phoneClean.length >= 7 && /^\d+$/.test(phoneClean)
   const ok = formData.customer_name && phoneValid && formData.address && formData.issue_title
 
@@ -1249,162 +1349,196 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
 
 function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, onBack, onSubmit, loading, error }) {
   const [agreed, setAgreed] = useState(false)
+  const [payMethod, setPayMethod] = useState('cash') // 'cash' | 'online'
+  const [couponCode, setCouponCode] = useState('')
+  const [couponApplied, setCouponApplied] = useState(false)
+  const [tip, setTip] = useState(null) // null | 50 | 75 | 100 | 'custom'
+  const [customTip, setCustomTip] = useState('')
   const [showPayment, setShowPayment] = useState(false)
+
   const displayDate = date ? new Date(date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" }) : ""
-  const displayTime = time ? TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === time)?.l : ""
+  const UC_TIME_FORMATS = (t) => { if (!t) return ''; const [h] = t.split(':').map(Number); const ampm = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:00 ${ampm}` }
+  const displayTime = UC_TIME_FORMATS(time)
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (pkg?.price || 0)
+  const taxFee = 99
+  const discount = couponApplied ? Math.floor(totalPrice * 0.1) : 0
+  const tipAmount = tip === 'custom' ? (parseInt(customTip) || 0) : (tip || 0)
+  const grandTotal = totalPrice + taxFee - discount + tipAmount
 
   // Gather service/package info
   const serviceItems = cart && cart.length > 0 ? cart : (pkg ? [pkg] : [])
-  const totalDuration = serviceItems.reduce((a, c) => {
-    const match = (c.duration || "").match(/(\d+)/)
-    return a + (match ? parseInt(match[1]) : 0)
-  }, 0)
-  const techCount = Math.ceil(totalDuration / 4) || 1
 
   return (
-    <div className="uc-step-page">
-      <div className="uc-step-back" onClick={onBack}><ArrowLeft size={16} /> Back</div>
-      <h2 className="uc-step-h2">Review & confirm</h2>
-      <p className="uc-step-sub">Check all the details before booking</p>
+    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 960, margin: '0 auto', padding: '0 0 80px', flexWrap: 'wrap' }}>
 
-      <div className="uc-confirm-layout">
-        {/* Summary Card */}
-        <div className="uc-summary-card">
-          <div className="uc-summary-hero" style={{ background: `linear-gradient(135deg,#7C3AED,#a855f7)` }}>
-            <span style={{ fontSize: "2rem" }}>{category?.emoji || "ðŸ”§"}</span>
-            <div>
-              <div style={{ fontWeight: 800, color: "white", fontSize: "1rem" }}>{category?.name || "Service"}</div>
-              <div style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.75rem" }}>
-                {cart && cart.length > 0 ? `${cart.reduce((a, c) => a + c.quantity, 0)} Item${cart.reduce((a, c) => a + c.quantity, 0) > 1 ? 's' : ''} Selected` : pkg?.name}
-              </div>
-            </div>
-          </div>
+      {/* LEFT: Payment Method + Details */}
+      <div style={{ flex: 1, minWidth: 280 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 99, border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem', color: '#64748b' }}>
+            <ArrowLeft size={14} /> Back
+          </button>
+          <div style={{ fontWeight: 900, fontSize: '1.15rem', color: '#0f172a' }}>Payment</div>
+        </div>
 
-          {/* Service/Package detail chips */}
-          <div style={{ padding: "0.85rem 1rem", background: "#f8fafc", display: "flex", flexWrap: "wrap", gap: "0.5rem", borderBottom: "1px solid #e2e8f0" }}>
+        {/* Booking Summary Chips */}
+        <div style={{ background: '#f8fafc', borderRadius: 14, padding: '14px 16px', marginBottom: 18, border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             {serviceItems.slice(0, 3).map((item, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, background: "white", border: "1px solid #e2e8f0", borderRadius: 99, padding: "4px 10px", fontSize: "0.72rem", fontWeight: 700, color: "#1e293b" }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'white', border: '1px solid #e2e8f0', borderRadius: 99, padding: '4px 10px', fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>
                 <CheckCircle2 size={11} color="#10B981" />{item.name}
               </div>
             ))}
-            {serviceItems.length > 3 && <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#7C3AED", padding: "4px 10px" }}>+{serviceItems.length - 3} more</div>}
+            {serviceItems.length > 3 && <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#7C3AED', padding: '4px 10px' }}>+{serviceItems.length - 3} more</div>}
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            {displayDate && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}><Calendar size={13} color="#7C3AED" /> {displayDate}</div>}
+            {displayTime && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}><Clock size={13} color="#7C3AED" /> {displayTime}</div>}
+            {formData.address && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}><MapPin size={13} color="#7C3AED" /> {formData.address.slice(0, 40)}{formData.address.length > 40 ? '...' : ''}</div>}
+          </div>
+        </div>
+
+        {/* Payment Method */}
+        <div style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 18, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
+          <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <CreditCard size={16} color="#7C3AED" /> Payment Method
           </div>
 
-          {/* Key stats row */}
-          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0" }}>
-            {[
-              { icon: <Clock size={13} />, label: "Duration", value: totalDuration > 0 ? `${totalDuration} Hr${totalDuration > 1 ? 's' : ''}` : (serviceItems[0]?.duration || "As needed") },
-              { icon: <Users size={13} />, label: "Technicians", value: `${techCount} Pro${techCount > 1 ? 's' : ''}` },
-              { icon: <Award size={13} />, label: "Guarantee", value: "30-Day" },
-            ].map((s, i) => (
-              <div key={i} style={{ flex: 1, padding: "0.75rem", textAlign: "center", borderRight: i < 2 ? "1px solid #e2e8f0" : "none" }}>
-                <div style={{ display: "flex", justifyContent: "center", color: "#7C3AED", marginBottom: 3 }}>{s.icon}</div>
-                <div style={{ fontSize: "0.75rem", fontWeight: 900, color: "#0f172a" }}>{s.value}</div>
-                <div style={{ fontSize: "0.62rem", color: "#94a3b8", fontWeight: 600 }}>{s.label}</div>
+          {/* Online */}
+          <div onClick={() => setPayMethod('online')} style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: payMethod === 'online' ? '#faf5ff' : 'white', transition: 'all 0.18s', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: payMethod === 'online' ? '#ede9fe' : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>💳</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                Pay Online
+                <span style={{ background: '#ede9fe', color: '#7C3AED', fontSize: '0.58rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #ddd6fe' }}>RECOMMENDED</span>
               </div>
-            ))}
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 3 }}>UPI / Card / NetBanking</div>
+              {payMethod === 'online' && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {['Google Pay', 'PhonePe', 'Paytm', 'BHIM', 'Card'].map(app => (
+                    <span key={app} style={{ padding: '4px 12px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: '0.7rem', fontWeight: 700, background: '#faf5ff', color: '#7C3AED' }}>{app}</span>
+                  ))}
+                </motion.div>
+              )}
+            </div>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${payMethod === 'online' ? '#7C3AED' : '#cbd5e1'}`, background: payMethod === 'online' ? '#7C3AED' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+              {payMethod === 'online' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'white' }} />}
+            </div>
           </div>
 
-          <div className="uc-summary-body">
-            <div className="uc-summary-row"><Calendar size={14} /> <span>{displayDate || date}</span></div>
-            <div className="uc-summary-row"><Clock size={14} /> <span>{displayTime || time}</span></div>
-            <div className="uc-summary-row"><User size={14} /> <span>{formData.customer_name}</span></div>
-            <div className="uc-summary-row"><Phone size={14} /> <span>{formData.phone}</span></div>
-            <div className="uc-summary-row"><MapPin size={14} /> <span>{formData.address}</span></div>
-            {photoPreview && (
-              <div style={{ marginTop: "0.75rem" }}>
-                <img src={photoPreview} alt="Issue" style={{ width: "100%", borderRadius: 10, objectFit: "cover", maxHeight: 120 }} />
+          {/* Cash */}
+          <div onClick={() => setPayMethod('cash')} style={{ padding: '16px 18px', cursor: 'pointer', background: payMethod === 'cash' ? '#faf5ff' : 'white', transition: 'all 0.18s', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: payMethod === 'cash' ? '#ede9fe' : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>💵</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                Pay After Service
+                <span style={{ background: '#f0fdf4', color: '#10B981', fontSize: '0.58rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #bbf7d0' }}>CASH</span>
               </div>
-            )}
-          </div>
-
-          {/* Price Breakdown */}
-          <div className="uc-price-box">
-            {cart && cart.length > 0 ? (
-              cart.map((c, i) => (
-                <div key={i} className="uc-price-row">
-                  <span>{c.quantity}x {c.name}</span>
-                  <span>{BOOKING_CURRENCY_SYMBOL}{c.price * c.quantity}</span>
-                </div>
-              ))
-            ) : (
-              <div className="uc-price-row">
-                <span>{pkg?.name}</span>
-                <span>{pkg?.priceStr}</span>
-              </div>
-            )}
-            <div className="uc-price-row uc-price-free">
-              <span>Platform fee</span>
-              <span style={{ color: "#10B981", fontWeight: 700 }}>FREE</span>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 3 }}>Pay when the service is done</div>
+              {payMethod === 'cash' && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {['No upfront payment', 'Pay only on completion', 'Any denomination'].map((d, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.72rem', color: '#059669', fontWeight: 600 }}>
+                      <CheckCircle2 size={11} /> {d}
+                    </div>
+                  ))}
+                </motion.div>
+              )}
             </div>
-            <div className="uc-price-row uc-price-free">
-              <span>Travel charges</span>
-              <span style={{ color: "#10B981", fontWeight: 700 }}>FREE</span>
-            </div>
-            <div className="uc-price-total">
-              <span>Total</span>
-              <span>{BOOKING_CURRENCY_SYMBOL}{totalPrice}</span>
-            </div>
-            <div style={{ textAlign: "center", fontSize: "0.68rem", color: "#94a3b8", marginTop: "0.25rem" }}>
-              Pay at doorstep Â· No advance required
+            <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${payMethod === 'cash' ? '#7C3AED' : '#cbd5e1'}`, background: payMethod === 'cash' ? '#7C3AED' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+              {payMethod === 'cash' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'white' }} />}
             </div>
           </div>
         </div>
 
-        {/* Includes */}
-        <div className="uc-confirm-includes">
-          <div className="uc-includes-title">What's included</div>
-          {cart && cart.length > 0 ? (
-            cart.flatMap(c => c.includes).filter((v, i, a) => a.indexOf(v) === i).map((item, i) => (
-              <div key={i} className="uc-includes-row">
-                <CheckCircle2 size={14} style={{ color: "#10B981", flexShrink: 0 }} />
-                <span>{item}</span>
-              </div>
-            ))
-          ) : (
-            pkg?.includes?.map(item => (
-              <div key={item} className="uc-includes-row">
-                <CheckCircle2 size={14} style={{ color: "#10B981", flexShrink: 0 }} />
-                <span>{item}</span>
-              </div>
-            ))
-          )}
-
-          <div className="uc-guarantee-box">
-            <Award size={18} style={{ color: "#7C3AED" }} />
-            <div>
-              <div style={{ fontWeight: 800, fontSize: "0.8rem", color: "#1e293b" }}>30-Day Quality Guarantee</div>
-              <div style={{ fontSize: "0.72rem", color: "#64748b" }}>Free re-service if you're not satisfied</div>
+        {/* Coupon */}
+        <div style={{ background: 'white', borderRadius: 14, border: '1px solid #e2e8f0', padding: '14px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: '1.1rem' }}>🏷️</span>
+          {couponApplied ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontWeight: 700, color: '#10B981', fontSize: '0.85rem' }}>✓ SAVE10 applied! You save ₹{discount}</div>
+              <button onClick={() => { setCouponApplied(false); setCouponCode('') }} style={{ fontSize: '0.72rem', color: '#ef4444', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}>Remove</button>
             </div>
+          ) : (
+            <>
+              <input value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} placeholder="Enter coupon code" style={{ flex: 1, border: 'none', outline: 'none', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', background: 'transparent' }} />
+              <button onClick={() => { if (couponCode === 'SAVE10') setCouponApplied(true) }} style={{ padding: '6px 14px', borderRadius: 99, background: couponCode ? '#7C3AED' : '#e2e8f0', color: couponCode ? 'white' : '#94a3b8', fontWeight: 800, fontSize: '0.75rem', border: 'none', cursor: 'pointer' }}>Apply</button>
+            </>
+          )}
+        </div>
+
+
+        {/* Agreement */}
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 18 }}>
+          <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ accentColor: '#7C3AED', marginTop: 2, flexShrink: 0 }} />
+          <span style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.5 }}>I agree to the <a href="#" className="uc-link">Terms of Service</a> and <a href="#" className="uc-link">Privacy Policy</a>. The technician will arrive at the scheduled time.</span>
+        </label>
+
+        {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
+
+        <button
+          onClick={() => { if (agreed && !loading) { if (payMethod === 'online') setShowPayment(true); else onSubmit('cash') } }}
+          disabled={!agreed || loading}
+          style={{ width: '100%', padding: '15px', borderRadius: 14, background: agreed && !loading ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#e2e8f0', color: agreed && !loading ? 'white' : '#94a3b8', fontWeight: 800, fontSize: '1rem', border: 'none', cursor: agreed && !loading ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: agreed && !loading ? '0 4px 20px rgba(124,58,237,0.3)' : 'none', transition: 'all 0.18s' }}
+        >
+          {loading ? <><RefreshCw size={16} className="spin-icon" /> Processing…</> : <><CheckCheck size={16} /> Confirm Booking · ₹{grandTotal.toLocaleString()}</>}
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 10, fontSize: '0.68rem', color: '#94a3b8' }}>
+          <Shield size={11} /> 256-bit SSL · Your info is secure
+        </div>
+      </div>
+
+      {/* RIGHT: Order Summary */}
+      <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 24 }}>
+        <div style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 20px rgba(0,0,0,0.06)' }}>
+          <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>Order Summary</div>
+          {serviceItems.map((item, i) => (
+            <div key={i} style={{ padding: '12px 18px', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b' }}>{item.name}</div>
+                {item.quantity > 1 && <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 2 }}>Qty: {item.quantity}</div>}
+              </div>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.85rem' }}>₹{((item.price || 0) * (item.quantity || 1)).toLocaleString()}</div>
+            </div>
+          ))}
+
+          {/* Tip Selector */}
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: 10 }}>
+              💝 Tip for your professional <span style={{ fontSize: '0.58rem', color: '#10B981', fontWeight: 800, background: '#f0fdf4', padding: '2px 6px', borderRadius: 99, border: '1px solid #bbf7d0' }}>POPULAR</span>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[50, 75, 100].map(amt => (
+                <button key={amt} onClick={() => setTip(tip === amt ? null : amt)} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: `2px solid ${tip === amt ? '#7C3AED' : '#e2e8f0'}`, background: tip === amt ? '#ede9fe' : 'white', color: tip === amt ? '#7C3AED' : '#374151', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.18s' }}>₹{amt}</button>
+              ))}
+              <button onClick={() => setTip(tip === 'custom' ? null : 'custom')} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: `2px solid ${tip === 'custom' ? '#7C3AED' : '#e2e8f0'}`, background: tip === 'custom' ? '#ede9fe' : 'white', color: tip === 'custom' ? '#7C3AED' : '#374151', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer', transition: 'all 0.18s' }}>Custom</button>
+            </div>
+            {tip === 'custom' && <input type="number" value={customTip} onChange={e => setCustomTip(e.target.value)} placeholder="Enter amount" style={{ marginTop: 8, width: '100%', padding: '8px 12px', border: '2px solid #7C3AED', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />}
           </div>
 
-          <label className="uc-agree">
-            <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ accentColor: "#7C3AED" }} />
-            <span>I agree to the <a href="#" className="uc-link">Terms of Service</a> and <a href="#" className="uc-link">Privacy Policy</a></span>
-          </label>
+          {/* Price Breakdown */}
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}><span>Item total</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{totalPrice.toLocaleString()}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: discount > 0 ? 6 : 0 }}><span>Taxes & Fee</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span></div>
+            {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#10B981', marginBottom: tipAmount > 0 ? 6 : 0 }}><span>Coupon discount</span><span style={{ fontWeight: 700 }}>-₹{discount}</span></div>}
+            {tipAmount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}><span>Tip</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{tipAmount}</span></div>}
+          </div>
 
-          {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
-
-          <button
-            className="uc-btn-primary uc-btn-full"
-            onClick={() => { if (agreed && !loading) setShowPayment(true) }}
-            disabled={!agreed || loading}
-          >
-            {loading ? <><RefreshCw size={16} className="spin-icon" /> Processing•¦</> : <><CreditCard size={16} /> Choose Payment & Confirm</>}
-          </button>
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginTop: "0.75rem", fontSize: "0.7rem", color: "#94a3b8" }}>
-            <Shield size={12} /> Secured & encrypted Â· Pay on arrival
+          <div style={{ padding: '14px 18px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '0.95rem' }}>Amount to Pay</div>
+              <div style={{ fontSize: '0.62rem', color: '#94a3b8', marginTop: 1 }}>Includes all taxes & fees</div>
+            </div>
+            <div style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.15rem' }}>₹{grandTotal.toLocaleString()}</div>
           </div>
         </div>
       </div>
 
+      {/* Online Payment Modal */}
       <AnimatePresence>
         {showPayment && (
           <PaymentModal
-            total={totalPrice}
-            allowedMethods={cart.some(c => c.payment_policy === 'ONLINE_ONLY') ? ['online'] : ['cash', 'online']}
+            total={grandTotal}
+            allowedMethods={['online']}
             onClose={() => setShowPayment(false)}
             onConfirm={(method) => { setShowPayment(false); onSubmit(method) }}
           />
@@ -1413,6 +1547,7 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
     </div>
   )
 }
+
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    PAYMENT MODAL
@@ -4013,6 +4148,7 @@ export function BookingPage() {
   // Arriving with a cart already built (e.g. "Proceed to Checkout" from the
   // landing page's own package popup) skips straight to the date/time step
   // instead of asking the user to re-add items here.
+  const navigate = useNavigate()
   const routerLocation = useLocation()
   const incomingCart = routerLocation.state?.cart
   const incomingCategory = routerLocation.state?.category
@@ -4030,6 +4166,7 @@ export function BookingPage() {
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [showPackageModal, setShowPackageModal] = useState(false)
+  const [showSubCategoryChoiceModal, setShowSubCategoryChoiceModal] = useState(false)
   const [dynamicReviews, setDynamicReviews] = useState([])
 
   const [searchQuery, setSearchQuery] = useState("")
@@ -4371,11 +4508,43 @@ export function BookingPage() {
 
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <StepHome searchQuery={searchQuery} setSearchQuery={setSearchQuery} onSelect={cat => { setCategory(cat); setShowPackageModal(true) }} categories={categoriesData} dynamicReviews={dynamicReviews} />
+              <StepHome
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                onSelect={cat => {
+                  setCategory(cat);
+                  const catId = (cat?.id || cat?.slug || "").toLowerCase();
+                  if (["electrical", "plumbing", "carpentry", "elec", "plum", "carp"].some(k => catId.includes(k))) {
+                    setShowSubCategoryChoiceModal(true);
+                  } else {
+                    setShowPackageModal(true);
+                  }
+                }}
+                categories={categoriesData}
+                dynamicReviews={dynamicReviews}
+              />
             </motion.div>
           )}
 
-          {/* step 2 was here */}
+          {step === 4 && (
+            <motion.div key="step4" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
+              <div className="uc-step-container">
+                <StepLogin
+                  category={category}
+                  onBack={() => { setShowPackageModal(true); }}
+                  onVerified={data => {
+                    setFormData(p => ({
+                      ...p,
+                      customer_name: data.name || p.customer_name,
+                      phone: data.phone || p.phone,
+                      email: data.email || p.email,
+                    }))
+                    setStep(5)
+                  }}
+                />
+              </div>
+            </motion.div>
+          )}
 
           {step === 3 && (
             <motion.div key="step3" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
@@ -4386,28 +4555,9 @@ export function BookingPage() {
                   selectedTime={selTime}
                   onDateChange={setSelDate}
                   onTimeChange={setSelTime}
-                  onNext={() => setStep(4)}
-                  onBack={() => { setStep(1); setShowPackageModal(true); }}
-                />
-              </div>
-            </motion.div>
-          )}
-
-          {step === 4 && (
-            <motion.div key="step4" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
-              <div className="uc-step-container">
-                <StepLogin
-                  category={category}
-                  onBack={() => setStep(3)}
-                  onVerified={data => {
-                    setFormData(p => ({
-                      ...p,
-                      customer_name: data.name || p.customer_name,
-                      phone: data.phone || p.phone,
-                      email: data.email || p.email,
-                    }))
-                    setStep(5)
-                  }}
+                  cart={cart}
+                  onNext={() => setStep(6)}
+                  onBack={() => setStep(5)}
                 />
               </div>
             </motion.div>
@@ -4424,7 +4574,7 @@ export function BookingPage() {
                   photoFile={photoFile}
                   onPhotoChange={handlePhoto}
                   photoPreview={photoPreview}
-                  onNext={() => setStep(6)}
+                  onNext={() => setStep(3)}
                   onBack={() => setStep(4)}
                   globalLocation={location}
                   onOpenMap={() => setShowLocPicker(true)}
@@ -4444,7 +4594,7 @@ export function BookingPage() {
                   time={selTime}
                   formData={formData}
                   photoPreview={photoPreview}
-                  onBack={() => setStep(5)}
+                  onBack={() => setStep(3)}
                   onSubmit={handleSubmit}
                   loading={loading}
                   error={error}
@@ -4463,6 +4613,102 @@ export function BookingPage() {
         <Award size={12} /> 30-Day Guarantee
       </footer>
 
+      {/* Electrician, Plumbing & Carpentry Choice Modal */}
+      <AnimatePresence>
+        {showSubCategoryChoiceModal && (
+          <div
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setShowSubCategoryChoiceModal(false)}
+          >
+            <motion.div
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowSubCategoryChoiceModal(false)}
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-black text-slate-900">
+                  Electrician, Plumbing &amp; Carpentry
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 font-medium">
+                  Choose a service type to view related services
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
+                {/* Electrician */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSubCategoryChoiceModal(false);
+                    const safeCats = categoriesData.length > 0 ? categoriesData : CATEGORIES;
+                    const targetCat = safeCats.find(c => c.id === "electrical" || c.id === "1") || { id: "electrical", name: "Electrical", desc: "Wiring, panels & lighting" };
+                    setCategory(targetCat);
+                    setShowPackageModal(true);
+                  }}
+                  className="group flex flex-col items-center justify-between p-4 rounded-2xl transition-all text-center cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 hover:shadow-md"
+                >
+                  <div className="w-20 h-20 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center p-3 group-hover:scale-105 transition-transform">
+                    <Zap className="w-10 h-10 text-amber-500" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-3 group-hover:text-emerald-700">
+                    Electrician
+                  </span>
+                </button>
+
+                {/* Plumber */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSubCategoryChoiceModal(false);
+                    const safeCats = categoriesData.length > 0 ? categoriesData : CATEGORIES;
+                    const targetCat = safeCats.find(c => c.id === "plumbing" || c.id === "2") || { id: "plumbing", name: "Plumbing", desc: "Leaks, pipes & fixtures" };
+                    setCategory(targetCat);
+                    setShowPackageModal(true);
+                  }}
+                  className="group flex flex-col items-center justify-between p-4 rounded-2xl transition-all text-center cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 hover:shadow-md"
+                >
+                  <div className="w-20 h-20 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center p-3 group-hover:scale-105 transition-transform">
+                    <Droplets className="w-10 h-10 text-blue-500" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-3 group-hover:text-emerald-700">
+                    Plumber
+                  </span>
+                </button>
+
+                {/* Carpentry */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSubCategoryChoiceModal(false);
+                    const safeCats = categoriesData.length > 0 ? categoriesData : CATEGORIES;
+                    const targetCat = safeCats.find(c => c.id === "carpentry" || c.id === "3") || { id: "carpentry", name: "Carpentry", desc: "Furniture & wood repairs" };
+                    setCategory(targetCat);
+                    setShowPackageModal(true);
+                  }}
+                  className="group flex flex-col items-center justify-between p-4 rounded-2xl transition-all text-center cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 hover:shadow-md"
+                >
+                  <div className="w-20 h-20 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center p-3 group-hover:scale-105 transition-transform">
+                    <Hammer className="w-10 h-10 text-orange-500" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-3 group-hover:text-emerald-700">
+                    Carpentry
+                  </span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Package Selection Modal Overlay */}
       <AnimatePresence>
         {showPackageModal && category && (
@@ -4471,8 +4717,28 @@ export function BookingPage() {
             cart={cart}
             setCart={setCart}
             packagesData={packagesData}
-            onClose={() => setShowPackageModal(false)}
-            onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+            onClose={() => {
+              const currentCatId = (category?.id || category?.slug || "").toLowerCase();
+              setShowPackageModal(false);
+              if (["electrical", "plumbing", "carpentry", "elec", "plum", "carp"].some(k => currentCatId.includes(k))) {
+                setShowSubCategoryChoiceModal(true);
+              } else {
+                setStep(1);
+                setTimeout(() => {
+                  const targetCard = document.getElementById(`cat-card-${currentCatId}`) ||
+                                     document.querySelector(`[data-cat-id="${currentCatId}"]`) ||
+                                     document.querySelector('.uc-cat-grid');
+                  if (targetCard) {
+                    targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    targetCard.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-2', 'transition-all');
+                    setTimeout(() => {
+                      targetCard.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-2');
+                    }, 2200);
+                  }
+                }, 120);
+              }
+            }}
+            onCheckout={() => { setShowPackageModal(false); setStep(4); }}
           />
         )}
       </AnimatePresence>
@@ -4482,46 +4748,28 @@ export function BookingPage() {
 
 const INDIVIDUAL_SERVICES = {
   hvac: [
-    { id: "ind-hvac-1", name: "AC Inspection & Diagnosis", price: 299, priceStr: "₹299", duration: "45 mins", categoryType: "Repair", includes: ["Complete 21-point checkup", "Cooling & gas pressure check", "Detailed estimate report"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-    { id: "ind-hvac-2", name: "AC Gas Leakage Fix & Refill", price: 1499, priceStr: "₹1,499", duration: "1.5 hrs", categoryType: "Repair", includes: ["Nitrogen leak testing", "Copper pipe brazing fix", "Full Freon gas recharge"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
-    { id: "ind-hvac-3", name: "AC Split Wall Installation", price: 1299, priceStr: "₹1,299", duration: "2 hrs", categoryType: "Install", includes: ["Indoor & outdoor unit mounting", "Copper pipe vacuuming", "Performance testing"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-    { id: "ind-hvac-4", name: "AC Uninstallation Service", price: 699, priceStr: "₹699", duration: "1 hr", categoryType: "Install", includes: ["Safe gas pump down", "Dismantling indoor & outdoor units", "Packing copper pipes"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+    { id: "ind-hvac-1", name: "AC Inspection & Diagnosis", price: 299, priceStr: "₹299", duration: "45 mins", categoryType: "Repair", includes: ["Complete 21-point checkup", "Cooling & gas pressure check", "Detailed estimate report"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=600&q=80&fit=crop" },
+    { id: "ind-hvac-2", name: "AC Gas Leakage Fix & Refill", price: 1499, priceStr: "₹1,499", duration: "1.5 hrs", categoryType: "Repair", includes: ["Nitrogen leak testing", "Copper pipe brazing fix", "Full Freon gas recharge"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=600&q=80&fit=crop" },
+    { id: "ind-hvac-3", name: "AC Split Wall Installation", price: 1299, priceStr: "₹1,299", duration: "2 hrs", categoryType: "Install", includes: ["Indoor & outdoor unit mounting", "Copper pipe vacuuming", "Performance testing"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=600&q=80&fit=crop" },
+    { id: "ind-hvac-4", name: "AC Uninstallation Service", price: 699, priceStr: "₹699", duration: "1 hr", categoryType: "Install", includes: ["Safe gas pump down", "Dismantling indoor & outdoor units", "Packing copper pipes"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop" },
   ],
   electrical: [
-    { id: "ind-elec-1", name: "Switch & Socket Installation", price: 149, priceStr: "₹149", duration: "30 mins", categoryType: "Install", includes: ["Replacement or new socket fitting", "Safety testing after install", "30-day service warranty"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-    { id: "ind-elec-2", name: "Ceiling Fan Repair / Fitting", price: 249, priceStr: "₹249", duration: "45 mins", categoryType: "Repair", includes: ["Regulator & capacitor fix", "Noise & speed troubleshooting", "Blade alignment & mounting"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-    { id: "ind-elec-3", name: "MCB Breaker Replacement", price: 399, priceStr: "₹399", duration: "45 mins", categoryType: "Repair", includes: ["Tripping & overload diagnosis", "Single/Double pole MCB fix", "Distribution board testing"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-    { id: "ind-elec-4", name: "Complete Room Wiring Check", price: 699, priceStr: "₹699", duration: "1.5 hrs", categoryType: "Repair", includes: ["Earthing & voltage check", "Heavy appliance load testing", "Short circuit safety report"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+    { id: "ind-elec-1", name: "Switch & Socket Installation", price: 149, priceStr: "₹149", duration: "30 mins", categoryType: "Install", includes: ["Replacement or new socket fitting", "Safety testing after install", "30-day service warranty"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=600&q=80&fit=crop" },
+    { id: "ind-elec-2", name: "Ceiling Fan Repair / Fitting", price: 249, priceStr: "₹249", duration: "45 mins", categoryType: "Repair", includes: ["Regulator & capacitor fix", "Noise & speed troubleshooting", "Blade alignment & mounting"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=600&q=80&fit=crop" },
+    { id: "ind-elec-3", name: "MCB Breaker Replacement", price: 399, priceStr: "₹399", duration: "45 mins", categoryType: "Repair", includes: ["Tripping & overload diagnosis", "Single/Double pole MCB fix", "Distribution board testing"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=600&q=80&fit=crop" },
+    { id: "ind-elec-4", name: "Complete Room Wiring Check", price: 699, priceStr: "₹699", duration: "1.5 hrs", categoryType: "Repair", includes: ["Earthing & voltage check", "Heavy appliance load testing", "Short circuit safety report"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop" },
   ],
   plumbing: [
-    { id: "ind-plum-1", name: "Tap & Faucet Repair", price: 149, priceStr: "₹149", duration: "30 mins", categoryType: "Repair", includes: ["Washer & spindle replacement", "Leakage & drip fix", "Water flow optimization"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-    { id: "ind-plum-2", name: "Sink & Drain Unclogging", price: 349, priceStr: "₹349", duration: "45 mins", categoryType: "Repair", includes: ["Waste pipe cleaning", "Clog removal using spring wire", "Water flow check"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-    { id: "ind-plum-3", name: "Flush Tank & Toilet Fix", price: 499, priceStr: "₹499", duration: "1 hr", categoryType: "Repair", includes: ["Syphon kit & ball valve fix", "Flush tank leak repair", "Sanitary seal check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-    { id: "ind-plum-4", name: "Geyser Water Heater Install", price: 799, priceStr: "₹799", duration: "1.5 hrs", categoryType: "Install", includes: ["Wall mounting & inlet/outlet pipes", "Thermostat & element safety test", "Demo & leak check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+    { id: "ind-plum-1", name: "Tap & Faucet Repair", price: 149, priceStr: "₹149", duration: "30 mins", categoryType: "Repair", includes: ["Washer & spindle replacement", "Leakage & drip fix", "Water flow optimization"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=600&q=80&fit=crop" },
+    { id: "ind-plum-2", name: "Sink & Drain Unclogging", price: 349, priceStr: "₹349", duration: "45 mins", categoryType: "Repair", includes: ["Waste pipe cleaning", "Clog removal using spring wire", "Water flow check"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=600&q=80&fit=crop" },
+    { id: "ind-plum-3", name: "Flush Tank & Toilet Fix", price: 499, priceStr: "₹499", duration: "1 hr", categoryType: "Repair", includes: ["Syphon kit & ball valve fix", "Flush tank leak repair", "Sanitary seal check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop" },
+    { id: "ind-plum-4", name: "Geyser Water Heater Install", price: 799, priceStr: "₹799", duration: "1.5 hrs", categoryType: "Install", includes: ["Wall mounting & inlet/outlet pipes", "Thermostat & element safety test", "Demo & leak check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&q=80&fit=crop" },
   ],
   cleaning: [
-    { id: "ind-clean-1", name: "Bathroom Deep Cleaning", price: 499, priceStr: "₹499", duration: "1.5 hrs", categoryType: "Repair", includes: ["Hard water stain removal", "Tile & grout scrubbing", "Sanitization of toilet & sink"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-    { id: "ind-clean-2", name: "Kitchen Deep Cleaning", price: 999, priceStr: "₹999", duration: "2 hrs", categoryType: "Repair", includes: ["Chimney exterior degreasing", "Countertop & tile scrubbing", "Cabinet exterior wipe"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-    { id: "ind-clean-3", name: "Sofa Vacuuming & Polish", price: 799, priceStr: "₹799", duration: "1.5 hrs", categoryType: "Repair", includes: ["Fabric shampooing & extraction", "Dust mite & stain removal", "Fabric freshener spray"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-    { id: "ind-clean-4", name: "Balcony & Window Wash", price: 399, priceStr: "₹399", duration: "1 hr", categoryType: "Install", includes: ["Glass panel streak-free clean", "Grille & ledge wiping", "Floor scrubbing"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-  ],
-  painting: [
-    { id: "ind-paint-1", name: "Single Wall Feature Paint", price: 1999, priceStr: "₹1,999", duration: "3 hrs", categoryType: "Install", includes: ["Surface putty & sanding", "2 coats premium emulsion", "Mess-free floor protection"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-    { id: "ind-paint-2", name: "Wall Waterproofing Treatment", price: 2999, priceStr: "₹2,999", duration: "4 hrs", categoryType: "Repair", includes: ["Dampness & seepage diagnosis", "Waterproof chemical coating", "Anti-fungal primer coat"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-    { id: "ind-paint-3", name: "Door & Window Enamel Polish", price: 1499, priceStr: "₹1,499", duration: "2 hrs", categoryType: "Repair", includes: ["Wood sanding & smoothing", "PU enamel coat application", "Hardware protection masking"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-    { id: "ind-paint-4", name: "Full Home Repaint Inspection", price: 199, priceStr: "₹199", duration: "30 mins", categoryType: "Repair", includes: ["Laser wall measurement", "Shade card consultation", "Itemized quotation"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-  ],
-  carpentry: [
-    { id: "ind-carp-1", name: "Door Lock & Handle Fitting", price: 199, priceStr: "₹199", duration: "30 mins", categoryType: "Install", includes: ["Mortise/cylindrical lock fix", "Latch alignment", "Smooth key operation test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-    { id: "ind-carp-2", name: "Furniture Repair & Assembly", price: 399, priceStr: "₹399", duration: "1 hr", categoryType: "Repair", includes: ["Bed / wardrobe assembly", "Joint tightening & glueing", "Leveling check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-    { id: "ind-carp-3", name: "Cabinet Hinge Repair", price: 249, priceStr: "₹249", duration: "45 mins", categoryType: "Repair", includes: ["Soft-close hinge replacement", "Door realignment", "Magnet catch installation"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-    { id: "ind-carp-4", name: "Wooden Shelf Installation", price: 499, priceStr: "₹499", duration: "1 hr", categoryType: "Install", includes: ["Wall drilling & anchor fitting", "Concealed bracket mounting", "Weight capacity check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-  ],
-  appliance_repair: [
-    { id: "ind-app-1", name: "Refrigerator Gas & Cooling Fix", price: 799, priceStr: "₹799", duration: "1.5 hrs", categoryType: "Repair", includes: ["Compressor relay & capacitor check", "Gas refill & thermostat fix", "Cooling coil defrost check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-    { id: "ind-app-2", name: "Washing Machine Motor Check", price: 599, priceStr: "₹599", duration: "1 hr", categoryType: "Repair", includes: ["Drain pump & belt inspection", "Drum noise & vibration check", "Spin cycle testing"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-    { id: "ind-app-3", name: "Microwave PCB & Heating Repair", price: 499, priceStr: "₹499", duration: "45 mins", categoryType: "Repair", includes: ["Magnetron & diode testing", "Control panel button fix", "Door interlock switch check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-    { id: "ind-app-4", name: "TV Wall Mounting Service", price: 399, priceStr: "₹399", duration: "45 mins", categoryType: "Install", includes: ["Universal wall bracket install", "Cable routing & port connection", "Screen leveling check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+    { id: "ind-clean-1", name: "Bathroom Deep Cleaning", price: 499, priceStr: "₹499", duration: "1.5 hrs", categoryType: "Repair", includes: ["Hard water stain removal", "Tile & grout scrubbing", "Sanitization of toilet & sink"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&q=80&fit=crop" },
+    { id: "ind-clean-2", name: "Kitchen Deep Cleaning", price: 999, priceStr: "₹999", duration: "2 hrs", categoryType: "Repair", includes: ["Chimney exterior degreasing", "Countertop & tile scrubbing", "Cabinet exterior wipe"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=600&q=80&fit=crop" },
+    { id: "ind-clean-3", name: "Sofa Vacuuming & Polish", price: 799, priceStr: "₹799", duration: "1.5 hrs", categoryType: "Repair", includes: ["Fabric shampooing & extraction", "Dust mite & stain removal", "Fabric freshener spray"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop" },
+    { id: "ind-clean-4", name: "Balcony & Window Wash", price: 399, priceStr: "₹399", duration: "1 hr", categoryType: "Install", includes: ["Glass panel streak-free clean", "Grille & ledge wiping", "Floor scrubbing"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop" },
   ],
 };
 
@@ -4556,122 +4804,161 @@ export function ServiceDetailSideDrawer({ item, category, cart, setCart, onClose
 
   return (
     <motion.div
-      className="fixed top-4 bottom-4 left-3 sm:left-6 xl:left-10 z-[10000] w-[330px] sm:w-[370px] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-auto max-h-[90vh]"
-      initial={{ opacity: 0, x: -60, scale: 0.95 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: -60, scale: 0.95 }}
-      transition={{ type: "spring", damping: 25, stiffness: 350 }}
+      className="absolute inset-0 z-50 bg-white rounded-3xl overflow-hidden flex flex-col shadow-2xl"
+      initial={{ opacity: 0, x: -30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -30 }}
+      transition={{ type: "spring", damping: 28, stiffness: 350 }}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Drawer Header */}
-      <div className="relative h-40 bg-slate-900 shrink-0">
-        <img
-          src={item.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop"}
-          alt={item.name}
-          className="w-full h-full object-cover opacity-80"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/40 to-transparent flex flex-col justify-end p-4">
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="bg-indigo-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
-              {category?.name || "Service Details"}
-            </span>
-            <div className="flex items-center gap-1 bg-amber-500/20 backdrop-blur-md px-2 py-0.5 rounded-full text-amber-300 text-[11px] font-bold border border-amber-400/30">
-              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-              <span>4.8</span>
-            </div>
-          </div>
-          <h3 className="text-base font-black text-white leading-tight">{item.name}</h3>
-          <p className="text-xs text-slate-200 mt-0.5 font-semibold">
-            Starts at <span className="font-extrabold text-amber-300">{item.priceStr || ("₹" + item.price)}</span> • {item.duration || "1 hr"}
-          </p>
+      {/* Top Header Navigation */}
+      <div className="bg-slate-900 text-white p-3 sm:p-4 flex items-center justify-between shrink-0 shadow-md">
+        <button
+          onClick={onClose}
+          className="flex items-center gap-2 text-xs font-black text-white hover:text-amber-300 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-all cursor-pointer border border-white/10"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to All Services</span>
+        </button>
+        <div className="text-xs font-extrabold text-slate-300 uppercase tracking-wider hidden sm:block">
+          {category?.name || "Service Details"}
         </div>
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-900/70 hover:bg-slate-900 text-white flex items-center justify-center transition-all cursor-pointer backdrop-blur-md border border-white/20"
+          className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Scrollable Drawer Content */}
-      <div className="p-4 overflow-y-auto space-y-4 flex-1 text-slate-800">
+      {/* Main Hero Header */}
+      <div className="relative h-44 bg-slate-950 shrink-0">
+        <img
+          src={item.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80&fit=crop"}
+          alt={item.name}
+          className="w-full h-full object-cover opacity-75"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent flex flex-col justify-end p-5">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="bg-indigo-600 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              {category?.name || "Service Details"}
+            </span>
+            <div className="flex items-center gap-1 bg-amber-500/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-amber-300 text-xs font-bold border border-amber-400/30">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span>4.8</span>
+              <span className="text-slate-300 text-[10px] font-medium ml-0.5">(113K reviews)</span>
+            </div>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-black text-white leading-tight">{item.name}</h3>
+          <p className="text-sm text-slate-200 mt-1 font-semibold">
+            Starts at <span className="font-extrabold text-amber-300 text-base">{item.priceStr || ("₹" + item.price)}</span> • {item.duration || "1 hr"}
+          </p>
+        </div>
+      </div>
 
-        {/* Step-by-Step Employee Workflow */}
+      {/* Scrollable Drawer Content */}
+      <div className="p-5 overflow-y-auto space-y-5 flex-1 text-slate-800 bg-white">
         <div>
-          <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <span>🛠️</span> How Our Technician Works
+          <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <span className="text-base">🛠️</span>
+            <span>How Our Technician Works</span>
           </h4>
-          <div className="space-y-2 text-[11px]">
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
-              <div className="font-bold text-slate-900 mb-0.5">🔍 Step 1: Diagnosis</div>
-              <p className="text-slate-600">Uniformed expert performs 21-point safety check.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
+              <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                <span>🔍</span> Step 1: Diagnosis
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">Uniformed expert performs 21-point safety & operational checkup.</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
-              <div className="font-bold text-slate-900 mb-0.5">🛠️ Step 2: Professional Repair</div>
-              <p className="text-slate-600">Uses specialized tools & genuine spare parts.</p>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
+              <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                <span>🛠️</span> Step 2: Professional Repair
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">Uses specialized tools & genuine company-backed spare parts.</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
-              <div className="font-bold text-slate-900 mb-0.5">🧹 Step 3: Cleanup & Test</div>
-              <p className="text-slate-600">Cleans up work area completely & tests appliance.</p>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
+              <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                <span>🧹</span> Step 3: Cleanup & Test
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">Cleans up work area completely & tests appliance performance.</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
-              <div className="font-bold text-slate-900 mb-0.5">🛡️ Step 4: Digital Bill & Warranty</div>
-              <p className="text-slate-600">Issues digital invoice with 30-day free revisit cover.</p>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
+              <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                <span>🛡️</span> Step 4: Digital Bill & Warranty
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">Issues digital invoice with 30-day free revisit cover guarantee.</p>
             </div>
           </div>
         </div>
 
-        {/* Included vs Excluded */}
-        <div className="space-y-2">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-            <div className="font-extrabold text-[10px] text-slate-900 uppercase tracking-wider mb-1">Included</div>
-            <ul className="space-y-1 text-xs text-slate-700 font-medium">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+            <div className="font-black text-xs text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <span className="text-indigo-600 font-extrabold">✓</span>
+              <span>Included Services</span>
+            </div>
+            <ul className="space-y-1.5 text-xs text-slate-700 font-medium">
               {(item.includes || ["Diagnosis & Labour", "30-day warranty"]).map(inc => (
-                <li key={inc} className="flex items-start gap-1">
-                  <span className="text-indigo-600 font-bold">✓</span>
+                <li key={inc} className="flex items-start gap-1.5">
+                  <span className="text-indigo-600 font-bold text-sm leading-none">✓</span>
                   <span>{inc}</span>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="bg-rose-50/70 border border-rose-200/80 rounded-xl p-3">
-            <div className="font-extrabold text-[10px] text-rose-800 uppercase tracking-wider mb-1">Excluded</div>
-            <ul className="space-y-1 text-xs text-slate-700 font-medium">
-              <li className="flex items-start gap-1">
-                <span className="text-rose-500 font-bold">✕</span>
-                <span>Spare parts cost (charged as per rate card)</span>
+          <div className="bg-rose-50/70 border border-rose-200/80 rounded-2xl p-4">
+            <div className="font-black text-xs text-rose-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <span className="text-rose-600 font-extrabold">✕</span>
+              <span>Excluded Services</span>
+            </div>
+            <ul className="space-y-1.5 text-xs text-slate-700 font-medium">
+              <li className="flex items-start gap-1.5">
+                <span className="text-rose-500 font-bold text-sm leading-none">✕</span>
+                <span>Spare parts cost (charged as per standard rate card)</span>
               </li>
             </ul>
           </div>
         </div>
 
-        {/* Guarantee */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-[11px] text-slate-600 space-y-0.5">
-          <div className="font-extrabold text-slate-900">🛡️ 30-Day Re-service Guarantee Included</div>
-          <div>Free revisit if issue reoccurs within 30 days.</div>
+        <div className="bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-between gap-3 shadow-md">
+          <div className="space-y-0.5">
+            <div className="font-extrabold text-sm flex items-center gap-1.5">
+              <span>🛡️</span>
+              <span>30-Day Re-service Guarantee Included</span>
+            </div>
+            <p className="text-xs text-slate-300">Free revisit if any issue reoccurs within 30 days of service.</p>
+          </div>
+          <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0">
+            100% Covered
+          </span>
         </div>
-
       </div>
 
-      {/* Drawer Action Bar */}
-      <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
+      <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
         <div>
-          <div className="text-[9px] text-slate-400 font-bold uppercase">Price</div>
-          <div className="text-sm font-black text-slate-900">{item.priceStr || ("₹" + item.price)}</div>
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Service Price</div>
+          <div className="text-lg font-black text-slate-900">{item.priceStr || ("₹" + item.price)}</div>
         </div>
-        <div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+          >
+            Close
+          </button>
           {getCartCount(item.id) > 0 ? (
-            <div className="flex items-center gap-2 bg-slate-900 text-white font-extrabold text-xs px-3 py-1.5 rounded-xl shadow-md">
-              <button className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-800 flex items-center justify-center" onClick={() => removeFromCart(item.id)}>-</button>
+            <div className="flex items-center gap-2.5 bg-slate-900 text-white font-extrabold text-xs px-4 py-2 rounded-xl shadow-md">
+              <button className="w-6 h-6 rounded-lg bg-slate-700 hover:bg-slate-800 flex items-center justify-center font-black" onClick={() => removeFromCart(item.id)}>-</button>
               <span>{getCartCount(item.id)} in Cart</span>
-              <button className="w-5 h-5 rounded bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center" onClick={() => addToCart(item)}>+</button>
+              <button className="w-6 h-6 rounded-lg bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center font-black" onClick={() => addToCart(item)}>+</button>
             </div>
           ) : (
             <button
-              className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-5 py-2 rounded-xl shadow-md uppercase tracking-wider active:scale-95 cursor-pointer"
+              className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-6 py-2.5 rounded-xl shadow-md uppercase tracking-wider active:scale-95 cursor-pointer flex items-center gap-1.5"
               onClick={() => addToCart(item)}
             >
-              Add Service
+              <ShoppingCart className="w-4 h-4" />
+              <span>Add Service</span>
             </button>
           )}
         </div>
@@ -4680,322 +4967,893 @@ export function ServiceDetailSideDrawer({ item, category, cart, setCart, onClose
   );
 }
 
-export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
-  const [activeFilter, setActiveFilter] = useState("All")
-  const [indFilter, setIndFilter] = useState("All")
-  const [selectedDetailItem, setSelectedDetailItem] = useState(null)
-  const [showCartPopover, setShowCartPopover] = useState(false)
+export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, isFullPage = false }) {
+  const rawCatKey = (category?.id || category?.slug || "cleaning").toLowerCase();
+  let normalizedKey = "cleaning";
+  if (["hvac", "ac", "ac_appliance", "appliance_repair", "appliance"].some(k => rawCatKey.includes(k))) normalizedKey = "hvac";
+  else if (["electrical", "electricity", "elec"].some(k => rawCatKey.includes(k))) normalizedKey = "electrical";
+  else if (["plumbing", "plumber", "plum"].some(k => rawCatKey.includes(k))) normalizedKey = "plumbing";
+  else if (["carpentry", "carpenter", "carp"].some(k => rawCatKey.includes(k))) normalizedKey = "carpentry";
+  else if (["painting", "painter", "paint"].some(k => rawCatKey.includes(k))) normalizedKey = "painting";
+  else if (["pest", "pest_control"].some(k => rawCatKey.includes(k))) normalizedKey = "pest_control";
+  else if (["goods", "transport", "mini_truck", "truck"].some(k => rawCatKey.includes(k))) normalizedKey = "goods_transport";
 
-  const packages = ((packagesData && packagesData[category?.id]) || PACKAGES[category?.id] || []).map(p => ({ ...p, priceStr: BOOKING_CURRENCY_SYMBOL + p.price }))
-  const rawIndividualServices = INDIVIDUAL_SERVICES[category?.id] || packages.slice(0, 4);
+  const CATEGORY_SUBCATEGORIES = {
+    hvac: [
+      { name: "AC Service & Repair", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+      { name: "AC Installation", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+      { name: "Washing Machine", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Refrigerator & Fridge", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Microwave & Purifier", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    ],
+    electrical: [
+      { name: "Switches & Sockets", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+      { name: "Fan & Lighting", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+      { name: "MCB & Wiring", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "Inverter & Heavy Appliance", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+    ],
+    plumbing: [
+      { name: "Taps & Mixers", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+      { name: "Drainage & Clog", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Toilet & Flush Tank", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Water Heater & Tank", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+    ],
+    carpentry: [
+      { name: "Lock & Handle", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Furniture Repair", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Doors & Windows", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Drill & Hanging", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" }
+    ],
+    painting: [
+      { name: "Full Home Painting", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Wall Waterproofing", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Door & Wood Polish", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    ],
+    pest_control: [
+      { name: "Termite Control", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Cockroach & Ant Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Bed Bug Treatment", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    ],
+    goods_transport: [
+      { name: "House Shifting", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
+      { name: "Single Item Transport", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+    ],
+    cleaning: [
+      { name: "Furnished Apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop" },
+      { name: "Unfurnished Apartment", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
+      { name: "Furnished Villa", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
+      { name: "Unfurnished Villa", image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop" },
+      { name: "Book by Room", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
+      { name: "Mini Services", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    ]
+  };
 
-  const filteredPackages = packages.filter(p => {
-    if (activeFilter === "All") return true;
-    if (activeFilter === "Premium") return p.price >= 1000;
-    if (activeFilter === "Standard") return p.price < 1000;
-    return true;
+  const subCategories = CATEGORY_SUBCATEGORIES[normalizedKey] || CATEGORY_SUBCATEGORIES.cleaning;
+
+  const [activeSubTab, setActiveSubTab] = useState(subCategories[0]?.name || "Furnished Apartment");
+
+  // Keep activeSubTab in sync if normalizedKey changes
+  useEffect(() => {
+    if (subCategories && subCategories.length > 0) {
+      setActiveSubTab(subCategories[0].name);
+    }
+  }, [normalizedKey]);
+
+  const [bhkSelections, setBhkSelections] = useState({
+    essential: 3,
+    premium: 3,
+    elite: 3
   });
+  const [isVipJoined, setIsVipJoined] = useState(false);
+  const [isCouponApplied, setIsCouponApplied] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredIndividualServices = rawIndividualServices.filter(s => {
-    if (indFilter === "All") return true;
-    if (indFilter === "Repair") return s.categoryType === "Repair" || !s.categoryType;
-    if (indFilter === "Install") return s.categoryType === "Install";
-    return true;
-  });
+  const getBhkPrice = (tabName, planId, bhk) => {
+    const bhkIdx = bhk - 1;
+    if (tabName === "Furnished Apartment") {
+      if (planId === "essential") return [1899, 2499, 2999, 3409, 3999][bhkIdx];
+      if (planId === "premium") return [2199, 2799, 3299, 3759, 4299][bhkIdx];
+      if (planId === "elite") return [2999, 3599, 4099, 4579, 5199][bhkIdx];
+    }
+    if (tabName === "Unfurnished Apartment") {
+      if (planId === "essential") return [1599, 2139, 2639, 3139, 3639][bhkIdx];
+      if (planId === "premium") return [1899, 2409, 2909, 3409, 3909][bhkIdx];
+      if (planId === "elite") return [2499, 2999, 3499, 3999, 4499][bhkIdx];
+    }
+    if (tabName === "Furnished Villa") {
+      if (planId === "essential") return [2439, 2939, 3439, 4439, 5439][bhkIdx];
+      if (planId === "premium") return [3729, 4729, 5729, 6729, 7729][bhkIdx];
+      if (planId === "elite") return [4599, 5599, 6599, 7599, 8599][bhkIdx];
+    }
+    if (tabName === "Unfurnished Villa") {
+      if (planId === "essential") return [2419, 2919, 3419, 4419, 5419][bhkIdx];
+      if (planId === "premium") return [3819, 4319, 4819, 5819, 6819][bhkIdx];
+      if (planId === "elite") return [4499, 4999, 5499, 6499, 7499][bhkIdx];
+    }
+    return 1000;
+  };
 
-  const getCartCount = (pkgId) => {
-    const item = cart.find(c => c.id === pkgId);
+  const getBhkDuration = (planId) => {
+    if (planId === "essential") return "4 hrs";
+    if (planId === "premium") return "4 hrs";
+    return "4.5 hrs";
+  };
+
+  const getCartItemCount = (itemId) => {
+    const item = cart.find(c => c.id === itemId);
     return item ? item.quantity : 0;
-  }
+  };
 
-  const addToCart = (pkg) => {
+  const addItemToCart = (itemId, itemName, itemPrice, itemDuration) => {
     setCart(prev => {
-      const existing = prev.find(c => c.id === pkg.id);
+      const existing = prev.find(c => c.id === itemId);
       if (existing) {
-        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
+        return prev.map(c => c.id === itemId ? { ...c, quantity: c.quantity + 1 } : c);
       }
-      return [...prev, { ...pkg, quantity: 1, categoryName: category.name }];
+      return [...prev, { id: itemId, name: itemName, price: itemPrice, duration: itemDuration, quantity: 1, categoryName: category.name }];
     });
-  }
+  };
 
-  const removeFromCart = (pkgId) => {
+  const removeItemFromCart = (itemId) => {
     setCart(prev => {
-      const existing = prev.find(c => c.id === pkgId);
+      const existing = prev.find(c => c.id === itemId);
+      if (!existing) return prev;
       if (existing.quantity === 1) {
-        return prev.filter(c => c.id !== pkgId);
+        return prev.filter(c => c.id !== itemId);
       }
-      return prev.map(c => c.id === pkgId ? { ...c, quantity: c.quantity - 1 } : c);
+      return prev.map(c => c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c);
     });
-  }
+  };
 
-  const renderCard = (p, i) => {
-    const isSelected = selectedDetailItem?.id === p.id;
-    return (
-      <motion.div
-        key={p.id}
-        className={`bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 mb-4 hover:border-slate-400 hover:shadow-md transition-all flex flex-col sm:flex-row justify-between items-start gap-4 ${isSelected ? "border-l-4 border-l-slate-900 bg-slate-50/40 shadow-sm" : ""}`}
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: i * 0.08 }}
-      >
-        <div className="flex-1 min-w-0 pr-2">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <h3 className="text-base font-extrabold text-slate-900 leading-snug">{p.name}</h3>
-            {p.tag && (
-              <span className="bg-indigo-50 text-indigo-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider border border-indigo-100">
-                {p.tag}
+  const subtotal = cart.reduce((acc, c) => acc + (c.price * c.quantity), 0);
+  const couponDiscount = isCouponApplied ? Math.round(subtotal * 0.1) : 0;
+  const vipSavings = isVipJoined ? Math.round(subtotal * 0.15) : 0;
+  const totalAmount = Math.max(0, subtotal + (isVipJoined ? 299 : 0) - couponDiscount - vipSavings);
+
+  const apartmentVillaPlans = [
+    {
+      id: "essential",
+      name: "Essential Plan",
+      badge: "Value Choice",
+      badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
+      description: "Thorough deep cleaning of essential areas: kitchens, bathrooms, and floor sweep-mops.",
+      icon: "⭐",
+      includes: [
+        "Bathroom & kitchen deep cleaning",
+        "Machine cleaning of floors, doors & windows",
+        "Cobweb removal, ceiling & fan dusting",
+        "Balcony & utility area cleaning",
+        "Cabinet & furniture exterior dusting & wet wiping"
+      ],
+      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"
+    },
+    {
+      id: "premium",
+      name: "Premium Plan",
+      badge: "Best Value",
+      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+      description: "Detailed deep cleaning including complete cabinet interior sanitization and stain degreasing.",
+      icon: "💎",
+      includes: [
+        "Includes everything in Essential Plan",
+        "Cupboard cleaning (interior & exterior)",
+        "Cabinets interior with complete utensil removal & wash",
+        "Wall dry dusting and major stain spot wipe",
+        "Tile grout deep scrubbing"
+      ],
+      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop"
+    },
+    {
+      id: "elite",
+      name: "Elite Plan",
+      badge: "Signature Care",
+      badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
+      description: "Top-tier premium restoration including mechanical dry shampooing of sofa, carpet, and mattress.",
+      icon: "👑",
+      includes: [
+        "Includes everything in Premium Plan",
+        "Sofa, carpet & mattress vacuum & dry shampooing",
+        "Whole house steam sanitization",
+        "Eco-friendly dust repellent coat application",
+        "Balcony pressure washing & drain flush"
+      ],
+      image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop"
+    }
+  ];
+
+  const bookByRoomPlans = [
+    {
+      id: "room-bedroom",
+      name: "Bedroom Deep Cleaning",
+      price: 599,
+      duration: "1 hr",
+      description: "Thorough vacuuming, window wipe, fan dusting, floor mopping, and wardrobe exterior clean.",
+      includes: ["Wardrobe dusting", "Dry vacuuming of mattress", "Floor dry & wet mopping"],
+      image: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=300&q=80&fit=crop"
+    },
+    {
+      id: "room-living",
+      name: "Living Room Detailing",
+      price: 699,
+      duration: "1.5 hrs",
+      description: "Deep dust-wipe of entertainment consoles, sofa dry vacuuming, glass polishing, and carpet shake.",
+      includes: ["Sofa & carpet dry vacuuming", "Glass panel polishing", "Floor scrubbing"],
+      image: "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=300&q=80&fit=crop"
+    },
+    {
+      id: "room-floor",
+      name: "Floor Scrubbing & Wash",
+      price: 399,
+      duration: "1 hr",
+      description: "Machine-assisted high-speed floor scrub to remove dark spots and restore original tile shine.",
+      includes: ["Machine scrubbing", "Germicide wash", "Corner grout detailing"],
+      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"
+    }
+  ];
+
+  const miniServicesPlans = [
+    {
+      id: "mini-fridge",
+      name: "Refrigerator Deep Cleaning",
+      price: 299,
+      duration: "45 mins",
+      description: "Defrosting, rack wash, shelf wipe down, door gasket disinfection, and exterior polish.",
+      includes: ["Internal rack wash", "Gasket cleaning & disinfection", "Deodorizing treatment"],
+      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop"
+    },
+    {
+      id: "mini-microwave",
+      name: "Oven & Microwave Cleaning",
+      price: 149,
+      duration: "30 mins",
+      description: "Removal of burnt oil, splash stains, steam disinfection, and turntable polishing.",
+      includes: ["Internal degreasing", "Glass tray wash", "Deodorizer spray"],
+      image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop"
+    },
+    {
+      id: "mini-balcony",
+      name: "Balcony Scrubbing",
+      price: 299,
+      duration: "1 hr",
+      description: "Dusting railings, window exterior spray, cobweb removal, and high pressure floor scrub.",
+      includes: ["Railings wipe", "Floor scrubbing & wash", "Utility drainage flush"],
+      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"
+    }
+  ];
+
+  // Service items catalog for non-cleaning categories
+  const OTHER_SERVICES = {
+    hvac: {
+      "AC Service & Repair": [
+        { id: "hvac-serv-1", name: "Power Jet AC Foam Service", price: 599, duration: "45 mins", badge: "Value Choice", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Deep jet spray foam wash of indoor & outdoor coils with 2-stage filtration wash.", includes: ["Indoor unit jet foam wash", "Outdoor unit high pressure spray", "Gas & cooling performance check", "30-day service warranty"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-serv-2", name: "AC Gas Leakage Fix & Refill", price: 1499, duration: "1.5 hrs", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Nitrogen pressure leak detection, copper pipe brazing, and 100% full Freon/R32 gas refill.", includes: ["Nitrogen leak testing", "Copper brazing fix", "Vacuuming & full gas recharge", "60-day gas warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
+        { id: "hvac-serv-3", name: "AC Water Leakage & Drain Unclog", price: 399, duration: "45 mins", badge: "Quick Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Clear drain pipe clog, unblock condensation tray, flush mold debris & seal tray crack.", includes: ["Drain line vacuuming", "Anti-fungal tray flush", "Water leak prevention seal"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-serv-4", name: "AC Noise & Fan Vibration Fix", price: 449, duration: "45 mins", badge: "Troubleshooting", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix squeaking/rattling blower noise, fan blade balancing, motor bushing replacement.", includes: ["Blower wheel vibration fix", "Motor bearing lubrication", "Panel tightness check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-serv-5", name: "AC PCB Circuit Board Repair", price: 999, duration: "1 hr", badge: "Expert PCB", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Fix non-turning on AC, error codes on display, remote sensor failure, or PCB relay replacement.", includes: ["PCB diagnostic test", "Capacitor & relay replace", "60-day PCB warranty"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "AC Installation": [
+        { id: "hvac-inst-1", name: "Split AC Wall Mounting", price: 1299, duration: "2 hrs", badge: "Recommended", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional wall drilling, bracket fitting, outdoor unit alignment, and copper pipe connection.", includes: ["Indoor & outdoor mounting", "Copper pipe vacuuming", "Safety voltage test"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+        { id: "hvac-inst-2", name: "Window AC Installation", price: 899, duration: "1.5 hrs", badge: "Standard", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Window frame mounting, foam sealant insulation, and vibration pad fitting.", includes: ["Window frame bracket fit", "Gap sealing", "Demo & cooling check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-inst-3", name: "AC Uninstallation", price: 699, duration: "1 hr", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe gas pump-down into compressor, dismounting indoor/outdoor units, and copper pipe sealing.", includes: ["Gas pump down", "Units dismounting", "Copper pipe packaging"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" }
+      ],
+      "Washing Machine": [
+        { id: "hvac-wash-1", name: "Automatic Washing Machine Service", price: 499, duration: "1 hr", badge: "Best Value", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Descaling drum clean, filter debris removal, belt tension check, and drain pump flush.", includes: ["Drum descaling wash", "Lint & coin filter clean", "Belt & motor test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-wash-2", name: "Washing Machine Motor & Spin Repair", price: 699, duration: "1.5 hrs", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix drum noise, spin cycle failure, drain pump blockage, or motor capacitor issues.", includes: ["Motor & belt diagnosis", "Drain pump clearing", "30-day warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Refrigerator & Fridge": [
+        { id: "hvac-ref-1", name: "Fridge Cooling & Gas Check", price: 299, duration: "45 mins", badge: "Inspection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Compressor relay test, thermostat check, door gasket seal inspection, and gas pressure reading.", includes: ["21-point fridge inspection", "Thermostat test", "Detailed quote"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "hvac-ref-2", name: "Fridge Gas Charge & Leak Repair", price: 1299, duration: "1.5 hrs", badge: "Comprehensive", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Cooling coil leak solder, capillary tube flush, filter dryer replacement, and gas recharge.", includes: ["Leak repair & soldering", "Filter replacement", "100% Gas charge"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "Microwave & Purifier": [
+        { id: "hvac-micro-1", name: "Microwave Magnetron Repair", price: 499, duration: "45 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix non-heating issues, spark in cavity, touch keypad failure, or turntable motor replacement.", includes: ["Magnetron & diode check", "High voltage safety test", "Door lock repair"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "hvac-micro-2", name: "RO Water Purifier Servicing", price: 399, duration: "45 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Filter sediment wash, carbon filter change check, TDS level adjustment, and pump leak fix.", includes: ["Sediment & carbon check", "TDS calibration", "Leakage seal fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      ]
+    },
+    electrical: {
+      "Switches & Sockets": [
+        { id: "elec-sw-1", name: "Switch / Socket Replacement", price: 149, duration: "30 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacement or new fitting of modular switch, 6A/16A socket, or regulator.", includes: ["Old socket removal & new fit", "Earth voltage verification", "30-day warranty"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+        { id: "elec-sw-2", name: "Heavy Appliance Socket (16A/25A)", price: 249, duration: "45 mins", badge: "Heavy Load", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High-grade 16A power socket installation for AC, Geyser, Washing Machine, or Oven.", includes: ["Heavy wire stripping & terminal clamp", "MCB safety check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "elec-sw-3", name: "Bedside Switchboard / 3-Pin Socket Fix", price: 199, duration: "30 mins", badge: "Daily Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fix loose contact socket, burnt switch plate, or add new extension point.", includes: ["Internal wire tightening", "Insulation sleeve fit", "Voltage load check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" }
+      ],
+      "Fan & Lighting": [
+        { id: "elec-fan-1", name: "Ceiling Fan Repair / Fitting", price: 249, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Ceiling fan installation, downrod assembly, canopy alignment & safety wire hook mounting.", includes: ["New fan mounting & downrod fit", "Safety wire hook installation", "Speed & balance test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+        { id: "elec-fan-2", name: "Fan Regulator / Speed Switch Replacement", price: 149, duration: "30 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replace burnt or non-working step regulator knob to restore 5-speed fan control.", includes: ["Modular regulator replace", "Terminal insulation check", "5-speed current test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+        { id: "elec-fan-3", name: "Fan Noise, Wobble & Bearing Repair", price: 199, duration: "45 mins", badge: "Troubleshooting", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix squeaking/humming fan noise, bearing lubrication, blade angle adjustment & wobble clamp.", includes: ["Bearing greasing/lubrication", "Blade pitch alignment", "Noise & wobble elimination"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+        { id: "elec-fan-4", name: "Fan Slow Speed / Capacitor Change", price: 299, duration: "45 mins", badge: "Essential", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix slow rotating fan caused by degraded capacitor or coil resistance.", includes: ["Heavy capacitor replacement", "Winding resistance test", "High speed rotation verification"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "elec-fan-5", name: "Exhaust Fan Installation / Repair", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Kitchen or bathroom exhaust fan wall mounting, shutter flap adjustment, and motor wiring.", includes: ["Exhaust fan wall fit", "Vibration pad insertion", "Air flow test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "elec-fan-6", name: "LED Spot Light / Panel Light Fitting", price: 149, duration: "30 mins", badge: "Lighting", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "False ceiling LED panel cut-out fitting, driver replacement, or tube light mounting.", includes: ["LED driver connection", "Spring clip flush fit", "Illumination check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "elec-fan-7", name: "Decorative Chandelier & Hanging Lamp", price: 499, duration: "1 hr", badge: "Heavy Decor", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Heavy ceiling fastener anchor drilling, chandelier wire assembly, and glass shade assembly.", includes: ["Ceiling anchor bolt fitting", "Wire harness connection", "Weight load check"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" }
+      ],
+      "MCB & Wiring": [
+        { id: "elec-mcb-1", name: "MCB Fuse Breaker Replacement", price: 399, duration: "45 mins", badge: "Safety Essential", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Single/Double pole MCB replacement to stop frequent tripping & electrical overload.", includes: ["Tripping diagnosis", "Single/Double Pole MCB fit", "Distribution board check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "elec-mcb-2", name: "Full Room Safety Wiring Check", price: 699, duration: "1.5 hrs", badge: "Comprehensive", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Complete earthing verification, phase leakage test, and heavy load cabling report.", includes: ["Neutral & Earth leakage test", "Short circuit safety scan", "Digital safety report"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" }
+      ],
+      "Inverter & Heavy Appliance": [
+        { id: "elec-inv-1", name: "Inverter & Battery Setup", price: 499, duration: "1 hr", badge: "Heavy Power", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Inverter wall connection, battery terminal grease, bypass switch setup & load division.", includes: ["Heavy terminal wiring", "Distilled water top-up check", "Automatic switchover test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ]
+    },
+    plumbing: {
+      "Taps & Mixers": [
+        { id: "plum-tap-1", name: "Tap & Faucet Repair / Fit", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or install new sink/basin tap.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "plum-tap-2", name: "Wall Mixer / Diverter Repair", price: 399, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Hot & cold water mixer valve replacement, shower diverter repair, and thread sealing.", includes: ["Internal cartridge fix", "Teflon tape seal", "Flow pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Drainage & Clog": [
+        { id: "plum-drain-1", name: "Sink & Drain Pipe Unclogging", price: 349, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High-flex spring wire cleaning to clear food debris, grease, and hair clogs in waste pipes.", includes: ["Spring wire clog removal", "Waste pipe trap cleaning", "Full flow test"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" }
+      ],
+      "Toilet & Flush Tank": [
+        { id: "plum-toilet-1", name: "Flush Tank Syphon & Valve Repair", price: 499, duration: "1 hr", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix continuous tank water leakage, syphon kit change, ball valve replacement, or flush button fix.", includes: ["Syphon kit replacement", "Internal float valve fix", "Sanitary seal check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Water Heater & Tank": [
+        { id: "plum-geyser-1", name: "Geyser Water Heater Installation", price: 799, duration: "1.5 hrs", badge: "Heavy Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Wall fastener drilling, inlet/outlet braided pipe connection, safety valve fitting.", includes: ["Heavy wall fastener mounting", "Braided pipe connection", "Heating & leak test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ]
+    },
+    carpentry: {
+      "Lock & Handle": [
+        { id: "carp-lock-1", name: "Main Door Lock / Handle Installation", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Mortise lock fitting, cylindrical lock replace, latch alignment, key smooth turn check.", includes: ["Lock slot chisel & fit", "Latch strike plate alignment", "Key smooth test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Furniture Repair": [
+        { id: "carp-furn-1", name: "Bed & Wardrobe Assembly / Repair", price: 399, duration: "1 hr", badge: "Best Value", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Tighten loose joints, replace broken wooden slats, wardrobe door realignment, or new flatpack assembly.", includes: ["Joint tightening & glueing", "Leveling check", "30-day warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Doors & Windows": [
+        { id: "carp-door-1", name: "Cabinet Soft-Close Hinge Fix", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hydraulic soft-close hinge replacement, magnetic catch fitting, drawer channel smooth slide fix.", includes: ["Hinge replacement", "Door gap alignment", "Magnetic catch fit"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      ],
+      "Drill & Hanging": [
+        { id: "carp-drill-1", name: "Wall Shelf / TV Bracket Mounting", price: 249, duration: "30 mins", badge: "Quick Drill", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Laser level drilling, rawl plug anchor insertion, heavy concealed bracket shelf fitting.", includes: ["Laser leveling check", "Concealed bracket fitting", "Weight test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" }
+      ]
+    },
+    painting: {
+      "Full Home Painting": [
+        { id: "paint-home-1", name: "Single Wall Feature Accent Paint", price: 1999, duration: "3 hrs", badge: "Design Choice", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Surface putty repair, 2 coats premium royal emulsion paint, geometric or texture accent finish.", includes: ["Surface putty & sanding", "2 coats premium emulsion", "Floor masking sheet protection"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Wall Waterproofing": [
+        { id: "paint-water-1", name: "Wall Dampness & Seepage Treatment", price: 2999, duration: "4 hrs", badge: "Protection", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Laser dampness diagnosis, anti-fungal chemical scraper, waterproof barrier coat application.", includes: ["Dampness diagnosis scan", "Chemical barrier coating", "1-year warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Door & Wood Polish": [
+        { id: "paint-wood-1", name: "Door PU Enamel & Polish", price: 1499, duration: "2 hrs", badge: "Restoration", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High-grade wood sanding, PU lacquer spray polish or enamel gloss paint coat.", includes: ["Wood surface sanding", "2 coats PU polish/enamel", "Hardware masking"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      ]
+    },
+    pest_control: {
+      "Termite Control": [
+        { id: "pest-term-1", name: "Termite Drill & Injection Guard", price: 2499, duration: "2 hrs", badge: "5-Yr Protection", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Precision drilling along wall bases, chemical pressure injection, and color-matched hole sealing.", includes: ["Wall base chemical injection", "Wood furniture chemical spray", "5-year warranty certificate"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Cockroach & Ant Control": [
+        { id: "pest-roach-1", name: "Herbal Gel & Odorless Spray", price: 799, duration: "45 mins", badge: "Odorless & Safe", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Herbal bait gel dot application in kitchen cabinets, odorless spray for drains & skirting boards.", includes: ["Kitchen cabinet gel baiting", "Bathroom drain spray", "90-day protection"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Bed Bug Treatment": [
+        { id: "pest-bug-1", name: "2-Stage Bed Bug Steam & Chemical", price: 1499, duration: "1.5 hrs", badge: "Double Stage", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "High-temperature steam extraction of mattresses & sofas followed by residual chemical spray.", includes: ["Mattress heat steam treatment", "Residual chemical spray", "2nd visit included"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      ]
+    },
+    goods_transport: {
+      "House Shifting": [
+        { id: "shift-house-1", name: "Local House Shifting (1-2 BHK)", price: 3499, duration: "4 hrs", badge: "Full Service", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Dedicated mini truck, 2 trained helpers, bubble wrap for fragile items, loading & unloading.", includes: ["Mini truck & 2 helpers", "Bubble wrap for electronics", "Unloading & placement"], image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" }
+      ],
+      "Single Item Transport": [
+        { id: "shift-item-1", name: "Single Large Appliance / Furniture Pickup", price: 799, duration: "1.5 hrs", badge: "Express Pickup", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Door-to-door transportation of single Sofa, Fridge, Washing Machine, or Bed.", includes: ["Express pickup truck", "Helper included", "Door delivery"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ]
+    }
+  };
+
+  const isApartmentVilla = normalizedKey === "cleaning" && ["Furnished Apartment", "Unfurnished Apartment", "Furnished Villa", "Unfurnished Villa"].includes(activeSubTab);
+  const currentOtherPlans = (OTHER_SERVICES[normalizedKey] && OTHER_SERVICES[normalizedKey][activeSubTab]) || [];
+
+  const getBhkTitle = (tab, planName, bhk) => {
+    return `${tab} - ${planName} (${bhk} BHK)`;
+  };
+
+  const wrapperClass = isFullPage
+    ? "w-full text-slate-700 bg-white min-h-screen"
+    : "fixed inset-0 z-[9999] bg-white overflow-y-auto text-slate-700 w-full min-h-screen flex flex-col";
+
+  const containerClass = isFullPage
+    ? "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4"
+    : "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto min-h-screen px-4 sm:px-6 lg:px-8 py-4";
+
+  const mainAreaClass = "flex flex-col lg:flex-row flex-1 gap-8 mt-4";
+
+  const leftColumnClass = "flex-1 space-y-5 lg:pr-4";
+
+  const rightColumnClass = "w-full lg:w-[380px] bg-slate-50 border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between lg:sticky lg:top-24 h-fit space-y-5 shadow-sm shrink-0";
+
+  const contentMarkup = (
+    <motion.div
+      className={containerClass}
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 10 }}
+      transition={{ duration: 0.25 }}
+      onClick={e => e.stopPropagation()}
+    >
+      {/* Modal / Cover Header + Subcategory Tabs — sticky on scroll */}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md pb-2 border-b border-slate-100">
+        <div className="py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (typeof onClose === 'function') onClose();
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-extrabold text-xs transition-all cursor-pointer border border-slate-200/80 shadow-xs active:scale-95"
+            >
+              <ChevronLeft size={16} /> Back to Services
+            </button>
+            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+              {category.name}
+            </h2>
+          </div>
+
+          {/* Inner Search box & Close */}
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative w-full sm:w-72">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Search size={15} />
               </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-2">
-            <div className="flex items-center gap-1 text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60">
-              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-              <span>4.8</span>
+              <input
+                type="text"
+                placeholder="Search services..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all bg-slate-50/50"
+              />
             </div>
-            <span className="text-slate-400 font-medium">(113K reviews)</span>
-          </div>
-          <div className="text-sm font-extrabold text-slate-900 mb-3">
-            Starts at {p.priceStr || (BOOKING_CURRENCY_SYMBOL + p.price)} <span className="text-slate-300 mx-1">•</span> <span className="text-slate-600 font-medium">{p.duration || '1 hr'}</span>
-          </div>
-          <ul className="space-y-1.5 mb-3">
-            {(p.includes || ["Standard inclusions"]).map(inc => (
-              <li key={inc} className="flex items-start gap-1.5 text-xs text-slate-600 font-medium">
-                <span className="text-slate-800 font-extrabold text-sm leading-none mt-0.5">✓</span>
-                <span>{inc}</span>
-              </li>
-            ))}
-          </ul>
-          <button
-            onClick={() => setSelectedDetailItem(p)}
-            className="text-xs font-extrabold text-slate-800 hover:text-indigo-600 underline cursor-pointer"
-          >
-            View details
-          </button>
-        </div>
-
-        {/* Right Thumbnail & NoBroker Style White Add Pill */}
-        <div className="flex flex-col items-center shrink-0 self-center sm:self-start w-28 sm:w-32">
-          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/60 shadow-xs">
-            <img
-              src={p.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"}
-              alt={p.name}
-              className="w-full h-full object-cover"
-              onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"; }}
-            />
-          </div>
-
-          <div onClick={(e) => e.stopPropagation()} className="w-full flex justify-center -mt-4 z-10 whitespace-nowrap">
-            {getCartCount(p.id) > 0 ? (
-              <div className="flex items-center gap-2 text-xs font-black text-slate-900 px-3 py-1 bg-white border border-slate-300 rounded-full shadow-md">
-                <button className="w-5 h-5 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-800 font-black cursor-pointer transition-colors" onClick={() => removeFromCart(p.id)}>-</button>
-                <span className="w-3 text-center text-xs font-black">{getCartCount(p.id)}</span>
-                <button className="w-5 h-5 rounded-full bg-slate-900 hover:bg-slate-800 flex items-center justify-center text-white font-black cursor-pointer transition-colors" onClick={() => addToCart(p)}>+</button>
-              </div>
-            ) : (
+            {!isFullPage && (
               <button
-                className="bg-white hover:bg-slate-900 text-slate-900 hover:text-white font-bold text-xs px-5 py-1.5 rounded-full shadow-md border border-slate-300 hover:border-slate-900 transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
-                onClick={() => {
-                  addToCart(p);
-                  setSelectedDetailItem(p);
-                }}
+                className="w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                onClick={onClose}
               >
-                <ShoppingCart className="w-3.5 h-3.5 text-slate-900 group-hover:text-white" />
-                <span>Add</span>
+                <X size={18} />
               </button>
             )}
           </div>
         </div>
-      </motion.div>
-    );
-  };
 
-  return (
-    <div className="uc-modal-overlay" onClick={onClose}>
-      <motion.div
-        className="uc-pkg-modal"
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        onClick={e => e.stopPropagation()}
-      >
-        <button className="uc-pkg-modal-close" onClick={onClose}><X size={20} /></button>
-
-        <div className="uc-pkg-modal-header">
-          <div className="uc-pkg-modal-hero">
-            <img src={category.image} alt={category.name} />
-            <div className="uc-pkg-modal-hero-overlay">
-              <h2>{category.name}</h2>
-              <p>{category.desc}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="uc-pkg-modal-split">
-          {/* Left Sidebar: Individual Services (Independent Scroll Container) */}
-          <div className="w-full lg:w-1/2 border-b lg:border-b-0 lg:border-r border-slate-200 p-5 overflow-y-auto h-full">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xl font-extrabold text-slate-900">Individual Services</h3>
-              <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">Standalone Fixes</span>
-            </div>
-
-            {/* Individual Services Filter Pills */}
-            <div className="uc-pkg-filter-row mb-4">
-              {["All", "Repair", "Install"].map(f => (
-                <button
-                  key={f}
-                  className={`uc-pkg-filter-pill ${indFilter === f ? "active" : ""}`}
-                  onClick={() => setIndFilter(f)}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-
-            <div className="uc-pkg-modal-list">
-              {filteredIndividualServices.map((s, i) => renderCard(s, i))}
-            </div>
-          </div>
-
-          {/* Right Content: Packages & Bundles (Independent Scroll Container) */}
-          <div className="w-full lg:w-1/2 p-5 overflow-y-auto h-full">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xl font-extrabold text-slate-900">Packages & Bundles</h3>
-              <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">Full Savings</span>
-            </div>
-
-            {/* Packages Filter Pills */}
-            <div className="uc-pkg-filter-row mb-4">
-              {["All", "Standard", "Premium"].map(f => (
-                <button
-                  key={f}
-                  className={`uc-pkg-filter-pill ${activeFilter === f ? "active" : ""}`}
-                  onClick={() => setActiveFilter(f)}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-
-            <div className="uc-pkg-modal-list">
-              {filteredPackages.map((p, i) => renderCard(p, i))}
-            </div>
-          </div>
-        </div>
-
-        {cart.length > 0 && (
-          <motion.div
-            className="uc-pkg-modal-cart-bar relative"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            {/* Expanded Cart Details Popover */}
-            {showCartPopover && (
-              <motion.div
-                className="absolute bottom-full left-3 right-3 mb-3 bg-white rounded-2xl p-4 shadow-2xl border border-slate-200 z-50 max-h-64 overflow-y-auto text-slate-800"
-                initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.98 }}
+        {/* Subservice Flex Selector */}
+        <div className="flex overflow-x-auto gap-6 pb-3 pt-2 justify-start scrollbar-none">
+          {subCategories.map(tab => {
+            const isSelected = activeSubTab === tab.name;
+            return (
+              <button
+                key={tab.name}
+                onClick={() => {
+                  setActiveSubTab(tab.name);
+                  setSearchQuery("");
+                }}
+                className="flex flex-col items-center justify-center p-1.5 transition-all cursor-pointer text-center bg-transparent w-[80px] shrink-0 group"
               >
-                <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-extrabold text-slate-900">Added Services</span>
-                    <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                      {cart.reduce((a, c) => a + c.quantity, 0)} items
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setShowCartPopover(false)}
-                    className="text-slate-400 hover:text-slate-700 text-xs font-bold flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg"
-                  >
-                    <span>Close</span>
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <img
+                  src={tab.image}
+                  alt={tab.name}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
+                  }}
+                  className={`w-14 h-14 object-cover rounded-2xl mb-1.5 transition-all duration-200 ${
+                    isSelected
+                      ? "scale-[1.08] shadow-md ring-2 ring-emerald-500 ring-offset-2"
+                      : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                  }`}
+                />
+                <span className={`text-[11px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                  isSelected ? "text-slate-900 font-black" : "text-slate-600 font-bold"
+                }`}>
+                  {tab.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {/* End of sticky header+tabs */}
 
-                <div className="space-y-2.5">
-                  {cart.map(item => (
-                    <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                      <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-200 shrink-0">
-                          <img
-                            src={item.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=100&q=80&fit=crop"}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                          />
+      {/* Main Content Area */}
+      <div className={mainAreaClass}>
+        {/* Left Column: Subservice categories + package cards */}
+        <div className={leftColumnClass}>
+
+          {/* Title for Active Category */}
+          <div className="pt-2">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
+              <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
+              {activeSubTab} Packages
+            </h3>
+          </div>
+
+          {/* List of package cards */}
+          <div className="space-y-4">
+            {/* Apartment/Villa Dynamic cards (for Cleaning) */}
+            {isApartmentVilla &&
+              apartmentVillaPlans
+                .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map(p => {
+                  const currentBhk = bhkSelections[p.id] || 3;
+                  const price = getBhkPrice(activeSubTab, p.id, currentBhk);
+                  const duration = getBhkDuration(p.id);
+                  const cartId = `clean-bhk-${activeSubTab.toLowerCase().replace(/ /g, "-")}-${p.id}-${currentBhk}bhk`;
+                  const cartName = getBhkTitle(activeSubTab, p.name, currentBhk);
+                  const count = getCartItemCount(cartId);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                    >
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{p.icon}</span>
+                          <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${p.badgeColor}`}>
+                            {p.badge}
+                          </span>
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-extrabold text-slate-900 truncate">{item.name}</div>
-                          <div className="text-[11px] font-extrabold text-indigo-600">
-                            {BOOKING_CURRENCY_SYMBOL}{item.price} x {item.quantity} = {BOOKING_CURRENCY_SYMBOL}{item.price * item.quantity}
+
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+
+                        {/* BHK Selector Pills */}
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Size (BHK)</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[1, 2, 3, 4, 5].map(b => (
+                              <button
+                                key={b}
+                                onClick={() => setBhkSelections(prev => ({ ...prev, [p.id]: b }))}
+                                className={`text-xs px-3 py-1 rounded-full border transition-all cursor-pointer ${
+                                  currentBhk === b
+                                    ? "bg-emerald-600 border-emerald-600 text-white font-bold"
+                                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                                }`}
+                              >
+                                {b} BHK
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Price & Duration */}
+                        <div className="flex items-center gap-3 text-xs pt-1">
+                          <span className="text-base font-black text-slate-900">₹{price.toLocaleString("en-IN")}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-slate-500 font-semibold">{duration}</span>
+                        </div>
+
+                        {/* Includes checklist */}
+                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
+                          {p.includes.map(inc => (
+                            <li key={inc} className="flex items-start gap-2">
+                              <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                              <span>{inc}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Right side image & add button */}
+                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
+                            {count > 0 ? (
+                              <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <span>{count}</span>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, cartName, price, duration)}>+</button>
+                              </div>
+                            ) : (
+                              <button
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
+                                onClick={() => addItemToCart(cartId, cartName, price, duration)}
+                              >
+                                <ShoppingCart size={11} className="shrink-0" />
+                                <span>Add</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
+                    </div>
+                  );
+                })}
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
-                          <button
-                            onClick={() => removeFromCart(item.id)}
-                            className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-xs font-black text-slate-700 cursor-pointer"
-                          >
-                            -
-                          </button>
-                          <span className="text-xs font-black text-slate-900 w-4 text-center">{item.quantity}</span>
-                          <button
-                            onClick={() => addToCart(item)}
-                            className="w-5 h-5 rounded bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-xs font-black text-white cursor-pointer"
-                          >
-                            +
-                          </button>
+            {/* Book by room list (for Cleaning) */}
+            {normalizedKey === "cleaning" && activeSubTab === "Book by Room" &&
+              bookByRoomPlans
+                .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map(p => {
+                  const cartId = `clean-room-${p.id}`;
+                  const count = getCartItemCount(cartId);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                    >
+                      <div className="flex-1 space-y-3">
+                        <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-base font-black text-slate-900">₹{p.price}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-slate-500 font-semibold">{p.duration}</span>
                         </div>
-                        <button
-                          onClick={() => {
-                            setSelectedDetailItem(item);
-                            setShowCartPopover(false);
-                          }}
-                          className="text-[11px] font-extrabold text-slate-700 hover:text-indigo-600 underline cursor-pointer px-1.5"
-                        >
-                          Details
-                        </button>
+
+                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                          {p.includes.map(inc => (
+                            <li key={inc} className="flex items-start gap-2">
+                              <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                              <span>{inc}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
+                            {count > 0 ? (
+                              <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <span>{count}</span>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
+                              </div>
+                            ) : (
+                              <button
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
+                                onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}
+                              >
+                                <ShoppingCart size={11} className="shrink-0" />
+                                <span>Add</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+            {/* Mini services list (for Cleaning) */}
+            {normalizedKey === "cleaning" && activeSubTab === "Mini Services" &&
+              miniServicesPlans
+                .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map(p => {
+                  const cartId = `clean-mini-${p.id}`;
+                  const count = getCartItemCount(cartId);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                    >
+                      <div className="flex-1 space-y-3">
+                        <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-base font-black text-slate-900">₹{p.price}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-slate-500 font-semibold">{p.duration}</span>
+                        </div>
+
+                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                          {p.includes.map(inc => (
+                            <li key={inc} className="flex items-start gap-2">
+                              <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                              <span>{inc}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
+                            {count > 0 ? (
+                              <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <span>{count}</span>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
+                              </div>
+                            ) : (
+                              <button
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
+                                onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}
+                              >
+                                <ShoppingCart size={11} className="shrink-0" />
+                                <span>Add</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+            {/* Standard non-cleaning Home Services cards (HVAC, Electrical, Plumbing, Carpentry, Painting, Pest Control, Transport) */}
+            {normalizedKey !== "cleaning" &&
+              currentOtherPlans
+                .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map(p => {
+                  const cartId = `serv-${normalizedKey}-${p.id}`;
+                  const count = getCartItemCount(cartId);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                    >
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                          {p.badge && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${p.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
+                              {p.badge}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+
+                        {/* Price & Duration */}
+                        <div className="flex items-center gap-3 text-xs pt-1">
+                          <span className="text-base font-black text-slate-900">₹{p.price.toLocaleString("en-IN")}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-slate-500 font-semibold">{p.duration}</span>
+                        </div>
+
+                        {/* Includes checklist */}
+                        {p.includes && p.includes.length > 0 && (
+                          <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
+                            {p.includes.map(inc => (
+                              <li key={inc} className="flex items-start gap-2">
+                                <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                <span>{inc}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {/* Right side image & floating ADD button */}
+                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                          <img
+                            src={p.image}
+                            alt={p.name}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
+                            {count > 0 ? (
+                              <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <span>{count}</span>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
+                              </div>
+                            ) : (
+                              <button
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
+                                onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}
+                              >
+                                <ShoppingCart size={11} className="shrink-0" />
+                                <span>Add</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+          </div>
+        </div>
+
+        {/* Right Column: Checkout, VIP banner & Order Summary */}
+        <div className={rightColumnClass}>
+          <div className="space-y-4">
+            {/* Order Summary box */}
+            <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
+                <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
+                <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
+              </div>
+
+              {cart.length > 0 ? (
+                <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+                  {cart.map(item => (
+                    <div key={item.id} className="flex justify-between items-start text-xs gap-2">
+                      <div className="flex-1">
+                        <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">{item.duration}</span>
+                      </div>
+                      <div className="text-right flex items-center gap-2">
+                        <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
+                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600 cursor-pointer">-</button>
+                          <span>{item.quantity}</span>
+                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-600 cursor-pointer">+</button>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
-              </motion.div>
-            )}
+              ) : (
+                <div className="text-center py-8 text-slate-400 text-xs">
+                  No services added. Select from the packages on the left.
+                </div>
+              )}
 
-            <div className="uc-cart-bar-left flex items-center gap-3">
-              <div>
-                <span className="uc-cart-bar-items">{cart.reduce((a, c) => a + c.quantity, 0)} items</span>
-                <span className="uc-cart-bar-price">{BOOKING_CURRENCY_SYMBOL}{cart.reduce((a, c) => a + (c.price * c.quantity), 0)}</span>
+              <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
+                {cart.length > 0 && (
+                  <>
+                    <div className="flex justify-between text-slate-500">
+                      <span>Items Subtotal</span>
+                      <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                    </div>
+                    {isVipJoined && (
+                      <div className="flex justify-between text-slate-500">
+                        <span>VIP Yearly Fee</span>
+                        <span>₹299</span>
+                      </div>
+                    )}
+                    {couponDiscount > 0 && (
+                      <div className="flex justify-between text-amber-600 font-semibold">
+                        <span>Welcome Discount (10%)</span>
+                        <span>-₹{couponDiscount.toLocaleString("en-IN")}</span>
+                      </div>
+                    )}
+                    {vipSavings > 0 && (
+                      <div className="flex justify-between text-emerald-600 font-semibold">
+                        <span>VIP Member Savings (15%)</span>
+                        <span>-₹{vipSavings.toLocaleString("en-IN")}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2.5">
+                  <span>Total Amount</span>
+                  <span>₹{totalAmount.toLocaleString("en-IN")}</span>
+                </div>
               </div>
-              <button
-                onClick={() => setShowCartPopover(prev => !prev)}
-                className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-extrabold px-3 py-1.5 rounded-xl transition-all cursor-pointer backdrop-blur-sm border border-white/20"
-              >
-                <span>{showCartPopover ? "Hide Items" : "View Added Services"}</span>
-                {showCartPopover ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-              </button>
             </div>
-            <button className="uc-cart-bar-btn" onClick={onCheckout}>
-              Proceed to Checkout <ChevronRight size={16} />
-            </button>
-          </motion.div>
-        )}
+          </div>
 
-        {/* Floating Side Drawer in Left Blank Space */}
-        {selectedDetailItem && (
-          <ServiceDetailSideDrawer
-            item={selectedDetailItem}
-            category={category}
-            cart={cart}
-            setCart={setCart}
-            onClose={() => setSelectedDetailItem(null)}
-          />
-        )}
-      </motion.div>
+          {/* Bottom Checkout Action */}
+          <div className="pt-2">
+            <button
+              disabled={cart.length === 0}
+              onClick={onCheckout}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all cursor-pointer"
+            >
+              Proceed to Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  return (
+    <div className={wrapperClass} onClick={onClose}>
+      {contentMarkup}
     </div>
-  )
+  );
+}
+
+export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
+  return (
+    <CustomCleaningPackageModal
+      category={category}
+      cart={cart}
+      setCart={setCart}
+      onClose={onClose}
+      onCheckout={onCheckout}
+      isFullPage={false}
+    />
+  );
 }
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
