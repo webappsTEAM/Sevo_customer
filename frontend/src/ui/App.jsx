@@ -170,6 +170,9 @@ const EmployeeFeedbackPage = lazy(() =>
 const CustomerDecisionPage = lazy(() =>
   import("./pages/CustomerDecisionPage.jsx").then(m => ({ default: m.CustomerDecisionPage }))
 )
+const MiniTruckBookingHosurPage = lazy(() =>
+  import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage }))
+)
 
 // ─── Route Guards ────────────────────────────────────────────
 
@@ -340,6 +343,10 @@ export function App() {
           <Route path={routes.booking} element={<LandingPage />} />
           <Route path={routes.booking_services} element={<LandingPage />} />
           <Route path={routes.booking_checkout} element={<BookingPage />} />
+          <Route path={routes.truck_booking_hosur} element={<MiniTruckBookingHosurPage />} />
+          <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />
+          <Route path="/trucks" element={<MiniTruckBookingHosurPage />} />
+          <Route path="/booking/trucks" element={<MiniTruckBookingHosurPage />} />
           <Route path={routes.feedback} element={<FeedbackPage />} />
           <Route path={routes.customer_work_extension} element={<CustomerDecisionPage />} />
           <Route path="/customer/decision/:token" element={<CustomerDecisionPage />} />
