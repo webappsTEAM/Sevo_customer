@@ -68,4 +68,8 @@ export const routes = {
   audit_ledger: "/audit-ledger",
   customer_work_extension: "/customer/work-extensions/:token",
   truck_booking_hosur: "/trucks/hosur",
+  two_wheeler_booking_hosur: "/two-wheelers/hosur",
+  two_wheeler_booking: "/two-wheelers",
+  packers_movers_booking_hosur: "/packers-and-movers/hosur",
+  packers_movers_booking: "/packers-and-movers",
 }
