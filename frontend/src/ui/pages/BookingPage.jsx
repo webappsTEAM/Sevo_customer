@@ -2008,7 +2008,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false)
   const [rescheduleError, setRescheduleError] = useState('')
   const [rescheduleSuccess, setRescheduleSuccess] = useState('')
-  
+
   const [activeBookings, setActiveBookings] = useState([])
   const [availableSlots, setAvailableSlots] = useState([])
   const [slotsLoading, setSlotsLoading] = useState(false)
@@ -2206,7 +2206,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
         try {
           const updated = await apiRequest('/customer/reschedules/')
           setReschedules(updated.data || [])
-        } catch(e) {
+        } catch (e) {
           const updated = await apiRequest('/booking/reschedule/')
           setReschedules(updated.data || [])
         }
@@ -2416,7 +2416,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                           <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: b.status === 'completed' ? '#10B98115' : '#7C3AED15', color: b.status === 'completed' ? '#10B981' : '#7C3AED', border: `1px solid ${b.status === 'completed' ? '#10B98130' : '#7C3AED30'}` }}>{b.status_display || b.status}</span>
                         </div>
                         <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
-                        
+
                         {/* Reschedule Action for Eligible Bookings (Pending Confirmation, Confirmed, Employee Assigned) */}
                         {isRescheduleEligible && (
                           <div style={{ marginTop: 6 }}>
@@ -2801,7 +2801,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                             justify: 'space-between',
                             position: 'relative'
                           }}>
-                          
+
                           <div>
                             {/* Card Header: Icon, Label, Default Badge */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -3063,7 +3063,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
             {showRescheduleForm && (
               <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}
                 style={{ border: '1.5px solid #7C3AED30', borderRadius: 20, padding: '1.75rem', background: '#faf5ff', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(124,58,237,0.08)' }}>
-                
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                   <h4 style={{ margin: 0, fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>New Reschedule Request</h4>
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: 99, background: '#7C3AED15', color: '#7C3AED' }}>Guided Workflow</span>
@@ -3076,7 +3076,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                  
+
                   {/* 1. Select Booking */}
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: '#334155', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -3254,17 +3254,17 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {reschedules.map(r => {
                   const statusConfig = {
-                    PENDING:                    { bg: '#FEF3C7', color: '#D97706', label: 'Pending Admin Review' },
-                    ADMIN_REVIEW:               { bg: '#E0E7FF', color: '#4F46E5', label: 'Under Admin Review' },
-                    SLOT_SUGGESTED:             { bg: '#F5F3FF', color: '#7C3AED', label: 'Admin Suggested New Slot' },
+                    PENDING: { bg: '#FEF3C7', color: '#D97706', label: 'Pending Admin Review' },
+                    ADMIN_REVIEW: { bg: '#E0E7FF', color: '#4F46E5', label: 'Under Admin Review' },
+                    SLOT_SUGGESTED: { bg: '#F5F3FF', color: '#7C3AED', label: 'Admin Suggested New Slot' },
                     AWAITING_EMPLOYEE_RESPONSE: { bg: '#EFF6FF', color: '#2563EB', label: 'Awaiting Technician Confirmation' },
-                    REASSIGNMENT_NEEDED:        { bg: '#FFF7ED', color: '#C2410C', label: 'Finding Another Technician' },
-                    RESCHEDULED:                { bg: '#D1FAE5', color: '#059669', label: '✓ Rescheduled Successfully' },
-                    REJECTED:                   { bg: '#FEE2E2', color: '#DC2626', label: 'Rejected' },
-                    CANCELLED:                  { bg: '#F1F5F9', color: '#64748B', label: 'Cancelled' },
-                    APPROVED:                   { bg: '#D1FAE5', color: '#059669', label: 'Approved' },
-                    CUSTOMER_NOTIFIED:          { bg: '#D1FAE5', color: '#059669', label: 'Confirmed & Updated' },
-                    TECHNICIAN_CONFIRMATION:    { bg: '#F3E8FF', color: '#7C3AED', label: 'Awaiting Tech Confirmation' },
+                    REASSIGNMENT_NEEDED: { bg: '#FFF7ED', color: '#C2410C', label: 'Finding Another Technician' },
+                    RESCHEDULED: { bg: '#D1FAE5', color: '#059669', label: '✓ Rescheduled Successfully' },
+                    REJECTED: { bg: '#FEE2E2', color: '#DC2626', label: 'Rejected' },
+                    CANCELLED: { bg: '#F1F5F9', color: '#64748B', label: 'Cancelled' },
+                    APPROVED: { bg: '#D1FAE5', color: '#059669', label: 'Approved' },
+                    CUSTOMER_NOTIFIED: { bg: '#D1FAE5', color: '#059669', label: 'Confirmed & Updated' },
+                    TECHNICIAN_CONFIRMATION: { bg: '#F3E8FF', color: '#7C3AED', label: 'Awaiting Tech Confirmation' },
                   }
                   const sc = statusConfig[r.status] || { bg: '#F1F5F9', color: '#64748B', label: r.status_display || r.status }
                   const currentDisplay = r.current_date ? `${r.current_date} (${r.current_time || '09-10'})` : 'N/A'
@@ -3340,11 +3340,11 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                             ].map(st => {
                               const stepIdx = r.step_index || (
                                 r.status === 'RESCHEDULED' ? 8 :
-                                r.status === 'EMPLOYEE_ACCEPTED' ? 7 :
-                                (r.status === 'AWAITING_EMPLOYEE_RESPONSE' || r.status === 'AWAITING_EMPLOYEE_CONFIRMATION') ? 6 :
-                                (r.status === 'EMPLOYEE_ASSIGNED') ? 5 :
-                                (r.status === 'ADMIN_APPROVED' || r.status === 'REASSIGNMENT_NEEDED') ? 4 :
-                                (r.status === 'ADMIN_REVIEW') ? 2 : 1
+                                  r.status === 'EMPLOYEE_ACCEPTED' ? 7 :
+                                    (r.status === 'AWAITING_EMPLOYEE_RESPONSE' || r.status === 'AWAITING_EMPLOYEE_CONFIRMATION') ? 6 :
+                                      (r.status === 'EMPLOYEE_ASSIGNED') ? 5 :
+                                        (r.status === 'ADMIN_APPROVED' || r.status === 'REASSIGNMENT_NEEDED') ? 4 :
+                                          (r.status === 'ADMIN_REVIEW') ? 2 : 1
                               )
                               const isCompleted = stepIdx > st.num || r.status === 'RESCHEDULED'
                               const isCurrent = stepIdx === st.num && r.status !== 'RESCHEDULED'
@@ -3518,7 +3518,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                  
+
                   {/* 1. Select Booking */}
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: '#334155', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
