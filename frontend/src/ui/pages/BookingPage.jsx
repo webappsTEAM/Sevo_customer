@@ -29,7 +29,7 @@ let BOOKING_CURRENCY_SYMBOL = "₹";
    DATA
    ───────────────────────────────────────────────────────────────────────── */
 
-const CATEGORIES = [
+export const CATEGORIES = [
   { id: "cleaning", name: "Home Cleaning", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", desc: "Deep clean & sanitization", rating: "4.8", jobs: "50K+" },
   { id: "plumbing", name: "Plumbing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop", desc: "Leaks, pipes & fixtures", rating: "4.7", jobs: "30K+" },
   { id: "electrical", name: "Electrical", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop", desc: "Wiring, panels & lighting", rating: "4.8", jobs: "40K+" },
@@ -4508,9 +4508,12 @@ export function BookingPage() {
     loadCatalog()
 
     // Handle URL search parameters for category/service redirect
+    // (falls back to the static CATEGORIES list so this works even before
+    // the live catalog fetch above resolves, or when it returns nothing)
     const catParam = searchParams.get('category') || searchParams.get('cat')
-    if (catParam && categoriesData.length > 0) {
-      const foundCat = categoriesData.find(c => c.id === catParam || c.slug === catParam || c.name.toLowerCase() === catParam.toLowerCase())
+    if (catParam) {
+      const catsToSearch = categoriesData.length > 0 ? categoriesData : CATEGORIES
+      const foundCat = catsToSearch.find(c => c.id === catParam || c.slug === catParam || c.name.toLowerCase() === catParam.toLowerCase())
       if (foundCat) {
         setCategory(foundCat)
         setShowPackageModal(true)
@@ -4898,7 +4901,7 @@ export function BookingPage() {
   )
 }
 
-function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
+export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
   const [activeTab, setActiveTab] = useState(0)
   const [activeFilter, setActiveFilter] = useState("All")
   const rawList = (packagesData && (packagesData[category?.id] || packagesData[category?.slug] || packagesData[category?.name?.toLowerCase()])) || PACKAGES[category?.id] || PACKAGES[category?.slug] || []
@@ -5081,7 +5084,7 @@ function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesDa
    STYLES
    ───────────────────────────────────────────────────────────────────────── */
 
-function BkStyles() {
+export function BkStyles() {
   return (
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Outfit:wght@400;500;600;700;800;900&display=swap');

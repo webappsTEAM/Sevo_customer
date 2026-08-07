@@ -341,6 +341,8 @@ export function App() {
 
           <Route path={routes.landing} element={<LandingPage />} />
           <Route path={routes.booking} element={<LandingPage />} />
+          <Route path={routes.booking_services} element={<LandingPage />} />
+          <Route path={routes.booking_checkout} element={<BookingPage />} />
           <Route path={routes.truck_booking_hosur} element={<MiniTruckBookingHosurPage />} />
           <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />
           <Route path="/trucks" element={<MiniTruckBookingHosurPage />} />

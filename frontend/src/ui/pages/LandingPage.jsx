@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import {
   Home, PaintRoller,
   SprayCan, Building2, AirVent, Hammer, Boxes,
@@ -10,6 +10,7 @@ import {
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet,
 } from "lucide-react"
 import { routes } from "../routes.js"
+import { PackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -140,12 +141,12 @@ function PackersMoversGraphic({ className = "w-16 h-16" }) {
 
 // ── Real photos already in the project (public/mockups) ─────────────────
 const CATEGORIES = [
-  { label: "Home Services & Pest Control", icon: SprayCan, photo: "/mockups/service_cleaning.png", bg: "bg-indigo-50", ring: "border-indigo-100", fg: "text-indigo-600", hoverBg: "group-hover:bg-indigo-100" },
-  { label: "Paintings", icon: PaintRoller, photo: "/mockups/service_maintenance.png", bg: "bg-amber-50", ring: "border-amber-100", fg: "text-amber-600", hoverBg: "group-hover:bg-amber-100" },
-  { label: "Mason", icon: Building2, photo: "/mockups/service_building.png", bg: "bg-sky-50", ring: "border-sky-100", fg: "text-sky-600", hoverBg: "group-hover:bg-sky-100" },
-  { label: "AC & Appliance", icon: AirVent, photo: "/mockups/service_hvac.png", bg: "bg-rose-50", ring: "border-rose-100", fg: "text-rose-600", hoverBg: "group-hover:bg-rose-100" },
-  { label: "Electrician, Plumbing & Carpentry", icon: Hammer, photo: "/mockups/service_electrical.png", bg: "bg-violet-50", ring: "border-violet-100", fg: "text-violet-600", hoverBg: "group-hover:bg-violet-100" },
-  { label: "Goods & Transports", icon: Boxes, photo: "/mockups/service_transport.jpg", bg: "bg-teal-50", ring: "border-teal-100", fg: "text-teal-600", hoverBg: "group-hover:bg-teal-100" },
+  { label: "Home Services & Pest Control", icon: SprayCan, photo: "/mockups/service_cleaning.png", bg: "bg-indigo-50", ring: "border-indigo-100", fg: "text-indigo-600", hoverBg: "group-hover:bg-indigo-100", serviceCategoryId: "pest_control" },
+  { label: "Paintings", icon: PaintRoller, photo: "/mockups/service_maintenance.png", bg: "bg-amber-50", ring: "border-amber-100", fg: "text-amber-600", hoverBg: "group-hover:bg-amber-100", serviceCategoryId: "painting" },
+  { label: "Mason", icon: Building2, photo: "/mockups/service_building.png", bg: "bg-sky-50", ring: "border-sky-100", fg: "text-sky-600", hoverBg: "group-hover:bg-sky-100", serviceCategoryId: null },
+  { label: "AC & Appliance", icon: AirVent, photo: "/mockups/service_hvac.png", bg: "bg-rose-50", ring: "border-rose-100", fg: "text-rose-600", hoverBg: "group-hover:bg-rose-100", serviceCategoryId: "hvac" },
+  { label: "Electrician, Plumbing & Carpentry", icon: Hammer, photo: "/mockups/service_electrical.png", bg: "bg-violet-50", ring: "border-violet-100", fg: "text-violet-600", hoverBg: "group-hover:bg-violet-100", serviceCategoryId: "electrical" },
+  { label: "Goods & Transports", icon: Boxes, photo: "/mockups/service_transport.jpg", bg: "bg-teal-50", ring: "border-teal-100", fg: "text-teal-600", hoverBg: "group-hover:bg-teal-100", serviceCategoryId: null },
 ]
 
 const TRUST_STRIP = [
@@ -224,12 +225,24 @@ function LocationDropdown({ className = "" }) {
 
 export function LandingPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [query, setQuery] = useState("")
   const [testimonialIdx, setTestimonialIdx] = useState(0)
+  const [modalCart, setModalCart] = useState([])
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(false)
 
   const goToBooking = () => navigate(routes.booking)
   const goToLogin = () => navigate(routes.login)
+  const goToCategoryServices = (serviceCategoryId) => {
+    navigate(serviceCategoryId ? `${routes.booking_services}?category=${serviceCategoryId}` : routes.booking_services)
+  }
+
+  // Category clicked on this page opens the existing package/services
+  // popup right here, instead of navigating to the old BookingPage UI.
+  const activeCategoryId = searchParams.get("category")
+  const activeCategory = activeCategoryId
+    ? BOOKING_CATEGORIES.find(c => c.id === activeCategoryId)
+    : null
 
   // Close popup on Escape key and prevent background scroll when open
   useEffect(() => {
@@ -249,6 +262,7 @@ export function LandingPage() {
   }, [isGoodsModalOpen])
 
   return (
+    <>
     <div className="min-h-screen bg-[#F7FAF9] text-slate-800" style={{ animation: "fadeUp 0.4s ease both" }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-100">
@@ -361,14 +375,14 @@ export function LandingPage() {
           <h2 className="text-xl font-bold text-slate-900">Browse by Category</h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {CATEGORIES.map(({ label, icon: Icon, photo }) => (
+          {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => (
             <button
               key={label}
               onClick={() => {
                 if (label === "Goods & Transports") {
                   setIsGoodsModalOpen(true)
                 } else {
-                  goToBooking()
+                  goToCategoryServices(serviceCategoryId)
                 }
               }}
               className="group flex flex-col bg-white rounded-2xl border border-slate-100 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all"
@@ -709,5 +723,18 @@ export function LandingPage() {
         </div>
       </footer>
     </div>
+
+    <BkStyles />
+    {activeCategory && (
+      <PackageModal
+        category={activeCategory}
+        cart={modalCart}
+        setCart={setModalCart}
+        packagesData={{}}
+        onClose={() => navigate(routes.booking_services)}
+        onCheckout={() => navigate(`${routes.booking_checkout}?category=${activeCategory.id}`)}
+      />
+    )}
+    </>
   )
 }
