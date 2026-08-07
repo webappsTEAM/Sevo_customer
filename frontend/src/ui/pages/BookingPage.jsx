@@ -31,6 +31,7 @@ let BOOKING_CURRENCY_SYMBOL = "₹";
 
 export const CATEGORIES = [
   { id: "cleaning", name: "Home Cleaning", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", desc: "Deep clean & sanitization", rating: "4.8", jobs: "50K+" },
+  { id: "kitchen_cleaning", name: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&q=80&fit=crop", desc: "Complete kitchen & appliance clean", rating: "4.8", jobs: "20K+" },
   { id: "plumbing", name: "Plumbing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop", desc: "Leaks, pipes & fixtures", rating: "4.7", jobs: "30K+" },
   { id: "electrical", name: "Electrical", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop", desc: "Wiring, panels & lighting", rating: "4.8", jobs: "40K+" },
   { id: "carpentry", name: "Carpentry", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=500&q=80&fit=crop", desc: "Furniture & wood repairs", rating: "4.6", jobs: "15K+" },
@@ -712,8 +713,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
                 <div className="uc-cat-name">{cat.name}</div>
                 <div className="uc-cat-desc">{cat.desc}</div>
                 <div className="uc-cat-meta">
-                  <StarRow rating={cat.rating} size={11} />
-                  <span className="uc-cat-jobs">{cat.jobs} bookings</span>
+                  <span className="uc-cat-jobs font-semibold">{cat.jobs} bookings</span>
                 </div>
               </div>
             </motion.button>
@@ -4817,8 +4817,8 @@ export function BookingPage() {
                   onTimeChange={setSelTime}
                   onNext={() => setStep(4)}
                   onBack={() => {
-                    if (category?.id === "cleaning" || category?.slug === "cleaning") {
-                      navigate("/home?category=cleaning");
+                    if (category?.id || category?.slug) {
+                      navigate(`/home?category=${category.slug || category.id}`, { state: { cart } });
                     } else {
                       setStep(1);
                       setShowPackageModal(true);
@@ -5561,6 +5561,417 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   );
 }
 
+/* ─── Kitchen Cleaning Modal ──────────────────────────────────────────────── */
+const KITCHEN_SUB_TABS = [
+  {
+    id: "complete",
+    name: "Complete Kitchen Cleaning",
+    image: "/mockups/kitchen_cleaning_hero.png",
+  },
+  {
+    id: "appliance",
+    name: "Appliance Cleaning",
+    image: "/mockups/appliance_cleaning_hero.png",
+  },
+];
+
+const COMPLETE_KITCHEN_SERVICE = {
+  id: "complete-kitchen",
+  name: "Complete Kitchen Cleaning",
+  price: 999,
+  duration: "2 hrs 30 mins",
+  rating: "4.76",
+  reviews: "434K",
+  image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop",
+  includes: [
+    "Cleaning of objects & surfaces with steam machine",
+    "Scrubbing of countertops, backsplash & sink",
+    "Stovetop, burner & chimney exterior cleaning",
+    "Floor mopping & corner sweep",
+    "Cabinet exterior wipe-down & de-greasing",
+  ],
+};
+
+const APPLIANCE_SERVICES = [
+  {
+    id: "fridge-cleaning",
+    name: "Fridge Cleaning",
+    price: 399,
+    duration: "45 mins",
+    rating: "4.83",
+    reviews: "164K",
+    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
+    includes: [
+      "Deep cleaning of fridge exterior with steam machine",
+      "Wet wiping of interior to remove food spills, stains & odour",
+    ],
+    options: "3 options",
+  },
+  {
+    id: "microwave-cleaning",
+    name: "Microwave Cleaning",
+    price: 199,
+    duration: "15 mins",
+    rating: "4.82",
+    reviews: "36K",
+    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
+    includes: [
+      "Deep cleaning of microwave exterior to remove grease & oil",
+      "Wet wiping of interior to remove burnt stains & odour",
+    ],
+  },
+  {
+    id: "gas-stove-cleaning",
+    name: "Gas Stove Cleaning",
+    price: 99,
+    duration: "20 mins",
+    rating: "4.80",
+    reviews: "59K",
+    image: "https://images.unsplash.com/photo-1556909172-54557c7e4fb7?w=300&q=80&fit=crop",
+    includes: [
+      "Stovetops, burners & knobs cleaning with steam machine",
+      "Wet wiping of interior to remove burnt stains & odour",
+    ],
+    options: "3 options",
+  },
+  {
+    id: "chimney-cleaning",
+    name: "Chimney Cleaning",
+    price: 349,
+    duration: "40 mins",
+    rating: "4.78",
+    reviews: "28K",
+    image: "https://images.unsplash.com/photo-1556909212-d5b604d0c90d?w=300&q=80&fit=crop",
+    includes: [
+      "Removal of grease & oil buildup from filters",
+      "Deep cleaning of chimney exterior & interior surfaces",
+    ],
+  },
+  {
+    id: "dishwasher-cleaning",
+    name: "Dishwasher Cleaning",
+    price: 249,
+    duration: "30 mins",
+    rating: "4.75",
+    reviews: "12K",
+    image: "https://images.unsplash.com/photo-1556909144-f5fcb1f8f05e?w=300&q=80&fit=crop",
+    includes: [
+      "Deep cleaning of dishwasher interior & door seal",
+      "Filter cleaning & deodorizing treatment",
+    ],
+  },
+];
+
+export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
+  const [activeTab, setActiveTab] = useState("complete");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const addItemToCart = (id, name, price, duration) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id);
+      if (existing) return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
+      return [...prev, { id, name, price, duration, quantity: 1 }];
+    });
+  };
+
+  const removeItemFromCart = (id) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id);
+      if (!existing) return prev;
+      if (existing.quantity === 1) return prev.filter(i => i.id !== id);
+      return prev.map(i => i.id === id ? { ...i, quantity: i.quantity - 1 } : i);
+    });
+  };
+
+  const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
+
+  const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+
+  const filteredAppliances = APPLIANCE_SERVICES.filter(a =>
+    a.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="w-full text-slate-700 bg-white">
+      {/* Sticky Header + Tabs */}
+      <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
+        <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
+          <div>
+            <button
+              onClick={onClose}
+              className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-2 text-xs transition-colors"
+            >
+              <ChevronLeft size={16} /> Back to Services
+            </button>
+            <h2 className="text-xl font-black text-slate-900">Kitchen Cleaning</h2>
+          </div>
+          <div className="relative w-full sm:w-64">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search size={14} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search services..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all bg-slate-50/50"
+            />
+          </div>
+        </div>
+
+        {/* Sub-tabs */}
+        <div className="flex gap-5 pb-3 pt-2 border-b border-slate-100 justify-start">
+          {KITCHEN_SUB_TABS.map(tab => {
+            const isSelected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
+                className="flex flex-col items-center justify-center p-1.5 transition-all cursor-pointer text-center bg-transparent w-[90px] shrink-0"
+              >
+                <img
+                  src={tab.image}
+                  alt={tab.name}
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
+                    isSelected ? "scale-[1.05] shadow-md" : "opacity-80 hover:opacity-100"
+                  }`}
+                />
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                  isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
+                }`}>
+                  {tab.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex flex-col lg:flex-row flex-1 pt-4">
+
+        {/* Left Column */}
+        <div className="flex-1 space-y-5 lg:pr-6">
+
+          {/* Section title */}
+          <div className="pt-1">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+              <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
+              {activeTab === "complete" ? "Complete Kitchen Cleaning" : "Appliance Cleaning"}
+            </h3>
+          </div>
+
+          {/* ── COMPLETE KITCHEN CLEANING ── */}
+          {activeTab === "complete" && (
+            <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+              {/* Image Hero */}
+              <div className="w-full h-52 sm:h-64 bg-slate-100 overflow-hidden">
+                <img
+                  src="/mockups/kitchen_cleaning_hero.png"
+                  alt="Complete Kitchen Cleaning"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+
+              {/* Details */}
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <h4 className="text-base font-black text-slate-900 mb-1">{COMPLETE_KITCHEN_SERVICE.name}</h4>
+
+                    <p className="text-xs font-bold text-slate-800 mt-1">
+                      Starts at ₹{COMPLETE_KITCHEN_SERVICE.price.toLocaleString("en-IN")}
+                      <span className="text-slate-400 font-normal ml-2">• {COMPLETE_KITCHEN_SERVICE.duration}</span>
+                    </p>
+                  </div>
+                  {/* Add button */}
+                  <div className="shrink-0">
+                    {getCount(COMPLETE_KITCHEN_SERVICE.id) > 0 ? (
+                      <div className="flex items-center gap-2 border border-emerald-500 rounded-lg px-3 py-2 text-sm font-bold text-emerald-700">
+                        <button onClick={() => removeItemFromCart(COMPLETE_KITCHEN_SERVICE.id)} className="hover:text-emerald-900">-</button>
+                        <span>{getCount(COMPLETE_KITCHEN_SERVICE.id)}</span>
+                        <button onClick={() => addItemToCart(COMPLETE_KITCHEN_SERVICE.id, COMPLETE_KITCHEN_SERVICE.name, COMPLETE_KITCHEN_SERVICE.price, COMPLETE_KITCHEN_SERVICE.duration)} className="hover:text-emerald-900">+</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addItemToCart(COMPLETE_KITCHEN_SERVICE.id, COMPLETE_KITCHEN_SERVICE.name, COMPLETE_KITCHEN_SERVICE.price, COMPLETE_KITCHEN_SERVICE.duration)}
+                        className="bg-white border border-slate-300 text-emerald-600 font-extrabold text-xs px-5 py-2.5 rounded-full hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-1.5 uppercase"
+                      >
+                        <ShoppingCart size={13} className="text-emerald-600" /> Add
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Includes */}
+                <div className="mt-4 space-y-1.5 border-t border-slate-100 pt-3">
+                  {COMPLETE_KITCHEN_SERVICE.includes.map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <span className="text-slate-400 mt-0.5">•</span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <button className="text-xs font-semibold text-blue-600 mt-3 hover:underline">View details</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── APPLIANCE CLEANING ── */}
+          {activeTab === "appliance" && (
+            <div className="space-y-0 divide-y divide-slate-100">
+              {filteredAppliances.map((appliance, idx) => {
+                const count = getCount(appliance.id);
+                const isFirst = idx === 0;
+                return (
+                  <div key={appliance.id} className="py-5">
+                    {/* First item image hero */}
+                    {isFirst && (
+                      <div className="w-full h-48 bg-slate-100 rounded-2xl overflow-hidden mb-4">
+                        <img
+                          src="/mockups/appliance_cleaning_hero.png"
+                          alt={appliance.name}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-black text-slate-900 mb-1">{appliance.name}</h4>
+
+                        <p className="text-xs font-bold text-slate-800">
+                          {appliance.options ? `Starts at ₹${appliance.price}` : `₹${appliance.price}`}
+                          <span className="text-slate-400 font-normal ml-2">• {appliance.duration}</span>
+                        </p>
+                        <div className="mt-3 space-y-1">
+                          {appliance.includes.map((item, i) => (
+                            <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                              <span className="text-slate-400 mt-0.5">•</span>
+                              <span>{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <button className="text-xs font-semibold text-blue-600 mt-2 hover:underline">View details</button>
+                        {appliance.options && (
+                          <p className="text-[11px] text-slate-400 mt-1">{appliance.options}</p>
+                        )}
+                      </div>
+
+                      {/* Appliance image + add button */}
+                      {!isFirst && (
+                        <div className="shrink-0 flex flex-col items-center gap-2">
+                          <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100">
+                            <img src={appliance.image} alt={appliance.name} className="w-full h-full object-cover" />
+                          </div>
+                          {count > 0 ? (
+                            <div className="flex items-center gap-2 border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 w-full justify-between">
+                              <button onClick={() => removeItemFromCart(appliance.id)} className="hover:text-emerald-900">-</button>
+                              <span>{count}</span>
+                              <button onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)} className="hover:text-emerald-900">+</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)}
+                              className="w-full bg-white border border-slate-300 text-emerald-600 font-extrabold text-[11px] px-3 py-1.5 rounded-full hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-1.5 uppercase"
+                            >
+                              <ShoppingCart size={11} className="text-emerald-600" /> Add
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* First item add button (inline) */}
+                      {isFirst && (
+                        <div className="shrink-0">
+                          {count > 0 ? (
+                            <div className="flex items-center gap-2 border border-emerald-500 rounded-lg px-3 py-2 text-sm font-bold text-emerald-700">
+                              <button onClick={() => removeItemFromCart(appliance.id)} className="hover:text-emerald-900">-</button>
+                              <span>{count}</span>
+                              <button onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)} className="hover:text-emerald-900">+</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)}
+                              className="bg-white border border-slate-300 text-emerald-600 font-extrabold text-xs px-5 py-2.5 rounded-full hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-1.5 uppercase"
+                            >
+                              <ShoppingCart size={13} className="text-emerald-600" /> Add
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Right Column: Order Summary */}
+        <div className="w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between lg:sticky lg:top-32 h-fit space-y-4 mt-6 lg:mt-0 rounded-2xl">
+          <div className="space-y-4">
+            <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
+                <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
+                <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
+              </div>
+
+              {cart.length > 0 ? (
+                <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                  {cart.map(item => (
+                    <div key={item.id} className="flex justify-between items-start text-xs gap-2">
+                      <div className="flex-1">
+                        <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">{item.duration}</span>
+                      </div>
+                      <div className="text-right flex items-center gap-2">
+                        <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
+                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600">-</button>
+                          <span>{item.quantity}</span>
+                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-600">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-slate-400 text-xs">
+                  No services added. Select from the left.
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
+                {cart.length > 0 && (
+                  <div className="flex justify-between text-slate-500">
+                    <span>Items Subtotal</span>
+                    <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2">
+                  <span>Total Amount</span>
+                  <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 mt-4 border-t border-slate-200/60">
+            <button
+              disabled={cart.length === 0}
+              onClick={onCheckout}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all"
+            >
+              Proceed to Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
   if (category?.id === "cleaning" || category?.slug === "cleaning") {
     return (
@@ -5649,7 +6060,9 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
               <button onClick={() => addToCart(p)}>+</button>
             </div>
           ) : (
-            <button className="uc-btn-add-swiggy" onClick={() => addToCart(p)}>Add</button>
+            <button className="uc-btn-add-swiggy" onClick={() => addToCart(p)}>
+              <ShoppingCart size={13} style={{ display: 'inline-block', verticalAlign: 'middle' }} /> Add
+            </button>
           )}
         </div>
       </div>
@@ -5702,7 +6115,9 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
                         <button style={{ padding: '0 0.5rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>+</button>
                       </div>
                     ) : (
-                      <button className="uc-btn-add-swiggy" style={{ padding: '0.3rem 1rem', fontSize: '0.75rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>ADD</button>
+                      <button className="uc-btn-add-swiggy" style={{ padding: '0.3rem 1rem', fontSize: '0.75rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>
+                        <ShoppingCart size={12} style={{ display: 'inline-block', verticalAlign: 'middle' }} /> ADD
+                      </button>
                     )}
                   </div>
                 </div>
@@ -6815,12 +7230,14 @@ export function BkStyles() {
       }
       
       .uc-btn-add-swiggy {
-        background: white; border: 1px solid #e2e8f0; color: #7C3AED;
-        font-weight: 800; padding: 0.4rem 1.8rem; border-radius: 8px;
+        background: white; border: 1px solid #cbd5e1; color: #059669;
+        font-weight: 800; padding: 0.4rem 1.4rem; border-radius: 999px;
         cursor: pointer; transition: all 0.2s; 
-        text-transform: uppercase; font-size: 0.85rem;
+        text-transform: uppercase; font-size: 0.8rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       }
-      .uc-btn-add-swiggy:hover { background: #f8fafc; border-color: #cbd5e1; }
+      .uc-btn-add-swiggy:hover { background: #f0fdf4; border-color: #059669; }
       
       .uc-swiggy-qty {
         display: flex; align-items: center; justify-content: space-between;
