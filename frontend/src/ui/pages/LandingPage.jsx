@@ -732,7 +732,7 @@ export function LandingPage() {
         setCart={setModalCart}
         packagesData={{}}
         onClose={() => navigate(routes.booking_services)}
-        onCheckout={() => navigate(`${routes.booking_checkout}?category=${activeCategory.id}`)}
+        onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
       />
     )}
     </>

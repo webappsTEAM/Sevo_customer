@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useSearchParams, useLocation } from "react-router-dom"
 import { useGoogleLogin } from "@react-oauth/google"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -4395,14 +4395,20 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 export function BookingPage() {
   const { user } = useAuth()
   const [searchParams] = useSearchParams()
-  const [step, setStep] = useState(1)
+  // Arriving with a cart already built (e.g. "Proceed to Checkout" from the
+  // landing page's own package popup) skips straight to the date/time step
+  // instead of asking the user to re-add items here.
+  const routerLocation = useLocation()
+  const incomingCart = routerLocation.state?.cart
+  const incomingCategory = routerLocation.state?.category
+  const [step, setStep] = useState(incomingCart?.length ? 3 : 1)
   const [loading, setLoading] = useState(false)
   const [showCartMenu, setShowCartMenu] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [error, setError] = useState(null)
   const [successData, setSuccessData] = useState(null)
-  const [category, setCategory] = useState(null)
-  const [cart, setCart] = useState([])
+  const [category, setCategory] = useState(incomingCategory || null)
+  const [cart, setCart] = useState(incomingCart || [])
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "" })
@@ -4510,8 +4516,9 @@ export function BookingPage() {
     // Handle URL search parameters for category/service redirect
     // (falls back to the static CATEGORIES list so this works even before
     // the live catalog fetch above resolves, or when it returns nothing)
+    // Skipped when we already arrived with a pre-filled cart (see above).
     const catParam = searchParams.get('category') || searchParams.get('cat')
-    if (catParam) {
+    if (catParam && !incomingCart?.length) {
       const catsToSearch = categoriesData.length > 0 ? categoriesData : CATEGORIES
       const foundCat = catsToSearch.find(c => c.id === catParam || c.slug === catParam || c.name.toLowerCase() === catParam.toLowerCase())
       if (foundCat) {
