@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom"
 import {
   Home, PaintRoller,
   SprayCan, Building2, AirVent, Hammer, Boxes,
@@ -10,7 +10,7 @@ import {
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet,
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { PackageModal, CustomCleaningPackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
+import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -610,7 +610,7 @@ const TESTIMONIALS = [
 function Logo() {
   return (
     <div className="flex items-center gap-2 select-none">
-      <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white">
+      <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
         <Home className="w-5 h-5" strokeWidth={2.5} />
       </div>
       <span className="text-lg font-extrabold tracking-tight text-slate-900">CalServices</span>
@@ -625,7 +625,7 @@ function LocationDropdown({ className = "" }) {
   const [city, setCity] = useState(CITIES[0])
   return (
     <div className={`relative flex items-center gap-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-full pl-3 pr-2 py-1.5 hover:border-slate-300 ${className}`}>
-      <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
+      <MapPin className="w-4 h-4 text-orange-500 shrink-0" />
       <select
         value={city}
         onChange={(e) => setCity(e.target.value)}
@@ -643,11 +643,18 @@ export function LandingPage() {
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState("")
   const [testimonialIdx, setTestimonialIdx] = useState(0)
-  const [modalCart, setModalCart] = useState([])
+  const location = useLocation()
+  const [modalCart, setModalCart] = useState(location.state?.cart || [])
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(false)
-  const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(false)
+  const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(location.state?.openHomePestModal || false)
+
+  useEffect(() => {
+    if (location.state?.openHomePestModal) {
+      setIsHomePestModalOpen(true)
+    }
+  }, [location.state])
 
   const goToBooking = () => navigate(routes.booking)
   const goToLogin = () => navigate(routes.login)
@@ -684,7 +691,7 @@ export function LandingPage() {
     }
   }, [isGoodsModalOpen, isElecModalOpen, isAcModalOpen, isHomePestModalOpen])
 
-  if (activeCategoryId === "cleaning") {
+  if (activeCategoryId === "cleaning" || activeCategoryId === "kitchen_cleaning") {
     return (
       <>
       <div className="min-h-screen bg-[#F7FAF9] text-slate-800 flex flex-col" style={{ animation: "fadeUp 0.4s ease both" }}>
@@ -715,13 +722,22 @@ export function LandingPage() {
 
         {/* Full Page View Wrapper */}
         <main className={`flex-1 max-w-7xl w-full mx-auto px-6 ${activeCategory ? "pt-4 pb-10" : "py-10"}`}>
-          {activeCategory && (
+          {activeCategory && activeCategory.id === "kitchen_cleaning" && (
+            <KitchenCleaningModal
+              category={activeCategory}
+              cart={modalCart}
+              setCart={setModalCart}
+              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
+              onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            />
+          )}
+          {activeCategory && activeCategory.id !== "kitchen_cleaning" && (
             <CustomCleaningPackageModal
               category={activeCategory}
               cart={modalCart}
               setCart={setModalCart}
               isFullPage={true}
-              onClose={() => navigate("/home")}
+              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
               onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
             />
           )}
@@ -777,34 +793,39 @@ export function LandingPage() {
     <>
     <div className="min-h-screen bg-[#F7FAF9] text-slate-800" style={{ animation: "fadeUp 0.4s ease both" }}>
       {/* ── Header ─────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-100">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-6">
-          <Logo />
+          <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => navigate(routes.landing)}>
+            <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white">
+              <Home className="w-5 h-5" strokeWidth={2.5} />
+            </div>
+            <span className="text-lg font-extrabold tracking-tight text-slate-900">CalServices</span>
+          </div>
 
           <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600">
-            <a href="#home" className="text-emerald-600 font-semibold">Home</a>
-            <a href="#categories" className="hover:text-slate-900">Services</a>
-            <a href="#how-it-works" className="hover:text-slate-900">How It Works</a>
-            <a href="#professionals" className="hover:text-slate-900">Professionals</a>
-            <a href="#about" className="hover:text-slate-900">About Us</a>
+            <a href="#home" className="text-teal-600 font-semibold">Home</a>
+            <a href="#categories" className="hover:text-slate-900 transition-colors">Services</a>
+            <a href="#how-it-works" className="hover:text-slate-900 transition-colors">How It Works</a>
+            <a href="#professionals" className="hover:text-slate-900 transition-colors">Professionals</a>
+            <a href="#about" className="hover:text-slate-900 transition-colors">About Us</a>
           </nav>
 
           <div className="flex items-center gap-3">
             <button
               onClick={goToBooking}
-              className="btn btnPrimary bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-full transition-colors"
+              className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-5 py-2 rounded-full transition-colors shadow-sm"
             >
               Book Service
             </button>
             <button
               onClick={goToLogin}
-              className="hidden sm:inline-flex border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors"
+              className="hidden sm:inline-flex border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors"
             >
               Login
             </button>
             <button
               onClick={() => navigate(routes.activation_journey)}
-              className="hidden sm:inline-flex border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors"
+              className="hidden sm:inline-flex border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors"
             >
               Sign Up
             </button>
@@ -815,12 +836,12 @@ export function LandingPage() {
       {/* ── Hero ───────────────────────────────────────────── */}
       <section id="home" className="max-w-7xl mx-auto px-6 pt-14 pb-16 grid lg:grid-cols-2 gap-12 items-center">
         <div>
-          <p className="text-sm font-bold text-slate-900 mb-4">
+          <p className="text-sm font-medium text-teal-600 mb-4">
             Reliable. Affordable. Right at Your Doorstep.
           </p>
           <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight text-slate-900 mb-5">
             Professional<br />
-            <span className="text-emerald-600">Services</span><br />
+            <span className="text-teal-600">Services</span><br />
             Made Simple
           </h1>
           <p className="text-slate-500 text-base mb-8 max-w-md">
@@ -841,23 +862,23 @@ export function LandingPage() {
             <button
               type="submit"
               aria-label="Search services"
-              className="ml-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl w-11 h-11 flex items-center justify-center shrink-0 transition-colors"
+              className="ml-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl w-11 h-11 flex items-center justify-center shrink-0 transition-colors"
             >
               <Search className="w-4.5 h-4.5" />
             </button>
           </form>
 
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs font-medium text-slate-500">
-            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-emerald-600" /> Verified Pros</span>
-            <span className="inline-flex items-center gap-1.5"><Star className="w-4 h-4 text-emerald-600" /> 4.8★ Rated</span>
-            <span className="inline-flex items-center gap-1.5"><Award className="w-4 h-4 text-emerald-600" /> 1M+ Happy Homes</span>
-            <span className="inline-flex items-center gap-1.5"><Clock className="w-4 h-4 text-emerald-600" /> 30-Day Guarantee</span>
+            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-teal-600" /> Verified Pros</span>
+            <span className="inline-flex items-center gap-1.5"><Star className="w-4 h-4 text-amber-500" /> 4.8★ Rated</span>
+            <span className="inline-flex items-center gap-1.5"><Award className="w-4 h-4 text-rose-500" /> 1M+ Happy Homes</span>
+            <span className="inline-flex items-center gap-1.5"><Clock className="w-4 h-4 text-violet-500" /> 30-Day Guarantee</span>
           </div>
         </div>
 
         {/* Real photo collage */}
         <div className="relative h-[420px] hidden sm:block">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-100 via-teal-50 to-transparent rounded-[3rem] -z-10" />
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 via-violet-50 to-orange-50 rounded-[3rem] -z-10" />
           <img
             src="/mockups/service_hvac.png"
             alt="Technician servicing an AC unit"
@@ -972,7 +993,11 @@ export function LandingPage() {
                       onClick={() => {
                         setIsHomePestModalOpen(false)
                         document.body.style.overflow = "unset"
-                        navigate(`?category=${item.categoryId}`)
+                        if (item.name === "Kitchen Cleaning") {
+                          navigate(`?category=kitchen_cleaning`)
+                        } else {
+                          navigate(`?category=${item.categoryId}`)
+                        }
                       }}
                       className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
                     >
@@ -1079,7 +1104,7 @@ export function LandingPage() {
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
                 >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-[#eef8f5] group-hover:bg-[#e2f3ee] flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
                     <TruckGraphic className="w-full h-full" />
                   </div>
                   <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
@@ -1093,11 +1118,11 @@ export function LandingPage() {
                   onClick={() => {
                     setIsGoodsModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToBooking()
+                    navigate(routes.two_wheeler_booking_hosur)
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
                 >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-[#eef8f5] group-hover:bg-[#e2f3ee] flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
                     <TwoWheelerGraphic className="w-full h-full" />
                   </div>
                   <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
@@ -1111,11 +1136,11 @@ export function LandingPage() {
                   onClick={() => {
                     setIsGoodsModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToBooking()
+                    navigate(routes.packers_movers_booking_hosur)
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
                 >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-[#eef8f5] group-hover:bg-[#e2f3ee] flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
                     <PackersMoversGraphic className="w-full h-full" />
                   </div>
                   <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
@@ -1387,37 +1412,44 @@ export function LandingPage() {
 
       {/* ── Trust strip ────────────────────────────────────── */}
       <section className="max-w-7xl mx-auto px-6">
-        <div className="bg-emerald-50/60 border border-emerald-100 rounded-3xl grid sm:grid-cols-2 lg:grid-cols-5 gap-6 p-8">
-          {TRUST_STRIP.map(({ icon: Icon, title, body }) => (
-            <div key={title} className="flex flex-col items-start gap-2">
-              <Icon className="w-6 h-6 text-emerald-600" strokeWidth={1.75} />
-              <p className="text-sm font-bold text-slate-800 leading-snug">{title}</p>
-              <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
-            </div>
-          ))}
+        <div className="bg-slate-50 border border-slate-200 rounded-3xl grid sm:grid-cols-2 lg:grid-cols-5 gap-6 p-8">
+          {TRUST_STRIP.map(({ icon: Icon, title, body }, idx) => {
+            const iconColors = ["text-teal-600", "text-rose-500", "text-violet-600", "text-amber-500", "text-sky-500"]
+            return (
+              <div key={title} className="flex flex-col items-start gap-2">
+                <Icon className={`w-6 h-6 ${iconColors[idx % iconColors.length]}`} strokeWidth={1.75} />
+                <p className="text-sm font-bold text-slate-800 leading-snug">{title}</p>
+                <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
+              </div>
+            )
+          })}
         </div>
       </section>
 
       {/* ── Offers ─────────────────────────────────────────── */}
       <section className="max-w-7xl mx-auto px-6 py-14 grid lg:grid-cols-[220px_1fr] gap-6 items-stretch">
-        <div className="bg-emerald-50 rounded-3xl p-6 flex flex-col justify-center">
-          <p className="text-lg font-extrabold text-slate-900 mb-1">Limited Time Offers!</p>
-          <p className="text-xs text-slate-500 mb-4">Great deals on services you love.</p>
-          <button onClick={goToBooking} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-full self-start transition-colors">
+        <div className="bg-gradient-to-br from-teal-600 to-emerald-700 rounded-3xl p-6 flex flex-col justify-center">
+          <p className="text-lg font-extrabold text-white mb-1">Limited Time Offers!</p>
+          <p className="text-xs text-teal-100 mb-4">Great deals on services you love.</p>
+          <button onClick={goToBooking} className="bg-white text-teal-700 hover:bg-teal-50 text-xs font-bold px-4 py-2 rounded-full self-start transition-colors">
             Explore Offers
           </button>
         </div>
         <div className="grid sm:grid-cols-3 gap-4">
-          {OFFERS.map((offer) => (
+          {[
+            { tag: "UPTO", big: "20% OFF", sub: "on Home Cleaning", bg: "bg-amber-50 hover:bg-amber-100", tag_color: "text-amber-600", link_color: "text-amber-700" },
+            { tag: "FLAT", big: "15% OFF", sub: "on Painting",      bg: "bg-rose-50 hover:bg-rose-100",   tag_color: "text-rose-600",  link_color: "text-rose-700"  },
+            { tag: "UPTO", big: "₹500 OFF", sub: "on AC Service",   bg: "bg-violet-50 hover:bg-violet-100", tag_color: "text-violet-600", link_color: "text-violet-700" },
+          ].map((offer) => (
             <button
               key={offer.sub}
               onClick={goToBooking}
-              className={`${offer.bg} rounded-3xl p-6 text-left hover:shadow-md transition-shadow`}
+              className={`${offer.bg} rounded-3xl p-6 text-left hover:shadow-md transition-all`}
             >
-              <p className="text-[11px] font-bold text-slate-500 tracking-wide">{offer.tag}</p>
+              <p className={`text-[11px] font-bold tracking-wide ${offer.tag_color}`}>{offer.tag}</p>
               <p className="text-2xl font-extrabold text-slate-900 mb-1">{offer.big}</p>
               <p className="text-sm text-slate-600 mb-4">{offer.sub}</p>
-              <span className="text-xs font-semibold text-emerald-700">Book Now &rarr;</span>
+              <span className={`text-xs font-semibold ${offer.link_color}`}>Book Now &rarr;</span>
             </button>
           ))}
         </div>
@@ -1427,30 +1459,40 @@ export function LandingPage() {
       <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-10">
         <h2 className="text-xl font-bold text-slate-900 text-center mb-10">How It Works</h2>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-8">
-          {STEPS.map(({ icon: Icon, title, body }, i) => (
-            <div key={title} className="flex flex-col items-center text-center gap-3">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center">
-                  <Icon className="w-7 h-7 text-emerald-600" strokeWidth={1.75} />
+          {STEPS.map(({ icon: Icon, title, body }, i) => {
+            const stepColors = [
+              { bg: "bg-teal-50",   icon: "text-teal-600",   badge: "bg-teal-600"   },
+              { bg: "bg-rose-50",   icon: "text-rose-500",   badge: "bg-rose-500"   },
+              { bg: "bg-violet-50", icon: "text-violet-600", badge: "bg-violet-600" },
+              { bg: "bg-amber-50",  icon: "text-amber-500",  badge: "bg-amber-500"  },
+              { bg: "bg-sky-50",    icon: "text-sky-500",    badge: "bg-sky-500"    },
+            ]
+            const c = stepColors[i % stepColors.length]
+            return (
+              <div key={title} className="flex flex-col items-center text-center gap-3">
+                <div className="relative">
+                  <div className={`w-16 h-16 rounded-full ${c.bg} flex items-center justify-center`}>
+                    <Icon className={`w-7 h-7 ${c.icon}`} strokeWidth={1.75} />
+                  </div>
+                  <span className={`absolute -top-1 -left-1 w-5 h-5 rounded-full ${c.badge} text-white text-[10px] font-bold flex items-center justify-center`}>
+                    {i + 1}
+                  </span>
                 </div>
-                <span className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-emerald-700 text-white text-[10px] font-bold flex items-center justify-center">
-                  {i + 1}
-                </span>
+                <p className="text-sm font-bold text-slate-800">{title}</p>
+                <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
               </div>
-              <p className="text-sm font-bold text-slate-800">{title}</p>
-              <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 
       {/* ── Stats ──────────────────────────────────────────── */}
-      <section className="bg-emerald-800 py-10">
+      <section className="bg-slate-800 py-10">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-5 gap-6 text-center text-white">
           {STATS.map((s) => (
             <div key={s.label}>
               <p className="text-2xl font-extrabold">{s.value}</p>
-              <p className="text-xs text-emerald-100">{s.label}</p>
+              <p className="text-xs text-slate-300">{s.label}</p>
             </div>
           ))}
         </div>
@@ -1468,7 +1510,7 @@ export function LandingPage() {
                 <p className="text-sm font-bold text-slate-800">{p.name}</p>
                 <p className="text-xs text-slate-500 mb-2">{p.role}</p>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
+                  <span className="inline-flex items-center gap-1 font-semibold text-amber-500">
                     <Star className="w-3.5 h-3.5 fill-current" /> {p.rating}
                   </span>
                   <span className="text-slate-400">{p.jobs}</span>
@@ -1480,10 +1522,10 @@ export function LandingPage() {
       </section>
 
       {/* ── Testimonials ───────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6 py-14">
+      <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">What Our Customers Say</h2>
-          <a href="#" className="hidden sm:inline text-sm font-semibold text-emerald-600 hover:text-emerald-700 whitespace-nowrap">View all reviews &rarr;</a>
+          <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">View all reviews &rarr;</a>
         </div>
         <div className="flex items-center gap-4">
           <button
@@ -1494,9 +1536,9 @@ export function LandingPage() {
           </button>
           <div className="grid sm:grid-cols-3 gap-5 flex-1">
             {TESTIMONIALS.map((t, i) => (
-              <div key={t.name} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-1 ring-emerald-200" : ""}`}>
+              <div key={t.name} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="w-8 h-8 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                  <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
                     {t.initials}
                   </span>
                   <div className="flex gap-0.5 text-amber-400">
@@ -1517,64 +1559,72 @@ export function LandingPage() {
         </div>
         <div className="flex justify-center gap-1.5 mt-6">
           {TESTIMONIALS.map((_, i) => (
-            <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === testimonialIdx ? "bg-emerald-600" : "bg-slate-200"}`} />
+            <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === testimonialIdx ? "bg-teal-600" : "bg-slate-200"}`} />
           ))}
         </div>
       </section>
 
       {/* ── App download banner ────────────────────────────── */}
       <section className="max-w-7xl mx-auto px-6 pb-14">
-        <div className="bg-emerald-50 rounded-3xl px-8 py-7 flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="bg-gradient-to-r from-rose-500 to-amber-500 rounded-3xl px-8 py-7 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-white/25 flex items-center justify-center text-white shrink-0">
               <Smartphone className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-800">Book on the go!</p>
-              <p className="text-lg font-extrabold text-emerald-700">Download the CalServices App</p>
-              <p className="text-xs text-slate-500">Faster booking, real-time tracking &amp; exclusive app offers.</p>
+              <p className="text-sm font-bold text-white">Book on the go!</p>
+              <p className="text-lg font-extrabold text-white">Download the CalServices App</p>
+              <p className="text-xs text-rose-100">Faster booking, real-time tracking &amp; exclusive app offers.</p>
             </div>
           </div>
           <div className="flex gap-3">
-            <button className="bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl">Get it on Google Play</button>
-            <button className="bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl">Download on App Store</button>
+            <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Get it on Google Play</button>
+            <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Download on App Store</button>
           </div>
         </div>
       </section>
 
       {/* ── Footer ─────────────────────────────────────────── */}
-      <footer id="about" className="border-t border-slate-100 bg-white">
+      <footer id="about" className="border-t border-slate-200 bg-slate-900">
         <div className="max-w-7xl mx-auto px-6 py-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
           <div>
-            <Logo />
-            <p className="text-xs text-slate-500 mt-3 leading-relaxed max-w-[220px]">
+            <div className="flex items-center gap-2 select-none">
+              <div className="w-9 h-9 rounded-xl bg-teal-500 flex items-center justify-center text-white">
+                <Home className="w-5 h-5" strokeWidth={2.5} />
+              </div>
+              <span className="text-lg font-extrabold tracking-tight text-white">CalServices</span>
+            </div>
+            <p className="text-xs text-slate-400 mt-3 leading-relaxed max-w-[220px]">
               Your trusted partner for all home services. Quality you can count on.
             </p>
-            <div className="flex gap-3 mt-4 text-slate-400">
-              <FacebookMark className="w-4 h-4" />
-              <InstagramMark className="w-4 h-4" />
-              <YoutubeMark className="w-4 h-4" />
-              <TwitterMark className="w-4 h-4" />
+            <div className="flex gap-3 mt-4 text-slate-400 hover:[&>*]:text-teal-400">
+              <FacebookMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
+              <InstagramMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
+              <YoutubeMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
+              <TwitterMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
             </div>
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-800 mb-3">Services</p>
-            <ul className="space-y-2 text-xs text-slate-500">
-              {CATEGORIES.slice(0, 4).map((c) => <li key={c.label}>{c.label}</li>)}
+            <p className="text-sm font-bold text-white mb-3">Services</p>
+            <ul className="space-y-2 text-xs text-slate-400">
+              {CATEGORIES.slice(0, 4).map((c) => <li key={c.label} className="hover:text-white cursor-pointer transition-colors">{c.label}</li>)}
             </ul>
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-800 mb-3">Company</p>
-            <ul className="space-y-2 text-xs text-slate-500">
-              <li>About Us</li><li>Careers</li><li>Blog</li><li>Become a Partner</li>
+            <p className="text-sm font-bold text-white mb-3">Company</p>
+            <ul className="space-y-2 text-xs text-slate-400">
+              <li className="hover:text-white cursor-pointer transition-colors">About Us</li>
+              <li className="hover:text-white cursor-pointer transition-colors">Careers</li>
+              <li className="hover:text-white cursor-pointer transition-colors">Blog</li>
+              <li className="hover:text-white cursor-pointer transition-colors">Become a Partner</li>
             </ul>
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-800 mb-3">Need Help?</p>
-            <ul className="space-y-2 text-xs text-slate-500">
-              <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-emerald-600" /> +91 98765 43210</li>
-              <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-emerald-600" /> support@calservices.com</li>
-              <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-emerald-600" /> Mon &ndash; Sun (8 AM &ndash; 8 PM)</li>
+            <p className="text-sm font-bold text-white mb-3">Need Help?</p>
+            <ul className="space-y-2 text-xs text-slate-400">
+              <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-teal-400" /> +91 98765 43210</li>
+              <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-teal-400" /> support@calservices.com</li>
+              <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-teal-400" /> Mon &ndash; Sun (8 AM &ndash; 8 PM)</li>
             </ul>
           </div>
         </div>
@@ -1583,14 +1633,24 @@ export function LandingPage() {
 
     <BkStyles />
     {activeCategory && (
-      <PackageModal
-        category={activeCategory}
-        cart={modalCart}
-        setCart={setModalCart}
-        packagesData={{}}
-        onClose={() => navigate(routes.booking_services)}
-        onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-      />
+      (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
+        <PaintingPackageModal
+          category={activeCategory}
+          cart={modalCart}
+          setCart={setModalCart}
+          onClose={() => navigate(routes.booking_services)}
+          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+        />
+      ) : (
+        <PackageModal
+          category={activeCategory}
+          cart={modalCart}
+          setCart={setModalCart}
+          packagesData={{}}
+          onClose={() => navigate(routes.booking_services)}
+          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+        />
+      )
     )}
     </>
   )

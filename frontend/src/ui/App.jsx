@@ -173,6 +173,12 @@ const CustomerDecisionPage = lazy(() =>
 const MiniTruckBookingHosurPage = lazy(() =>
   import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage }))
 )
+const TwoWheelerBookingHosurPage = lazy(() =>
+  import("./pages/TwoWheelerBookingHosurPage.jsx").then(m => ({ default: m.TwoWheelerBookingHosurPage }))
+)
+const PackersMoversBookingHosurPage = lazy(() =>
+  import("./pages/PackersMoversBookingHosurPage.jsx").then(m => ({ default: m.PackersMoversBookingHosurPage }))
+)
 
 // ─── Route Guards ────────────────────────────────────────────
 
@@ -347,6 +353,14 @@ export function App() {
           <Route path="/trucks/hosur" element={<MiniTruckBookingHosurPage />} />
           <Route path="/trucks" element={<MiniTruckBookingHosurPage />} />
           <Route path="/booking/trucks" element={<MiniTruckBookingHosurPage />} />
+          <Route path={routes.two_wheeler_booking_hosur} element={<TwoWheelerBookingHosurPage />} />
+          <Route path="/two-wheelers/hosur" element={<TwoWheelerBookingHosurPage />} />
+          <Route path="/two-wheelers" element={<TwoWheelerBookingHosurPage />} />
+          <Route path="/booking/two-wheelers" element={<TwoWheelerBookingHosurPage />} />
+          <Route path={routes.packers_movers_booking_hosur} element={<PackersMoversBookingHosurPage />} />
+          <Route path="/packers-and-movers/hosur" element={<PackersMoversBookingHosurPage />} />
+          <Route path="/packers-and-movers" element={<PackersMoversBookingHosurPage />} />
+          <Route path="/booking/packers-and-movers" element={<PackersMoversBookingHosurPage />} />
           <Route path={routes.feedback} element={<FeedbackPage />} />
           <Route path={routes.customer_work_extension} element={<CustomerDecisionPage />} />
           <Route path="/customer/decision/:token" element={<CustomerDecisionPage />} />

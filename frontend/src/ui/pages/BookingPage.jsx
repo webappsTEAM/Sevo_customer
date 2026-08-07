@@ -29,6 +29,43 @@ let BOOKING_CURRENCY_SYMBOL = "₹";
    DATA
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
+
+function FacebookMark(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.78-3.89 1.1 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.44 2.89h-2.34v6.99A10 10 0 0 0 22 12Z" />
+    </svg>
+  )
+}
+function InstagramMark(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+function YoutubeMark(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M22.5 6.5s-.22-1.56-.9-2.25c-.86-.9-1.82-.9-2.26-.96C16.2 3 12 3 12 3h-.01s-4.2 0-7.34.29c-.44.06-1.4.06-2.26.96C1.72 4.94 1.5 6.5 1.5 6.5S1.2 8.35 1.2 10.2v1.6c0 1.85.3 3.7.3 3.7s.22 1.56.89 2.25c.86.9 1.98.87 2.48.97C6.6 18.9 12 19 12 19s4.2-.01 7.34-.3c.44-.05 1.4-.05 2.26-.96.68-.69.9-2.25.9-2.25s.3-1.85.3-3.7v-1.6c0-1.85-.3-3.7-.3-3.7ZM9.75 13.9V8.5l5.25 2.71-5.25 2.7Z" />
+    </svg>
+  )
+}
+function TwitterMark(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M18.9 3H22l-7.2 8.23L23 21h-6.6l-5.17-6.42L5.3 21H2.2l7.7-8.8L2 3h6.75l4.67 5.86L18.9 3Zm-1.16 16.2h1.72L7.35 4.7H5.5l12.24 14.5Z" />
+    </svg>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   DATA
+   ───────────────────────────────────────────────────────────────────────── */
+
+
 export const CATEGORIES = [
   { id: "cleaning", name: "Home Cleaning", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", desc: "Deep clean & sanitization", rating: "4.8", jobs: "50K+" },
   { id: "plumbing", name: "Plumbing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop", desc: "Leaks, pipes & fixtures", rating: "4.7", jobs: "30K+" },
@@ -4712,12 +4749,21 @@ export function BookingPage() {
       {/* Package Selection Modal Overlay */}
       <AnimatePresence>
         {showPackageModal && category && (
-          <PackageModal
-            category={category}
-            cart={cart}
-            setCart={setCart}
-            packagesData={packagesData}
-            onClose={() => {
+          (category.id === "painting" || category.slug === "painting" || String(category.id) === "painting" || category.name?.toLowerCase() === "painting") ? (
+            <PaintingPackageModal
+              category={category}
+              cart={cart}
+              setCart={setCart}
+              onClose={() => setShowPackageModal(false)}
+              onCheckout={() => { setShowPackageModal(false); setStep(4); }}
+            />
+          ) : (
+            <PackageModal
+              category={category}
+              cart={cart}
+              setCart={setCart}
+              packagesData={packagesData}
+              onClose={() => {
               const currentCatId = (category?.id || category?.slug || "").toLowerCase();
               setShowPackageModal(false);
               if (["electrical", "plumbing", "carpentry", "elec", "plum", "carp"].some(k => currentCatId.includes(k))) {
@@ -4739,7 +4785,8 @@ export function BookingPage() {
               }
             }}
             onCheckout={() => { setShowPackageModal(false); setStep(4); }}
-          />
+            />
+          )
         )}
       </AnimatePresence>
     </div>
@@ -4965,6 +5012,1889 @@ export function ServiceDetailSideDrawer({ item, category, cart, setCart, onClose
       </div>
     </motion.div>
   );
+}
+
+
+export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout }) {
+  const [searchQuery, setSearchQuery] = useState("")
+  const [expanded, setExpanded] = useState({})
+
+  const PAINTING_SERVICES = [
+    {
+      id: "paint-interior",
+      name: "Interior Painting",
+      rating: "4.8",
+      reviews: "18K",
+      image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
+      points: [
+        "Complete wall prep & putty application",
+        "Double coat premium emulsion paint",
+        "Detailed masking & post-cleanup protection",
+        "1-Year Service Warranty"
+      ],
+      includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
+      excludes: ["Major plastering work", "Dampness treatment (available separately)"],
+      subOptions: [
+        { id: "int-single-wall", name: "Single Wall", price: 0 },
+        { id: "int-one-room", name: "One Room", price: 0 },
+        { id: "int-multi-room", name: "Two or More Rooms", price: 0 },
+        { id: "int-full-home", name: "Full Home", price: 0 },
+        { id: "int-ceiling", name: "Ceiling", price: 0 }
+      ]
+    },
+    {
+      id: "paint-exterior",
+      name: "Exterior Painting",
+      rating: "4.7",
+      reviews: "15K",
+      image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&fit=crop",
+      points: [
+        "Pressure washing & crack filling",
+        "Anti-fungal primer coat",
+        "Double coat weather-defense paint",
+        "Dust and dirt resistant finish"
+      ],
+      includes: ["Pressure Washing", "Sanding & Crack Filling", "Exterior Primer", "2 Coats Weatherproof Paint", "Grill/Pipe Painting", "Post-Cleanup"],
+      excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)"],
+      subOptions: [
+        { id: "ext-wall", name: "Exterior Wall", price: 0 },
+        { id: "ext-building", name: "Building Exterior", price: 0 },
+        { id: "ext-compound", name: "Compound Wall", price: 0 },
+        { id: "ext-terrace", name: "Terrace", price: 0 }
+      ]
+    },
+    {
+      id: "paint-waterproofing",
+      name: "Waterproofing",
+      rating: "4.6",
+      reviews: "12K",
+      image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800&q=80&fit=crop",
+      points: [
+        "Expert Leakage Detection & Dampness Solutions",
+        "Terrace, Bathroom & External Wall Waterproofing",
+        "We diagnose the cause. Fix it right. Waterproofing that lasts."
+      ],
+      includes: ["Moisture Meter Inspection", "Leakage Detection", "Terrace Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Crack Filling"],
+      excludes: ["Re-tiling charges if tiling needs to be broken", "Major masonry reconstruction"],
+      subOptions: [
+        { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
+        { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
+        { id: "wp-wall", name: "Wall Waterproofing", price: 0 },
+        { id: "wp-roof", name: "Roof Waterproofing", price: 0 },
+        { id: "wp-crack", name: "Crack Filling", price: 0 }
+      ]
+    },
+    {
+      id: "paint-wood-metal",
+      name: "Wood & Metal Painting",
+      rating: "4.7",
+      reviews: "9K",
+      image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=800&q=80&fit=crop",
+      points: [
+        "Rust removal & sanding treatment",
+        "Specialized wood/metal primer application",
+        "PU coating or premium enamel paint",
+        "High gloss or sophisticated matte finish"
+      ],
+      includes: ["Rust Scraping & Sanding", "Wood Sanding", "Metal Anti-Rust Primer", "Wood Primer", "2 Coats PU or Enamel Paint", "Gloss/Matte Finish Selection"],
+      excludes: ["New wood carving repairs", "Major structural wood replacement"],
+      subOptions: [
+        { id: "wm-doors", name: "Doors", price: 0 },
+        { id: "wm-windows", name: "Windows", price: 0 },
+        { id: "wm-grills", name: "Grills", price: 0 },
+        { id: "wm-cabinets", name: "Cabinets", price: 0 },
+        { id: "wm-gates", name: "Gates", price: 0 }
+      ]
+    },
+    {
+      id: "paint-texture",
+      name: "Texture & Decorative Painting",
+      rating: "4.8",
+      reviews: "8K",
+      image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&q=80&fit=crop",
+      points: [
+        "Specialty textured finishes & stencils",
+        "Premium metallic & non-metallic glazes",
+        "Vibrant accent wall styling consultation"
+      ],
+      includes: ["Texture Consultation", "Accent Wall Preparation", "Metallic Glazes", "Stencils decor", "Design Sign-off"],
+      excludes: ["Major masonry repairs"],
+      subOptions: [
+        { id: "td-texture", name: "Texture Finish", price: 0 },
+        { id: "td-designer", name: "Designer Finish", price: 0 },
+        { id: "td-stencil", name: "Stencil Decor", price: 0 },
+        { id: "td-accent", name: "Accent Wall Painting", price: 0 }
+      ]
+    }
+  ];
+
+  const cardRefs = {
+    "paint-interior": useRef(null),
+    "paint-exterior": useRef(null),
+    "paint-waterproofing": useRef(null),
+    "paint-wood-metal": useRef(null),
+    "paint-texture": useRef(null),
+  }
+
+  const contentRef = useRef(null);
+
+  const scrollToCard = (id) => {
+    const card = cardRefs[id]?.current;
+    if (!card) return;
+    const container = contentRef.current;
+    if (!container) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    // Get card top relative to the scroll container
+    const cardTop = card.getBoundingClientRect().top;
+    const containerTop = container.getBoundingClientRect().top;
+    const offset = cardTop - containerTop + container.scrollTop - 16; // 16px breathing room
+    container.scrollTo({ top: offset, behavior: 'smooth' });
+  }
+
+  const addToCart = (pkg) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === pkg.id);
+      if (existing) {
+        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
+      }
+      return [...prev, { ...pkg, quantity: 1, categoryName: "Painting" }];
+    });
+  }
+
+  const removeFromCart = (pkgId) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === pkgId);
+      if (!existing) return prev;
+      if (existing.quantity === 1) {
+        return prev.filter(c => c.id !== pkgId);
+      }
+      return prev.map(c => c.id === pkgId ? { ...c, quantity: c.quantity - 1 } : c);
+    });
+  }
+
+  const getCartCount = (pkgId) => {
+    const item = cart.find(c => c.id === pkgId);
+    return item ? item.quantity : 0;
+  }
+
+  const addSubOptionToCart = (subOpt, parentService) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === subOpt.id);
+      if (existing) {
+        return prev.map(c => c.id === subOpt.id ? { ...c, quantity: c.quantity + 1 } : c);
+      }
+      return [...prev, { 
+        id: subOpt.id, 
+        name: `${parentService.name}: ${subOpt.name}`, 
+        shortName: subOpt.name,
+        price: subOpt.price, 
+        parentId: parentService.id, 
+        parentName: parentService.name,
+        quantity: 1, 
+        categoryName: "Painting" 
+      }];
+    });
+  }
+
+  const removeSubOptionFromCart = (subOptId) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === subOptId);
+      if (!existing) return prev;
+      if (existing.quantity === 1) {
+        return prev.filter(c => c.id !== subOptId);
+      }
+      return prev.map(c => c.id === subOptId ? { ...c, quantity: c.quantity - 1 } : c);
+    });
+  }
+
+  const getSubOptionCartCount = (subOptId) => {
+    const item = cart.find(c => c.id === subOptId);
+    return item ? item.quantity : 0;
+  }
+
+  const getParentCartCount = (parentId) => {
+    return cart.reduce((sum, item) => item.parentId === parentId ? sum + item.quantity : sum, 0);
+  }
+
+  const toggleExpand = (id) => {
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const filteredServices = searchQuery
+    ? PAINTING_SERVICES.filter(s =>
+        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.points.some(p => p.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : PAINTING_SERVICES;
+
+  const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  return (
+    <div className="uc-paint-overlay" onClick={onClose}>
+      <motion.div
+        className="uc-paint-modal"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        onClick={e => e.stopPropagation()}
+      >
+        <style>{`
+          .uc-paint-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+            z-index: 1000;
+          }
+          .uc-paint-modal {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: #ffffff;
+            border-radius: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            box-shadow: none;
+          }
+          .uc-paint-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+            padding: 0 2rem;
+          }
+          .uc-paint-header-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+          }
+          .uc-paint-choices-container {
+            max-width: 800px;
+            margin: 2.5rem auto 0;
+            width: 100%;
+          }
+          .uc-paint-bottom-bar-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+          }
+          .uc-paint-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 0;
+            border-bottom: 1px solid #f1f5f9;
+            background: #ffffff;
+            flex-shrink: 0;
+          }
+          .uc-paint-header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+          }
+          .uc-paint-back-btn {
+            cursor: pointer;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #475569;
+            transition: all 0.2s;
+          }
+          .uc-paint-back-btn:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+          }
+          .uc-paint-search-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 0.5rem 1rem;
+            width: 320px;
+            transition: all 0.2s;
+          }
+          .uc-paint-search-bar:focus-within {
+            border-color: #10b981;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+          }
+          .uc-paint-search-bar input {
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 0.85rem;
+            width: 100%;
+            color: #1e293b;
+            font-weight: 500;
+          }
+          .uc-paint-search-bar input::placeholder {
+            color: #94a3b8;
+          }
+          .uc-paint-header-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+          }
+          .uc-paint-my-bookings {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #475569;
+            transition: color 0.2s;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 0.5rem 1rem;
+            border-radius: 10px;
+          }
+          .uc-paint-my-bookings:hover {
+            color: #0f172a;
+            background: #f1f5f9;
+          }
+          .uc-paint-profile-icon {
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: #f0fdf4;
+            border: 1px solid #dcfce7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #059669;
+            transition: all 0.2s;
+          }
+          .uc-paint-profile-icon:hover {
+            background: #dcfce7;
+            transform: scale(1.05);
+          }
+          .uc-paint-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem 0;
+            padding-bottom: ${totalQuantity > 0 ? '7.5rem' : '2.5rem'};
+            background: #ffffff;
+            scroll-behavior: smooth;
+          }
+
+          .uc-paint-main-layout {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 2.5rem;
+            align-items: start;
+            margin-top: 1.5rem;
+            isolation: isolate;
+          }
+          @media (max-width: 1024px) {
+            .uc-paint-main-layout {
+              grid-template-columns: 1fr;
+              gap: 2rem;
+            }
+          }
+
+          .uc-paint-hero-row {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            text-align: left;
+            margin-bottom: 1.5rem;
+          }
+          .uc-paint-sidebar-title {
+            font-size: 2.25rem;
+            font-weight: 900;
+            color: #0f172a;
+            line-height: 1.2;
+            margin: 0;
+            letter-spacing: -0.03em;
+          }
+          .uc-paint-sidebar-rating {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #475569;
+          }
+
+          /* Top Horizontal Category Navigation */
+          .uc-paint-horizontal-nav {
+            background: #ffffff;
+            border-bottom: 1.5px solid #f1f5f9;
+            padding: 0.75rem 2rem;
+            width: 100%;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          }
+          .uc-paint-horizontal-nav-list {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.5rem;
+            overflow-x: auto;
+            scrollbar-width: none; /* Hide scrollbar in Firefox */
+            max-width: 1200px;
+            margin: 0 auto;
+          }
+          .uc-paint-horizontal-nav-list::-webkit-scrollbar {
+            display: none; /* Hide scrollbar in Chrome/Safari/Webkit */
+          }
+          .uc-paint-tab-btn {
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.4rem;
+            border: none;
+            background: none;
+            padding: 0.5rem 0.75rem;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+            text-align: center;
+          }
+          .uc-paint-tab-btn:hover {
+            background: #f8fafc;
+          }
+          .uc-paint-tab-img {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            object-fit: cover;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+          }
+          .uc-paint-tab-btn:hover .uc-paint-tab-img {
+            transform: scale(1.05);
+            border-color: #10b981;
+          }
+          .uc-paint-tab-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #475569;
+            line-height: 1.2;
+            max-width: 72px;
+            white-space: normal;
+          }
+          .uc-paint-tab-btn:hover .uc-paint-tab-label {
+            color: #0f172a;
+          }
+          .uc-paint-middle-col {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+          }
+          .uc-paint-right-col {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            position: sticky;
+            top: 2rem;
+            align-self: start;
+          }
+          .uc-paint-promise-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+          }
+          .uc-paint-promise-title-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 800;
+            color: #0f172a;
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+          }
+          .uc-paint-promise-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+          .uc-paint-promise-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #475569;
+          }
+          .uc-paint-cart-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+            text-align: center;
+          }
+          .uc-paint-cart-card-title {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0 0 1.25rem 0;
+            text-align: left;
+          }
+          .uc-paint-empty-cart-img {
+            width: 50px;
+            height: 50px;
+            margin: 0.5rem auto 1rem;
+            opacity: 0.3;
+            display: block;
+          }
+          .uc-paint-empty-cart-text {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #94a3b8;
+            margin: 0;
+          }
+          .uc-paint-cart-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+            margin-bottom: 1.25rem;
+            text-align: left;
+          }
+          .uc-paint-cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 0.6rem;
+            border-bottom: 1px dashed #f1f5f9;
+          }
+          .uc-paint-cart-item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+          }
+          .uc-paint-cart-item-name {
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: #1e293b;
+          }
+          .uc-paint-cart-item-price {
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: #059669;
+          }
+          .uc-paint-cart-item-qty {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            padding: 0.2rem 0.4rem;
+            background: #ffffff;
+          }
+          .uc-paint-cart-item-qty button {
+            border: none;
+            background: none;
+            color: #10b981;
+            font-size: 0.85rem;
+            font-weight: 900;
+            cursor: pointer;
+            padding: 0 0.1rem;
+          }
+          .uc-paint-cart-item-qty span {
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: #1e293b;
+            min-width: 12px;
+            text-align: center;
+          }
+          .uc-paint-cart-subtotal {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 800;
+            font-size: 0.9rem;
+            color: #0f172a;
+            margin-bottom: 1.25rem;
+            padding-top: 0.4rem;
+          }
+          .uc-paint-cart-checkout-btn {
+            width: 100%;
+            cursor: pointer;
+            border: none;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 0.8rem;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);
+            transition: all 0.2s;
+          }
+          .uc-paint-cart-checkout-btn:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.2);
+          }
+          @media (min-width: 1025px) {
+            .uc-paint-bottom-bar {
+              display: none !important;
+            }
+          }
+
+          .uc-paint-recent-projects {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.85rem 1.5rem;
+            background: #f8fafc;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+          }
+          .uc-paint-recent-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+          }
+          .uc-paint-avatar-stack {
+            display: flex;
+            align-items: center;
+          }
+          .uc-paint-avatar-stack img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid white;
+            margin-left: -10px;
+            object-fit: cover;
+          }
+          .uc-paint-avatar-stack img:first-child {
+            margin-left: 0;
+          }
+          .uc-paint-avatar-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #cbd5e1;
+            border: 2px solid white;
+            margin-left: -10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: #1e293b;
+          }
+          .uc-paint-recent-text {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #334155;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+          }
+          .uc-paint-new-badge {
+            background: #4f46e5;
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 6px;
+            letter-spacing: 0.02em;
+          }
+          .uc-paint-recent-btn {
+            cursor: pointer;
+            background: white;
+            border: 1.5px solid #10b981;
+            color: #10b981;
+            font-size: 0.8rem;
+            font-weight: 800;
+            padding: 0.45rem 1.25rem;
+            border-radius: 10px;
+            transition: all 0.2s;
+          }
+          .uc-paint-recent-btn:hover {
+            background: #f0fdf4;
+            border-color: #059669;
+            color: #059669;
+          }
+          .uc-paint-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+          }
+          .uc-paint-card {
+            background: #ffffff;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+            transition: all 0.2s;
+          }
+          .uc-paint-card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+          }
+          .uc-paint-card-img-box {
+            position: relative;
+            height: 240px;
+            overflow: hidden;
+          }
+          .uc-paint-card-img-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+          }
+          .uc-paint-card:hover .uc-paint-card-img-box img {
+            transform: scale(1.02);
+          }
+          .uc-paint-card-img-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 1.5rem 1.75rem;
+            color: #ffffff;
+          }
+          .uc-paint-card-overlay-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.01em;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          }
+          .uc-paint-card-overlay-rating {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            background: rgba(0,0,0,0.5);
+            padding: 4px 10px;
+            border-radius: 8px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.15);
+          }
+          .uc-paint-card-body {
+            padding: 1.5rem 1.75rem;
+          }
+          .uc-paint-points {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 1.25rem 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+          }
+          .uc-paint-point-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+            font-size: 0.88rem;
+            color: #475569;
+            line-height: 1.45;
+          }
+          .uc-paint-point-check {
+            color: #10b981;
+            margin-top: 3px;
+            flex-shrink: 0;
+          }
+          .uc-paint-show-more {
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #10b981;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            transition: color 0.2s;
+          }
+          .uc-paint-show-more:hover {
+            color: #059669;
+          }
+          .uc-paint-expanded-details {
+            margin-top: 1.25rem;
+            padding-top: 1.25rem;
+            border-top: 1px dashed #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            animation: fadeIn 0.2s ease-out;
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .uc-paint-expand-section {
+            font-size: 0.82rem;
+          }
+          .uc-paint-expand-section-title {
+            font-weight: 800;
+            color: #1e293b;
+            margin-bottom: 0.35rem;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.02em;
+          }
+          .uc-paint-expand-section-content {
+            color: #64748b;
+            line-height: 1.5;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+          }
+          .uc-paint-tag-pill {
+            background: #f1f5f9;
+            color: #475569;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.75rem;
+          }
+          .uc-paint-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1.25rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid #f1f5f9;
+          }
+          .uc-paint-card-price {
+            font-size: 0.85rem;
+            color: #64748b;
+            font-weight: 600;
+          }
+          .uc-paint-card-price-num {
+            font-size: 1.3rem;
+            color: #0f172a;
+            font-weight: 800;
+          }
+          .uc-paint-action-btn {
+            cursor: pointer;
+            background: #ffffff;
+            border: 1.5px solid #10b981;
+            color: #10b981;
+            font-size: 0.85rem;
+            font-weight: 800;
+            padding: 0.6rem 1.75rem;
+            border-radius: 12px;
+            transition: all 0.2s;
+            min-width: 150px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.05);
+          }
+          .uc-paint-action-btn:hover {
+            background: #f0fdf4;
+            border-color: #059669;
+            color: #059669;
+          }
+          .uc-paint-qty-selector {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1.5px solid #10b981;
+            background: #f0fdf4;
+            border-radius: 12px;
+            padding: 0.5rem 0.85rem;
+            min-width: 150px;
+            font-weight: 800;
+            color: #059669;
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.08);
+          }
+          .uc-paint-qty-selector button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.15rem;
+            font-weight: 900;
+            color: #059669;
+            padding: 0 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .uc-paint-bottom-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 1.2rem 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            box-shadow: 0 -6px 25px rgba(5, 150, 105, 0.25);
+          }
+          .uc-paint-bottom-left {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+          }
+          .uc-paint-bottom-items {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+          }
+          .uc-paint-bottom-total {
+            font-size: 1.35rem;
+            font-weight: 900;
+            letter-spacing: -0.01em;
+          }
+          .uc-paint-bottom-btn {
+            cursor: pointer;
+            border: none;
+            background: #ffffff;
+            color: #059669;
+            font-size: 0.92rem;
+            font-weight: 800;
+            padding: 0.8rem 1.75rem;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: all 0.2s;
+          }
+          .uc-paint-bottom-btn:hover {
+            background: #f8fafc;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+          }
+          .uc-paint-bottom-btn:active {
+            transform: translateY(0);
+          }
+
+          /* Estimate Banner & Process Section styles */
+          .uc-paint-estimate-banner {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 1px solid #bbf7d0;
+            border-radius: 24px;
+            padding: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 2rem;
+            margin-top: 3rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01);
+            text-align: left;
+          }
+          .uc-paint-estimate-left {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: flex-start;
+          }
+          .uc-paint-estimate-title {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #064e3b;
+            margin: 0;
+          }
+          .uc-paint-estimate-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+          }
+          .uc-paint-estimate-item {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #14532d;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+          }
+          .uc-paint-estimate-btn {
+            cursor: pointer;
+            border: none;
+            background: #059669;
+            color: white;
+            padding: 0.7rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 0.85rem;
+            box-shadow: 0 4px 10px rgba(5, 150, 105, 0.15);
+            transition: all 0.2s;
+          }
+          .uc-paint-estimate-btn:hover {
+            background: #047857;
+            transform: translateY(-1px);
+          }
+          .uc-paint-estimate-right {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff;
+            width: 90px;
+            height: 90px;
+            border-radius: 20px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.04);
+            border: 1px solid #e2e8f0;
+            position: relative;
+            flex-shrink: 0;
+          }
+          .uc-paint-estimate-badge {
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            background: #10b981;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+          }
+
+          .uc-paint-process-section {
+            margin-top: 3.5rem;
+            padding-bottom: 2rem;
+            text-align: left;
+          }
+          .uc-paint-process-title {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 2rem;
+          }
+          .uc-paint-process-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 2.25rem;
+          }
+          .uc-paint-process-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.5rem;
+            position: relative;
+          }
+          .uc-paint-process-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 20px;
+            top: 40px;
+            bottom: -25px;
+            width: 2px;
+            border-left: 2px dashed #cbd5e1;
+          }
+          .uc-paint-process-icon-box {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #475569;
+            flex-shrink: 0;
+            z-index: 1;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 0 1px #e2e8f0;
+          }
+          .uc-paint-process-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            padding-top: 0.3rem;
+          }
+          .uc-paint-process-name {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #1e293b;
+          }
+          .uc-paint-process-desc {
+            font-size: 0.82rem;
+            color: #64748b;
+            font-weight: 500;
+          }
+
+          /* Sub-options styles */
+          .uc-paint-suboptions-section {
+            margin-top: 1.25rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid #f1f5f9;
+            text-align: left;
+          }
+          .uc-paint-suboptions-title {
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: #0f172a;
+            display: block;
+            margin-bottom: 0.75rem;
+          }
+          .uc-paint-chips-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+          }
+          .uc-paint-opt-chip {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            border-radius: 12px;
+            border: 1.5px solid #e2e8f0;
+            background: #ffffff;
+            color: #475569;
+            font-weight: 700;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            outline: none;
+          }
+          .uc-paint-opt-chip:hover {
+            border-color: #cbd5e1;
+            background: #f8fafc;
+            transform: translateY(-0.5px);
+          }
+          .uc-paint-opt-chip.active {
+            border-color: #10b981;
+            background: #f0fdf4;
+            color: #047857;
+            box-shadow: 0 4px 10px rgba(16, 185, 129, 0.05);
+          }
+          .uc-paint-chip-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #f1f5f9;
+            color: #64748b;
+            font-size: 0.75rem;
+            font-weight: 800;
+            transition: all 0.2s;
+          }
+          .uc-paint-opt-chip.active .uc-paint-chip-status {
+            background: #10b981;
+            color: white;
+          }
+
+          /* App Banner & Main Footer styles */
+          .uc-paint-footer-section {
+            margin-top: 4rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            width: 100%;
+            background: #ffffff;
+            border-top: 1px solid #f1f5f9;
+          }
+          .uc-paint-app-banner {
+            background: #f0fdf4;
+            border-radius: 24px;
+            padding: 2.25rem 2.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 2rem;
+            margin: 3rem 0;
+            border: 1px solid #dcfce7;
+            text-align: left;
+          }
+          @media (max-width: 768px) {
+            .uc-paint-app-banner {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 1.5rem;
+              padding: 1.5rem;
+            }
+          }
+          .uc-paint-app-banner-left {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+          }
+          .uc-paint-app-banner-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: #10b981;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+          }
+          .uc-paint-app-banner-text {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+          }
+          .uc-paint-app-banner-tag {
+            font-size: 0.75rem;
+            font-weight: 800;
+            color: #059669;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+          }
+          .uc-paint-app-banner-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0;
+          }
+          .uc-paint-app-banner-desc {
+            font-size: 0.82rem;
+            color: #64748b;
+            font-weight: 500;
+            margin: 0;
+          }
+          .uc-paint-app-banner-right {
+            display: flex;
+            gap: 1rem;
+          }
+          @media (max-width: 480px) {
+            .uc-paint-app-banner-right {
+              flex-direction: column;
+              width: 100%;
+            }
+          }
+          .uc-paint-store-btn {
+            cursor: pointer;
+            border: none;
+            background: #0f172a;
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 0.82rem;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+            transition: all 0.2s;
+            white-space: nowrap;
+          }
+          .uc-paint-store-btn:hover {
+            background: #1e293b;
+            transform: translateY(-1px);
+          }
+
+          .uc-paint-main-footer {
+            background: #f8fafc;
+            border-top: 1px solid #f1f5f9;
+            padding: 3.5rem 0;
+            width: 100%;
+          }
+          .uc-paint-main-footer-inner {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
+            gap: 3rem;
+            text-align: left;
+          }
+          @media (max-width: 768px) {
+            .uc-paint-main-footer-inner {
+              grid-template-columns: 1fr 1fr;
+              gap: 2rem;
+            }
+          }
+          @media (max-width: 480px) {
+            .uc-paint-main-footer-inner {
+              grid-template-columns: 1fr;
+            }
+          }
+          .uc-paint-footer-col {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+          }
+          .uc-paint-footer-logo-row {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+          }
+          .uc-paint-footer-brand {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.01em;
+          }
+          .uc-paint-footer-brand-desc {
+            font-size: 0.85rem;
+            color: #64748b;
+            line-height: 1.5;
+            margin: 0;
+            font-weight: 500;
+          }
+          .uc-paint-footer-socials {
+            display: flex;
+            gap: 0.75rem;
+          }
+          .uc-paint-social-icon {
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            transition: all 0.2s;
+          }
+          .uc-paint-social-icon:hover {
+            background: #10b981;
+            color: white;
+            border-color: #10b981;
+            transform: scale(1.05);
+          }
+          .uc-paint-footer-col-title {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0;
+          }
+          .uc-paint-footer-links {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+          .uc-paint-footer-links li {
+            font-size: 0.85rem;
+            color: #64748b;
+            font-weight: 500;
+            cursor: pointer;
+            transition: color 0.2s;
+          }
+          .uc-paint-footer-links li:hover {
+            color: #10b981;
+          }
+          .uc-paint-footer-contact {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+          }
+          .uc-paint-footer-contact li {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.85rem;
+            color: #64748b;
+            font-weight: 500;
+          }
+          .uc-paint-footer-contact li svg {
+            color: #94a3b8;
+          }
+        `}</style>
+
+        {/* Header */}
+        <div className="uc-paint-header">
+          <div className="uc-paint-header-inner uc-paint-container">
+            <div className="uc-paint-header-left">
+              <button className="uc-paint-back-btn" onClick={onClose} aria-label="Go back">
+                <ArrowLeft size={18} />
+              </button>
+              <div className="uc-paint-search-bar">
+                <Search size={16} style={{ color: "#94a3b8" }} />
+                <input
+                  type="text"
+                  placeholder="Search Interior Painting, Waterproofing..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}
+                    onClick={() => setSearchQuery("")}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="uc-paint-header-right">
+              <button className="uc-paint-my-bookings">
+                <Clock size={15} />
+                <span>My Bookings</span>
+              </button>
+              <div className="uc-paint-profile-icon" title="Profile">
+                <User size={18} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Fixed Horizontal Sub-Navigation Tab bar (outside scroll container) */}
+        <div className="uc-paint-horizontal-nav">
+          <div className="uc-paint-horizontal-nav-list">
+            <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-interior")}>
+              <img
+                className="uc-paint-tab-img"
+                src="https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"
+                alt="Interior Painting"
+                onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+              />
+              <span className="uc-paint-tab-label">Interior Painting</span>
+            </button>
+            <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-exterior")}>
+              <img
+                className="uc-paint-tab-img"
+                src="https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=150&auto=format&fit=crop&q=60"
+                alt="Exterior Painting"
+                onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+              />
+              <span className="uc-paint-tab-label">Exterior Painting</span>
+            </button>
+            <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-waterproofing")}>
+              <img
+                className="uc-paint-tab-img"
+                src="https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=150&auto=format&fit=crop&q=60"
+                alt="Waterproofing"
+                onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+              />
+              <span className="uc-paint-tab-label">Waterproofing</span>
+            </button>
+            <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-wood-metal")}>
+              <img
+                className="uc-paint-tab-img"
+                src="https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=150&auto=format&fit=crop&q=60"
+                alt="Wood & Metal"
+                onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+              />
+              <span className="uc-paint-tab-label">Wood & Metal</span>
+            </button>
+            <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-texture")}>
+              <img
+                className="uc-paint-tab-img"
+                src="https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=150&auto=format&fit=crop&q=60"
+                alt="Texture Decor"
+                onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+              />
+              <span className="uc-paint-tab-label">Texture Decor</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Content - ONLY this div scrolls */}
+        <div className="uc-paint-content" ref={contentRef}>
+          <div className="uc-paint-container">
+            {/* Title & Rating */}
+            <div className="uc-paint-hero-row">
+              <h2 className="uc-paint-sidebar-title">Painting Services</h2>
+              <div className="uc-paint-sidebar-rating">
+                <Star size={14} style={{ fill: "#fbbf24", color: "#fbbf24" }} />
+                <span>4.8 (Highly Rated by 2.5 Lakh+ Customers)</span>
+              </div>
+            </div>
+
+            <div className="uc-paint-main-layout">
+              {/* Middle Column - Service Choices Cards */}
+              <div className="uc-paint-middle-col">
+                <div className="uc-paint-choices">
+                  <h3 className="uc-paint-section-title">Painting choices for your home</h3>
+                  <div className="uc-paint-list">
+                    {filteredServices.map(service => {
+                      const isExpanded = !!expanded[service.id];
+                      const count = getCartCount(service.id);
+                      return (
+                        <div key={service.id} className="uc-paint-card" ref={cardRefs[service.id]}>
+                          <div className="uc-paint-card-img-box">
+                            <img
+                              src={service.image}
+                              alt={service.name}
+                              onError={e => {
+                                e.target.onerror = null;
+                                e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop";
+                              }}
+                            />
+                            <div className="uc-paint-card-img-overlay">
+                              <h4 className="uc-paint-card-overlay-title">{service.name}</h4>
+                              <div className="uc-paint-card-overlay-rating">
+                                <Star size={12} style={{ fill: "#fbbf24", color: "#fbbf24", marginRight: 2 }} />
+                                <span>{service.rating} ({service.reviews})</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="uc-paint-card-body">
+                            <ul className="uc-paint-points">
+                              {service.points.map((p, idx) => (
+                                <li key={idx} className="uc-paint-point-item">
+                                  <span className="uc-paint-point-check">✓</span>
+                                  <span>{p}</span>
+                                </li>
+                              ))}
+                            </ul>
+
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+                              <button
+                                className="uc-paint-show-more"
+                                onClick={() => toggleExpand(service.id)}
+                              >
+                                <span>{isExpanded ? "Show less" : "Show more"}</span>
+                                <span style={{ display: 'inline-block', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                                  <ChevronDown size={14} />
+                                </span>
+                              </button>
+                              <button
+                                className="uc-paint-action-btn"
+                                onClick={() => scrollToCard(service.id)}
+                                style={{ padding: '0.5rem 1.4rem', fontSize: '0.8rem' }}
+                              >
+                                GET ESTIMATE
+                              </button>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="uc-paint-expanded-details">
+                                <div className="uc-paint-expand-section">
+                                  <div className="uc-paint-expand-section-title">What's Included:</div>
+                                  <div className="uc-paint-expand-section-content">
+                                    {service.includes.map((inc, i) => (
+                                      <span key={i} className="uc-paint-tag-pill" style={{ background: '#f0fdf4', color: '#166534' }}>{inc}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="uc-paint-expand-section">
+                                  <div className="uc-paint-expand-section-title">What's Excluded:</div>
+                                  <div className="uc-paint-expand-section-content">
+                                    {service.excludes.map((exc, i) => (
+                                      <span key={i} className="uc-paint-tag-pill" style={{ background: '#fef2f2', color: '#991b1b' }}>{exc}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Sub-Options Grid */}
+                            <div className="uc-paint-suboptions-section">
+                              <span className="uc-paint-suboptions-title">Select areas to inspect:</span>
+                              <div className="uc-paint-chips-grid">
+                                {service.subOptions.map(subOpt => {
+                                  const isSelected = getSubOptionCartCount(subOpt.id) > 0;
+                                  return (
+                                    <button
+                                      key={subOpt.id}
+                                      className={`uc-paint-opt-chip ${isSelected ? 'active' : ''}`}
+                                      onClick={() => isSelected ? removeSubOptionFromCart(subOpt.id) : addSubOptionToCart(subOpt, service)}
+                                    >
+                                      <span className="uc-paint-chip-status">{isSelected ? "✓" : "+"}</span>
+                                      <span>{subOpt.name}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="uc-paint-card-footer" style={{ borderTop: '1px solid #f1f5f9', marginTop: '1rem', paddingTop: '0.75rem' }}>
+                              <div className="uc-paint-card-price" style={{ textAlign: 'center', width: '100%' }}>
+                                {getParentCartCount(service.id) > 0 ? (
+                                  <span style={{ color: '#059669', fontSize: '0.85rem', fontWeight: 800 }}>
+                                    ✓ {getParentCartCount(service.id)} area(s) selected for site visit
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontWeight: 500 }}>
+                                    Select areas above to schedule consultation
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {filteredServices.length === 0 && (
+                      <div style={{ textAlign: "center", padding: "3rem 1rem", color: "#94a3b8" }}>
+                        <Search size={32} style={{ margin: "0 auto 0.75rem", color: "#cbd5e1" }} />
+                        <p style={{ fontWeight: 600, fontSize: "0.9rem" }}>No painting services match your search.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Get Estimate Banner */}
+                  <div className="uc-paint-estimate-banner">
+                    <div className="uc-paint-estimate-left">
+                      <h4 className="uc-paint-estimate-title">Get a Free Painting Consultation</h4>
+                      <ul className="uc-paint-estimate-list">
+                        <li className="uc-paint-estimate-item">
+                          <CheckCircle2 size={14} style={{ color: "#10b981" }} />
+                          <span>Certified, top-tier paint brands</span>
+                        </li>
+                        <li className="uc-paint-estimate-item">
+                          <CheckCircle2 size={14} style={{ color: "#10b981" }} />
+                          <span>Complimentary expert wall consultation</span>
+                        </li>
+                        <li className="uc-paint-estimate-item">
+                          <CheckCircle2 size={14} style={{ color: "#10b981" }} />
+                          <span>Handled by vetted, skilled professionals</span>
+                        </li>
+                      </ul>
+                      <button className="uc-paint-estimate-btn" onClick={() => scrollToCard("paint-interior")}>
+                        Select Areas
+                      </button>
+                    </div>
+                    <div className="uc-paint-estimate-right">
+                      <Calculator size={36} style={{ color: "#059669" }} />
+                      <div className="uc-paint-estimate-badge">
+                        <PaintRoller size={12} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* How Painting Works */}
+                  <div className="uc-paint-process-section">
+                    <h3 className="uc-paint-process-title">How CalServices Painting Works</h3>
+                    <div className="uc-paint-process-steps">
+                      <div className="uc-paint-process-step">
+                        <div className="uc-paint-process-icon-box">
+                          <Calendar size={16} />
+                        </div>
+                        <div className="uc-paint-process-info">
+                          <span className="uc-paint-process-name">Book a Free Assessment</span>
+                          <span className="uc-paint-process-desc">Schedule a site inspection at your preferred time.</span>
+                        </div>
+                      </div>
+                      <div className="uc-paint-process-step">
+                        <div className="uc-paint-process-icon-box">
+                          <Cpu size={16} />
+                        </div>
+                        <div className="uc-paint-process-info">
+                          <span className="uc-paint-process-name">Digital Wall Measurement</span>
+                          <span className="uc-paint-process-desc">Get highly accurate pricing with precise digital measurement tools.</span>
+                        </div>
+                      </div>
+                      <div className="uc-paint-process-step">
+                        <div className="uc-paint-process-icon-box">
+                          <PaintRoller size={16} />
+                        </div>
+                        <div className="uc-paint-process-info">
+                          <span className="uc-paint-process-name">On-Time Execution</span>
+                          <span className="uc-paint-process-desc">We guarantee punctual startup and completion of your project.</span>
+                        </div>
+                      </div>
+                      <div className="uc-paint-process-step">
+                        <div className="uc-paint-process-icon-box">
+                          <ShieldCheck size={16} />
+                        </div>
+                        <div className="uc-paint-process-info">
+                          <span className="uc-paint-process-name">Clean-up & Quality Sign-off</span>
+                          <span className="uc-paint-process-desc">Spotless post-paint cleanup followed by a rigorous quality check.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                    </div>
+                  </div>
+
+              {/* Right Column - Promise & Cart Summary */}
+              <div className="uc-paint-right-col">
+                <div className="uc-paint-promise-card">
+                  <div className="uc-paint-promise-title-row">
+                    <ShieldCheck size={18} style={{ color: "#059669" }} />
+                    <span>CalServices Promise</span>
+                  </div>
+                  <ul className="uc-paint-promise-list">
+                    <li className="uc-paint-promise-item">
+                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
+                      <span>Verified Professionals</span>
+                    </li>
+                    <li className="uc-paint-promise-item">
+                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
+                      <span>Hassle Free Booking</span>
+                    </li>
+                    <li className="uc-paint-promise-item">
+                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
+                      <span>Transparent Pricing</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="uc-paint-cart-card">
+                  <h4 className="uc-paint-cart-card-title">Your Cart</h4>
+                  {cart.length === 0 ? (
+                    <div>
+                      <ShoppingCart className="uc-paint-empty-cart-img" style={{ color: "#94a3b8" }} />
+                      <p className="uc-paint-empty-cart-text">No items in your cart</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="uc-paint-cart-items">
+                        {cart.map(item => (
+                          <div key={item.id} className="uc-paint-cart-item">
+                            <div className="uc-paint-cart-item-info">
+                              <span className="uc-paint-cart-item-name">
+                                {item.parentId ? (
+                                  <>
+                                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, lineHeight: 1.2 }}>{item.parentName}</div>
+                                    <div style={{ fontSize: '0.82rem', color: '#1e293b', fontWeight: 700, marginTop: '2px' }}>{item.shortName}</div>
+                                  </>
+                                ) : (
+                                  item.name
+                                )}
+                              </span>
+                              {item.price > 0 && (
+                                <span className="uc-paint-cart-item-price">{BOOKING_CURRENCY_SYMBOL}{item.price.toLocaleString()}</span>
+                              )}
+                            </div>
+                            <div className="uc-paint-cart-item-qty">
+                              <button onClick={() => item.parentId ? removeSubOptionFromCart(item.id) : removeFromCart(item.id)}>−</button>
+                              <span>{item.quantity}</span>
+                              <button onClick={() => item.parentId ? addSubOptionToCart({ id: item.id, name: item.shortName, price: item.price }, { id: item.parentId, name: item.parentName }) : addToCart(item)}>+</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="uc-paint-cart-subtotal">
+                        <span>Site Inspection</span>
+                        <span style={{ color: '#059669', fontWeight: 800 }}>FREE</span>
+                      </div>
+                      <button className="uc-paint-cart-checkout-btn" onClick={onCheckout}>
+                        Book Free Inspection
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Footers Section */}
+          <div className="uc-paint-footer-section">
+            {/* App Banner */}
+            <div className="uc-paint-container">
+              <div className="uc-paint-app-banner">
+                <div className="uc-paint-app-banner-left">
+                  <div className="uc-paint-app-banner-icon">
+                    <Smartphone size={24} style={{ color: "#ffffff" }} />
+                  </div>
+                  <div className="uc-paint-app-banner-text">
+                    <span className="uc-paint-app-banner-tag">Book on the go!</span>
+                    <h4 className="uc-paint-app-banner-title">Download the CalServices App</h4>
+                    <p className="uc-paint-app-banner-desc">Faster booking, real-time tracking & exclusive app offers.</p>
+                  </div>
+                </div>
+                <div className="uc-paint-app-banner-right">
+                  <button className="uc-paint-store-btn">Get it on Google Play</button>
+                  <button className="uc-paint-store-btn" style={{ marginLeft: '1rem' }}>Download on App Store</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Links Footer */}
+            <div className="uc-paint-main-footer">
+              <div className="uc-paint-container uc-paint-main-footer-inner">
+                {/* Col 1 */}
+                <div className="uc-paint-footer-col">
+                  <div className="uc-paint-footer-logo-row">
+                    <CalTrackLogo size={24} />
+                    <span className="uc-paint-footer-brand">CalServices</span>
+                  </div>
+                  <p className="uc-paint-footer-brand-desc">
+                    Your trusted partner for all home services. Quality you can count on.
+                  </p>
+                  <div className="uc-paint-footer-socials">
+                    <span className="uc-paint-social-icon"><FacebookMark style={{ width: 16, height: 16 }} /></span>
+                    <span className="uc-paint-social-icon"><InstagramMark style={{ width: 16, height: 16 }} /></span>
+                    <span className="uc-paint-social-icon"><YoutubeMark style={{ width: 16, height: 16 }} /></span>
+                    <span className="uc-paint-social-icon"><TwitterMark style={{ width: 16, height: 16 }} /></span>
+                  </div>
+                </div>
+
+                {/* Col 2 */}
+                <div className="uc-paint-footer-col">
+                  <h5 className="uc-paint-footer-col-title">Services</h5>
+                  <ul className="uc-paint-footer-links">
+                    <li>Home Services & Pest Control</li>
+                    <li>Paintings</li>
+                    <li>Mason</li>
+                    <li>AC & Appliance</li>
+                  </ul>
+                </div>
+
+                {/* Col 3 */}
+                <div className="uc-paint-footer-col">
+                  <h5 className="uc-paint-footer-col-title">Company</h5>
+                  <ul className="uc-paint-footer-links">
+                    <li>About Us</li>
+                    <li>Careers</li>
+                    <li>Blog</li>
+                    <li>Become a Partner</li>
+                  </ul>
+                </div>
+
+                {/* Col 4 */}
+                <div className="uc-paint-footer-col">
+                  <h5 className="uc-paint-footer-col-title">Need Help?</h5>
+                  <ul className="uc-paint-footer-contact">
+                    <li>
+                      <Phone size={14} />
+                      <span>+91 98765 43210</span>
+                    </li>
+                    <li>
+                      <Mail size={14} />
+                      <span>support@calservices.com</span>
+                    </li>
+                    <li>
+                      <Clock size={14} />
+                      <span>Mon - Sun (8 AM - 8 PM)</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Cart Bar */}
+        {totalQuantity > 0 && (
+          <motion.div
+            className="uc-paint-bottom-bar"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+          >
+            <div className="uc-paint-bottom-bar-inner uc-paint-container">
+              <div className="uc-paint-bottom-left">
+                <span className="uc-paint-bottom-items">{totalQuantity} Area{totalQuantity > 1 ? 's' : ''} Selected</span>
+                <span className="uc-paint-bottom-total">Free Site Inspection</span>
+              </div>
+              <button className="uc-paint-bottom-btn" onClick={onCheckout}>
+                Book Free Inspection <ChevronRight size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
+    </div>
+  )
 }
 
 export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, isFullPage = false }) {
@@ -6951,4 +8881,315 @@ export function BkStyles() {
 
     `}</style>
   )
+}
+
+
+export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
+  const [activeTab, setActiveTab] = useState("complete");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const addItemToCart = (id, name, price, duration) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id);
+      if (existing) return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
+      return [...prev, { id, name, price, duration, quantity: 1 }];
+    });
+  };
+
+  const removeItemFromCart = (id) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id);
+      if (!existing) return prev;
+      if (existing.quantity === 1) return prev.filter(i => i.id !== id);
+      return prev.map(i => i.id === id ? { ...i, quantity: i.quantity - 1 } : i);
+    });
+  };
+
+  const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
+
+  const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+
+  const filteredAppliances = APPLIANCE_SERVICES.filter(a =>
+    a.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="w-full text-slate-700 bg-white">
+      {/* Sticky Header + Tabs */}
+      <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
+        <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
+          <div>
+            <button
+              onClick={onClose}
+              className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-2 text-xs transition-colors"
+            >
+              <ChevronLeft size={16} /> Back to Services
+            </button>
+            <h2 className="text-xl font-black text-slate-900">Kitchen Cleaning</h2>
+          </div>
+          <div className="relative w-full sm:w-64">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search size={14} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search services..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all bg-slate-50/50"
+            />
+          </div>
+        </div>
+
+        {/* Sub-tabs */}
+        <div className="flex gap-5 pb-3 pt-2 border-b border-slate-100 justify-start">
+          {KITCHEN_SUB_TABS.map(tab => {
+            const isSelected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
+                className="flex flex-col items-center justify-center p-1.5 transition-all cursor-pointer text-center bg-transparent w-[90px] shrink-0"
+              >
+                <img
+                  src={tab.image}
+                  alt={tab.name}
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
+                    isSelected ? "scale-[1.05] shadow-md" : "opacity-80 hover:opacity-100"
+                  }`}
+                />
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                  isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
+                }`}>
+                  {tab.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex flex-col lg:flex-row flex-1 pt-4">
+
+        {/* Left Column */}
+        <div className="flex-1 space-y-5 lg:pr-6">
+
+          {/* Section title */}
+          <div className="pt-1">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+              <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
+              {activeTab === "complete" ? "Complete Kitchen Cleaning" : "Appliance Cleaning"}
+            </h3>
+          </div>
+
+          {/* ── COMPLETE KITCHEN CLEANING ── */}
+          {activeTab === "complete" && (
+            <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+              {/* Image Hero */}
+              <div className="w-full h-52 sm:h-64 bg-slate-100 overflow-hidden">
+                <img
+                  src="/mockups/kitchen_cleaning_hero.png"
+                  alt="Complete Kitchen Cleaning"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+
+              {/* Details */}
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <h4 className="text-base font-black text-slate-900 mb-1">{COMPLETE_KITCHEN_SERVICE.name}</h4>
+
+                    <p className="text-xs font-bold text-slate-800 mt-1">
+                      Starts at ₹{COMPLETE_KITCHEN_SERVICE.price.toLocaleString("en-IN")}
+                      <span className="text-slate-400 font-normal ml-2">• {COMPLETE_KITCHEN_SERVICE.duration}</span>
+                    </p>
+                  </div>
+                  {/* Add button */}
+                  <div className="shrink-0">
+                    {getCount(COMPLETE_KITCHEN_SERVICE.id) > 0 ? (
+                      <div className="flex items-center gap-2 border border-emerald-500 rounded-lg px-3 py-2 text-sm font-bold text-emerald-700">
+                        <button onClick={() => removeItemFromCart(COMPLETE_KITCHEN_SERVICE.id)} className="hover:text-emerald-900">-</button>
+                        <span>{getCount(COMPLETE_KITCHEN_SERVICE.id)}</span>
+                        <button onClick={() => addItemToCart(COMPLETE_KITCHEN_SERVICE.id, COMPLETE_KITCHEN_SERVICE.name, COMPLETE_KITCHEN_SERVICE.price, COMPLETE_KITCHEN_SERVICE.duration)} className="hover:text-emerald-900">+</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addItemToCart(COMPLETE_KITCHEN_SERVICE.id, COMPLETE_KITCHEN_SERVICE.name, COMPLETE_KITCHEN_SERVICE.price, COMPLETE_KITCHEN_SERVICE.duration)}
+                        className="bg-white border border-slate-300 text-emerald-600 font-extrabold text-xs px-5 py-2.5 rounded-full hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-1.5 uppercase"
+                      >
+                        <ShoppingCart size={13} className="text-emerald-600" /> Add
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Includes */}
+                <div className="mt-4 space-y-1.5 border-t border-slate-100 pt-3">
+                  {COMPLETE_KITCHEN_SERVICE.includes.map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <span className="text-slate-400 mt-0.5">•</span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <button className="text-xs font-semibold text-blue-600 mt-3 hover:underline">View details</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── APPLIANCE CLEANING ── */}
+          {activeTab === "appliance" && (
+            <div className="space-y-0 divide-y divide-slate-100">
+              {filteredAppliances.map((appliance, idx) => {
+                const count = getCount(appliance.id);
+                const isFirst = idx === 0;
+                return (
+                  <div key={appliance.id} className="py-5">
+                    {/* First item image hero */}
+                    {isFirst && (
+                      <div className="w-full h-48 bg-slate-100 rounded-2xl overflow-hidden mb-4">
+                        <img
+                          src="/mockups/appliance_cleaning_hero.png"
+                          alt={appliance.name}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-black text-slate-900 mb-1">{appliance.name}</h4>
+
+                        <p className="text-xs font-bold text-slate-800">
+                          {appliance.options ? `Starts at ₹${appliance.price}` : `₹${appliance.price}`}
+                          <span className="text-slate-400 font-normal ml-2">• {appliance.duration}</span>
+                        </p>
+                        <div className="mt-3 space-y-1">
+                          {appliance.includes.map((item, i) => (
+                            <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                              <span className="text-slate-400 mt-0.5">•</span>
+                              <span>{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <button className="text-xs font-semibold text-blue-600 mt-2 hover:underline">View details</button>
+                        {appliance.options && (
+                          <p className="text-[11px] text-slate-400 mt-1">{appliance.options}</p>
+                        )}
+                      </div>
+
+                      {/* Appliance image + add button */}
+                      {!isFirst && (
+                        <div className="shrink-0 flex flex-col items-center gap-2">
+                          <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100">
+                            <img src={appliance.image} alt={appliance.name} className="w-full h-full object-cover" />
+                          </div>
+                          {count > 0 ? (
+                            <div className="flex items-center gap-2 border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 w-full justify-between">
+                              <button onClick={() => removeItemFromCart(appliance.id)} className="hover:text-emerald-900">-</button>
+                              <span>{count}</span>
+                              <button onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)} className="hover:text-emerald-900">+</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)}
+                              className="w-full bg-white border border-slate-300 text-emerald-600 font-extrabold text-[11px] px-3 py-1.5 rounded-full hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-1.5 uppercase"
+                            >
+                              <ShoppingCart size={11} className="text-emerald-600" /> Add
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* First item add button (inline) */}
+                      {isFirst && (
+                        <div className="shrink-0">
+                          {count > 0 ? (
+                            <div className="flex items-center gap-2 border border-emerald-500 rounded-lg px-3 py-2 text-sm font-bold text-emerald-700">
+                              <button onClick={() => removeItemFromCart(appliance.id)} className="hover:text-emerald-900">-</button>
+                              <span>{count}</span>
+                              <button onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)} className="hover:text-emerald-900">+</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)}
+                              className="bg-white border border-slate-300 text-emerald-600 font-extrabold text-xs px-5 py-2.5 rounded-full hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-1.5 uppercase"
+                            >
+                              <ShoppingCart size={13} className="text-emerald-600" /> Add
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Right Column: Order Summary */}
+        <div className="w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between lg:sticky lg:top-32 h-fit space-y-4 mt-6 lg:mt-0 rounded-2xl">
+          <div className="space-y-4">
+            <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
+                <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
+                <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
+              </div>
+
+              {cart.length > 0 ? (
+                <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                  {cart.map(item => (
+                    <div key={item.id} className="flex justify-between items-start text-xs gap-2">
+                      <div className="flex-1">
+                        <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">{item.duration}</span>
+                      </div>
+                      <div className="text-right flex items-center gap-2">
+                        <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
+                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600">-</button>
+                          <span>{item.quantity}</span>
+                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-600">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-slate-400 text-xs">
+                  No services added. Select from the left.
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
+                {cart.length > 0 && (
+                  <div className="flex justify-between text-slate-500">
+                    <span>Items Subtotal</span>
+                    <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2">
+                  <span>Total Amount</span>
+                  <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 mt-4 border-t border-slate-200/60">
+            <button
+              disabled={cart.length === 0}
+              onClick={onCheckout}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all"
+            >
+              Proceed to Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
