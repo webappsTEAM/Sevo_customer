@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react"
-import { useSearchParams, useLocation } from "react-router-dom"
+import { useSearchParams, useLocation, useNavigate } from "react-router-dom"
 import { useGoogleLogin } from "@react-oauth/google"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -4398,6 +4398,7 @@ export function BookingPage() {
   // Arriving with a cart already built (e.g. "Proceed to Checkout" from the
   // landing page's own package popup) skips straight to the date/time step
   // instead of asking the user to re-add items here.
+  const navigate = useNavigate()
   const routerLocation = useLocation()
   const incomingCart = routerLocation.state?.cart
   const incomingCategory = routerLocation.state?.category
@@ -4815,7 +4816,14 @@ export function BookingPage() {
                   onDateChange={setSelDate}
                   onTimeChange={setSelTime}
                   onNext={() => setStep(4)}
-                  onBack={() => { setStep(1); setShowPackageModal(true); }}
+                  onBack={() => {
+                    if (category?.id === "cleaning" || category?.slug === "cleaning") {
+                      navigate("/home?category=cleaning");
+                    } else {
+                      setStep(1);
+                      setShowPackageModal(true);
+                    }
+                  }}
                 />
               </div>
             </motion.div>
@@ -4908,7 +4916,664 @@ export function BookingPage() {
   )
 }
 
+export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, isFullPage = false }) {
+  const [activeSubTab, setActiveSubTab] = useState("Furnished Apartment");
+  const [bhkSelections, setBhkSelections] = useState({
+    essential: 3,
+    premium: 3,
+    elite: 3
+  });
+  const [isVipJoined, setIsVipJoined] = useState(false);
+  const [isCouponApplied, setIsCouponApplied] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const getBhkPrice = (tabName, planId, bhk) => {
+    const bhkIdx = bhk - 1; // 0-indexed for 1 BHK to 5 BHK
+    if (tabName === "Furnished Apartment") {
+      if (planId === "essential") return [1899, 2499, 2999, 3409, 3999][bhkIdx];
+      if (planId === "premium") return [2199, 2799, 3299, 3759, 4299][bhkIdx];
+      if (planId === "elite") return [2999, 3599, 4099, 4579, 5199][bhkIdx];
+    }
+    if (tabName === "Unfurnished Apartment") {
+      if (planId === "essential") return [1599, 2139, 2639, 3139, 3639][bhkIdx];
+      if (planId === "premium") return [1899, 2409, 2909, 3409, 3909][bhkIdx];
+      if (planId === "elite") return [2499, 2999, 3499, 3999, 4499][bhkIdx];
+    }
+    if (tabName === "Furnished Villa") {
+      if (planId === "essential") return [2439, 2939, 3439, 4439, 5439][bhkIdx];
+      if (planId === "premium") return [3729, 4729, 5729, 6729, 7729][bhkIdx];
+      if (planId === "elite") return [4599, 5599, 6599, 7599, 8599][bhkIdx];
+    }
+    if (tabName === "Unfurnished Villa") {
+      if (planId === "essential") return [2419, 2919, 3419, 4419, 5419][bhkIdx];
+      if (planId === "premium") return [3819, 4319, 4819, 5819, 6819][bhkIdx];
+      if (planId === "elite") return [4499, 4999, 5499, 6499, 7499][bhkIdx];
+    }
+    return 1000;
+  };
+
+  const getBhkDuration = (planId) => {
+    if (planId === "essential") return "4 hrs";
+    if (planId === "premium") return "4 hrs";
+    return "4.5 hrs";
+  };
+
+  const getCartItemCount = (itemId) => {
+    const item = cart.find(c => c.id === itemId);
+    return item ? item.quantity : 0;
+  };
+
+  const addItemToCart = (itemId, itemName, itemPrice, itemDuration) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === itemId);
+      if (existing) {
+        return prev.map(c => c.id === itemId ? { ...c, quantity: c.quantity + 1 } : c);
+      }
+      return [...prev, { id: itemId, name: itemName, price: itemPrice, duration: itemDuration, quantity: 1, categoryName: category.name }];
+    });
+  };
+
+  const removeItemFromCart = (itemId) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === itemId);
+      if (!existing) return prev;
+      if (existing.quantity === 1) {
+        return prev.filter(c => c.id !== itemId);
+      }
+      return prev.map(c => c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c);
+    });
+  };
+
+  const subtotal = cart.reduce((acc, c) => acc + (c.price * c.quantity), 0);
+  const couponDiscount = isCouponApplied ? Math.round(subtotal * 0.1) : 0;
+  const vipSavings = isVipJoined ? Math.round(subtotal * 0.15) : 0;
+  const totalAmount = Math.max(0, subtotal + (isVipJoined ? 299 : 0) - couponDiscount - vipSavings);
+
+  const subCategories = [
+    {
+      name: "Furnished Apartment",
+      image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop"
+    },
+    {
+      name: "Unfurnished Apartment",
+      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop"
+    },
+    {
+      name: "Furnished Villa",
+      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop"
+    },
+    {
+      name: "Unfurnished Villa",
+      image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop"
+    },
+    {
+      name: "Book by Room",
+      image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop"
+    },
+    {
+      name: "Mini Services",
+      image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop"
+    }
+  ];
+
+  const apartmentVillaPlans = [
+    {
+      id: "essential",
+      name: "Essential Plan",
+      badge: "Value Choice",
+      badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
+      description: "Thorough deep cleaning of essential areas: kitchens, bathrooms, and floor sweep-mops.",
+      icon: "⭐",
+      includes: [
+        "Bathroom & kitchen deep cleaning",
+        "Machine cleaning of floors, doors & windows",
+        "Cobweb removal, ceiling & fan dusting",
+        "Balcony & utility area cleaning",
+        "Cabinet & furniture exterior dusting & wet wiping"
+      ],
+      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"
+    },
+    {
+      id: "premium",
+      name: "Premium Plan",
+      badge: "Best Value",
+      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+      description: "Detailed deep cleaning including complete cabinet interior sanitization and stain degreasing.",
+      icon: "💎",
+      includes: [
+        "Includes everything in Essential Plan",
+        "Cupboard cleaning (interior & exterior)",
+        "Cabinets interior with complete utensil removal & wash",
+        "Wall dry dusting and major stain spot wipe",
+        "Tile grout deep scrubbing"
+      ],
+      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop"
+    },
+    {
+      id: "elite",
+      name: "Elite Plan",
+      badge: "Signature Care",
+      badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
+      description: "Top-tier premium restoration including mechanical dry shampooing of sofa, carpet, and mattress.",
+      icon: "👑",
+      includes: [
+        "Includes everything in Premium Plan",
+        "Sofa, carpet & mattress vacuum & dry shampooing",
+        "Whole house steam sanitization",
+        "Eco-friendly dust repellent coat application",
+        "Balcony pressure washing & drain flush"
+      ],
+      image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop"
+    }
+  ];
+
+  const bookByRoomPlans = [
+    {
+      id: "room-bedroom",
+      name: "Bedroom Deep Cleaning",
+      price: 599,
+      duration: "1 hr",
+      description: "Thorough vacuuming, window wipe, fan dusting, floor mopping, and wardrobe exterior clean.",
+      includes: ["Wardrobe dusting", "Dry vacuuming of mattress", "Floor dry & wet mopping"],
+      image: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=300&q=80&fit=crop"
+    },
+    {
+      id: "room-living",
+      name: "Living Room Detailing",
+      price: 699,
+      duration: "1.5 hrs",
+      description: "Deep dust-wipe of entertainment consoles, sofa dry vacuuming, glass polishing, and carpet shake.",
+      includes: ["Sofa & carpet dry vacuuming", "Glass panel polishing", "Floor scrubbing"],
+      image: "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=300&q=80&fit=crop"
+    },
+    {
+      id: "room-floor",
+      name: "Floor Scrubbing & Wash",
+      price: 399,
+      duration: "1 hr",
+      description: "Machine-assisted high-speed floor scrub to remove dark spots and restore original tile shine.",
+      includes: ["Machine scrubbing", "Germicide wash", "Corner grout detailing"],
+      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"
+    }
+  ];
+
+  const miniServicesPlans = [
+    {
+      id: "mini-fridge",
+      name: "Refrigerator Deep Cleaning",
+      price: 299,
+      duration: "45 mins",
+      description: "Defrosting, rack wash, shelf wipe down, door gasket disinfection, and exterior polish.",
+      includes: ["Internal rack wash", "Gasket cleaning & disinfection", "Deodorizing treatment"],
+      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop"
+    },
+    {
+      id: "mini-microwave",
+      name: "Oven & Microwave Cleaning",
+      price: 149,
+      duration: "30 mins",
+      description: "Removal of burnt oil, splash stains, steam disinfection, and turntable polishing.",
+      includes: ["Internal degreasing", "Glass tray wash", "Deodorizer spray"],
+      image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop"
+    },
+    {
+      id: "mini-balcony",
+      name: "Balcony Scrubbing",
+      price: 299,
+      duration: "1 hr",
+      description: "Dusting railings, window exterior spray, cobweb removal, and high pressure floor scrub.",
+      includes: ["Railings wipe", "Floor scrubbing & wash", "Utility drainage flush"],
+      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"
+    }
+  ];
+
+  const isApartmentVilla = ["Furnished Apartment", "Unfurnished Apartment", "Furnished Villa", "Unfurnished Villa"].includes(activeSubTab);
+
+  const getBhkTitle = (tab, planName, bhk) => {
+    return `${tab} - ${planName} (${bhk} BHK)`;
+  };
+
+  const wrapperClass = isFullPage
+    ? "w-full text-slate-700 bg-white"
+    : "fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm";
+
+  const containerClass = isFullPage
+    ? "bg-white relative flex flex-col text-slate-700 w-full"
+    : "bg-white rounded-3xl max-w-5xl w-full shadow-2xl border border-slate-100 relative max-h-[92vh] flex flex-col overflow-hidden text-slate-700";
+
+  const mainAreaClass = isFullPage
+    ? "flex flex-col lg:flex-row flex-1"
+    : "flex flex-col lg:flex-row flex-1 overflow-hidden";
+
+  const leftColumnClass = isFullPage
+    ? "flex-1 space-y-5 lg:pr-6"
+    : "flex-1 p-6 overflow-y-auto space-y-5 scrollbar-thin";
+
+  const rightColumnClass = isFullPage
+    ? "w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between lg:sticky lg:top-20 h-fit space-y-4"
+    : "w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between overflow-y-auto max-h-[45vh] lg:max-h-none scrollbar-thin";
+
+  const contentMarkup = (
+    <motion.div
+      className={containerClass}
+      initial={isFullPage ? false : { opacity: 0, y: 35, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 25, scale: 0.97 }}
+      transition={{ type: "spring", damping: 25, stiffness: 320 }}
+      onClick={e => e.stopPropagation()}
+    >
+      {/* Close Button (only in modal mode) */}
+      {!isFullPage && (
+        <button
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors z-10"
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+      )}
+
+      {/* Modal Header + Subcategory Tabs — sticky on scroll */}
+      <div className={`${isFullPage ? "sticky top-16 z-20 bg-white pb-2 shadow-sm" : ""}`}>
+        <div className={`p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white ${isFullPage ? "px-0" : ""}`}>
+          <div>
+            {isFullPage && (
+              <button
+                onClick={onClose}
+                className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-3 text-xs transition-colors"
+              >
+                <ChevronLeft size={16} /> Back to Services
+              </button>
+            )}
+            <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+              {category.name}
+            </h2>
+          </div>
+          {/* Inner Search box */}
+          <div className="relative w-full sm:w-64">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search size={14} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search packages..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all bg-slate-50/50"
+            />
+          </div>
+        </div>
+
+        {/* Subservice Flex Selector — inside sticky container */}
+        <div className={`flex flex-wrap gap-5 pb-3 pt-2 border-b border-slate-100 justify-start ${isFullPage ? "px-0" : "px-6"}`}>
+            {subCategories.map(tab => {
+              const isSelected = activeSubTab === tab.name;
+              return (
+                <button
+                  key={tab.name}
+                  onClick={() => {
+                    setActiveSubTab(tab.name);
+                    setSearchQuery("");
+                  }}
+                  className="flex flex-col items-center justify-center p-1.5 transition-all cursor-pointer text-center bg-transparent w-[76px] shrink-0"
+                >
+                  <img
+                    src={tab.image}
+                    alt={tab.name}
+                    className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
+                      isSelected
+                        ? "scale-[1.05] shadow-md"
+                        : "opacity-80 hover:opacity-100"
+                    }`}
+                  />
+                  <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                    isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
+                  }`}>
+                    {tab.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      {/* End of sticky header+tabs */}
+
+      {/* Main Content Area */}
+      <div className={mainAreaClass}>
+        {/* Left Column: Subservice categories + package cards */}
+        <div className={leftColumnClass}>
+
+          {/* Title for Active Category */}
+          <div className="pt-2">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+              <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
+              {activeSubTab} Packages
+            </h3>
+          </div>
+
+          {/* List of package cards */}
+          <div className="space-y-4">
+            {/* Apartment/Villa Dynamic cards */}
+            {isApartmentVilla &&
+              apartmentVillaPlans
+                .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map(p => {
+                  const currentBhk = bhkSelections[p.id] || 3;
+                  const price = getBhkPrice(activeSubTab, p.id, currentBhk);
+                  const duration = getBhkDuration(p.id);
+                  const cartId = `clean-bhk-${activeSubTab.toLowerCase().replace(/ /g, "-")}-${p.id}-${currentBhk}bhk`;
+                  const cartName = getBhkTitle(activeSubTab, p.name, currentBhk);
+                  const count = getCartItemCount(cartId);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                    >
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{p.icon}</span>
+                          <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${p.badgeColor}`}>
+                            {p.badge}
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+
+                        {/* BHK Selector Pills */}
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Size (BHK)</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[1, 2, 3, 4, 5].map(b => (
+                              <button
+                                key={b}
+                                onClick={() => setBhkSelections(prev => ({ ...prev, [p.id]: b }))}
+                                className={`text-xs px-3 py-1 rounded-full border transition-all ${
+                                  currentBhk === b
+                                    ? "bg-emerald-600 border-emerald-600 text-white font-bold"
+                                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                                }`}
+                              >
+                                {b} BHK
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Price & Duration */}
+                        <div className="flex items-center gap-3 text-xs pt-1">
+                          <span className="text-sm font-extrabold text-slate-900">₹{price.toLocaleString("en-IN")}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-slate-500 font-semibold">{duration}</span>
+                        </div>
+
+                        {/* Includes checklist */}
+                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
+                          {p.includes.map(inc => (
+                            <li key={inc} className="flex items-start gap-2">
+                              <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                              <span>{inc}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Right side image & add button */}
+                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-28 h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
+                            {count > 0 ? (
+                              <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <span>{count}</span>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => addItemToCart(cartId, cartName, price, duration)}>+</button>
+                              </div>
+                            ) : (
+                              <button
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1"
+                                onClick={() => addItemToCart(cartId, cartName, price, duration)}
+                              >
+                                <ShoppingCart size={11} className="shrink-0" />
+                                <span>Add</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+            {/* Book by room list */}
+            {activeSubTab === "Book by Room" &&
+              bookByRoomPlans
+                .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map(p => {
+                  const cartId = `clean-room-${p.id}`;
+                  const count = getCartItemCount(cartId);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                    >
+                      <div className="flex-1 space-y-3">
+                        <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-sm font-extrabold text-slate-900">₹{p.price}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-slate-500 font-semibold">{p.duration}</span>
+                        </div>
+
+                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                          {p.includes.map(inc => (
+                            <li key={inc} className="flex items-start gap-2">
+                              <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                              <span>{inc}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-28 h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
+                            {count > 0 ? (
+                              <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <span>{count}</span>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
+                              </div>
+                            ) : (
+                              <button
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1"
+                                onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}
+                              >
+                                <ShoppingCart size={11} className="shrink-0" />
+                                <span>Add</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+            {/* Mini services list */}
+            {activeSubTab === "Mini Services" &&
+              miniServicesPlans
+                .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map(p => {
+                  const cartId = `clean-mini-${p.id}`;
+                  const count = getCartItemCount(cartId);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                    >
+                      <div className="flex-1 space-y-3">
+                        <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-sm font-extrabold text-slate-900">₹{p.price}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-slate-500 font-semibold">{p.duration}</span>
+                        </div>
+
+                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                          {p.includes.map(inc => (
+                            <li key={inc} className="flex items-start gap-2">
+                              <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                              <span>{inc}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-28 h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
+                            {count > 0 ? (
+                              <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <span>{count}</span>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
+                              </div>
+                            ) : (
+                              <button
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1"
+                                onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}
+                              >
+                                <ShoppingCart size={11} className="shrink-0" />
+                                <span>Add</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+          </div>
+        </div>
+
+        {/* Right Column: Checkout, VIP banner & Promos */}
+        <div className={rightColumnClass}>
+          <div className="space-y-4">
+            {/* Order Summary box */}
+            <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
+                <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
+                <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
+              </div>
+
+              {cart.length > 0 ? (
+                <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                  {cart.map(item => (
+                    <div key={item.id} className="flex justify-between items-start text-xs gap-2">
+                      <div className="flex-1">
+                        <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">{item.duration}</span>
+                      </div>
+                      <div className="text-right flex items-center gap-2">
+                        <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
+                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600">-</button>
+                          <span>{item.quantity}</span>
+                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-600">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-slate-400 text-xs">
+                  No cleaning services added. Select from the packages on the left.
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
+                {cart.length > 0 && (
+                  <>
+                    <div className="flex justify-between text-slate-500">
+                      <span>Items Subtotal</span>
+                      <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                    </div>
+                    {isVipJoined && (
+                      <div className="flex justify-between text-slate-500">
+                        <span>VIP Yearly Fee</span>
+                        <span>₹299</span>
+                      </div>
+                    )}
+                    {couponDiscount > 0 && (
+                      <div className="flex justify-between text-amber-600 font-semibold">
+                        <span>Welcome Discount (10%)</span>
+                        <span>-₹{couponDiscount.toLocaleString("en-IN")}</span>
+                      </div>
+                    )}
+                    {vipSavings > 0 && (
+                      <div className="flex justify-between text-emerald-600 font-semibold">
+                        <span>VIP Member Savings (15%)</span>
+                        <span>-₹{vipSavings.toLocaleString("en-IN")}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2">
+                  <span>Total Amount</span>
+                  <span>₹{totalAmount.toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Checkout Action */}
+          <div className="pt-4 mt-4 border-t border-slate-200/60">
+            <button
+              disabled={cart.length === 0}
+              onClick={onCheckout}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all"
+            >
+              Proceed to Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  if (isFullPage) {
+    return <div className={wrapperClass}>{contentMarkup}</div>;
+  }
+
+  return (
+    <div className={wrapperClass} onClick={onClose}>
+      {contentMarkup}
+    </div>
+  );
+}
+
 export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
+  if (category?.id === "cleaning" || category?.slug === "cleaning") {
+    return (
+      <CustomCleaningPackageModal
+        category={category}
+        cart={cart}
+        setCart={setCart}
+        onClose={onClose}
+        onCheckout={onCheckout}
+      />
+    );
+  }
+
   const [activeTab, setActiveTab] = useState(0)
   const [activeFilter, setActiveFilter] = useState("All")
   const rawList = (packagesData && (packagesData[category?.id] || packagesData[category?.slug] || packagesData[category?.name?.toLowerCase()])) || PACKAGES[category?.id] || PACKAGES[category?.slug] || []
