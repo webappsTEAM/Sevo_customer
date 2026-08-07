@@ -10,7 +10,11 @@ import {
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet,
 } from "lucide-react"
 import { routes } from "../routes.js"
+<<<<<<< HEAD
+import { PackageModal, PaintingPackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
+=======
 import { PackageModal, CustomCleaningPackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
+>>>>>>> 495fd6e618509f6898f4bfba131cdd3dafed0393
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -1270,14 +1274,24 @@ export function LandingPage() {
 
     <BkStyles />
     {activeCategory && (
-      <PackageModal
-        category={activeCategory}
-        cart={modalCart}
-        setCart={setModalCart}
-        packagesData={{}}
-        onClose={() => navigate(routes.booking_services)}
-        onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-      />
+      (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
+        <PaintingPackageModal
+          category={activeCategory}
+          cart={modalCart}
+          setCart={setModalCart}
+          onClose={() => navigate(routes.booking_services)}
+          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+        />
+      ) : (
+        <PackageModal
+          category={activeCategory}
+          cart={modalCart}
+          setCart={setModalCart}
+          packagesData={{}}
+          onClose={() => navigate(routes.booking_services)}
+          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+        />
+      )
     )}
     </>
   )
