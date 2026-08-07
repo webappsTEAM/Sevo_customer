@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom"
 import {
   Home, PaintRoller,
   SprayCan, Building2, AirVent, Hammer, Boxes,
@@ -10,11 +10,7 @@ import {
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet,
 } from "lucide-react"
 import { routes } from "../routes.js"
-<<<<<<< HEAD
-import { PackageModal, PaintingPackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
-=======
-import { PackageModal, CustomCleaningPackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
->>>>>>> 495fd6e618509f6898f4bfba131cdd3dafed0393
+import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -546,9 +542,16 @@ export function LandingPage() {
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState("")
   const [testimonialIdx, setTestimonialIdx] = useState(0)
-  const [modalCart, setModalCart] = useState([])
+  const location = useLocation()
+  const [modalCart, setModalCart] = useState(location.state?.cart || [])
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(false)
-  const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(false)
+  const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(location.state?.openHomePestModal || false)
+
+  useEffect(() => {
+    if (location.state?.openHomePestModal) {
+      setIsHomePestModalOpen(true)
+    }
+  }, [location.state])
 
   const goToBooking = () => navigate(routes.booking)
   const goToLogin = () => navigate(routes.login)
@@ -583,7 +586,7 @@ export function LandingPage() {
     }
   }, [isGoodsModalOpen, isHomePestModalOpen])
 
-  if (activeCategoryId === "cleaning") {
+  if (activeCategoryId === "cleaning" || activeCategoryId === "kitchen_cleaning") {
     return (
       <>
       <div className="min-h-screen bg-[#F7FAF9] text-slate-800 flex flex-col" style={{ animation: "fadeUp 0.4s ease both" }}>
@@ -614,13 +617,22 @@ export function LandingPage() {
 
         {/* Full Page View Wrapper */}
         <main className={`flex-1 max-w-7xl w-full mx-auto px-6 ${activeCategory ? "pt-4 pb-10" : "py-10"}`}>
-          {activeCategory && (
+          {activeCategory && activeCategory.id === "kitchen_cleaning" && (
+            <KitchenCleaningModal
+              category={activeCategory}
+              cart={modalCart}
+              setCart={setModalCart}
+              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
+              onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            />
+          )}
+          {activeCategory && activeCategory.id !== "kitchen_cleaning" && (
             <CustomCleaningPackageModal
               category={activeCategory}
               cart={modalCart}
               setCart={setModalCart}
               isFullPage={true}
-              onClose={() => navigate("/home")}
+              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
               onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
             />
           )}
@@ -872,7 +884,11 @@ export function LandingPage() {
                       onClick={() => {
                         setIsHomePestModalOpen(false)
                         document.body.style.overflow = "unset"
-                        navigate(`?category=${item.categoryId}`)
+                        if (item.name === "Kitchen Cleaning") {
+                          navigate(`?category=kitchen_cleaning`)
+                        } else {
+                          navigate(`?category=${item.categoryId}`)
+                        }
                       }}
                       className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
                     >
