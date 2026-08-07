@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   MapPin, ChevronDown, ChevronUp, ArrowRight, ShieldCheck,
   Clock, Package, Boxes, X, Sparkles, Navigation, Truck,
-  CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed
+  CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed,
+  User, Mail, MessageSquare, AlertCircle
 } from "lucide-react"
 import { routes } from "../routes.js"
 
@@ -285,6 +286,66 @@ function OnePointSevenTonDiagram({ className = "w-full max-w-[240px] h-[120px]" 
   )
 }
 
+function TwoWheelerGraphic({ className = "w-28 h-20" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Mint green ground shadow oval */}
+      <ellipse cx="50" cy="80" rx="38" ry="5" fill="#dcfce7" />
+      {/* Yellow delivery box on rear rack */}
+      <rect x="22" y="28" width="22" height="20" rx="3" fill="#f59e0b" />
+      <rect x="20" y="26" width="26" height="5" rx="2" fill="#fbbf24" />
+      <rect x="30" y="34" width="6" height="8" rx="1" fill="#d97706" />
+      {/* Blue Scooter/Motorcycle Chassis */}
+      <path d="M36 48L50 48L60 60H40L36 48Z" fill="#1d4ed8" />
+      <path d="M46 40L54 40L58 52L48 52Z" fill="#2563eb" />
+      {/* Seat */}
+      <path d="M32 46C32 43 36 42 42 42C48 42 52 45 52 47L32 47Z" fill="#1e293b" />
+      {/* Handlebars & Fork */}
+      <path d="M58 38L66 62" stroke="#64748b" strokeWidth="3" strokeLinecap="round" />
+      <path d="M52 32C56 32 60 34 64 34L68 34" stroke="#334155" strokeWidth="3" strokeLinecap="round" />
+      {/* Front Headlamp with yellow ring */}
+      <circle cx="66" cy="40" r="7" fill="#3b82f6" />
+      <circle cx="66" cy="40" r="5" fill="#fef08a" />
+      <circle cx="66" cy="40" r="2.5" fill="#ffffff" opacity="0.9" />
+      {/* Rear Wheel */}
+      <circle cx="30" cy="66" r="13" fill="#1e293b" />
+      <circle cx="30" cy="66" r="7" fill="#94a3b8" />
+      <circle cx="30" cy="66" r="2.5" fill="#ffffff" />
+      {/* Front Wheel */}
+      <circle cx="66" cy="66" r="13" fill="#1e293b" />
+      <circle cx="66" cy="66" r="7" fill="#94a3b8" />
+      <circle cx="66" cy="66" r="2.5" fill="#ffffff" />
+    </svg>
+  )
+}
+
+function PackersMoversGraphic({ className = "w-28 h-20" }) {
+  return (
+    <svg viewBox="0 0 110 90" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Mint green ground shadow oval */}
+      <ellipse cx="55" cy="74" rx="46" ry="5" fill="#dcfce7" />
+      {/* Standing Floor Lamp on Left */}
+      <path d="M26 22L34 34H18L26 22Z" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1" />
+      <line x1="26" y1="34" x2="26" y2="70" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
+      <ellipse cx="26" cy="70" rx="6" ry="2" fill="#64748b" />
+      {/* Light glow behind lamp */}
+      <path d="M20 34L12 56H34L28 34Z" fill="#fef08a" opacity="0.3" />
+      {/* Wooden Nightstand / Cardboard Box */}
+      <rect x="22" y="48" width="18" height="20" rx="2" fill="#d97706" />
+      <path d="M22 48L26 44H40L38 48H22Z" fill="#f59e0b" />
+      <rect x="28" y="48" width="5" height="20" fill="#b45309" opacity="0.6" />
+      {/* Royal Blue Sofa on Right */}
+      <rect x="40" y="34" width="54" height="26" rx="6" fill="#1e40af" />
+      <rect x="38" y="50" width="58" height="18" rx="5" fill="#2563eb" />
+      <rect x="36" y="44" width="11" height="24" rx="4" fill="#3b82f6" />
+      <rect x="87" y="44" width="11" height="24" rx="4" fill="#1d4ed8" />
+      {/* Sofa legs */}
+      <line x1="42" y1="68" x2="40" y2="74" stroke="#1e293b" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="90" y1="68" x2="92" y2="74" stroke="#1e293b" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function WeightIcon({ className = "w-3.5 h-3.5" }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor">
@@ -332,6 +393,137 @@ function QRCodeGraphic({ className = "w-36 h-36" }) {
   )
 }
 
+/* ── Hosur & Nearby Location Suggestions Database ── */
+const HOSUR_LOCATIONS_DATABASE = [
+  // Hosur Central & Transit Landmarks
+  { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
+  { name: "Hosur Railway Station", subtitle: "Station Road, Hosur", category: "Hosur Central" },
+  { name: "Hosur Flower Market", subtitle: "Bagalur Road, Hosur", category: "Hosur Central" },
+  { name: "Hosur Cattle Farm", subtitle: "Mathigiri, Hosur", category: "Hosur Central" },
+  { name: "Hosur IT Park (ELCOT)", subtitle: "Ring Road, Hosur", category: "Hosur Central" },
+  { name: "Hosur Taluk Office", subtitle: "NH44, Hosur", category: "Hosur Central" },
+  { name: "Hosur Ring Road", subtitle: "Outer Ring Road, Hosur", category: "Hosur Central" },
+  { name: "Harita (Hosur)", subtitle: "TVS Motor Corridor, Hosur", category: "Hosur Area" },
+
+  // Hosur SIPCOT & Industrial Zones
+  { name: "SIPCOT Phase 1", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
+  { name: "SIPCOT Phase 2", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
+  { name: "SIPCOT Phase 3", subtitle: "Zuzuvadi, Hosur", category: "SIPCOT Industrial" },
+  { name: "SIPCOT Phase 4", subtitle: "Moranapalli, Hosur", category: "SIPCOT Industrial" },
+  { name: "Mookandapalli", subtitle: "Industrial Belt, Hosur", category: "Hosur Area" },
+  { name: "Moranapalli", subtitle: "Industrial Hub, Hosur", category: "Hosur Area" },
+  { name: "Ashok Leyland Plant 1 & 2", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
+  { name: "TVS Motor Factory", subtitle: "Harita, Hosur", category: "Hosur Industrial" },
+  { name: "Titan Industries", subtitle: "SIPCOT Phase 1, Hosur", category: "Hosur Industrial" },
+  { name: "Exide Industries", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
+
+  // Hosur Localities & Residential Belts
+  { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Zuzuvadi", subtitle: "Hosur Border, Tamil Nadu", category: "Hosur Area" },
+  { name: "Avalapalli Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Denkanikottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Rayakottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Thally Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Kelamangalam Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Alasanatham", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Dinnur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Kamaraj Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Shanthi Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Nethaji Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Chennathur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Dharga", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Poonapalli", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Bagalur Town", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
+  { name: "Berigai", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
+
+  // Nearby Border & Bengaluru Corridors
+  { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
+  { name: "Attibele Industrial Area", subtitle: "Anekal Taluk (~10 Kms)", category: "Near Hosur" },
+  { name: "Anekal Town", subtitle: "Karnataka (~18 Kms)", category: "Near Hosur" },
+  { name: "Chandapura Circle", subtitle: "Bengaluru Highway (~18 Kms)", category: "Bengaluru Hub" },
+  { name: "Bommasandra Industrial Area", subtitle: "Bengaluru (~22 Kms)", category: "Bengaluru Hub" },
+  { name: "Hebbagodi", subtitle: "Hosur Road, Bengaluru (~24 Kms)", category: "Bengaluru Hub" },
+  { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
+  { name: "Electronic City Phase 2", subtitle: "Bengaluru (~26 Kms)", category: "Bengaluru Hub" },
+  { name: "Jigani Industrial Area", subtitle: "Bengaluru (~25 Kms)", category: "Bengaluru Hub" },
+  { name: "Sarjapur Road", subtitle: "Bengaluru (~32 Kms)", category: "Bengaluru Hub" },
+  { name: "Silk Board Junction", subtitle: "Bengaluru (~35 Kms)", category: "Bengaluru Hub" },
+  { name: "Koramangala", subtitle: "Bengaluru (~38 Kms)", category: "Bengaluru Hub" },
+  { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
+  { name: "Whitefield", subtitle: "Bengaluru (~42 Kms)", category: "Bengaluru Hub" },
+  { name: "Kempegowda Airport (BLR)", subtitle: "Devanahalli (~75 Kms)", category: "Bengaluru Hub" },
+
+  // Long Distance Hubs from Hosur
+  { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
+  { name: "Krishnagiri Toll Plaza", subtitle: "NH44, Tamil Nadu", category: "Intercity Route" },
+  { name: "Dharmapuri", subtitle: "Tamil Nadu (85 Kms)", category: "Intercity Route" },
+  { name: "Salem Junction", subtitle: "Tamil Nadu (155 Kms)", category: "Intercity Route" },
+  { name: "Vellore Fort City", subtitle: "Tamil Nadu (140 Kms)", category: "Intercity Route" },
+  { name: "Tiruvannamalai", subtitle: "Tamil Nadu (170 Kms)", category: "Intercity Route" },
+  { name: "Chennai (Koyambedu / Port)", subtitle: "Tamil Nadu (310 Kms)", category: "Intercity Route" },
+  { name: "Coimbatore (Gandhipuram)", subtitle: "Tamil Nadu (310 Kms)", category: "Intercity Route" },
+  { name: "Erode Market", subtitle: "Tamil Nadu (205 Kms)", category: "Intercity Route" },
+  { name: "Tirupur Textile Hub", subtitle: "Tamil Nadu (255 Kms)", category: "Intercity Route" },
+  { name: "Madurai Central", subtitle: "Tamil Nadu (380 Kms)", category: "Intercity Route" }
+]
+
+function filterLocationSuggestions(searchText) {
+  if (!searchText || !searchText.trim()) {
+    // Default popular items when clicking empty field
+    return [
+      { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
+      { name: "SIPCOT Phase 1", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
+      { name: "SIPCOT Phase 2", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
+      { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+      { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+      { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
+      { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
+      { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
+      { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" }
+    ]
+  }
+
+  const query = searchText.trim().toLowerCase()
+  const exactStarts = []
+  const wordStarts = []
+  const containsMatches = []
+
+  HOSUR_LOCATIONS_DATABASE.forEach((item) => {
+    const nameLow = item.name.toLowerCase()
+    const subLow = item.subtitle.toLowerCase()
+    const catLow = item.category.toLowerCase()
+
+    if (nameLow.startsWith(query)) {
+      exactStarts.push(item)
+    } else if (
+      nameLow.split(/[\s,/-]+/).some((w) => w.startsWith(query)) ||
+      subLow.split(/[\s,/-]+/).some((w) => w.startsWith(query))
+    ) {
+      wordStarts.push(item)
+    } else if (
+      nameLow.includes(query) ||
+      subLow.includes(query) ||
+      catLow.includes(query)
+    ) {
+      containsMatches.push(item)
+    }
+  })
+
+  // Deduplicate and return top 9 matches
+  const combined = [...exactStarts, ...wordStarts, ...containsMatches]
+  const seen = new Set()
+  const result = []
+  for (const it of combined) {
+    if (!seen.has(it.name)) {
+      seen.add(it.name)
+      result.push(it)
+    }
+    if (result.length >= 9) break
+  }
+  return result
+}
+
 /* ── Mini Truck Booking in Hosur Page ── */
 export function MiniTruckBookingHosurPage() {
   const navigate = useNavigate()
@@ -344,6 +536,26 @@ export function MiniTruckBookingHosurPage() {
   const [userType, setUserType] = useState("Personal Use / Shifting")
   const [estimateModalOpen, setEstimateModalOpen] = useState(false)
   const [selectedRoute, setSelectedRoute] = useState(null)
+
+  // Booking Flow State
+  const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
+  const [selectedVehicle, setSelectedVehicle] = useState(null)
+  const [loginModalOpen, setLoginModalOpen] = useState(false)
+  const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
+  const [noServiceRoute, setNoServiceRoute] = useState(false)
+  const [otpStep, setOtpStep] = useState(false) // false = info form, true = OTP entry
+  const [otpValue, setOtpValue] = useState("")
+  const [loginEmail, setLoginEmail] = useState("")
+  const [loginWhatsapp, setLoginWhatsapp] = useState(true)
+  const [isSignedIn, setIsSignedIn] = useState(false) // tracks if user has verified OTP
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpLoading, setOtpLoading] = useState(false)
+
+  // Suggestions Dropdown State
+  const [showPickupSuggestions, setShowPickupSuggestions] = useState(false)
+  const [showDropSuggestions, setShowDropSuggestions] = useState(false)
+  const pickupWrapperRef = useRef(null)
+  const dropWrapperRef = useRef(null)
 
   // Live Location Detection State
   const [isDetectingLocation, setIsDetectingLocation] = useState(false)
@@ -360,6 +572,35 @@ export function MiniTruckBookingHosurPage() {
     window.scrollTo(0, 0)
     document.body.style.overflow = "unset"
   }, [])
+
+  // Close dropdowns on outside click or escape
+  useEffect(() => {
+    const handleDocumentClick = (e) => {
+      if (pickupWrapperRef.current && !pickupWrapperRef.current.contains(e.target)) {
+        setShowPickupSuggestions(false)
+      }
+      if (dropWrapperRef.current && !dropWrapperRef.current.contains(e.target)) {
+        setShowDropSuggestions(false)
+      }
+    }
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setShowPickupSuggestions(false)
+        setShowDropSuggestions(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleDocumentClick)
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [])
+
+  const pickupSuggestions = filterLocationSuggestions(pickup)
+  const dropSuggestions = filterLocationSuggestions(drop)
 
   // Live location fetch handler (can be fetched live or entered manually)
   const handleFetchLiveLocation = (e) => {
@@ -538,9 +779,80 @@ export function MiniTruckBookingHosurPage() {
     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
   }
 
+  // HOSUR SERVICE AREA — routes we operate
+  const SERVED_AREAS = [
+    "hosur", "sipcot", "bagalur", "mathigiri", "zuzuvadi", "avalapalli",
+    "moranapalli", "mookandapalli", "denkanikottai", "rayakottai", "thally",
+    "alasanatham", "dinnur", "kelamangalam", "kamaraj", "shanthi",
+    "nethaji", "chennathur", "dharga", "poonapalli", "berigai",
+    "attibele", "anekal", "chandapura", "bommasandra", "hebbagodi",
+    "electronic city", "jigani", "sarjapur", "silk board", "koramangala",
+    "bengaluru", "bangalore", "whitefield", "kempegowda",
+    "krishnagiri", "dharmapuri", "salem", "vellore",
+    "tiruvannamalai", "chennai", "coimbatore", "erode", "tirupur", "madurai"
+  ]
+
+  const isRouteServed = (pickupVal, dropVal) => {
+    const combined = (pickupVal + " " + dropVal).toLowerCase()
+    return SERVED_AREAS.some((area) => combined.includes(area))
+  }
+
   const handleGetEstimate = (e) => {
     if (e) e.preventDefault()
-    setEstimateModalOpen(true)
+    // Check if route is served
+    if (pickup && drop && !isRouteServed(pickup, drop)) {
+      setNoServiceRoute(true)
+      return
+    }
+    setNoServiceRoute(false)
+    setEstimateModalOpen(false)
+    setVehicleSelectorOpen(true)
+    // Pre-select the first vehicle
+    const allVehicles = [...LIGHT_VEHICLES, ...HEAVY_VEHICLES]
+    if (!selectedVehicle) setSelectedVehicle(allVehicles[0])
+  }
+
+  const handleConfirmAndBook = () => {
+    // Called from the old Instant Estimate modal "Confirm & Book"
+    if (!isSignedIn) {
+      setEstimateModalOpen(false)
+      setLoginModalOpen(true)
+    } else {
+      setEstimateModalOpen(false)
+      setBookingSuccessOpen(true)
+    }
+  }
+
+  const handleBookNow = () => {
+    // Called from vehicle selector modal "Book Now"
+    if (!isSignedIn) {
+      setVehicleSelectorOpen(false)
+      setLoginModalOpen(true)
+    } else {
+      setVehicleSelectorOpen(false)
+      setBookingSuccessOpen(true)
+    }
+  }
+
+  const handleSendOtp = () => {
+    if (!phone || phone.trim().length < 10) return
+    setOtpLoading(true)
+    setTimeout(() => {
+      setOtpLoading(false)
+      setOtpSent(true)
+      setOtpStep(true)
+    }, 1200)
+  }
+
+  const handleVerifyOtp = () => {
+    if (otpValue.length < 4) return
+    // Mark user as signed in and show success
+    setIsSignedIn(true)
+    setLoginModalOpen(false)
+    setOtpStep(false)
+    setOtpValue("")
+    setOtpSent(false)
+    setBookingSuccessOpen(true)
   }
 
   return (
@@ -620,7 +932,7 @@ export function MiniTruckBookingHosurPage() {
             className="bg-white rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/80 p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-3.5 items-end"
           >
             {/* Pickup */}
-            <div className="flex flex-col text-left">
+            <div ref={pickupWrapperRef} className="flex flex-col text-left relative">
               <div className="h-5 mb-1.5 flex items-center justify-between">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 whitespace-nowrap">
                   <span className="text-emerald-600">●</span> Pickup Address *
@@ -655,9 +967,21 @@ export function MiniTruckBookingHosurPage() {
                   type="text"
                   placeholder="Enter pickup location"
                   value={pickup}
-                  onChange={(e) => setPickup(e.target.value)}
+                  onFocus={() => {
+                    setShowPickupSuggestions(true)
+                    setShowDropSuggestions(false)
+                  }}
+                  onClick={() => {
+                    setShowPickupSuggestions(true)
+                    setShowDropSuggestions(false)
+                  }}
+                  onChange={(e) => {
+                    setPickup(e.target.value)
+                    setShowPickupSuggestions(true)
+                  }}
                   className="w-full pl-3 pr-8 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
                   required
+                  autoComplete="off"
                 />
                 <button
                   type="button"
@@ -673,10 +997,68 @@ export function MiniTruckBookingHosurPage() {
                   )}
                 </button>
               </div>
+
+              {/* Pickup Suggestions Dropdown */}
+              {showPickupSuggestions && (
+                <div className="absolute top-full left-0 mt-1.5 w-[320px] sm:w-[370px] max-w-[90vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden max-h-72 overflow-y-auto">
+                  <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span>{pickup ? `Suggestions for "${pickup}"` : "Suggested Hosur Locations"}</span>
+                    <span className="text-[9px] text-emerald-700 font-semibold">{pickupSuggestions.length} found</span>
+                  </div>
+                  <div className="p-1 space-y-0.5">
+                    {pickupSuggestions.length > 0 ? (
+                      pickupSuggestions.map((loc, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            const cleanSub = loc.subtitle.split("(")[0].trim().replace(/,\s*$/, "")
+                            setPickup(`${loc.name}, ${cleanSub}`)
+                            setShowPickupSuggestions(false)
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 hover:text-emerald-950 transition-colors flex items-center justify-between gap-2.5 group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center shrink-0 transition-colors">
+                              <MapPin className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-700 transition-colors" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-900 leading-snug">
+                                {loc.name}
+                              </p>
+                              <p className="text-[10px] text-slate-500 group-hover:text-emerald-700 leading-none mt-0.5">
+                                {loc.subtitle}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-slate-100 group-hover:bg-emerald-200/70 text-slate-600 group-hover:text-emerald-800 shrink-0">
+                            {loc.category}
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center">
+                        <p className="text-xs text-slate-500">No matching location found for "{pickup}"</p>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            setShowPickupSuggestions(false)
+                          }}
+                          className="mt-1 text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                        >
+                          Use "{pickup}" as pickup address
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Drop */}
-            <div className="flex flex-col text-left">
+            <div ref={dropWrapperRef} className="flex flex-col text-left relative">
               <div className="h-5 mb-1.5 flex items-center">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 whitespace-nowrap">
                   <span className="text-rose-500">●</span> Drop Address *
@@ -686,10 +1068,80 @@ export function MiniTruckBookingHosurPage() {
                 type="text"
                 placeholder="Sending to (e.g. Bengaluru)"
                 value={drop}
-                onChange={(e) => setDrop(e.target.value)}
+                onFocus={() => {
+                  setShowDropSuggestions(true)
+                  setShowPickupSuggestions(false)
+                }}
+                onClick={() => {
+                  setShowDropSuggestions(true)
+                  setShowPickupSuggestions(false)
+                }}
+                onChange={(e) => {
+                  setDrop(e.target.value)
+                  setShowDropSuggestions(true)
+                }}
                 className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
                 required
+                autoComplete="off"
               />
+
+              {/* Drop Suggestions Dropdown */}
+              {showDropSuggestions && (
+                <div className="absolute top-full left-0 sm:left-auto sm:right-0 lg:left-0 lg:right-auto mt-1.5 w-[320px] sm:w-[370px] max-w-[90vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden max-h-72 overflow-y-auto">
+                  <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span>{drop ? `Suggestions for "${drop}"` : "Suggested Delivery Destinations"}</span>
+                    <span className="text-[9px] text-emerald-700 font-semibold">{dropSuggestions.length} found</span>
+                  </div>
+                  <div className="p-1 space-y-0.5">
+                    {dropSuggestions.length > 0 ? (
+                      dropSuggestions.map((loc, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            const cleanSub = loc.subtitle.split("(")[0].trim().replace(/,\s*$/, "")
+                            setDrop(`${loc.name}, ${cleanSub}`)
+                            setShowDropSuggestions(false)
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 hover:text-emerald-950 transition-colors flex items-center justify-between gap-2.5 group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-7 h-7 rounded-lg bg-slate-100 group-hover:bg-emerald-100 flex items-center justify-center shrink-0 transition-colors">
+                              <MapPin className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-700 transition-colors" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-900 leading-snug">
+                                {loc.name}
+                              </p>
+                              <p className="text-[10px] text-slate-500 group-hover:text-emerald-700 leading-none mt-0.5">
+                                {loc.subtitle}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-slate-100 group-hover:bg-emerald-200/70 text-slate-600 group-hover:text-emerald-800 shrink-0">
+                            {loc.category}
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center">
+                        <p className="text-xs text-slate-500">No matching location found for "{drop}"</p>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            setShowDropSuggestions(false)
+                          }}
+                          className="mt-1 text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                        >
+                          Use "{drop}" as destination
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Name */}
@@ -757,6 +1209,14 @@ export function MiniTruckBookingHosurPage() {
               </button>
             </div>
           </form>
+
+          {/* No-Service Route Warning */}
+          {noServiceRoute && (
+            <div className="mt-3 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-rose-400 bg-rose-50 text-rose-700 text-xs font-extrabold uppercase tracking-widest animate-in fade-in duration-200">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+              WE DO NOT OPERATE FOR THE SELECTED ROUTE
+            </div>
+          )}
         </div>
       </section>
 
@@ -936,26 +1396,40 @@ export function MiniTruckBookingHosurPage() {
           Other Services to Choose From
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* Packers and Movers Card */}
           <div
-            onClick={() => navigate(routes.landing)}
-            className="bg-white rounded-3xl p-6 border border-slate-200 hover:border-emerald-500 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col items-center"
+            onClick={() => navigate(routes.packers_movers_booking_hosur)}
+            className="bg-[#f0f3fa] rounded-3xl p-7 border border-slate-200/60 hover:shadow-lg transition-all cursor-pointer flex flex-col items-center gap-3 group"
           >
-            <div className="w-20 h-20 rounded-2xl bg-amber-50 flex items-center justify-center mb-4">
-              <Boxes className="w-10 h-10 text-amber-600" />
+            <div className="h-24 flex items-center justify-center">
+              <PackersMoversGraphic className="w-28 h-20 group-hover:scale-105 transition-transform" />
             </div>
             <h3 className="text-base font-bold text-slate-900">Packers and Movers</h3>
-            <p className="text-xs text-slate-500 mt-1">Complete household &amp; office relocation in Hosur</p>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate(routes.packers_movers_booking_hosur) }}
+              className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shadow-md transition-colors cursor-pointer mt-1"
+            >
+              <ArrowRight className="w-4 h-4 text-white" />
+            </button>
           </div>
 
+          {/* Two Wheelers Card */}
           <div
-            onClick={() => navigate(routes.landing)}
-            className="bg-white rounded-3xl p-6 border border-slate-200 hover:border-emerald-500 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col items-center"
+            onClick={() => navigate(routes.two_wheeler_booking_hosur)}
+            className="bg-[#f0f3fa] rounded-3xl p-7 border border-slate-200/60 hover:shadow-lg transition-all cursor-pointer flex flex-col items-center gap-3 group"
           >
-            <div className="w-20 h-20 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
-              <Navigation className="w-10 h-10 text-blue-600" />
+            <div className="h-24 flex items-center justify-center">
+              <TwoWheelerGraphic className="w-28 h-20 group-hover:scale-105 transition-transform" />
             </div>
             <h3 className="text-base font-bold text-slate-900">Two Wheelers</h3>
-            <p className="text-xs text-slate-500 mt-1">Instant package &amp; document delivery across town</p>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate(routes.two_wheeler_booking_hosur) }}
+              className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shadow-md transition-colors cursor-pointer mt-1"
+            >
+              <ArrowRight className="w-4 h-4 text-white" />
+            </button>
           </div>
         </div>
       </section>
@@ -1067,7 +1541,7 @@ export function MiniTruckBookingHosurPage() {
         </div>
       )}
 
-      {/* ── Instant Fare Breakdown Modal ───────────────────────── */}
+      {/* ── Instant Fare Breakdown Modal (kept for vehicle detail 'Proceed to Book') ─── */}
       {estimateModalOpen && (
         <div
           role="dialog"
@@ -1134,15 +1608,324 @@ export function MiniTruckBookingHosurPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setEstimateModalOpen(false)
-                  navigate(routes.booking)
-                }}
+                onClick={handleConfirmAndBook}
                 className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/25 transition-colors cursor-pointer"
               >
                 Confirm &amp; Book
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Vehicle Selector Modal (Image 4 flow) ─────────────────── */}
+      {vehicleSelectorOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setVehicleSelectorOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col sm:flex-row max-h-[90vh]"
+          >
+            <button
+              onClick={() => setVehicleSelectorOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer z-10"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Left: Address Details */}
+            <div className="sm:w-[45%] shrink-0 bg-slate-50 p-5 sm:p-6 border-b sm:border-b-0 sm:border-r border-slate-200 flex flex-col">
+              <h3 className="text-base font-extrabold text-slate-900 mb-5">Address Details</h3>
+              {/* Pickup */}
+              <div className="flex items-start gap-3 mb-4">
+                <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "—"}</p>
+                  <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Hosur, Tamil Nadu"}</p>
+                </div>
+                <button
+                  onClick={() => setVehicleSelectorOpen(false)}
+                  className="ml-auto text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                >Edit</button>
+              </div>
+              {/* Dashed line */}
+              <div className="ml-[4px] w-[2px] h-5 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
+              {/* Drop */}
+              <div className="flex items-start gap-3 mb-6">
+                <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "—"}</p>
+                  <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? `${selectedRoute.to}, Tamil Nadu` : "Bengaluru, Karnataka")}</p>
+                </div>
+                <button
+                  onClick={() => setVehicleSelectorOpen(false)}
+                  className="ml-auto text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                >Edit</button>
+              </div>
+
+              {/* Offer banner */}
+              <div className="mt-auto bg-emerald-700 text-white rounded-2xl px-4 py-2.5 flex items-center gap-2 text-xs font-bold">
+                <Sparkles className="w-3.5 h-3.5 text-yellow-300 shrink-0" />
+                Get up to 30% off on your first order. *T&C apply
+              </div>
+
+              {/* Book Now button */}
+              <button
+                type="button"
+                onClick={handleBookNow}
+                className="mt-3 w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+              >
+                Book Now
+              </button>
+            </div>
+
+            {/* Right: Select Vehicle */}
+            <div className="flex-1 flex flex-col p-5 sm:p-6 overflow-y-auto">
+              <h3 className="text-base font-extrabold text-slate-900 mb-4">Select Vehicle</h3>
+              <div className="space-y-2.5">
+                {[...HEAVY_VEHICLES, ...LIGHT_VEHICLES].map((v, idx) => {
+                  const isSelected = selectedVehicle?.id === v.id
+                  // Fare calculation: base per-km rate depending on route distance
+                  const routeDist = selectedRoute ? parseInt(selectedRoute.distance) : 40
+                  const fareRaw = routeDist * (v.id === "1_7_ton" ? 42 : v.id === "pickup_8ft" ? 38 : v.id === "tata_ace" ? 35 : 28)
+                  const fare = `₹ ${fareRaw.toLocaleString("en-IN")}`
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setSelectedVehicle(v)}
+                      className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
+                        isSelected
+                          ? "border-emerald-600 bg-emerald-50/60 shadow-md shadow-emerald-200"
+                          : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="w-16 shrink-0 flex items-center justify-center">
+                        {React.cloneElement(v.diagram, { className: "w-full h-14" })}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-extrabold text-slate-900">{v.name}</p>
+                        <p className="text-xs text-slate-500">{v.capacity}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-extrabold text-slate-800">{fare}</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Login / Welcome Modal (Image 5 flow) ─────────────────── */}
+      {loginModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => { setLoginModalOpen(false); setOtpStep(false); setOtpValue("") }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex max-h-[92vh]"
+          >
+            <button
+              onClick={() => { setLoginModalOpen(false); setOtpStep(false); setOtpValue("") }}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer z-10"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Left: Delivery Person Photo */}
+            <div className="hidden sm:block sm:w-[42%] shrink-0 bg-gradient-to-br from-slate-700 to-slate-900 relative overflow-hidden">
+              <div className="absolute inset-0 flex items-center justify-center">
+                {/* Logistics professional illustration placeholder */}
+                <div className="text-center px-6">
+                  <div className="w-24 h-24 rounded-full bg-emerald-600/20 border-2 border-emerald-500/40 flex items-center justify-center mx-auto mb-4">
+                    <Truck className="w-12 h-12 text-emerald-400" />
+                  </div>
+                  <p className="text-white font-extrabold text-lg leading-tight">CalServices</p>
+                  <p className="text-emerald-400 text-xs font-semibold mt-1">Hosur Logistics</p>
+                  <p className="text-slate-400 text-[11px] mt-3 leading-relaxed">Reliable & affordable mini truck booking in Hosur</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Form */}
+            <div className="flex-1 p-6 sm:p-8 flex flex-col justify-center overflow-y-auto">
+              <div className="mb-6">
+                <h2 className="text-2xl font-extrabold text-slate-900">Welcome! 👋</h2>
+                <p className="text-sm text-slate-500 mt-1">Sign in or make an account to complete your order with us.</p>
+              </div>
+
+              {!otpStep ? (
+                <div className="space-y-3">
+                  {/* Name */}
+                  <div className="flex items-center gap-2.5 border border-slate-200 rounded-xl px-3.5 h-12 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/20 transition-all bg-white">
+                    <User className="w-4 h-4 text-slate-400 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Enter your Name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="flex-1 text-sm text-slate-800 placeholder-slate-400 bg-transparent outline-none"
+                    />
+                  </div>
+                  {/* Phone */}
+                  <div className="flex items-center gap-2.5 border border-slate-200 rounded-xl px-3.5 h-12 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/20 transition-all bg-white">
+                    <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                    <input
+                      type="tel"
+                      placeholder="Enter your Phone Number"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      maxLength={10}
+                      className="flex-1 text-sm text-slate-800 placeholder-slate-400 bg-transparent outline-none"
+                    />
+                  </div>
+                  {/* Email */}
+                  <div className="flex items-center gap-2.5 border border-slate-200 rounded-xl px-3.5 h-12 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/20 transition-all bg-white">
+                    <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                    <input
+                      type="email"
+                      placeholder="Enter your email"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      className="flex-1 text-sm text-slate-800 placeholder-slate-400 bg-transparent outline-none"
+                    />
+                  </div>
+                  {/* WhatsApp checkbox */}
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={loginWhatsapp}
+                      onChange={(e) => setLoginWhatsapp(e.target.checked)}
+                      className="w-4 h-4 accent-emerald-600"
+                    />
+                    <span className="text-xs text-slate-600 font-medium flex items-center gap-1">
+                      <MessageSquare className="w-3.5 h-3.5 text-green-600" /> Receive updates via WhatsApp
+                    </span>
+                  </label>
+
+                  <p className="text-[11px] text-slate-400 text-center leading-relaxed pt-1">
+                    By proceeding, you agree to the{" "}
+                    <span className="text-emerald-700 font-semibold cursor-pointer hover:underline">terms of services</span>{" "}and{" "}
+                    <span className="text-emerald-700 font-semibold cursor-pointer hover:underline">privacy policy</span>
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={otpLoading || !phone || phone.trim().length < 10}
+                    className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {otpLoading ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Sending OTP...</>
+                    ) : (
+                      "Continue"
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="text-center mb-2">
+                    <p className="text-sm font-bold text-slate-700">Enter OTP sent to</p>
+                    <p className="text-base font-extrabold text-emerald-700">+91 {phone}</p>
+                  </div>
+                  {/* OTP Input */}
+                  <div className="flex justify-center gap-3">
+                    {[0,1,2,3].map((i) => (
+                      <input
+                        key={i}
+                        type="text"
+                        maxLength={1}
+                        value={otpValue[i] || ""}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "")
+                          const arr = otpValue.split("")
+                          arr[i] = val
+                          setOtpValue(arr.join(""))
+                          if (val && e.target.nextSibling) e.target.nextSibling.focus()
+                        }}
+                        className="w-14 h-14 text-center text-2xl font-extrabold border-2 border-slate-200 focus:border-emerald-500 rounded-2xl outline-none transition-colors text-slate-900"
+                      />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleVerifyOtp}
+                    disabled={otpValue.replace(/\D/g,"").length < 4}
+                    className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+                  >
+                    Verify OTP &amp; Book
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setOtpStep(false); setOtpValue("") }}
+                    className="w-full text-xs text-slate-500 hover:text-emerald-700 font-semibold transition-colors cursor-pointer"
+                  >
+                    ← Change number
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Booking Success Modal ─────────────────────────────────── */}
+      {bookingSuccessOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setBookingSuccessOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-sm w-full p-8 shadow-2xl border border-slate-100 text-center relative"
+          >
+            <button
+              onClick={() => setBookingSuccessOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            {/* Success icon */}
+            <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-5">
+              <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+            </div>
+            <h2 className="text-xl font-extrabold text-slate-900 mb-2">Booking Confirmed!</h2>
+            <p className="text-sm text-slate-600 leading-relaxed mb-1">
+              Our service partner will contact you shortly.
+            </p>
+            <p className="text-xs text-slate-400 mb-6">
+              {pickup && drop ? `${pickup} → ${drop}` : "Your booking has been placed successfully."}
+            </p>
+            {selectedVehicle && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 mb-5 flex items-center gap-3">
+                <div className="w-12 h-10 flex items-center justify-center shrink-0">
+                  {React.cloneElement(selectedVehicle.diagram, { className: "w-12 h-10" })}
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-extrabold text-slate-900">{selectedVehicle.name}</p>
+                  <p className="text-[11px] text-slate-500">{selectedVehicle.capacity} • {selectedVehicle.price}/km</p>
+                </div>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setBookingSuccessOpen(false)}
+              className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm transition-all cursor-pointer"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}
