@@ -8,7 +8,7 @@ import {
   Upload, AlertCircle, Check, X, Info, Zap, Lock, Settings,
   Droplets, Wind, Bug, Brush, Cpu, Hammer, Package, Sparkles,
   Home, RefreshCw, MessageSquare, KeyRound, ShieldCheck,
-  LogIn, ChevronDown, Award, Users, ThumbsUp, ArrowRight,
+  LogIn, ChevronDown, ChevronUp, Plus, Award, Users, ThumbsUp, ArrowRight,
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket
 } from "lucide-react"
@@ -23,11 +23,11 @@ import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 
-let BOOKING_CURRENCY_SYMBOL = "â‚¹";
+let BOOKING_CURRENCY_SYMBOL = "₹";
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    DATA
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 export const CATEGORIES = [
   { id: "cleaning", name: "Home Cleaning", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", desc: "Deep clean & sanitization", rating: "4.8", jobs: "50K+" },
@@ -110,60 +110,60 @@ function openGoogleSignInPopup(onSuccess, onError) {
 
 const PACKAGES = {
   cleaning: [
-    { id: "clean-std", name: "Standard", price: 999, priceStr: "â‚¹999", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", includes: ["Floor Cleaning", "Kitchen Surface Cleaning", "Bathroom Cleaning", "Dusting"], excludes: [] },
-    { id: "clean-prem", name: "Premium", price: 2499, priceStr: "â‚¹2,499", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", includes: ["Complete Home Deep Cleaning", "Kitchen Deep Cleaning", "Bathroom Deep Cleaning", "Sofa Vacuuming", "Window Cleaning", "Balcony Cleaning"], excludes: [] },
-    { id: "clean-move", name: "Move-In / Move-Out Package", price: 3499, priceStr: "â‚¹3,499", duration: "6 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", includes: ["Entire House Cleaning", "Cabinet Cleaning", "Fan & Light Cleaning", "Window & Glass Cleaning"], excludes: [] },
+    { id: "clean-std", name: "Standard", price: 999, priceStr: "₹999", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", includes: ["Floor Cleaning", "Kitchen Surface Cleaning", "Bathroom Cleaning", "Dusting"], excludes: [] },
+    { id: "clean-prem", name: "Premium", price: 2499, priceStr: "₹2,499", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", includes: ["Complete Home Deep Cleaning", "Kitchen Deep Cleaning", "Bathroom Deep Cleaning", "Sofa Vacuuming", "Window Cleaning", "Balcony Cleaning"], excludes: [] },
+    { id: "clean-move", name: "Move-In / Move-Out Package", price: 3499, priceStr: "₹3,499", duration: "6 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", includes: ["Entire House Cleaning", "Cabinet Cleaning", "Fan & Light Cleaning", "Window & Glass Cleaning"], excludes: [] },
   ],
   plumbing: [
-    { id: "plum-std", name: "Standard", price: 299, priceStr: "â‚¹299", duration: "1 hr", popular: false, tag: "", includes: ["One Plumbing Issue", "Leak Check", "Basic Repair"], excludes: [] },
-    { id: "plum-prem", name: "Premium", price: 799, priceStr: "â‚¹799", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", includes: ["Up to 3 Plumbing Repairs", "Pipe Inspection", "Drain Cleaning"], excludes: [] },
-    { id: "plum-comp", name: "Complete Home Plumbing", price: 1999, priceStr: "â‚¹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop", includes: ["Full House Plumbing Inspection", "Multiple Repairs", "Water Pressure Check"], excludes: [] },
+    { id: "plum-std", name: "Standard", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", includes: ["One Plumbing Issue", "Leak Check", "Basic Repair"], excludes: [] },
+    { id: "plum-prem", name: "Premium", price: 799, priceStr: "₹799", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", includes: ["Up to 3 Plumbing Repairs", "Pipe Inspection", "Drain Cleaning"], excludes: [] },
+    { id: "plum-comp", name: "Complete Home Plumbing", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop", includes: ["Full House Plumbing Inspection", "Multiple Repairs", "Water Pressure Check"], excludes: [] },
   ],
   electrical: [
-    { id: "elec-std", name: "Standard", price: 299, priceStr: "â‚¹299", duration: "1 hr", popular: false, tag: "", includes: ["One Electrical Repair", "Safety Check"], excludes: [] },
-    { id: "elec-prem", name: "Premium", price: 899, priceStr: "â‚¹899", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", includes: ["Multiple Electrical Repairs", "Wiring Inspection", "MCB Check"], excludes: [] },
-    { id: "elec-care", name: "Home Electrical Care", price: 1999, priceStr: "â‚¹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop", includes: ["Complete Home Inspection", "Fan & Light Service", "Socket Testing"], excludes: [] },
+    { id: "elec-std", name: "Standard", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", includes: ["One Electrical Repair", "Safety Check"], excludes: [] },
+    { id: "elec-prem", name: "Premium", price: 899, priceStr: "₹899", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", includes: ["Multiple Electrical Repairs", "Wiring Inspection", "MCB Check"], excludes: [] },
+    { id: "elec-care", name: "Home Electrical Care", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop", includes: ["Complete Home Inspection", "Fan & Light Service", "Socket Testing"], excludes: [] },
   ],
   hvac: [
-    { id: "hvac-std", name: "Standard Package", price: 599, priceStr: "â‚¹599", duration: "1-2 Hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop", includes: ["General AC Service", "Filter Cleaning", "Cooling Performance Check", "Basic Inspection"], excludes: [] },
-    { id: "hvac-prem", name: "Premium Package", price: 1299, priceStr: "â‚¹1,299", duration: "2-3 Hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop", includes: ["Deep Coil Cleaning", "Water Jet Cleaning", "Filter Cleaning", "Cooling Performance Check", "Gas Pressure Check", "Minor Adjustments", "30-Day Service Warranty"], excludes: [] },
-    { id: "hvac-amc", name: "Annual Maintenance Package (AMC)", price: 2999, priceStr: "â‚¹2,999", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop", includes: ["4 AC Services per Year", "Priority Technician", "Discount on Spare Parts", "Free Basic Inspection", "Service Reminder"], excludes: [] },
+    { id: "hvac-std", name: "Standard Package", price: 599, priceStr: "₹599", duration: "1-2 Hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop", includes: ["General AC Service", "Filter Cleaning", "Cooling Performance Check", "Basic Inspection"], excludes: [] },
+    { id: "hvac-prem", name: "Premium Package", price: 1299, priceStr: "₹1,299", duration: "2-3 Hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop", includes: ["Deep Coil Cleaning", "Water Jet Cleaning", "Filter Cleaning", "Cooling Performance Check", "Gas Pressure Check", "Minor Adjustments", "30-Day Service Warranty"], excludes: [] },
+    { id: "hvac-amc", name: "Annual Maintenance Package (AMC)", price: 2999, priceStr: "₹2,999", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop", includes: ["4 AC Services per Year", "Priority Technician", "Discount on Spare Parts", "Free Basic Inspection", "Service Reminder"], excludes: [] },
   ],
   appliance_repair: [
-    { id: "app-std", name: "Standard", price: 399, priceStr: "â‚¹399", duration: "1 hr", popular: false, tag: "", includes: ["Appliance Diagnosis", "Basic Repair"], excludes: [] },
-    { id: "app-prem", name: "Premium", price: 999, priceStr: "â‚¹999", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", includes: ["Complete Servicing", "Internal Cleaning", "Performance Testing"], excludes: [] },
-    { id: "app-amc", name: "Annual Care Plan", price: 2499, priceStr: "â‚¹2,499", duration: "Yearly", popular: false, tag: "Best Value", includes: ["3 Service Visits", "Priority Support", "Discount on Parts"], excludes: [] },
+    { id: "app-std", name: "Standard", price: 399, priceStr: "₹399", duration: "1 hr", popular: false, tag: "", includes: ["Appliance Diagnosis", "Basic Repair"], excludes: [] },
+    { id: "app-prem", name: "Premium", price: 999, priceStr: "₹999", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", includes: ["Complete Servicing", "Internal Cleaning", "Performance Testing"], excludes: [] },
+    { id: "app-amc", name: "Annual Care Plan", price: 2499, priceStr: "₹2,499", duration: "Yearly", popular: false, tag: "Best Value", includes: ["3 Service Visits", "Priority Support", "Discount on Parts"], excludes: [] },
   ],
   security: [
-    { id: "check", name: "System Check", price: 499, priceStr: "â‚¹499", duration: "1 hr", popular: false, tag: "", includes: ["Camera test", "DVR check", "App verify"], excludes: ["New cables", "Repositioning"] },
-    { id: "install2", name: "2-Camera Setup", price: 2999, priceStr: "â‚¹2,999", duration: "3 hrs", popular: true, tag: "Most Booked", includes: ["2 HD cameras", "DVR setup", "Mobile app config", "Cabling"], excludes: ["Monthly plan"] },
-    { id: "install4", name: "4-Camera Setup", price: 4999, priceStr: "â‚¹4,999", duration: "5 hrs", popular: false, tag: "Best Value", includes: ["4 HD cameras", "DVR", "App", "Night vision", "1-yr warranty"], excludes: [] },
+    { id: "check", name: "System Check", price: 499, priceStr: "₹499", duration: "1 hr", popular: false, tag: "", includes: ["Camera test", "DVR check", "App verify"], excludes: ["New cables", "Repositioning"] },
+    { id: "install2", name: "2-Camera Setup", price: 2999, priceStr: "₹2,999", duration: "3 hrs", popular: true, tag: "Most Booked", includes: ["2 HD cameras", "DVR setup", "Mobile app config", "Cabling"], excludes: ["Monthly plan"] },
+    { id: "install4", name: "4-Camera Setup", price: 4999, priceStr: "₹4,999", duration: "5 hrs", popular: false, tag: "Best Value", includes: ["4 HD cameras", "DVR", "App", "Night vision", "1-yr warranty"], excludes: [] },
   ],
   general: [
-    { id: "basic", name: "1 Hr Handyman", price: 299, priceStr: "â‚¹299", duration: "1 hr", popular: false, tag: "", includes: ["Any general task", "Basic tools"], excludes: ["Materials", "Electrical/plumbing"] },
-    { id: "standard", name: "2 Hr Handyman", price: 499, priceStr: "â‚¹499", duration: "2 hrs", popular: true, tag: "Most Booked", includes: ["Multiple small tasks", "Tools included", "Experienced pro"], excludes: ["Materials"] },
-    { id: "complete", name: "Full Day Pro", price: 999, priceStr: "â‚¹999", duration: "8 hrs", popular: false, tag: "Best Value", includes: ["Unlimited tasks", "All tools", "Priority scheduling"], excludes: ["Materials above â‚¹500"] },
+    { id: "basic", name: "1 Hr Handyman", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", includes: ["Any general task", "Basic tools"], excludes: ["Materials", "Electrical/plumbing"] },
+    { id: "standard", name: "2 Hr Handyman", price: 499, priceStr: "₹499", duration: "2 hrs", popular: true, tag: "Most Booked", includes: ["Multiple small tasks", "Tools included", "Experienced pro"], excludes: ["Materials"] },
+    { id: "complete", name: "Full Day Pro", price: 999, priceStr: "₹999", duration: "8 hrs", popular: false, tag: "Best Value", includes: ["Unlimited tasks", "All tools", "Priority scheduling"], excludes: ["Materials above •‚¹500"] },
   ],
   carpentry: [
-    { id: "carp-std", name: "Standard Repair", price: 499, priceStr: "â‚¹499", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop", includes: ["Minor Woodwork", "Hinge Replacement", "Basic Fixes"], excludes: [] },
-    { id: "carp-prem", name: "Premium Setup", price: 999, priceStr: "â‚¹999", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop", includes: ["Furniture Assembly", "Custom Shelving", "Door Alignment"], excludes: [] },
-    { id: "carp-full", name: "Full Day Carpentry", price: 1999, priceStr: "â‚¹1,999", duration: "8 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop", includes: ["Extensive Repairs", "New Installations", "Material Shopping"], excludes: [] },
+    { id: "carp-std", name: "Standard Repair", price: 499, priceStr: "₹499", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop", includes: ["Minor Woodwork", "Hinge Replacement", "Basic Fixes"], excludes: [] },
+    { id: "carp-prem", name: "Premium Setup", price: 999, priceStr: "₹999", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop", includes: ["Furniture Assembly", "Custom Shelving", "Door Alignment"], excludes: [] },
+    { id: "carp-full", name: "Full Day Carpentry", price: 1999, priceStr: "₹1,999", duration: "8 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop", includes: ["Extensive Repairs", "New Installations", "Material Shopping"], excludes: [] },
   ],
   pest_control: [
-    { id: "pest-std", name: "Basic Pest Control", price: 799, priceStr: "â‚¹799", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=300&q=80&fit=crop", includes: ["Cockroach & Ant Spray", "Targeted Areas"], excludes: [] },
-    { id: "pest-prem", name: "Comprehensive Treatment", price: 1499, priceStr: "â‚¹1,499", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=300&q=80&fit=crop", includes: ["Full Home Spray", "Termite Check", "Bedbug Treatment"], excludes: [] },
-    { id: "pest-year", name: "Annual Pest Protection", price: 3499, priceStr: "â‚¹3,499", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1628102491629-778586284000?w=300&q=80&fit=crop", includes: ["3 Service Visits", "Priority Response", "Guarantee"], excludes: [] },
+    { id: "pest-std", name: "Basic Pest Control", price: 799, priceStr: "₹799", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=300&q=80&fit=crop", includes: ["Cockroach & Ant Spray", "Targeted Areas"], excludes: [] },
+    { id: "pest-prem", name: "Comprehensive Treatment", price: 1499, priceStr: "₹1,499", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=300&q=80&fit=crop", includes: ["Full Home Spray", "Termite Check", "Bedbug Treatment"], excludes: [] },
+    { id: "pest-year", name: "Annual Pest Protection", price: 3499, priceStr: "₹3,499", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1628102491629-778586284000?w=300&q=80&fit=crop", includes: ["3 Service Visits", "Priority Response", "Guarantee"], excludes: [] },
   ],
   painting: [
-    { id: "paint-room", name: "Single Room Makeover", price: 2999, priceStr: "â‚¹2,999", duration: "1 day", popular: false, tag: "", image: "https://images.unsplash.com/photo-1562259942-27364e0ee76b?w=300&q=80&fit=crop", includes: ["Basic Prep", "2 Coats Paint", "Cleanup"], excludes: [] },
-    { id: "paint-home", name: "Complete Home Painting", price: 9999, priceStr: "â‚¹9,999", duration: "4 days", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1562259942-27364e0ee76b?w=300&q=80&fit=crop", includes: ["Wall Putty", "Primer", "Premium Paint", "Post-Cleanup"], excludes: [] },
-    { id: "paint-prem", name: "Texture & Decor Painting", price: 14999, priceStr: "â‚¹14,999", duration: "5 days", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1584820927500-11b3337a7c5a?w=300&q=80&fit=crop", includes: ["Custom Textures", "Accent Walls", "Designer Finish"], excludes: [] },
+    { id: "paint-room", name: "Single Room Makeover", price: 2999, priceStr: "₹2,999", duration: "1 day", popular: false, tag: "", image: "https://images.unsplash.com/photo-1562259942-27364e0ee76b?w=300&q=80&fit=crop", includes: ["Basic Prep", "2 Coats Paint", "Cleanup"], excludes: [] },
+    { id: "paint-home", name: "Complete Home Painting", price: 9999, priceStr: "₹9,999", duration: "4 days", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1562259942-27364e0ee76b?w=300&q=80&fit=crop", includes: ["Wall Putty", "Primer", "Premium Paint", "Post-Cleanup"], excludes: [] },
+    { id: "paint-prem", name: "Texture & Decor Painting", price: 14999, priceStr: "₹14,999", duration: "5 days", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1584820927500-11b3337a7c5a?w=300&q=80&fit=crop", includes: ["Custom Textures", "Accent Walls", "Designer Finish"], excludes: [] },
   ],
 }
 
 const TIME_SLOTS = [
   { period: "Morning", icon: "ðŸŒ…", slots: [{ t: "07:00", l: "7:00 AM" }, { t: "08:00", l: "8:00 AM" }, { t: "09:00", l: "9:00 AM" }, { t: "10:00", l: "10:00 AM" }, { t: "11:00", l: "11:00 AM" }] },
-  { period: "Afternoon", icon: "â˜€ï¸", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
+  { period: "Afternoon", icon: "•˜•ï¸", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
   { period: "Evening", icon: "ðŸŒ†", slots: [{ t: "17:00", l: "5:00 PM" }, { t: "18:00", l: "6:00 PM" }, { t: "19:00", l: "7:00 PM" }] },
 ]
 
@@ -193,9 +193,9 @@ function generateAvatarUrl(name) {
 
 const OTP_SESSION_KEY = "bk_cust_verified"
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    HELPERS
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function getNextDays(n = 21) {
   const out = []
@@ -219,9 +219,9 @@ function getNextDays(n = 21) {
 
 const DAYS_LIST = getNextDays(21)
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    MINI COMPONENTS
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function Tag({ children, color = "#7C3AED" }) {
   return (
@@ -291,12 +291,12 @@ function SummaryBar({ category, cart, date, time, step }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   STEP 1 â€” HOME (Hero + Services)
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 1 •” HOME (Hero + Services)
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    LOCATION PICKER MODAL
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
   const [search, setSearch] = useState(initialLocation || "")
   const [isFetching, setIsFetching] = useState(false)
@@ -504,7 +504,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
           <div className="uc-hero">
             <div className="uc-hero-inner">
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                <p className="uc-hero-tag">â­ India's #1 Home Services Platform</p>
+                <p className="uc-hero-tag">•­ India's #1 Home Services Platform</p>
                 <h1 className="uc-hero-h1">
                   Professional
                   <br />
@@ -531,7 +531,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
                 <Search size={18} className="uc-search-icon" />
                 <input
                   className="uc-search-input"
-                  placeholder="Search for services (e.g. AC repair, deep cleaningâ€¦)"
+                  placeholder="Search for services (e.g. AC repair, deep cleaning•¦)"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                 />
@@ -545,7 +545,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
               {/* Trust pills */}
               <motion.div className="uc-trust-row" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
                 <span><ShieldCheck size={13} /> Verified Pros</span>
-                <span><Star size={13} style={{ fill: "#fbbf24", color: "#fbbf24" }} /> 4.8â˜… Rated</span>
+                <span><Star size={13} style={{ fill: "#fbbf24", color: "#fbbf24" }} /> 4.8•˜… Rated</span>
                 <span><Users size={13} /> 1M+ Happy Homes</span>
                 <span><Award size={13} /> 30-Day Guarantee</span>
               </motion.div>
@@ -570,7 +570,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
                     <p>{featured[rotIdx].desc}</p>
                     <div style={{ display: 'flex', gap: '12px', marginTop: '12px', fontSize: '0.95rem', color: '#f1f5f9', fontWeight: 600 }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Star size={14} style={{ fill: "#fbbf24", color: "#fbbf24" }} /> {featured[rotIdx].rating} Rated</span>
-                      <span>â€¢</span>
+                      <span>•</span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle2 size={14} /> {featured[rotIdx].jobs} Bookings</span>
                     </div>
                   </div>
@@ -675,9 +675,9 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   STEP 2 â€” PACKAGE SELECTION
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 2 •” PACKAGE SELECTION
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, packagesData }) {
   const packages = ((packagesData && packagesData[category?.id]) || PACKAGES[category?.id] || []).map(p => ({ ...p, priceStr: BOOKING_CURRENCY_SYMBOL + p.price }))
@@ -711,7 +711,7 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
             >
               {pkg.tag && (
                 <div className="uc-pkg-tag" style={{ background: pkg.popular ? "#7C3AED" : "#059669" }}>
-                  {pkg.popular ? "â­ " : "âœ… "}{pkg.tag}
+                  {pkg.popular ? "•­ " : "•œ… "}{pkg.tag}
                 </div>
               )}
 
@@ -763,9 +763,9 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   STEP 3 â€” SCHEDULE
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 3 •” SCHEDULE
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTimeChange, onNext, onBack }) {
   const dateScrollRef = useRef()
@@ -826,9 +826,9 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   STEP 4 â€” PHONE OTP IDENTITY
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 4 •” PHONE OTP IDENTITY
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function StepLogin({ category, onVerified, onBack }) {
   const { user, refreshMe } = useAuth()
@@ -998,7 +998,7 @@ function StepLogin({ category, onVerified, onBack }) {
           {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
 
           <button className="uc-btn-primary uc-btn-full" onClick={sendOtp} disabled={!nameOk || !phoneOk || loading}>
-            {loading ? <><RefreshCw size={15} className="spin-icon" /> Sendingâ€¦</> : <><MessageSquare size={15} /> Send OTP</>}
+            {loading ? <><RefreshCw size={15} className="spin-icon" /> Sending•¦</> : <><MessageSquare size={15} /> Send OTP</>}
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -1056,7 +1056,7 @@ function StepLogin({ category, onVerified, onBack }) {
 
           {devCode && (
             <div className="uc-dev-banner">
-              <Zap size={13} /> Dev mode â€” code: <strong>{devCode}</strong> (auto-filled)
+              <Zap size={13} /> Dev mode •” code: <strong>{devCode}</strong> (auto-filled)
             </div>
           )}
 
@@ -1074,7 +1074,7 @@ function StepLogin({ category, onVerified, onBack }) {
           {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
 
           <button className="uc-btn-primary uc-btn-full" onClick={verifyOtp} disabled={otp.join("").length < 4 || loading}>
-            {loading ? <><RefreshCw size={15} className="spin-icon" /> Verifyingâ€¦</> : <><ShieldCheck size={15} /> Verify &amp; Continue</>}
+            {loading ? <><RefreshCw size={15} className="spin-icon" /> Verifying•¦</> : <><ShieldCheck size={15} /> Verify &amp; Continue</>}
           </button>
 
           <div className="uc-resend">
@@ -1094,16 +1094,16 @@ function StepLogin({ category, onVerified, onBack }) {
           </motion.div>
           <div className="uc-success-title">Identity Verified!</div>
           <div className="uc-success-sub">Welcome, {name} ðŸ‘‹</div>
-          <div className="uc-success-sub" style={{ color: "#94a3b8", fontSize: "0.78rem" }}>Loading your booking formâ€¦</div>
+          <div className="uc-success-sub" style={{ color: "#94a3b8", fontSize: "0.78rem" }}>Loading your booking form•¦</div>
         </motion.div>
       )}
     </div>
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   STEP 5 â€” CUSTOMER DETAILS
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 5 •” CUSTOMER DETAILS
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoChange, photoPreview, onNext, onBack, globalLocation, onOpenMap }) {
   const fileRef = useRef()
@@ -1120,7 +1120,7 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
 
   useEffect(() => {
     if (!formData.issue_title && cart && cart.length > 0) {
-      const defaultTitle = cart.map(c => c.name).join(', ') + (category ? ` â€” ${category.name}` : '');
+      const defaultTitle = cart.map(c => c.name).join(', ') + (category ? ` •” ${category.name}` : '');
       onChange({ target: { name: 'issue_title', value: defaultTitle } })
     }
   }, [cart, category, formData.issue_title])
@@ -1204,7 +1204,7 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
             className="uc-textarea"
             name="description"
             rows={3}
-            placeholder="Any specific issues, brand of appliance, how long the problem has been occurringâ€¦"
+            placeholder="Any specific issues, brand of appliance, how long the problem has been occurring•¦"
             value={formData.description}
             onChange={onChange}
           />
@@ -1226,7 +1226,7 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
               <>
                 <Camera size={24} style={{ color: "#94a3b8" }} />
                 <div className="uc-photo-text">Click to attach a photo of the issue</div>
-                <div className="uc-photo-hint">JPG, PNG â€” helps our expert prepare</div>
+                <div className="uc-photo-hint">JPG, PNG •” helps our expert prepare</div>
               </>
             )}
             <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onPhotoChange} />
@@ -1243,9 +1243,9 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   STEP 6 â€” CONFIRM
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 6 •” CONFIRM
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, onBack, onSubmit, loading, error }) {
   const [agreed, setAgreed] = useState(false)
@@ -1391,7 +1391,7 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
             onClick={() => { if (agreed && !loading) setShowPayment(true) }}
             disabled={!agreed || loading}
           >
-            {loading ? <><RefreshCw size={16} className="spin-icon" /> Processingâ€¦</> : <><CreditCard size={16} /> Choose Payment & Confirm</>}
+            {loading ? <><RefreshCw size={16} className="spin-icon" /> Processing•¦</> : <><CreditCard size={16} /> Choose Payment & Confirm</>}
           </button>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginTop: "0.75rem", fontSize: "0.7rem", color: "#94a3b8" }}>
@@ -1414,9 +1414,9 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    PAYMENT MODAL
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onConfirm, bookingId }) {
   const [selected, setSelected] = useState(allowedMethods.includes('online') && allowedMethods.length === 1 ? 'online' : 'cash')
@@ -1489,7 +1489,7 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
             {payPhase === 'processing' && (
               <div style={{ textAlign: 'center', padding: '2rem 0' }}>
                 <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ display: 'inline-block', marginBottom: '1.5rem' }}><RefreshCw size={48} color="#7C3AED" /></motion.div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Processing UPI Paymentâ€¦</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Processing UPI Payment•¦</div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Please do not close this window</div>
               </div>
             )}
@@ -1501,7 +1501,7 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
                 </motion.div>
                 <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Payment Successful! ðŸŽ‰</div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Your booking is now confirmed</div>
-                <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.78rem', color: '#166534', fontWeight: 600 }}>âœ… Amount {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()} debited successfully</div>
+                <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.78rem', color: '#166534', fontWeight: 600 }}>•œ… Amount {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()} debited successfully</div>
               </div>
             )}
             {payPhase === 'failed' && (
@@ -1585,7 +1585,7 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
         <div style={{ padding: '0 1.75rem' }}>
           <button onClick={handleConfirm} disabled={confirming}
             style={{ width: '100%', padding: '1rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', fontWeight: 800, fontSize: '1rem', border: 'none', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 20px rgba(124,58,237,0.3)' }}>
-            {confirming ? <><RefreshCw size={16} className="spin-icon" /> Processingâ€¦</> :
+            {confirming ? <><RefreshCw size={16} className="spin-icon" /> Processing•¦</> :
               selected === 'online' ? <><CreditCard size={16} /> Continue to Pay {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}</> :
                 <><CheckCheck size={16} /> Confirm Booking</>}
           </button>
@@ -1598,9 +1598,9 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    POST-BOOKING ANIMATED FLOW
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTime, onDone }) {
   const [phase, setPhase] = useState(0)
@@ -1625,17 +1625,17 @@ function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTi
   const phases = [
     {
       icon: <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}><RefreshCw size={52} color="#7C3AED" /></motion.div>,
-      title: "Creating your bookingâ€¦",
+      title: "Creating your booking•¦",
       sub: "Submitting your service request securely",
     },
     {
       icon: <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ repeat: Infinity, duration: 0.8 }}><Users size={52} color="#F59E0B" /></motion.div>,
-      title: "Finding your expertâ€¦",
+      title: "Finding your expert•¦",
       sub: "Matching you with the best professional nearby",
     },
     {
       icon: <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}><CheckCircle2 size={52} color="#10B981" /></motion.div>,
-      title: "Professional Assigned! âœ…",
+      title: "Professional Assigned! •œ…",
       sub: "Your expert is confirmed and on their way",
     },
     {
@@ -1684,7 +1684,7 @@ function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTi
               <img src={MOCK_TECH.avatar} alt={MOCK_TECH.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '2px solid #7C3AED30' }} />
               <div style={{ flex: 1, textAlign: 'left' }}>
                 <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{MOCK_TECH.name}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>â­ {MOCK_TECH.rating} Â· {MOCK_TECH.jobs} jobs</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>•­ {MOCK_TECH.rating} Â· {MOCK_TECH.jobs} jobs</div>
               </div>
               <div style={{ background: '#10B98115', color: '#10B981', fontWeight: 800, fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, border: '1px solid #10B98130' }}>ETA {MOCK_TECH.eta}</div>
             </motion.div>
@@ -1705,9 +1705,9 @@ function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTi
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    LIVE TRACKING PAGE
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function LiveTrackingPage({ successData, technician, category, cart, formData, selDate, selTime, onBookAgain }) {
   const rid = successData?.request_id || successData?.id || "BK" + Date.now().toString().slice(-6)
@@ -1717,10 +1717,10 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
   const displayTime = selTime ? TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === selTime)?.l : ""
 
   const trackSteps = [
-    { label: "Booking Confirmed", icon: "âœ…", done: true, time: "Just now" },
-    { label: "Expert Assigned", icon: "ðŸ‘¨â€ðŸ”§", done: false, time: "Pending" },
+    { label: "Booking Confirmed", icon: "•œ…", done: true, time: "Just now" },
+    { label: "Expert Assigned", icon: "ðŸ‘¨•ðŸ”§", done: false, time: "Pending" },
     { label: "Expert On The Way", icon: "ðŸ›µ", done: false, time: "Pending" },
-    { label: "Service In Progress", icon: "âš™ï¸", done: false, time: "Scheduled" },
+    { label: "Service In Progress", icon: "•š™ï¸", done: false, time: "Scheduled" },
     { label: "Service Completed", icon: "ðŸŒŸ", done: false, time: "Pending" },
   ]
 
@@ -1758,7 +1758,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{tech.name}</div>
-            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>â­ {tech.rating} Â· {tech.jobs} jobs completed</div>
+            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>•­ {tech.rating} Â· {tech.jobs} jobs completed</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               <span style={{ background: '#10B98112', color: '#10B981', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #10B98125' }}>Verified Pro</span>
               <span style={{ background: '#7C3AED12', color: '#7C3AED', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #7C3AED25' }}>Background Checked</span>
@@ -1795,7 +1795,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
           ].map((r, i) => (
             <div key={i} style={{ ...(r.span ? { gridColumn: '1/-1' } : {}), background: '#f8fafc', borderRadius: 10, padding: '0.5rem 0.75rem' }}>
               <div style={{ color: '#94a3b8', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase' }}>{r.label}</div>
-              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2 }}>{r.value || 'â€”'}</div>
+              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2 }}>{r.value || '•”'}</div>
             </div>
           ))}
         </div>
@@ -1827,9 +1827,9 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    STEP INDICATOR BAR
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 const STEP_LABELS = ["Service", "Package", "Schedule", "Identity", "Details", "Confirm"]
 
@@ -1856,13 +1856,13 @@ function StepBar({ step, total }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    MAIN PAGE
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    CUSTOMER ACCOUNT MODAL
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   const { user, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
@@ -1995,7 +1995,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     }
   }, [activeTab, user])
 
-  // â”€â”€ Reschedule State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // •”••”• Reschedule State •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
   // ── Reschedule State ────────────────────────────────────────────────────────
   const [reschedules, setReschedules] = useState([])
   const [reschedulesLoading, setReschedulesLoading] = useState(false)
@@ -2412,7 +2412,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/â€“/g, ' - ').replace(/â€”/g, ' - ').replace(/&amp;/g, '&')}</span>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
                           <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: b.status === 'completed' ? '#10B98115' : '#7C3AED15', color: b.status === 'completed' ? '#10B981' : '#7C3AED', border: `1px solid ${b.status === 'completed' ? '#10B98130' : '#7C3AED30'}` }}>{b.status_display || b.status}</span>
                         </div>
                         <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
@@ -3091,7 +3091,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                         style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: '1.5px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', fontWeight: 700, background: 'white', outline: 'none' }}>
                         {activeBookings.map(b => {
                           const rawTitle = b.issue_title || b.service_category || 'Service Booking'
-                          const cleanTitle = rawTitle.replace(/â€“/g, ' - ').replace(/â€”/g, ' - ').replace(/&amp;/g, '&')
+                          const cleanTitle = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
                           return (
                             <option key={b.id} value={b.id}>
                               {cleanTitle} ({b.request_id || `SR-${b.id}`}) — Current: {b.preferred_date || b.created_at?.split('T')[0]}
@@ -3751,7 +3751,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   </button>
                 </div>
 
-                {complaintSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, marginBottom: 16 }}>âœ… {complaintSuccess}</div>}
+                {complaintSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, marginBottom: 16 }}>•œ… {complaintSuccess}</div>}
 
                 {showComplaintForm && (
                   <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
@@ -3827,7 +3827,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                           <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.description}</div>
                           <div style={{ marginTop: 10, fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <span>{new Date(c.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                            <span style={{ color: '#7C3AED', fontWeight: 700 }}>View Thread â†’</span>
+                            <span style={{ color: '#7C3AED', fontWeight: 700 }}>View Thread •†’</span>
                           </div>
                         </div>
                       )
@@ -4176,13 +4176,13 @@ export function BookingPage() {
     data.append("phone", formData.phone)
     data.append("email", formData.email || "")
     data.append("service_category", category?.id || "general")
-    data.append("issue_title", formData.issue_title || `${cart.map(c => c.name).join(', ')} â€” ${category?.name}`)
+    data.append("issue_title", formData.issue_title || `${cart.map(c => c.name).join(', ')} •” ${category?.name}`)
     data.append("description", formData.description || "")
     data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
     data.append("total_amount", cart.reduce((a, c) => a + (c.price * c.quantity), 0))
-    // Serialize cart_data as JSON string â€” backend will parse it robustly
+    // Serialize cart_data as JSON string •” backend will parse it robustly
     data.append("cart_data", JSON.stringify(cart.map(c => ({
       id: c.id, name: c.name, price: c.price, quantity: c.quantity,
       categoryName: c.categoryName || category?.name || ""
@@ -4458,7 +4458,7 @@ export function BookingPage() {
       {/* Footer */}
       <footer className="uc-footer">
         <Shield size={12} /> SSL Encrypted &nbsp;Â·&nbsp;
-        <Star size={12} style={{ fill: "#F59E0B", color: "#F59E0B" }} /> 4.8â˜… Rated &nbsp;Â·&nbsp;
+        <Star size={12} style={{ fill: "#F59E0B", color: "#F59E0B" }} /> 4.8•˜… Rated &nbsp;Â·&nbsp;
         <CheckCircle2 size={12} /> 1M+ Bookings &nbsp;Â·&nbsp;
         <Award size={12} /> 30-Day Guarantee
       </footer>
@@ -4480,16 +4480,226 @@ export function BookingPage() {
   )
 }
 
+const INDIVIDUAL_SERVICES = {
+  hvac: [
+    { id: "ind-hvac-1", name: "AC Inspection & Diagnosis", price: 299, priceStr: "₹299", duration: "45 mins", categoryType: "Repair", includes: ["Complete 21-point checkup", "Cooling & gas pressure check", "Detailed estimate report"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+    { id: "ind-hvac-2", name: "AC Gas Leakage Fix & Refill", price: 1499, priceStr: "₹1,499", duration: "1.5 hrs", categoryType: "Repair", includes: ["Nitrogen leak testing", "Copper pipe brazing fix", "Full Freon gas recharge"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
+    { id: "ind-hvac-3", name: "AC Split Wall Installation", price: 1299, priceStr: "₹1,299", duration: "2 hrs", categoryType: "Install", includes: ["Indoor & outdoor unit mounting", "Copper pipe vacuuming", "Performance testing"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+    { id: "ind-hvac-4", name: "AC Uninstallation Service", price: 699, priceStr: "₹699", duration: "1 hr", categoryType: "Install", includes: ["Safe gas pump down", "Dismantling indoor & outdoor units", "Packing copper pipes"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+  ],
+  electrical: [
+    { id: "ind-elec-1", name: "Switch & Socket Installation", price: 149, priceStr: "₹149", duration: "30 mins", categoryType: "Install", includes: ["Replacement or new socket fitting", "Safety testing after install", "30-day service warranty"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+    { id: "ind-elec-2", name: "Ceiling Fan Repair / Fitting", price: 249, priceStr: "₹249", duration: "45 mins", categoryType: "Repair", includes: ["Regulator & capacitor fix", "Noise & speed troubleshooting", "Blade alignment & mounting"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+    { id: "ind-elec-3", name: "MCB Breaker Replacement", price: 399, priceStr: "₹399", duration: "45 mins", categoryType: "Repair", includes: ["Tripping & overload diagnosis", "Single/Double pole MCB fix", "Distribution board testing"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+    { id: "ind-elec-4", name: "Complete Room Wiring Check", price: 699, priceStr: "₹699", duration: "1.5 hrs", categoryType: "Repair", includes: ["Earthing & voltage check", "Heavy appliance load testing", "Short circuit safety report"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+  ],
+  plumbing: [
+    { id: "ind-plum-1", name: "Tap & Faucet Repair", price: 149, priceStr: "₹149", duration: "30 mins", categoryType: "Repair", includes: ["Washer & spindle replacement", "Leakage & drip fix", "Water flow optimization"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+    { id: "ind-plum-2", name: "Sink & Drain Unclogging", price: 349, priceStr: "₹349", duration: "45 mins", categoryType: "Repair", includes: ["Waste pipe cleaning", "Clog removal using spring wire", "Water flow check"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
+    { id: "ind-plum-3", name: "Flush Tank & Toilet Fix", price: 499, priceStr: "₹499", duration: "1 hr", categoryType: "Repair", includes: ["Syphon kit & ball valve fix", "Flush tank leak repair", "Sanitary seal check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+    { id: "ind-plum-4", name: "Geyser Water Heater Install", price: 799, priceStr: "₹799", duration: "1.5 hrs", categoryType: "Install", includes: ["Wall mounting & inlet/outlet pipes", "Thermostat & element safety test", "Demo & leak check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+  ],
+  cleaning: [
+    { id: "ind-clean-1", name: "Bathroom Deep Cleaning", price: 499, priceStr: "₹499", duration: "1.5 hrs", categoryType: "Repair", includes: ["Hard water stain removal", "Tile & grout scrubbing", "Sanitization of toilet & sink"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+    { id: "ind-clean-2", name: "Kitchen Deep Cleaning", price: 999, priceStr: "₹999", duration: "2 hrs", categoryType: "Repair", includes: ["Chimney exterior degreasing", "Countertop & tile scrubbing", "Cabinet exterior wipe"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+    { id: "ind-clean-3", name: "Sofa Vacuuming & Polish", price: 799, priceStr: "₹799", duration: "1.5 hrs", categoryType: "Repair", includes: ["Fabric shampooing & extraction", "Dust mite & stain removal", "Fabric freshener spray"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+    { id: "ind-clean-4", name: "Balcony & Window Wash", price: 399, priceStr: "₹399", duration: "1 hr", categoryType: "Install", includes: ["Glass panel streak-free clean", "Grille & ledge wiping", "Floor scrubbing"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+  ],
+  painting: [
+    { id: "ind-paint-1", name: "Single Wall Feature Paint", price: 1999, priceStr: "₹1,999", duration: "3 hrs", categoryType: "Install", includes: ["Surface putty & sanding", "2 coats premium emulsion", "Mess-free floor protection"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+    { id: "ind-paint-2", name: "Wall Waterproofing Treatment", price: 2999, priceStr: "₹2,999", duration: "4 hrs", categoryType: "Repair", includes: ["Dampness & seepage diagnosis", "Waterproof chemical coating", "Anti-fungal primer coat"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+    { id: "ind-paint-3", name: "Door & Window Enamel Polish", price: 1499, priceStr: "₹1,499", duration: "2 hrs", categoryType: "Repair", includes: ["Wood sanding & smoothing", "PU enamel coat application", "Hardware protection masking"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+    { id: "ind-paint-4", name: "Full Home Repaint Inspection", price: 199, priceStr: "₹199", duration: "30 mins", categoryType: "Repair", includes: ["Laser wall measurement", "Shade card consultation", "Itemized quotation"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+  ],
+  carpentry: [
+    { id: "ind-carp-1", name: "Door Lock & Handle Fitting", price: 199, priceStr: "₹199", duration: "30 mins", categoryType: "Install", includes: ["Mortise/cylindrical lock fix", "Latch alignment", "Smooth key operation test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+    { id: "ind-carp-2", name: "Furniture Repair & Assembly", price: 399, priceStr: "₹399", duration: "1 hr", categoryType: "Repair", includes: ["Bed / wardrobe assembly", "Joint tightening & glueing", "Leveling check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+    { id: "ind-carp-3", name: "Cabinet Hinge Repair", price: 249, priceStr: "₹249", duration: "45 mins", categoryType: "Repair", includes: ["Soft-close hinge replacement", "Door realignment", "Magnet catch installation"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+    { id: "ind-carp-4", name: "Wooden Shelf Installation", price: 499, priceStr: "₹499", duration: "1 hr", categoryType: "Install", includes: ["Wall drilling & anchor fitting", "Concealed bracket mounting", "Weight capacity check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+  ],
+  appliance_repair: [
+    { id: "ind-app-1", name: "Refrigerator Gas & Cooling Fix", price: 799, priceStr: "₹799", duration: "1.5 hrs", categoryType: "Repair", includes: ["Compressor relay & capacitor check", "Gas refill & thermostat fix", "Cooling coil defrost check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+    { id: "ind-app-2", name: "Washing Machine Motor Check", price: 599, priceStr: "₹599", duration: "1 hr", categoryType: "Repair", includes: ["Drain pump & belt inspection", "Drum noise & vibration check", "Spin cycle testing"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+    { id: "ind-app-3", name: "Microwave PCB & Heating Repair", price: 499, priceStr: "₹499", duration: "45 mins", categoryType: "Repair", includes: ["Magnetron & diode testing", "Control panel button fix", "Door interlock switch check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+    { id: "ind-app-4", name: "TV Wall Mounting Service", price: 399, priceStr: "₹399", duration: "45 mins", categoryType: "Install", includes: ["Universal wall bracket install", "Cable routing & port connection", "Screen leveling check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+  ],
+};
+
+export function ServiceDetailSideDrawer({ item, category, cart, setCart, onClose }) {
+  if (!item) return null;
+
+  const getCartCount = (itemId) => {
+    const found = cart.find(c => c.id === itemId);
+    return found ? found.quantity : 0;
+  };
+
+  const addToCart = (pkg) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === pkg.id);
+      if (existing) {
+        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
+      }
+      return [...prev, { ...pkg, quantity: 1, categoryName: category?.name || "Service" }];
+    });
+  };
+
+  const removeFromCart = (itemId) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === itemId);
+      if (!existing) return prev;
+      if (existing.quantity === 1) {
+        return prev.filter(c => c.id !== itemId);
+      }
+      return prev.map(c => c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c);
+    });
+  };
+
+  return (
+    <motion.div
+      className="fixed top-4 bottom-4 left-3 sm:left-6 xl:left-10 z-[10000] w-[330px] sm:w-[370px] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-auto max-h-[90vh]"
+      initial={{ opacity: 0, x: -60, scale: 0.95 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      exit={{ opacity: 0, x: -60, scale: 0.95 }}
+      transition={{ type: "spring", damping: 25, stiffness: 350 }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Drawer Header */}
+      <div className="relative h-40 bg-slate-900 shrink-0">
+        <img
+          src={item.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop"}
+          alt={item.name}
+          className="w-full h-full object-cover opacity-80"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/40 to-transparent flex flex-col justify-end p-4">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="bg-indigo-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+              {category?.name || "Service Details"}
+            </span>
+            <div className="flex items-center gap-1 bg-amber-500/20 backdrop-blur-md px-2 py-0.5 rounded-full text-amber-300 text-[11px] font-bold border border-amber-400/30">
+              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+              <span>4.8</span>
+            </div>
+          </div>
+          <h3 className="text-base font-black text-white leading-tight">{item.name}</h3>
+          <p className="text-xs text-slate-200 mt-0.5 font-semibold">
+            Starts at <span className="font-extrabold text-amber-300">{item.priceStr || ("₹" + item.price)}</span> • {item.duration || "1 hr"}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-900/70 hover:bg-slate-900 text-white flex items-center justify-center transition-all cursor-pointer backdrop-blur-md border border-white/20"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Scrollable Drawer Content */}
+      <div className="p-4 overflow-y-auto space-y-4 flex-1 text-slate-800">
+
+        {/* Step-by-Step Employee Workflow */}
+        <div>
+          <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <span>🛠️</span> How Our Technician Works
+          </h4>
+          <div className="space-y-2 text-[11px]">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
+              <div className="font-bold text-slate-900 mb-0.5">🔍 Step 1: Diagnosis</div>
+              <p className="text-slate-600">Uniformed expert performs 21-point safety check.</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
+              <div className="font-bold text-slate-900 mb-0.5">🛠️ Step 2: Professional Repair</div>
+              <p className="text-slate-600">Uses specialized tools & genuine spare parts.</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
+              <div className="font-bold text-slate-900 mb-0.5">🧹 Step 3: Cleanup & Test</div>
+              <p className="text-slate-600">Cleans up work area completely & tests appliance.</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5">
+              <div className="font-bold text-slate-900 mb-0.5">🛡️ Step 4: Digital Bill & Warranty</div>
+              <p className="text-slate-600">Issues digital invoice with 30-day free revisit cover.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Included vs Excluded */}
+        <div className="space-y-2">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+            <div className="font-extrabold text-[10px] text-slate-900 uppercase tracking-wider mb-1">Included</div>
+            <ul className="space-y-1 text-xs text-slate-700 font-medium">
+              {(item.includes || ["Diagnosis & Labour", "30-day warranty"]).map(inc => (
+                <li key={inc} className="flex items-start gap-1">
+                  <span className="text-indigo-600 font-bold">✓</span>
+                  <span>{inc}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="bg-rose-50/70 border border-rose-200/80 rounded-xl p-3">
+            <div className="font-extrabold text-[10px] text-rose-800 uppercase tracking-wider mb-1">Excluded</div>
+            <ul className="space-y-1 text-xs text-slate-700 font-medium">
+              <li className="flex items-start gap-1">
+                <span className="text-rose-500 font-bold">✕</span>
+                <span>Spare parts cost (charged as per rate card)</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Guarantee */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-[11px] text-slate-600 space-y-0.5">
+          <div className="font-extrabold text-slate-900">🛡️ 30-Day Re-service Guarantee Included</div>
+          <div>Free revisit if issue reoccurs within 30 days.</div>
+        </div>
+
+      </div>
+
+      {/* Drawer Action Bar */}
+      <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
+        <div>
+          <div className="text-[9px] text-slate-400 font-bold uppercase">Price</div>
+          <div className="text-sm font-black text-slate-900">{item.priceStr || ("₹" + item.price)}</div>
+        </div>
+        <div>
+          {getCartCount(item.id) > 0 ? (
+            <div className="flex items-center gap-2 bg-slate-900 text-white font-extrabold text-xs px-3 py-1.5 rounded-xl shadow-md">
+              <button className="w-5 h-5 rounded bg-slate-700 hover:bg-slate-800 flex items-center justify-center" onClick={() => removeFromCart(item.id)}>-</button>
+              <span>{getCartCount(item.id)} in Cart</span>
+              <button className="w-5 h-5 rounded bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center" onClick={() => addToCart(item)}>+</button>
+            </div>
+          ) : (
+            <button
+              className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-5 py-2 rounded-xl shadow-md uppercase tracking-wider active:scale-95 cursor-pointer"
+              onClick={() => addToCart(item)}
+            >
+              Add Service
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
-  const [activeTab, setActiveTab] = useState(0)
   const [activeFilter, setActiveFilter] = useState("All")
+  const [indFilter, setIndFilter] = useState("All")
+  const [selectedDetailItem, setSelectedDetailItem] = useState(null)
+  const [showCartPopover, setShowCartPopover] = useState(false)
+
   const packages = ((packagesData && packagesData[category?.id]) || PACKAGES[category?.id] || []).map(p => ({ ...p, priceStr: BOOKING_CURRENCY_SYMBOL + p.price }))
-  const relatedServices = packages.slice(0, 4);
+  const rawIndividualServices = INDIVIDUAL_SERVICES[category?.id] || packages.slice(0, 4);
 
   const filteredPackages = packages.filter(p => {
     if (activeFilter === "All") return true;
     if (activeFilter === "Premium") return p.price >= 1000;
     if (activeFilter === "Standard") return p.price < 1000;
+    return true;
+  });
+
+  const filteredIndividualServices = rawIndividualServices.filter(s => {
+    if (indFilter === "All") return true;
+    if (indFilter === "Repair") return s.categoryType === "Repair" || !s.categoryType;
+    if (indFilter === "Install") return s.categoryType === "Install";
     return true;
   });
 
@@ -4518,49 +4728,86 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
     });
   }
 
-  const renderCard = (p, i) => (
-    <motion.div
-      key={p.id}
-      className="uc-pkg-modal-card-uc"
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: i * 0.1 }}
-    >
-      <div className="uc-pkg-modal-card-uc-info">
-        <h3 className="uc-pkg-uc-title">{p.name}</h3>
-        <div className="uc-pkg-uc-rating">
-          <Star size={12} style={{ fill: "#7C3AED", color: "#7C3AED", marginRight: 4 }} />
-          <span style={{ fontWeight: 700 }}>4.8</span> <span style={{ color: "#94a3b8", textDecoration: "underline" }}>(113K reviews)</span>
-        </div>
-        <div className="uc-pkg-uc-price">
-          Starts at {p.priceStr} <span className="uc-pkg-uc-dot">â€¢</span> {p.duration}
-        </div>
-        <ul className="uc-pkg-uc-includes">
-          {p.includes.map(inc => <li key={inc}>{inc}</li>)}
-        </ul>
-        <div className="uc-pkg-uc-view-details">View details</div>
-      </div>
-      <div className="uc-pkg-modal-card-uc-imgbox">
-        <img
-          src={p.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"}
-          alt={p.name}
-          className="uc-pkg-uc-img"
-          onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"; }}
-        />
-        <div className="uc-pkg-uc-add-wrap" onClick={(e) => e.stopPropagation()}>
-          {getCartCount(p.id) > 0 ? (
-            <div className="uc-swiggy-qty">
-              <button onClick={() => removeFromCart(p.id)}>-</button>
-              <span>{getCartCount(p.id)}</span>
-              <button onClick={() => addToCart(p)}>+</button>
+  const renderCard = (p, i) => {
+    const isSelected = selectedDetailItem?.id === p.id;
+    return (
+      <motion.div
+        key={p.id}
+        className={`bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 mb-4 hover:border-slate-400 hover:shadow-md transition-all flex flex-col sm:flex-row justify-between items-start gap-4 ${isSelected ? "border-l-4 border-l-slate-900 bg-slate-50/40 shadow-sm" : ""}`}
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: i * 0.08 }}
+      >
+        <div className="flex-1 min-w-0 pr-2">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h3 className="text-base font-extrabold text-slate-900 leading-snug">{p.name}</h3>
+            {p.tag && (
+              <span className="bg-indigo-50 text-indigo-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider border border-indigo-100">
+                {p.tag}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-2">
+            <div className="flex items-center gap-1 text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span>4.8</span>
             </div>
-          ) : (
-            <button className="uc-btn-add-swiggy" onClick={() => addToCart(p)}>Add</button>
-          )}
+            <span className="text-slate-400 font-medium">(113K reviews)</span>
+          </div>
+          <div className="text-sm font-extrabold text-slate-900 mb-3">
+            Starts at {p.priceStr || (BOOKING_CURRENCY_SYMBOL + p.price)} <span className="text-slate-300 mx-1">•</span> <span className="text-slate-600 font-medium">{p.duration || '1 hr'}</span>
+          </div>
+          <ul className="space-y-1.5 mb-3">
+            {(p.includes || ["Standard inclusions"]).map(inc => (
+              <li key={inc} className="flex items-start gap-1.5 text-xs text-slate-600 font-medium">
+                <span className="text-slate-800 font-extrabold text-sm leading-none mt-0.5">✓</span>
+                <span>{inc}</span>
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={() => setSelectedDetailItem(p)}
+            className="text-xs font-extrabold text-slate-800 hover:text-indigo-600 underline cursor-pointer"
+          >
+            View details
+          </button>
         </div>
-      </div>
-    </motion.div>
-  );
+
+        {/* Right Thumbnail & NoBroker Style White Add Pill */}
+        <div className="flex flex-col items-center shrink-0 self-center sm:self-start w-28 sm:w-32">
+          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/60 shadow-xs">
+            <img
+              src={p.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"}
+              alt={p.name}
+              className="w-full h-full object-cover"
+              onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"; }}
+            />
+          </div>
+
+          <div onClick={(e) => e.stopPropagation()} className="w-full flex justify-center -mt-4 z-10 whitespace-nowrap">
+            {getCartCount(p.id) > 0 ? (
+              <div className="flex items-center gap-2 text-xs font-black text-slate-900 px-3 py-1 bg-white border border-slate-300 rounded-full shadow-md">
+                <button className="w-5 h-5 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-800 font-black cursor-pointer transition-colors" onClick={() => removeFromCart(p.id)}>-</button>
+                <span className="w-3 text-center text-xs font-black">{getCartCount(p.id)}</span>
+                <button className="w-5 h-5 rounded-full bg-slate-900 hover:bg-slate-800 flex items-center justify-center text-white font-black cursor-pointer transition-colors" onClick={() => addToCart(p)}>+</button>
+              </div>
+            ) : (
+              <button
+                className="bg-white hover:bg-slate-900 text-slate-900 hover:text-white font-bold text-xs px-5 py-1.5 rounded-full shadow-md border border-slate-300 hover:border-slate-900 transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+                onClick={() => {
+                  addToCart(p);
+                  setSelectedDetailItem(p);
+                }}
+              >
+                <ShoppingCart className="w-3.5 h-3.5 text-slate-900 group-hover:text-white" />
+                <span>Add</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
 
   return (
     <div className="uc-modal-overlay" onClick={onClose}>
@@ -4584,43 +4831,41 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
           </div>
         </div>
 
-        <div className="uc-pkg-modal-split" style={{ display: 'flex', flexDirection: 'row', gap: 0 }}>
-          {/* Left Sidebar: Individual Services */}
-          <div className="uc-pkg-sidebar" style={{ width: '35%', borderRight: '1px solid #e2e8f0', paddingRight: '1.5rem', overflowY: 'auto' }}>
-            <h3 className="uc-pkg-sidebar-title" style={{ fontSize: '1.1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 900 }}>Individual Services</h3>
-            <div className="uc-pkg-related-list" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {relatedServices.map((s, idx) => (
-                <div key={s.id || idx} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-                  <img
-                    src={s.image || s.img || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=100&q=80&fit=crop"}
-                    alt={s.name}
-                    style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }}
-                    onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=100&q=80&fit=crop"; }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1e293b', lineHeight: 1.2, marginBottom: '0.2rem' }}>{s.name}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.5rem' }}>{s.priceStr || (BOOKING_CURRENCY_SYMBOL + '499')} â€¢ {s.duration || '1 hr'}</div>
+        <div className="uc-pkg-modal-split">
+          {/* Left Sidebar: Individual Services (Independent Scroll Container) */}
+          <div className="w-full lg:w-1/2 border-b lg:border-b-0 lg:border-r border-slate-200 p-5 overflow-y-auto h-full">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xl font-extrabold text-slate-900">Individual Services</h3>
+              <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">Standalone Fixes</span>
+            </div>
 
-                    {getCartCount(s.id) > 0 ? (
-                      <div className="uc-swiggy-qty" style={{ width: 80, height: 28, fontSize: '0.8rem' }}>
-                        <button style={{ padding: '0 0.5rem' }} onClick={() => removeFromCart(s.id)}>-</button>
-                        <span>{getCartCount(s.id)}</span>
-                        <button style={{ padding: '0 0.5rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>+</button>
-                      </div>
-                    ) : (
-                      <button className="uc-btn-add-swiggy" style={{ padding: '0.3rem 1rem', fontSize: '0.75rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>ADD</button>
-                    )}
-                  </div>
-                </div>
+            {/* Individual Services Filter Pills */}
+            <div className="uc-pkg-filter-row mb-4">
+              {["All", "Repair", "Install"].map(f => (
+                <button
+                  key={f}
+                  className={`uc-pkg-filter-pill ${indFilter === f ? "active" : ""}`}
+                  onClick={() => setIndFilter(f)}
+                >
+                  {f}
+                </button>
               ))}
+            </div>
+
+            <div className="uc-pkg-modal-list">
+              {filteredIndividualServices.map((s, i) => renderCard(s, i))}
             </div>
           </div>
 
-          {/* Right Content: Packages */}
-          <div className="uc-pkg-content" style={{ width: '65%', paddingLeft: '1.5rem', overflowY: 'auto' }}>
-            <h3 className="uc-pkg-content-title" style={{ fontSize: '1.4rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 900 }}>Packages & Bundles</h3>
+          {/* Right Content: Packages & Bundles (Independent Scroll Container) */}
+          <div className="w-full lg:w-1/2 p-5 overflow-y-auto h-full">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xl font-extrabold text-slate-900">Packages & Bundles</h3>
+              <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">Full Savings</span>
+            </div>
 
-            <div className="uc-pkg-filter-row">
+            {/* Packages Filter Pills */}
+            <div className="uc-pkg-filter-row mb-4">
               {["All", "Standard", "Premium"].map(f => (
                 <button
                   key={f}
@@ -4640,27 +4885,122 @@ export function PackageModal({ category, cart, setCart, onClose, onCheckout, pac
 
         {cart.length > 0 && (
           <motion.div
-            className="uc-pkg-modal-cart-bar"
+            className="uc-pkg-modal-cart-bar relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <div className="uc-cart-bar-left">
-              <span className="uc-cart-bar-items">{cart.reduce((a, c) => a + c.quantity, 0)} items</span>
-              <span className="uc-cart-bar-price">{BOOKING_CURRENCY_SYMBOL}{cart.reduce((a, c) => a + (c.price * c.quantity), 0)}</span>
+            {/* Expanded Cart Details Popover */}
+            {showCartPopover && (
+              <motion.div
+                className="absolute bottom-full left-3 right-3 mb-3 bg-white rounded-2xl p-4 shadow-2xl border border-slate-200 z-50 max-h-64 overflow-y-auto text-slate-800"
+                initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              >
+                <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-extrabold text-slate-900">Added Services</span>
+                    <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                      {cart.reduce((a, c) => a + c.quantity, 0)} items
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowCartPopover(false)}
+                    className="text-slate-400 hover:text-slate-700 text-xs font-bold flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg"
+                  >
+                    <span>Close</span>
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  {cart.map(item => (
+                    <div key={item.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                      <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-200 shrink-0">
+                          <img
+                            src={item.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=100&q=80&fit=crop"}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-extrabold text-slate-900 truncate">{item.name}</div>
+                          <div className="text-[11px] font-extrabold text-indigo-600">
+                            {BOOKING_CURRENCY_SYMBOL}{item.price} x {item.quantity} = {BOOKING_CURRENCY_SYMBOL}{item.price * item.quantity}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-xs font-black text-slate-700 cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <span className="text-xs font-black text-slate-900 w-4 text-center">{item.quantity}</span>
+                          <button
+                            onClick={() => addToCart(item)}
+                            className="w-5 h-5 rounded bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-xs font-black text-white cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedDetailItem(item);
+                            setShowCartPopover(false);
+                          }}
+                          className="text-[11px] font-extrabold text-slate-700 hover:text-indigo-600 underline cursor-pointer px-1.5"
+                        >
+                          Details
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            <div className="uc-cart-bar-left flex items-center gap-3">
+              <div>
+                <span className="uc-cart-bar-items">{cart.reduce((a, c) => a + c.quantity, 0)} items</span>
+                <span className="uc-cart-bar-price">{BOOKING_CURRENCY_SYMBOL}{cart.reduce((a, c) => a + (c.price * c.quantity), 0)}</span>
+              </div>
+              <button
+                onClick={() => setShowCartPopover(prev => !prev)}
+                className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-extrabold px-3 py-1.5 rounded-xl transition-all cursor-pointer backdrop-blur-sm border border-white/20"
+              >
+                <span>{showCartPopover ? "Hide Items" : "View Added Services"}</span>
+                {showCartPopover ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+              </button>
             </div>
             <button className="uc-cart-bar-btn" onClick={onCheckout}>
               Proceed to Checkout <ChevronRight size={16} />
             </button>
           </motion.div>
         )}
+
+        {/* Floating Side Drawer in Left Blank Space */}
+        {selectedDetailItem && (
+          <ServiceDetailSideDrawer
+            item={selectedDetailItem}
+            category={category}
+            cart={cart}
+            setCart={setCart}
+            onClose={() => setSelectedDetailItem(null)}
+          />
+        )}
       </motion.div>
     </div>
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    STYLES
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 export function BkStyles() {
   return (
@@ -4670,7 +5010,7 @@ export function BkStyles() {
       @keyframes bk-spin { to { transform:rotate(360deg); } }
       .spin-icon { animation: bk-spin 0.8s linear infinite; display:inline-block; }
 
-      /* â”€â”€ Root â”€â”€ */
+      /* •”••”• Root •”••”• */
       .uc-root {
         min-height: 100vh;
         background: #ffffff;
@@ -4681,7 +5021,7 @@ export function BkStyles() {
         overflow-x: hidden;
       }
 
-      /* â”€â”€ Nav â”€â”€ */
+      /* •”••”• Nav •”••”• */
       .uc-nav {
         position: sticky; top:0; z-index:100;
         background: rgba(255,255,255,0.97);
@@ -4750,7 +5090,7 @@ export function BkStyles() {
         opacity: 0.9;
       }
 
-      /* â”€â”€ Nav Search Bar â”€â”€ */
+      /* •”••”• Nav Search Bar •”••”• */
       .uc-nav-search {
         display: flex; align-items: center; gap: 0.5rem;
         background: #f8fafc; border: 1.5px solid #e2e8f0;
@@ -4787,7 +5127,7 @@ export function BkStyles() {
         padding: 0.5rem 1.5rem; position: sticky; top: 60px; z-index: 99;
       }
 
-      /* â”€â”€ Progress â”€â”€ */
+      /* •”••”• Progress •”••”• */
       .uc-progress-wrap {
         background: white;
         border-bottom: 1px solid #f1f5f9;
@@ -4844,7 +5184,7 @@ export function BkStyles() {
       }
       .uc-sb-line-done { background: #10B981; }
 
-      /* â”€â”€ Main â”€â”€ */
+      /* •”••”• Main •”••”• */
       .uc-main {
         flex: 1;
         overflow-y: auto;
@@ -4915,7 +5255,7 @@ export function BkStyles() {
         border: 1px solid #f1f5f9;
       }
 
-      /* â”€â”€ HERO â”€â”€ */
+      /* •”••”• HERO •”••”• */
       .uc-hero {
         background: transparent;
         position: relative;
@@ -4957,7 +5297,7 @@ export function BkStyles() {
         margin-bottom: 2rem;
       }
 
-      /* â”€â”€ Search â”€â”€ */
+      /* •”••”• Search •”••”• */
       .uc-search-bar {
         position: relative;
         max-width: 560px;
@@ -4998,7 +5338,7 @@ export function BkStyles() {
         display:flex; align-items:center; gap:0.3rem;
       }
 
-      /* â”€â”€ Category Grid â”€â”€ */
+      /* •”••”• Category Grid •”••”• */
       .uc-section {
         width: 100%;
         padding: 2.5rem 1.5rem;
@@ -5080,7 +5420,7 @@ export function BkStyles() {
       .uc-cat-arrow { color:#cbd5e1; flex-shrink:0; }
       .uc-cat-card:hover .uc-cat-arrow { color:#7C3AED; }
 
-      /* â”€â”€ How It Works â”€â”€ */
+      /* •”••”• How It Works •”••”• */
       .uc-how {
         background: linear-gradient(135deg, #faf5ff, #f0fdf4);
         padding: 3rem 1.5rem;
@@ -5121,7 +5461,7 @@ export function BkStyles() {
       .uc-how-title { font-size:1.1rem; font-weight:800; color:#1e293b; margin-bottom:0.5rem; }
       .uc-how-desc  { font-size:0.85rem; color:#64748b; line-height:1.6; }
 
-      /* â”€â”€ Reviews â”€â”€ */
+      /* •”••”• Reviews •”••”• */
       .uc-reviews-section {
         padding: 3rem 1.5rem;
         max-width:1200px;
@@ -5152,7 +5492,7 @@ export function BkStyles() {
       .uc-review-ago { font-size: 0.75rem; color: #94a3b8; margin-top: 0.1rem; }
       .uc-review-text { font-size:0.85rem; color:#475569; line-height:1.6; font-style: italic; }
 
-      /* â”€â”€ Step Pages â”€â”€ */
+      /* •”••”• Step Pages •”••”• */
       .uc-step-page {
         display:flex;
         flex-direction:column;
@@ -5181,7 +5521,7 @@ export function BkStyles() {
       }
       .uc-step-sub { font-size:0.82rem; color:#64748b; margin:0 0 1.5rem; font-weight:500; }
 
-      /* â”€â”€ Package Cards â”€â”€ */
+      /* •”••”• Package Cards •”••”• */
       .uc-pkg-grid {
         display:grid;
         grid-template-columns: repeat(auto-fill, minmax(220px,1fr));
@@ -5232,7 +5572,7 @@ export function BkStyles() {
       .uc-pkg-radio--sel { border-color:#7C3AED; background:#7C3AED; }
       .uc-pkg-radio-dot { width:8px; height:8px; border-radius:50%; background:white; }
 
-      /* â”€â”€ Schedule â”€â”€ */
+      /* •”••”• Schedule •”••”• */
       .uc-date-section, .uc-time-section { margin-bottom:1.5rem; }
       .uc-subsection-label {
         display:flex; align-items:center; gap:0.4rem;
@@ -5285,7 +5625,7 @@ export function BkStyles() {
       .uc-time-slot:hover { border-color:#7C3AED; color:#7C3AED; }
       .uc-time-slot--sel { background:#7C3AED; border-color:#7C3AED; color:white; font-weight:700; }
 
-      /* â”€â”€ Login â”€â”€ */
+      /* •”••”• Login •”••”• */
       .uc-login-page { padding-top:0.5rem; }
       .uc-login-center { text-align:center; margin-bottom:1.5rem; }
       .uc-login-shield {
@@ -5340,7 +5680,7 @@ export function BkStyles() {
       .uc-success-title { font-family:'Outfit',sans-serif; font-size:1.6rem; font-weight:900; color:#1e293b; }
       .uc-success-sub   { font-size:0.88rem; color:#64748b; font-weight:600; }
 
-      /* â”€â”€ Form â”€â”€ */
+      /* •”••”• Form •”••”• */
       .uc-form { display:flex; flex-direction:column; gap:1rem; margin-bottom:1.5rem; }
       .uc-field-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
       @media(max-width:560px) { .uc-field-row { grid-template-columns:1fr; } }
@@ -5403,7 +5743,7 @@ export function BkStyles() {
         justify-content:center;
       }
 
-      /* â”€â”€ Confirm â”€â”€ */
+      /* •”••”• Confirm •”••”• */
       .uc-confirm-layout {
         display:grid;
         grid-template-columns:1fr 1fr;
@@ -5450,7 +5790,7 @@ export function BkStyles() {
         margin:0.5rem 0;
       }
 
-      /* â”€â”€ Success Page â”€â”€ */
+      /* •”••”• Success Page •”••”• */
       .uc-success-page {
         max-width:520px;
         margin:3rem auto;
@@ -5491,7 +5831,7 @@ export function BkStyles() {
       .uc-tl-icon { font-size:1rem; width:24px; text-align:center; }
       .uc-tl-label { flex:1; }
 
-      /* â”€â”€ Buttons â”€â”€ */
+      /* •”••”• Buttons •”••”• */
       .uc-btn-primary {
         display:inline-flex; align-items:center; justify-content:center; gap:0.45rem;
         background:linear-gradient(135deg,#7C3AED,#6d28d9);
@@ -5532,7 +5872,7 @@ export function BkStyles() {
 
       .uc-step-footer { padding-top:0.5rem; }
 
-      /* â”€â”€ Footer â”€â”€ */
+      /* •”••”• Footer •”••”• */
       .uc-footer {
         background:white; border-top:1px solid #e2e8f0;
         padding:0.75rem 1.5rem;
@@ -5540,7 +5880,7 @@ export function BkStyles() {
         gap:0.4rem; flex-wrap:wrap;
         font-size:0.72rem; font-weight:600; color:#94a3b8;
       }
-      /* â”€â”€ Package Modal â”€â”€ */
+      /* •”••”• Package Modal •”••”• */
       .uc-modal-overlay {
         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
         background: rgba(15, 23, 42, 0.4);
@@ -5552,9 +5892,12 @@ export function BkStyles() {
       .uc-pkg-modal {
         background: white;
         border-radius: 24px;
-        width: 100%; max-width: 960px;
-        max-height: 90vh;
-        overflow-y: auto;
+        width: 100%; max-width: 980px;
+        height: 88vh;
+        max-height: 88vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
         position: relative;
         box-shadow: 0 20px 60px rgba(0,0,0,0.15);
       }
@@ -5567,7 +5910,7 @@ export function BkStyles() {
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       }
       .uc-pkg-modal-hero {
-        position: relative; width: 100%; height: 200px;
+        position: relative; width: 100%; height: 180px; shrink: 0; flex-shrink: 0;
         border-radius: 24px 24px 0 0; overflow: hidden;
       }
       .uc-pkg-modal-hero img {
@@ -5577,15 +5920,17 @@ export function BkStyles() {
         position: absolute; inset: 0;
         background: linear-gradient(to top, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.2) 100%);
         display: flex; flex-direction: column; justify-content: flex-end;
-        padding: 2rem; color: white;
+        padding: 1.5rem 2rem; color: white;
       }
-      .uc-pkg-modal-hero-overlay h2 { font-family: 'Outfit', sans-serif; font-size: 2rem; font-weight: 800; margin: 0; }
-      .uc-pkg-modal-hero-overlay p { margin: 0.2rem 0 0; color: rgba(255,255,255,0.85); font-weight: 500; font-size: 1rem; }
+      .uc-pkg-modal-hero-overlay h2 { font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; margin: 0; }
+      .uc-pkg-modal-hero-overlay p { margin: 0.2rem 0 0; color: rgba(255,255,255,0.85); font-weight: 500; font-size: 0.95rem; }
       .uc-pkg-modal-split {
         display: flex;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
         flex-direction: row;
         background: #f8fafc;
-        min-height: 400px;
       }
       .uc-pkg-sidebar {
         width: 300px;
