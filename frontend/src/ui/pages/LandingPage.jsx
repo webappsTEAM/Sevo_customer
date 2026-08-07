@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { createPortal } from "react-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import {
   Home, PaintRoller,
   SprayCan, Building2, AirVent, Hammer, Boxes,
   ShieldCheck, BadgeCheck, Clock, Award, Headphones,
   Star, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight,
-  Smartphone, Phone, Mail,
+  Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet,
 } from "lucide-react"
 import { routes } from "../routes.js"
+import { PackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -43,14 +45,108 @@ function TwitterMark(props) {
   )
 }
 
+/* ── Custom High-Fidelity Transport Illustrations ── */
+function TruckGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 120 90" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Ground shadow */}
+      <ellipse cx="58" cy="74" rx="44" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      {/* Yellow Cargo Container (clean closed solid box with 3D bevel) */}
+      <rect x="18" y="24" width="48" height="38" rx="4" fill="#f59e0b" />
+      <path d="M18 28C18 25.8 19.8 24 22 24H62C64.2 24 66 25.8 66 28V32H18V28Z" fill="#fbbf24" />
+      {/* Cargo container vertical panel lines */}
+      <line x1="34" y1="26" x2="34" y2="60" stroke="#d97706" strokeWidth="1.5" strokeDasharray="3 3" />
+      <line x1="50" y1="26" x2="50" y2="60" stroke="#d97706" strokeWidth="1.5" strokeDasharray="3 3" />
+      {/* Blue Driver Cabin */}
+      <path d="M64 34H78C82 34 85 36.5 86.5 40.5L91 50C92 52.5 92 55 92 57.5V62H64V34Z" fill="#2563eb" />
+      {/* Windshield */}
+      <path d="M69 38H77C79 38 80.8 39.5 81.6 41.5L84.5 48.5H69V38Z" fill="#93c5fd" />
+      <path d="M71 40L76 40L73.5 46L70 46Z" fill="#ffffff" opacity="0.7" />
+      {/* Front Headlight */}
+      <circle cx="89" cy="56" r="2.5" fill="#fef08a" />
+      {/* Bumper */}
+      <rect x="88" y="59" width="6" height="3.5" rx="1.5" fill="#64748b" />
+      {/* Side door handle */}
+      <rect x="70" y="52" width="4" height="1.5" rx="0.5" fill="#1e40af" />
+      {/* Wheels */}
+      <circle cx="32" cy="64" r="9.5" fill="#1e293b" />
+      <circle cx="32" cy="64" r="5" fill="#94a3b8" />
+      <circle cx="32" cy="64" r="2" fill="#ffffff" />
+      <circle cx="76" cy="64" r="9.5" fill="#1e293b" />
+      <circle cx="76" cy="64" r="5" fill="#94a3b8" />
+      <circle cx="76" cy="64" r="2" fill="#ffffff" />
+    </svg>
+  )
+}
+
+function TwoWheelerGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Ground shadow */}
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      {/* Yellow delivery box on rear rack */}
+      <rect x="22" y="28" width="22" height="20" rx="3" fill="#f59e0b" />
+      <rect x="20" y="26" width="26" height="5" rx="2" fill="#fbbf24" />
+      <rect x="30" y="34" width="6" height="8" rx="1" fill="#d97706" />
+      {/* Blue Scooter/Motorcycle Chassis */}
+      <path d="M36 48L50 48L60 60H40L36 48Z" fill="#1d4ed8" />
+      <path d="M46 40L54 40L58 52L48 52Z" fill="#2563eb" />
+      {/* Seat */}
+      <path d="M32 46C32 43 36 42 42 42C48 42 52 45 52 47L32 47Z" fill="#1e293b" />
+      {/* Handlebars & Fork */}
+      <path d="M58 38L66 62" stroke="#64748b" strokeWidth="3" strokeLinecap="round" />
+      <path d="M52 32C56 32 60 34 64 34L68 34" stroke="#334155" strokeWidth="3" strokeLinecap="round" />
+      {/* Front Headlamp with yellow ring */}
+      <circle cx="66" cy="40" r="7" fill="#3b82f6" />
+      <circle cx="66" cy="40" r="5" fill="#fef08a" />
+      <circle cx="66" cy="40" r="2.5" fill="#ffffff" opacity="0.9" />
+      {/* Rear Wheel */}
+      <circle cx="30" cy="66" r="13" fill="#1e293b" />
+      <circle cx="30" cy="66" r="7" fill="#94a3b8" />
+      <circle cx="30" cy="66" r="2.5" fill="#ffffff" />
+      {/* Front Wheel */}
+      <circle cx="66" cy="66" r="13" fill="#1e293b" />
+      <circle cx="66" cy="66" r="7" fill="#94a3b8" />
+      <circle cx="66" cy="66" r="2.5" fill="#ffffff" />
+    </svg>
+  )
+}
+
+function PackersMoversGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 110 90" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Ground shadow */}
+      <ellipse cx="55" cy="74" rx="46" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      {/* Standing Floor Lamp on Left */}
+      <path d="M26 22L34 34H18L26 22Z" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
+      <line x1="26" y1="34" x2="26" y2="70" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
+      <ellipse cx="26" cy="70" rx="6" ry="2" fill="#64748b" />
+      {/* Light glow */}
+      <path d="M20 34L12 56H34L28 34Z" fill="#fef08a" opacity="0.25" />
+      {/* Cardboard Box / Nightstand */}
+      <rect x="22" y="48" width="18" height="20" rx="2" fill="#d97706" />
+      <path d="M22 48L26 44H40L38 48H22Z" fill="#f59e0b" />
+      <rect x="28" y="48" width="5" height="20" fill="#b45309" opacity="0.6" />
+      {/* Royal Blue Sofa on Right */}
+      <rect x="40" y="34" width="54" height="26" rx="6" fill="#1e40af" />
+      <rect x="38" y="50" width="58" height="18" rx="5" fill="#2563eb" />
+      <rect x="36" y="44" width="11" height="24" rx="4" fill="#3b82f6" />
+      <rect x="87" y="44" width="11" height="24" rx="4" fill="#1d4ed8" />
+      {/* Sofa legs */}
+      <line x1="42" y1="68" x2="40" y2="74" stroke="#1e293b" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="90" y1="68" x2="92" y2="74" stroke="#1e293b" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 // ── Real photos already in the project (public/mockups) ─────────────────
 const CATEGORIES = [
-  { label: "Home Services & Pest Control", icon: SprayCan, photo: "/mockups/service_cleaning.png", bg: "bg-indigo-50", ring: "border-indigo-100", fg: "text-indigo-600", hoverBg: "group-hover:bg-indigo-100" },
-  { label: "Paintings", icon: PaintRoller, photo: "/mockups/service_maintenance.png", bg: "bg-amber-50", ring: "border-amber-100", fg: "text-amber-600", hoverBg: "group-hover:bg-amber-100" },
-  { label: "Mason", icon: Building2, photo: "/mockups/service_building.png", bg: "bg-sky-50", ring: "border-sky-100", fg: "text-sky-600", hoverBg: "group-hover:bg-sky-100" },
-  { label: "AC & Appliance", icon: AirVent, photo: "/mockups/service_hvac.png", bg: "bg-rose-50", ring: "border-rose-100", fg: "text-rose-600", hoverBg: "group-hover:bg-rose-100" },
-  { label: "Electrician, Plumbing & Carpentry", icon: Hammer, photo: "/mockups/service_electrical.png", bg: "bg-violet-50", ring: "border-violet-100", fg: "text-violet-600", hoverBg: "group-hover:bg-violet-100" },
-  { label: "Goods & Transports", icon: Boxes, photo: "/mockups/service_transport.jpg", bg: "bg-teal-50", ring: "border-teal-100", fg: "text-teal-600", hoverBg: "group-hover:bg-teal-100" },
+  { label: "Home Services & Pest Control", icon: SprayCan, photo: "/mockups/service_cleaning.png", bg: "bg-indigo-50", ring: "border-indigo-100", fg: "text-indigo-600", hoverBg: "group-hover:bg-indigo-100", serviceCategoryId: "pest_control" },
+  { label: "Paintings", icon: PaintRoller, photo: "/mockups/service_maintenance.png", bg: "bg-amber-50", ring: "border-amber-100", fg: "text-amber-600", hoverBg: "group-hover:bg-amber-100", serviceCategoryId: "painting" },
+  { label: "Mason", icon: Building2, photo: "/mockups/service_building.png", bg: "bg-sky-50", ring: "border-sky-100", fg: "text-sky-600", hoverBg: "group-hover:bg-sky-100", serviceCategoryId: null },
+  { label: "AC & Appliance", icon: AirVent, photo: "/mockups/service_hvac.png", bg: "bg-rose-50", ring: "border-rose-100", fg: "text-rose-600", hoverBg: "group-hover:bg-rose-100", serviceCategoryId: "hvac" },
+  { label: "Electrician, Plumbing & Carpentry", icon: Hammer, photo: "/mockups/service_electrical.png", bg: "bg-violet-50", ring: "border-violet-100", fg: "text-violet-600", hoverBg: "group-hover:bg-violet-100", serviceCategoryId: "electrical" },
+  { label: "Goods & Transports", icon: Boxes, photo: "/mockups/service_transport.jpg", bg: "bg-teal-50", ring: "border-teal-100", fg: "text-teal-600", hoverBg: "group-hover:bg-teal-100", serviceCategoryId: null },
 ]
 
 const TRUST_STRIP = [
@@ -129,13 +225,44 @@ function LocationDropdown({ className = "" }) {
 
 export function LandingPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [query, setQuery] = useState("")
   const [testimonialIdx, setTestimonialIdx] = useState(0)
+  const [modalCart, setModalCart] = useState([])
+  const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(false)
 
   const goToBooking = () => navigate(routes.booking)
   const goToLogin = () => navigate(routes.login)
+  const goToCategoryServices = (serviceCategoryId) => {
+    navigate(serviceCategoryId ? `${routes.booking_services}?category=${serviceCategoryId}` : routes.booking_services)
+  }
+
+  // Category clicked on this page opens the existing package/services
+  // popup right here, instead of navigating to the old BookingPage UI.
+  const activeCategoryId = searchParams.get("category")
+  const activeCategory = activeCategoryId
+    ? BOOKING_CATEGORIES.find(c => c.id === activeCategoryId)
+    : null
+
+  // Close popup on Escape key and prevent background scroll when open
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setIsGoodsModalOpen(false)
+    }
+    if (isGoodsModalOpen) {
+      window.addEventListener("keydown", handleKeyDown)
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = ""
+    }
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+      document.body.style.overflow = ""
+    }
+  }, [isGoodsModalOpen])
 
   return (
+    <>
     <div className="min-h-screen bg-[#F7FAF9] text-slate-800" style={{ animation: "fadeUp 0.4s ease both" }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-100">
@@ -248,10 +375,16 @@ export function LandingPage() {
           <h2 className="text-xl font-bold text-slate-900">Browse by Category</h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {CATEGORIES.map(({ label, icon: Icon, photo }) => (
+          {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => (
             <button
               key={label}
-              onClick={goToBooking}
+              onClick={() => {
+                if (label === "Goods & Transports") {
+                  setIsGoodsModalOpen(true)
+                } else {
+                  goToCategoryServices(serviceCategoryId)
+                }
+              }}
               className="group flex flex-col bg-white rounded-2xl border border-slate-100 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all"
             >
               {photo ? (
@@ -272,6 +405,128 @@ export function LandingPage() {
           ))}
         </div>
       </section>
+
+      {/* ── Goods & Transports Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
+      {isGoodsModalOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transport-modal-title"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsGoodsModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setIsGoodsModalOpen(false)}
+                aria-label="Close popup"
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Modal Title */}
+              <div className="text-center mb-6">
+                <h3
+                  id="transport-modal-title"
+                  className="text-lg sm:text-xl font-extrabold text-slate-900"
+                >
+                  Goods &amp; Transports
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Choose a transport type to get an instant estimate
+                </p>
+              </div>
+
+              {/* Items Grid matching Image 2 with Landing Page Emerald styling */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-stretch">
+                {/* Option 1: Truck */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsGoodsModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    navigate(routes.truck_booking_hosur)
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-[#eef8f5] group-hover:bg-[#e2f3ee] flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <TruckGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
+                    Truck
+                  </span>
+                </button>
+
+                {/* Option 2: Two Wheeler */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsGoodsModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    goToBooking()
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-[#eef8f5] group-hover:bg-[#e2f3ee] flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <TwoWheelerGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
+                    Two Wheeler
+                  </span>
+                </button>
+
+                {/* Option 3: Packers & Movers */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsGoodsModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    goToBooking()
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-[#eef8f5] group-hover:bg-[#e2f3ee] flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <PackersMoversGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
+                    Packers &amp; Movers
+                  </span>
+                </button>
+
+                {/* Option 4: Get an Estimate card/button in Landing Page Emerald theme */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsGoodsModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    navigate(routes.truck_booking_hosur)
+                  }}
+                  className="group flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-[0.98] text-white shadow-lg shadow-emerald-600/25 transition-all text-left cursor-pointer min-h-[140px]"
+                >
+                  <div>
+                    <p className="text-lg sm:text-xl font-extrabold leading-tight tracking-tight">
+                      Get an<br />Estimate
+                    </p>
+                    <p className="text-xs text-emerald-100 font-medium mt-2 opacity-95">
+                      (takes ~2 mins)
+                    </p>
+                  </div>
+                  <div className="pt-4 flex items-center">
+                    <ArrowRight className="w-6 h-6 text-white stroke-[2.5] group-hover:translate-x-1.5 transition-transform" />
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* ── Trust strip ────────────────────────────────────── */}
       <section className="max-w-7xl mx-auto px-6">
@@ -468,5 +723,18 @@ export function LandingPage() {
         </div>
       </footer>
     </div>
+
+    <BkStyles />
+    {activeCategory && (
+      <PackageModal
+        category={activeCategory}
+        cart={modalCart}
+        setCart={setModalCart}
+        packagesData={{}}
+        onClose={() => navigate(routes.booking_services)}
+        onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+      />
+    )}
+    </>
   )
 }

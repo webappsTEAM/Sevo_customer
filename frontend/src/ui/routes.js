@@ -58,6 +58,8 @@ export const routes = {
   employees_training: "/employees/training",
   create_password: "/create-password",
   booking: "/booking",
+  booking_services: "/booking/services",
+  booking_checkout: "/booking/checkout",
   feedback: "/feedback/:token",
   admin_service_requests: "/admin/service-requests",
   admin_feedback: "/admin/feedback",
@@ -65,4 +67,5 @@ export const routes = {
   employee_feedback: "/employee/feedback",
   audit_ledger: "/audit-ledger",
   customer_work_extension: "/customer/work-extensions/:token",
+  truck_booking_hosur: "/trucks/hosur",
 }

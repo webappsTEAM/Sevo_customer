@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useSearchParams, useLocation } from "react-router-dom"
 import { useGoogleLogin } from "@react-oauth/google"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -29,7 +29,7 @@ let BOOKING_CURRENCY_SYMBOL = "â‚¹";
    DATA
    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-const CATEGORIES = [
+export const CATEGORIES = [
   { id: "cleaning", name: "Home Cleaning", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", desc: "Deep clean & sanitization", rating: "4.8", jobs: "50K+" },
   { id: "plumbing", name: "Plumbing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop", desc: "Leaks, pipes & fixtures", rating: "4.7", jobs: "30K+" },
   { id: "electrical", name: "Electrical", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop", desc: "Wiring, panels & lighting", rating: "4.8", jobs: "40K+" },
@@ -4010,14 +4010,20 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
 export function BookingPage() {
   const [searchParams] = useSearchParams()
-  const [step, setStep] = useState(1)
+  // Arriving with a cart already built (e.g. "Proceed to Checkout" from the
+  // landing page's own package popup) skips straight to the date/time step
+  // instead of asking the user to re-add items here.
+  const routerLocation = useLocation()
+  const incomingCart = routerLocation.state?.cart
+  const incomingCategory = routerLocation.state?.category
+  const [step, setStep] = useState(incomingCart?.length ? 3 : 1)
   const [loading, setLoading] = useState(false)
   const [showCartMenu, setShowCartMenu] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [error, setError] = useState(null)
   const [successData, setSuccessData] = useState(null)
-  const [category, setCategory] = useState(null)
-  const [cart, setCart] = useState([])
+  const [category, setCategory] = useState(incomingCategory || null)
+  const [cart, setCart] = useState(incomingCart || [])
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "" })
@@ -4102,7 +4108,6 @@ export function BookingPage() {
       }
     }
     loadCatalog()
-
     // Fetch initial location
     if (navigator.geolocation) {
       setLocation("Detecting location...")
@@ -4475,7 +4480,7 @@ export function BookingPage() {
   )
 }
 
-function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
+export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
   const [activeTab, setActiveTab] = useState(0)
   const [activeFilter, setActiveFilter] = useState("All")
   const packages = ((packagesData && packagesData[category?.id]) || PACKAGES[category?.id] || []).map(p => ({ ...p, priceStr: BOOKING_CURRENCY_SYMBOL + p.price }))
@@ -4657,7 +4662,7 @@ function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesDa
    STYLES
    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-function BkStyles() {
+export function BkStyles() {
   return (
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Outfit:wght@400;500;600;700;800;900&display=swap');
