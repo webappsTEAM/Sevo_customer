@@ -293,6 +293,75 @@ def is_booking_reschedule_eligible(booking):
     return True, "Eligible for rescheduling"
 
 
+def is_booking_refund_eligible(booking):
+    """
+    Checks whether a booking is eligible for a refund:
+    - payment_status in ['paid', 'collected', 'partially_refunded']
+    - No existing active/processed refund request
+    """
+    ps = (booking.payment_status or "").lower()
+    if ps not in ["paid", "collected", "partially_refunded"]:
+        return False, "Booking is not paid."
+
+    from service_requests.models import RefundRequest, RefundStatus
+    active_refunds = RefundRequest.objects.filter(booking=booking).exclude(
+        status__in=[RefundStatus.REJECTED, RefundStatus.CANCELLED]
+    )
+    if active_refunds.exists():
+        return False, "A refund request is already active or processed for this booking."
+
+    return True, "Eligible for refund"
+
+
+def get_customer_available_actions(booking):
+    """
+    Single source of truth for customer-facing available actions.
+    Returns list of string action tokens based on booking_status, payment_status,
+    and domain eligibility rules.
+    """
+    actions = []
+    st = (booking.status or "").lower()
+    ps = (booking.payment_status or "").lower()
+
+    from service_requests.models import RefundRequest
+
+    # 1. retry_payment
+    if st == "pending_payment" and ps in ["pending", "failed", "processing"]:
+        actions.append("retry_payment")
+
+    # 2. track
+    if st in ["assigned", "accepted", "on_the_way", "in_progress"]:
+        actions.append("track")
+
+    # 3. reschedule
+    reschedule_ok, _ = is_booking_reschedule_eligible(booking)
+    if reschedule_ok:
+        actions.append("reschedule")
+
+    # 4. cancel
+    if st in ["draft", "pending_payment", "new_request", "waiting_for_payment", "confirmed", "reviewed", "assigned", "accepted"]:
+        actions.append("cancel")
+
+    # 5. report_problem / complaint
+    if st not in ["draft"]:
+        actions.append("report_problem")
+
+    # 6. contact_support
+    actions.append("contact_support")
+
+    # 7. view_invoice
+    if st in ["confirmed", "assigned", "accepted", "on_the_way", "in_progress", "completed", "verified", "closed"] or ps == "paid":
+        actions.append("view_invoice")
+
+    # 8. refund_status
+    refund_ok, _ = is_booking_refund_eligible(booking)
+    has_existing_refund = RefundRequest.objects.filter(booking=booking).exists()
+    if refund_ok or has_existing_refund:
+        actions.append("refund_status")
+
+    return actions
+
+
 def apply_reschedule_transition(reschedule_request, new_status, actor=None, note=None, proposed_technician=None, new_date=None, new_time_slot=None):
     """
     Applies a state transition to a RescheduleRequest enforcing allowed edge validations.

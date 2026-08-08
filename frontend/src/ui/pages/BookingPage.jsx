@@ -7,19 +7,22 @@ import {
   ChevronRight, ChevronLeft, ArrowLeft, Clock, Calendar, Camera,
   Upload, AlertCircle, Check, X, Info, Zap, Lock, Settings,
   Droplets, Wind, Bug, Brush, Cpu, Hammer, Package, Sparkles,
-  Home, RefreshCw, MessageSquare, KeyRound, ShieldCheck,
+  Home, RefreshCw, MessageSquare, KeyRound, ShieldCheck, Compass,
   LogIn, ChevronDown, ChevronUp, Plus, Award, Users, ThumbsUp, ArrowRight,
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
-  CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket
+  CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
+  Calculator, PaintRoller, Smartphone, MoreVertical
 } from "lucide-react"
 import {
   apiRequestCustomerEmailOTP, apiVerifyCustomerEmailOTP,
   apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP,
-  apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError
+  apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError,
+  apiUpdateCustomerLastLocation, apiDetectCustomerLocation
 } from "../../api/authService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { apiRequest } from "../../api/client.js"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
+import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 
@@ -333,99 +336,586 @@ function SummaryBar({ category, cart, date, time, step }) {
    STEP 1 •” HOME (Hero + Services)
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
-   LOCATION PICKER MODAL
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
-function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
+   /* ─────────────────────────────────────────────────────────────
+   SAVED ADDRESSES MODAL (Urban-style Address Selector)
+   ───────────────────────────────────────────────────────────── */
+
+function SavedAddressesModal({
+  onClose,
+  onSelectAddress,
+  currentAddress,
+  onAddNewAddress
+}) {
+  const [addresses, setAddresses] = useState([
+    { id: "addr-1", title: "Home", text: "fff, Banaswadi, Bengaluru, Karnataka, India" },
+    { id: "addr-2", title: "Home", text: "5, Poonahally, Tamil Nadu, India" },
+    { id: "addr-3", title: "65yu6", text: "t6ytt, Jayamahal Main Rd, Nandi Durga Road Extension, Jayamahal, Bengaluru, Karnataka 560046, India" },
+    { id: "addr-4", title: "Home", text: "12, Bangalore Cantonment Railway Station, Cantonment Railway Quarters, Shivaji Nagar, Bengaluru, Karnataka, India" }
+  ])
+
+  const [selectedId, setSelectedId] = useState(() => {
+    const found = addresses.find(a => a.text === currentAddress)
+    return found ? found.id : addresses[0].id
+  })
+
+  const [menuOpenId, setMenuOpenId] = useState(null)
+
+  const handleProceed = () => {
+    const sel = addresses.find(a => a.id === selectedId)
+    if (sel) {
+      onSelectAddress(sel.text)
+    }
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose}>
+      <motion.div
+        className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-100 relative max-h-[90vh] flex flex-col font-sans text-slate-800"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Floating Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-white hover:bg-slate-100 text-slate-800 flex items-center justify-center shadow-lg border border-slate-200 transition-transform active:scale-95 cursor-pointer z-10"
+        >
+          <X size={20} />
+        </button>
+
+        {/* Title */}
+        <h3 className="text-xl font-black text-slate-900 mb-4">
+          Saved addresses
+        </h3>
+
+        {/* Add another address button */}
+        <button
+          onClick={() => {
+            onAddNewAddress()
+          }}
+          className="flex items-center gap-2 text-indigo-600 font-extrabold text-sm hover:underline mb-4 py-1 text-left cursor-pointer"
+        >
+          <Plus size={18} className="stroke-[3]" /> Add another address
+        </button>
+
+        <div className="h-px bg-slate-100 -mx-6 mb-4" />
+
+        {/* Address List */}
+        <div className="flex-1 overflow-y-auto space-y-4 pr-1 divide-y divide-slate-100">
+          {addresses.map((item) => {
+            const isSelected = selectedId === item.id
+            return (
+              <div
+                key={item.id}
+                onClick={() => setSelectedId(item.id)}
+                className={`pt-3 first:pt-0 flex items-start gap-3 cursor-pointer group`}
+              >
+                {/* Custom Radio Circle */}
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${
+                  isSelected ? "border-slate-900 bg-white" : "border-slate-300 group-hover:border-slate-400"
+                }`}>
+                  {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />}
+                </div>
+
+                {/* Address Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-black text-slate-900 block">
+                      {item.title}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setMenuOpenId(menuOpenId === item.id ? null : item.id)
+                      }}
+                      className="text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-100"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed mt-0.5 pr-2">
+                    {item.text}
+                  </p>
+
+                  {/* 3-dots popup options */}
+                  {menuOpenId === item.id && (
+                    <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-2 flex gap-3 text-xs font-bold">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onAddNewAddress()
+                        }}
+                        className="text-indigo-600 hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setAddresses(prev => prev.filter(a => a.id !== item.id))
+                          setMenuOpenId(null)
+                        }}
+                        className="text-rose-600 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Sticky Proceed Button */}
+        <div className="pt-5 border-t border-slate-100 mt-4">
+          <button
+            onClick={handleProceed}
+            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99] cursor-pointer"
+          >
+            Proceed
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ADD ADDRESS SEARCH MODAL (Urban-style "Add another address" flow)
+   ───────────────────────────────────────────────────────────── */
+
+export function AddAddressSearchModal({
+  onClose,
+  onSelectLocation,
+  onUseCurrentLocation,
+  savedAddresses: initialSaved = []
+}) {
+  const [query, setQuery] = useState("")
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState([])
+  const [isGeoLoading, setIsGeoLoading] = useState(false)
+  const [geoError, setGeoError] = useState("")
+  const [savedAddrs, setSavedAddrs] = useState(initialSaved)
+
+  // Auto fetch saved addresses on mount if logged in
+  useEffect(() => {
+    async function loadSaved() {
+      try {
+        const res = await apiRequest('/auth/customer/addresses/')
+        if (res && res.success && Array.isArray(res.data)) {
+          setSavedAddrs(res.data)
+        }
+      } catch (e) {
+        // guest or non-auth
+      }
+    }
+    loadSaved()
+  }, [])
+
+  // Debounced geocoding search
+  useEffect(() => {
+    if (!query || query.length < 3) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
+    setIsSearching(true)
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`)
+        const data = await res.json()
+        if (data && data.features) {
+          const formatted = data.features.map(f => {
+            const p = f.properties
+            const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ")
+            return {
+              title: p.name || display.split(',')[0],
+              details: display,
+              lat: f.geometry.coordinates[1],
+              lon: f.geometry.coordinates[0]
+            }
+          })
+          setSearchResults(formatted)
+        } else {
+          setSearchResults([])
+        }
+      } catch (err) {
+        console.error(err)
+      }
+      setIsSearching(false)
+    }, 400)
+    return () => clearTimeout(delayDebounce)
+  }, [query])
+
+  const handleUseCurrentLocationClick = () => {
+    if (!navigator.geolocation) {
+      setGeoError("Geolocation is not supported by your browser.")
+      return
+    }
+    setIsGeoLoading(true)
+    setGeoError("")
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6))
+        const lng = parseFloat(pos.coords.longitude.toFixed(6))
+        const acc = pos.coords.accuracy
+
+        try {
+          let readableLocation = ""
+          try {
+            const backendDetect = await apiDetectCustomerLocation(lat, lng, acc)
+            if (backendDetect && backendDetect.success && backendDetect.data) {
+              const d = backendDetect.data
+              readableLocation = [d.area, d.city, d.state].filter(Boolean).join(", ")
+            }
+          } catch (e) {}
+
+          if (!readableLocation) {
+            try {
+              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`)
+              const data = await res.json()
+              if (data && data.address) {
+                const a = data.address
+                readableLocation = [a.road || a.suburb || a.neighbourhood, a.city || a.town || a.village, a.state].filter(Boolean).join(", ")
+              }
+            } catch (e) {}
+          }
+
+          if (!readableLocation) readableLocation = `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+
+          onSelectLocation(readableLocation)
+          onClose()
+        } catch (e) {
+          setGeoError("Unable to detect location. Please try again.")
+        } finally {
+          setIsGeoLoading(false)
+        }
+      },
+      (err) => {
+        setIsGeoLoading(false)
+        if (err.code === 1) {
+          setGeoError("Location permission denied. Please allow location access.")
+        } else if (err.code === 2) {
+          setGeoError("Unable to detect high-accuracy GPS position.")
+        } else if (err.code === 3) {
+          setGeoError("Location request timed out.")
+        } else {
+          setGeoError("Failed to detect location.")
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    )
+  }
+
+  const recents = [
+    { title: "Banashankari", details: "Bengaluru, Karnataka, India" },
+    { title: "Bangalore Palace", details: "Palace Cross Road, Vasanth Nagar, Bengaluru, Karnataka, India" }
+  ]
+
+  return (
+    <div className="fixed inset-0 z-[10002] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose}>
+      <motion.div
+        className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-100 relative max-h-[90vh] flex flex-col font-sans text-slate-800"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Top Header: Arrow + Search Input */}
+        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 mb-4">
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors shrink-0 cursor-pointer"
+            title="Back"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="Search for your location/society/apartment"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-indigo-600 focus:bg-white focus:ring-2 focus:ring-indigo-600/10 transition-all placeholder:text-slate-400"
+              autoFocus
+            />
+            {query ? (
+              <button
+                onClick={() => setQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Use current location option */}
+        <button
+          onClick={handleUseCurrentLocationClick}
+          disabled={isGeoLoading}
+          className="flex items-center gap-3 text-purple-700 hover:text-purple-800 font-extrabold text-xs py-2.5 px-1 rounded-xl transition-colors cursor-pointer group mb-3 hover:bg-purple-50/50"
+        >
+          <div className="w-7 h-7 rounded-full bg-purple-100/70 flex items-center justify-center text-purple-700 shrink-0 group-hover:bg-purple-200/70 transition-colors">
+            {isGeoLoading ? (
+              <RefreshCw size={15} className="animate-spin text-purple-700" />
+            ) : (
+              <Compass size={15} className="stroke-[2.5]" />
+            )}
+          </div>
+          <div>
+            <span className="block text-purple-700 font-extrabold text-xs">
+              {isGeoLoading ? "Detecting location..." : "Use current location"}
+            </span>
+            <span className="block text-[10px] text-purple-600/70 font-medium">Using GPS for exact address</span>
+          </div>
+        </button>
+
+        {geoError && (
+          <div className="mb-3 px-3 py-2 bg-red-50 border border-red-100 rounded-xl text-[11px] font-bold text-red-600 flex items-center gap-2">
+            <AlertCircle size={14} className="shrink-0" />
+            <span>{geoError}</span>
+          </div>
+        )}
+
+        <div className="h-px bg-slate-100 -mx-6 mb-4" />
+
+        {/* Content Body: Search Results OR (Saved + Recents) */}
+        <div className="flex-1 overflow-y-auto space-y-5 pr-1 text-slate-800">
+          {query.length >= 3 ? (
+            <div>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">
+                Search Results
+              </span>
+              {isSearching ? (
+                <div className="py-6 text-center text-xs font-bold text-indigo-600 flex items-center justify-center gap-2">
+                  <RefreshCw size={14} className="animate-spin" />
+                  <span>Searching locations...</span>
+                </div>
+              ) : searchResults.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {searchResults.map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => onSelectLocation(item.details)}
+                      className="py-3 flex items-start gap-3 cursor-pointer hover:bg-slate-50 rounded-xl px-2 transition-colors"
+                    >
+                      <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="text-xs font-black text-slate-900 block">{item.title}</span>
+                        <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{item.details}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-6 text-center text-xs text-slate-400">
+                  No matching locations found.
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Saved Section */}
+              {savedAddrs && savedAddrs.length > 0 ? (
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Saved</h4>
+                  <div className="space-y-3">
+                    {savedAddrs.map((addr, idx) => {
+                      const displayAddr = [addr.address_line1, addr.address_line2, addr.city, addr.state, addr.pincode].filter(Boolean).join(", ")
+                      return (
+                        <div
+                          key={addr.id || idx}
+                          onClick={() => onSelectLocation(displayAddr)}
+                          className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
+                            <Home size={15} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-slate-900 capitalize group-hover:text-purple-700 transition-colors">
+                                {addr.label_display || addr.label || "Home"}
+                              </span>
+                              {addr.is_default && (
+                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-md">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5 truncate">
+                              {displayAddr}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <button onClick={() => { onClose(); onSelectLocation("") }} className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
+                    View more
+                  </button>
+                </div>
+              ) : null}
+
+              {/* Recents Section */}
+              <div>
+                <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Recents</h4>
+                <div className="space-y-3">
+                  {recents.map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => onSelectLocation(item.details)}
+                      className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
+                        <Clock size={15} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-black text-slate-900 block group-hover:text-purple-700 transition-colors">
+                          {item.title}
+                        </span>
+                        <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5">
+                          {item.details}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
+                  View more
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer info */}
+        <div className="pt-3 border-t border-slate-100 mt-3 flex items-center justify-center gap-1.5 text-[10px] text-slate-400 font-semibold">
+          <span>powered by</span>
+          <span className="font-bold text-slate-600">Google</span>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoords }) {
   const [search, setSearch] = useState(initialLocation || "")
   const [isFetching, setIsFetching] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
-  const [mapCenter, setMapCenter] = useState([28.524, 77.204]) // Default fallback
+  const [isUpdatingAddress, setIsUpdatingAddress] = useState(false)
+  const [inlineError, setInlineError] = useState("")
+  const [locationPayload, setLocationPayload] = useState(null)
+  const [mapCenter, setMapCenter] = useState(initialCoords ? [initialCoords.lat, initialCoords.lng] : [12.7409, 77.8253]) // Hosur default
   const [searchResults, setSearchResults] = useState([])
   const [mapObj, setMapObj] = useState(null)
   const isTyping = useRef(false)
+  const debounceTimerRef = useRef(null)
 
-  // Center map on user's current location when modal opens
+  // Center map on user's current location when modal opens if no initial coords
   useEffect(() => {
-    if (navigator.geolocation && mapObj) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        setMapCenter([lat, lon]);
-        mapObj.flyTo([lat, lon], 14);
-      }, (err) => {
-        console.error("Geolocation failed", err);
-      });
+    if (!initialCoords && navigator.geolocation && mapObj) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude
+          const lon = pos.coords.longitude
+          setMapCenter([lat, lon])
+          mapObj.flyTo([lat, lon], 15)
+        },
+        (err) => {
+          console.warn("Geolocation fallback to map default", err)
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      )
     }
-  }, [mapObj]);
+  }, [mapObj, initialCoords])
 
   // Fetch location suggestions when typing
   useEffect(() => {
     if (!search || search.length < 3 || !isTyping.current) {
-      if (!search) setSearchResults([]);
-      setIsSearching(false);
-      return;
+      if (!search) setSearchResults([])
+      setIsSearching(false)
+      return
     }
-    setIsSearching(true);
+    setIsSearching(true)
     const delayDebounce = setTimeout(async () => {
       try {
-        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(search)}&limit=5`);
-        const data = await res.json();
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(search)}&limit=5`)
+        const data = await res.json()
         if (data && data.features) {
           const formatted = data.features.map(f => {
-            const p = f.properties;
-            const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+            const p = f.properties
+            const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ")
             return {
               display_name: display,
               lat: f.geometry.coordinates[1],
               lon: f.geometry.coordinates[0]
             }
-          });
-          setSearchResults(formatted);
+          })
+          setSearchResults(formatted)
         } else {
-          setSearchResults([]);
+          setSearchResults([])
         }
-      } catch (err) { console.error(err); }
-      setIsSearching(false);
+      } catch (err) { console.error(err) }
+      setIsSearching(false)
     }, 600)
     return () => clearTimeout(delayDebounce)
   }, [search])
 
   function MapEvents() {
     const map = useMapEvents({
-      moveend: async (e) => {
-        const center = e.target.getCenter();
-        setMapCenter([center.lat, center.lng]);
+      moveend: (e) => {
+        const center = e.target.getCenter()
+        setMapCenter([center.lat, center.lng])
+        setIsUpdatingAddress(true)
+        setInlineError("")
 
-        setIsFetching(true);
-        try {
-          const res = await fetch(`https://photon.komoot.io/reverse?lon=${center.lng}&lat=${center.lat}`);
-          const data = await res.json();
-          if (data && data.features && data.features.length > 0) {
-            const p = data.features[0].properties;
-            const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
-            isTyping.current = false;
-            setSearch(display);
-            setSearchResults([]); // clear suggestions when dragged manually
-          }
-        } catch (err) {
-          console.error("Geocoding failed", err);
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
         }
-        setIsFetching(false);
+
+        debounceTimerRef.current = setTimeout(async () => {
+          try {
+            const lat = parseFloat(center.lat.toFixed(6))
+            const lng = parseFloat(center.lng.toFixed(6))
+            const res = await apiDetectCustomerLocation(lat, lng)
+
+            if (res && res.success && res.data) {
+              const d = res.data
+              setLocationPayload(d)
+              const readableStr = [d.area, d.city, d.state].filter(Boolean).join(", ")
+              isTyping.current = false
+              setSearch(readableStr || d.formatted_address)
+              setSearchResults([])
+              setInlineError("")
+            } else {
+              setInlineError("Unable to update address for this pin location.")
+            }
+          } catch (err) {
+            setInlineError("Unable to update address for this pin location.")
+          } finally {
+            setIsUpdatingAddress(false)
+          }
+        }, 500)
       }
-    });
+    })
     useEffect(() => { if (!mapObj) setMapObj(map) }, [map, mapObj])
-    return null;
+    return null
   }
 
   const handleSelectResult = (result) => {
-    isTyping.current = false;
-    setSearch(result.display_name);
-    setSearchResults([]);
-    const lat = parseFloat(result.lat);
-    const lon = parseFloat(result.lon);
-    setMapCenter([lat, lon]);
+    isTyping.current = false
+    setSearch(result.display_name)
+    setSearchResults([])
+    const lat = parseFloat(result.lat)
+    const lon = parseFloat(result.lon)
+    setMapCenter([lat, lon])
     if (mapObj) {
-      mapObj.flyTo([lat, lon], 14);
+      mapObj.flyTo([lat, lon], 15)
     }
   }
 
@@ -433,26 +923,28 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
     <div className="uc-modal-overlay" onClick={onClose} style={{ zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <motion.div
         className="uc-step-container"
-        style={{ width: '100%', maxWidth: 550, padding: 0, overflow: 'hidden', margin: '2rem' }}
+        style={{ width: '100%', maxWidth: 550, padding: 0, overflow: 'hidden', margin: '1.5rem' }}
         initial={{ opacity: 0, y: 30, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.95 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
         onClick={e => e.stopPropagation()}
       >
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e293b', padding: 0, display: 'flex' }}><ArrowLeft size={20} /></button>
+        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e293b', padding: 0, display: 'flex' }}>
+            <ArrowLeft size={20} />
+          </button>
           <div style={{ flex: 1 }}>
-            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#1e293b' }}>Select Location</h3>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>Your service will be booked here</p>
+            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#1e293b' }}>Confirm Pin Location</h3>
+            <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b', fontWeight: 500 }}>Drag the map to refine your exact delivery point</p>
           </div>
         </div>
 
-        {/* Interactive Map Placeholder */}
-        <div style={{ width: '100%', height: 250, position: 'relative', background: '#e2e8f0' }}>
+        {/* Map view container */}
+        <div style={{ width: '100%', height: 260, position: 'relative', background: '#e2e8f0' }}>
           <MapContainer
             center={mapCenter}
-            zoom={14}
+            zoom={15}
             style={{ width: '100%', height: '100%' }}
             zoomControl={false}
           >
@@ -462,55 +954,78 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
             />
             <MapEvents />
           </MapContainer>
+
+          {/* Center Draggable Target Marker */}
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 1000 }}>
-            <div style={{ transform: 'translateY(-18px)', color: '#ef4444', filter: 'drop-shadow(0 5px 5px rgba(0,0,0,0.3))' }}>
-              <MapPin size={42} fill="#ef4444" color="white" strokeWidth={1.5} />
+            <div style={{ transform: 'translateY(-20px)', color: '#ef4444', filter: 'drop-shadow(0 6px 6px rgba(0,0,0,0.35))' }}>
+              <MapPin size={44} fill="#ef4444" color="white" strokeWidth={1.5} />
             </div>
           </div>
         </div>
 
-        <div style={{ padding: '1.5rem' }}>
+        {/* Selected Address Display & Controls */}
+        <div style={{ padding: '1.25rem 1.5rem' }}>
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 16, padding: '0.85rem 1rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>📍 Pin Location Address</span>
+              {isUpdatingAddress && (
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6366f1', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <RefreshCw size={12} className="animate-spin" /> Updating location...
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.4 }}>
+              {search || "Drag map pin to select location..."}
+            </div>
+            {inlineError && (
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ef4444', marginTop: 4 }}>
+                {inlineError}
+              </div>
+            )}
+          </div>
+
           <div className="uc-input-wrap" style={{ marginBottom: '1rem' }}>
             <Search size={16} className="uc-field-icon" />
             <input
               className="uc-input"
-              placeholder={isFetching ? "Locating on map..." : "Search for area, street name..."}
+              placeholder="Or search for area, street name..."
               value={search}
               onChange={e => {
-                isTyping.current = true;
-                setSearch(e.target.value);
+                isTyping.current = true
+                setSearch(e.target.value)
               }}
-              autoFocus
             />
           </div>
 
-          <div style={{ maxHeight: 150, overflowY: 'auto', marginBottom: '1.5rem' }}>
-            {isSearching && (
-              <div style={{ padding: '0.75rem', textAlign: 'center', color: '#7C3AED', fontSize: '0.85rem', fontWeight: 600 }}>
-                Searching...
-              </div>
-            )}
-            {isTyping.current && search.length > 2 && searchResults.length === 0 && !isSearching && !isFetching && (
-              <div style={{ padding: '0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
-                No matches found. Try a different spelling or more specific area.
-              </div>
-            )}
-            {searchResults.map((loc, i) => (
-              <div
-                key={i}
-                style={{ padding: '0.75rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', background: search === loc.display_name ? '#f8fafc' : 'white' }}
-                onClick={() => handleSelectResult(loc)}
-              >
-                <MapPin size={16} color={search === loc.display_name ? '#7C3AED' : '#94a3b8'} style={{ marginTop: 2 }} />
-                <div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: search === loc.display_name ? '#7C3AED' : '#1e293b' }}>{loc.display_name.split(',')[0]}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>{loc.display_name}</div>
+          {searchResults.length > 0 && (
+            <div style={{ maxHeight: 130, overflowY: 'auto', marginBottom: '1rem' }}>
+              {searchResults.map((loc, i) => (
+                <div
+                  key={i}
+                  style={{ padding: '0.65rem 0.85rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                  onClick={() => handleSelectResult(loc)}
+                >
+                  <MapPin size={16} color="#6366f1" style={{ marginTop: 2 }} />
+                  <div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>{loc.display_name.split(',')[0]}</div>
+                    <div style={{ fontSize: '0.74rem', color: '#64748b' }}>{loc.display_name}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
-          <button className="uc-btn-primary uc-btn-full" onClick={() => onConfirm(search)} disabled={isFetching || !search}>
+          <button
+            className="uc-btn-primary uc-btn-full"
+            onClick={() => onConfirm(locationPayload || {
+              latitude: mapCenter[0],
+              longitude: mapCenter[1],
+              area: search.split(',')[0] || "Detected Area",
+              formatted_address: search
+            })}
+            disabled={isUpdatingAddress || !search}
+            style={{ borderRadius: 16, padding: '0.85rem' }}
+          >
             Confirm Location
           </button>
         </div>
@@ -519,11 +1034,14 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
   )
 }
 
-function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicReviews }) {
+function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicReviews, user }) {
   const [rotIdx, setRotIdx] = useState(0)
   const safeCats = categories && categories.length > 0 ? categories : CATEGORIES;
   const featured = safeCats.slice(0, 6)
   const rotWords = featured.map(c => c.name)
+
+  const displayName = user?.firstName || user?.first_name || user?.full_name || user?.username
+  const greeting = displayName ? `Hi, ${displayName} 👋` : "Hi, Guest 👋"
 
   useEffect(() => {
     const t = setInterval(() => setRotIdx(i => (i + 1) % rotWords.length), 4500)
@@ -2037,7 +2555,7 @@ function StepBar({ step, total }) {
    CUSTOMER ACCOUNT MODAL
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
-function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
+export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   const { user, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
 
   const [loginMethod, setLoginMethod] = useState('email')
@@ -2264,13 +2782,21 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   const fetchAddresses = () => {
     setAddressesLoading(true)
     apiRequest('/auth/customer/addresses/')
-      .then(r => setSavedAddresses(r.data || []))
+      .then(r => {
+        if (r && Array.isArray(r.data)) {
+          setSavedAddresses(r.data)
+        } else if (Array.isArray(r)) {
+          setSavedAddresses(r)
+        } else {
+          setSavedAddresses([])
+        }
+      })
       .catch(() => setSavedAddresses([]))
       .finally(() => setAddressesLoading(false))
   }
 
   useEffect(() => {
-    if (activeTab === 'Saved Addresses' && user) {
+    if (activeTab === 'Saved Addresses') {
       fetchAddresses()
     }
   }, [activeTab, user])
@@ -2500,15 +3026,149 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     setMockAddresses(mockAddresses.filter(a => a.id !== id))
   }
 
+  const [geoAddressLoading, setGeoAddressLoading] = useState(false)
+
+  const handleDetectLocationForAddress = () => {
+    if (!navigator.geolocation) {
+      setAddrError("Geolocation is not supported by your browser.")
+      return
+    }
+    setGeoAddressLoading(true)
+    setAddrError("")
+    setAddrSuccess("")
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6))
+        const lng = parseFloat(pos.coords.longitude.toFixed(6))
+        const acc = pos.coords.accuracy
+
+        try {
+          let line1 = ""
+          let city = ""
+          let state = ""
+          let pincode = ""
+
+          try {
+            const backendDetect = await apiDetectCustomerLocation(lat, lng, acc)
+            if (backendDetect && backendDetect.success && backendDetect.data) {
+              const d = backendDetect.data
+              const parts = [d.area, d.formatted_address ? d.formatted_address.split(',')[0] : ''].filter(Boolean)
+              line1 = parts.filter((v, i, a) => a.indexOf(v) === i).join(', ')
+              city = d.city
+              state = d.state
+              pincode = d.pincode
+            }
+          } catch (err) {
+            console.warn("Backend detect fallback:", err)
+          }
+
+          if (!line1) {
+            try {
+              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en&zoom=18`)
+              const data = await res.json()
+              if (data && data.address) {
+                const a = data.address
+                const parts = [a.building, a.house_number, a.road, a.suburb, a.neighbourhood, a.residential].filter(Boolean)
+                line1 = parts.filter((v, i, a) => a.indexOf(v) === i).join(", ") || (data.display_name ? data.display_name.split(",")[0] : '')
+                city = a.city || a.town || a.village || a.county || city
+                state = a.state || state
+                pincode = a.postcode || pincode
+              }
+            } catch (e) {
+              console.warn("Reverse geocode warning:", e)
+            }
+          }
+
+          // Hosur Geo-fencing & Pincode Resolution
+          if ((pincode && pincode.startsWith("635")) || (12.55 <= lat && lat <= 12.85 && 77.70 <= lng && lng <= 77.98)) {
+            city = "Hosur"
+            state = "Tamil Nadu"
+            if (!pincode) pincode = "635109"
+          }
+
+          if (!line1) line1 = `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+          if (!city) city = "Hosur"
+          if (!state) state = "Tamil Nadu"
+          if (!pincode) pincode = "635109"
+
+          setAddrLine1(line1)
+          setAddrCity(city)
+          setAddrState(state)
+          setAddrPincode(pincode)
+
+          // Update last_known_location for home page pill
+          await apiUpdateCustomerLastLocation({
+            latitude: lat,
+            longitude: lng,
+            label: line1,
+            detected_at: new Date().toISOString()
+          })
+
+          // Deduplicate: check if home/default address already exists
+          const existing = (savedAddresses || []).find(a => a.label === 'home' || a.is_default)
+          const targetUrl = existing ? `/auth/customer/addresses/${existing.id}/` : '/auth/customer/addresses/'
+          const targetMethod = existing ? 'PATCH' : 'POST'
+
+          try {
+            const saveRes = await apiRequest(targetUrl, {
+              method: targetMethod,
+              json: {
+                label: 'home',
+                address_line1: line1,
+                address_line2: '',
+                city: city,
+                state: state,
+                pincode: pincode,
+                phone_number: user?.phone || '',
+                latitude: lat,
+                longitude: lng,
+                is_default: true
+              }
+            })
+            if (saveRes.success || saveRes.data || saveRes.id) {
+              fetchAddresses()
+              setAddrSuccess(`✓ Real-time GPS location detected (${line1}, ${city}) & saved!`)
+              setShowAddressForm(false)
+            } else {
+              setShowAddressForm(true)
+              setAddrSuccess("Current location detected! Please review and click Save Address.")
+            }
+          } catch (e) {
+            setShowAddressForm(true)
+            setAddrSuccess("Current location detected! Please review and click Save Address.")
+          }
+
+          if (typeof refreshMe === 'function') await refreshMe()
+        } catch (e) {
+          setAddrError("Failed to fetch address details for detected GPS coordinates.")
+        } finally {
+          setGeoAddressLoading(false)
+        }
+      },
+      (err) => {
+        setGeoAddressLoading(false)
+        if (err.code === 1) {
+          setAddrError("Location permission denied. Please allow location access in your browser settings.")
+        } else if (err.code === 2) {
+          setAddrError("Unable to detect high-accuracy GPS position. Please try again.")
+        } else if (err.code === 3) {
+          setAddrError("GPS request timed out. Please try again.")
+        } else {
+          setAddrError("Failed to detect location. Please enter manually.")
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    )
+  }
+
+  const nonDraftBookings = (realBookings || []).filter(b => b.status !== 'draft')
+  const hasNonDraftBookings = nonDraftBookings.length > 0
+
   const tabs = [
     { id: "My Profile", icon: User },
-    { id: "My Bookings", icon: Calendar },
     { id: "Saved Addresses", icon: MapPin },
-    { id: "My Reschedules", icon: RefreshCw },
-    { id: "My Refunds", icon: CreditCard },
-    { id: "My Complaints", icon: MessageSquare },
-    { id: "Payment Methods", icon: Wallet },
-    { id: "Notifications", icon: Bell },
+    { id: "My Bookings", icon: Calendar, badge: nonDraftBookings.length || undefined },
     { id: "Help & Support", icon: LifeBuoy },
   ]
 
@@ -2561,7 +3221,25 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Bookings</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {bookingsLoading ? <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading bookings...</div> : realBookings.length === 0 ? <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>No bookings found.</div> : realBookings.map(b => {
+              {bookingsLoading ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading bookings...</div>
+              ) : realBookings.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                  <div style={{ width: 64, height: 64, borderRadius: 16, background: '#f3e8ff', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 4px 12px rgba(124,58,237,0.15)' }}>
+                    <Calendar size={30} />
+                  </div>
+                  <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>No Active Bookings Yet</h4>
+                  <p style={{ margin: '0 auto 20px', fontSize: '0.85rem', color: '#64748b', maxWidth: 360, lineHeight: 1.5 }}>
+                    You haven't placed any service bookings yet. Browse our top home services and book an expert with instant slot confirmation.
+                  </p>
+                  <button
+                    onClick={() => { onClose(); setStep(1); }}
+                    style={{ padding: '12px 24px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.25)' }}
+                  >
+                    + Book a Service Now
+                  </button>
+                </div>
+              ) : realBookings.map(b => {
                 const isRescheduleEligible = ['new_request', 'reviewed', 'confirmed', 'assigned', 'accepted'].includes(b.status)
                 const getRescheduleNotice = (st) => {
                   if (['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(st)) {
@@ -2678,12 +3356,53 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                           )}
 
                           <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                            {(b.payment_status === 'paid' || b.payment_status === 'collected') && (
-                              <>
-                                <button onClick={() => window.open(`http://localhost:8000/api/booking/${b.id}/invoice/`, '_blank')} style={{ flex: 1, minWidth: 160, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><FileText size={14} /> Download Invoice</button>
-                                <button onClick={() => alert("Invoice successfully sent to your registered email!")} style={{ flex: 1, minWidth: 160, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Mail size={14} /> Email Invoice</button>
-                              </>
-                            )}
+                            {(b.available_actions || []).map(act => {
+                              if (act === "retry_payment") return (
+                                <button key={act} onClick={async () => {
+                                  try {
+                                    const res = await apiRequest(`/booking/${b.id}/retry-payment/`, {
+                                      method: 'POST',
+                                      body: JSON.stringify({ payment_method: b.payment_method || 'ONLINE' })
+                                    })
+                                    if (res.success) {
+                                      alert("Payment completed successfully!")
+                                      const updated = await apiRequest("/booking/my-bookings/")
+                                      if (updated.data) setBookings(updated.data)
+                                    } else {
+                                      alert(res.message || "Payment retry failed.")
+                                    }
+                                  } catch (e) { alert(e.message || "Retry payment failed.") }
+                                }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <RefreshCw size={14} /> Retry Payment
+                                </button>
+                              )
+                              if (act === "track") return (
+                                <button key={act} onClick={() => { setAssignedTech(b.assigned_employee); onClose(); setStep(0); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: '#3B82F6', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <MapPin size={14} /> Track Professional
+                                </button>
+                              )
+                              if (act === "reschedule") return (
+                                <button key={act} onClick={() => { setActiveTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <Calendar size={14} /> Reschedule
+                                </button>
+                              )
+                              if (act === "view_invoice") return (
+                                <button key={act} onClick={() => window.open(`http://localhost:8000/api/booking/${b.id}/invoice/`, '_blank')} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <FileText size={14} /> Download Invoice
+                                </button>
+                              )
+                              if (act === "refund_status") return (
+                                <button key={act} onClick={() => { setActiveTab("My Refunds"); setSelectedBooking(b); setShowRefundForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <CreditCard size={14} /> Refund Status
+                                </button>
+                              )
+                              if (act === "report_problem") return (
+                                <button key={act} onClick={() => { setActiveTab("My Complaints"); setSelectedBooking(b); setShowComplaintForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <MessageSquare size={14} /> Report Problem
+                                </button>
+                              )
+                              return null
+                            })}
                           </div>
                         </div>
                       </motion.div>
@@ -2784,14 +3503,17 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           setAddrSuccess('')
           try {
             const res = await apiRequest(`/auth/customer/addresses/${addrId}/`, { method: 'DELETE' })
-            if (res.success) {
+            if (!res || res.success || res.status === 204 || res.status === 200) {
               setAddrSuccess('Address deleted successfully.')
-              fetchAddresses()
+              setAddrError('')
             } else {
-              setAddrError(res.message || 'Failed to delete address.')
+              const msg = res?.error?.detail || res?.detail || res?.message || 'Failed to delete address.'
+              setAddrError(msg)
             }
           } catch (e) {
-            setAddrError(e?.body?.message || e?.message || 'Failed to delete address.')
+            setAddrError(e?.body?.detail || e?.message || 'Failed to delete address.')
+          } finally {
+            fetchAddresses()
           }
         }
 
@@ -2815,15 +3537,21 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: 12 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Saved Addresses</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#64748b' }}>Manage your home, office, and preferred service delivery locations.</p>
               </div>
-              <button onClick={() => handleOpenForm(null)}
-                style={{ padding: '10px 20px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(124,58,237,0.25)' }}>
-                <MapPin size={15} /> Add New Address
-              </button>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button type="button" onClick={handleDetectLocationForAddress} disabled={geoAddressLoading}
+                  style={{ padding: '10px 16px', background: '#ede9fe', color: '#6366f1', border: '1.5px solid #c4b5fd', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Compass size={16} /> {geoAddressLoading ? "Detecting..." : "Use Current Location"}
+                </button>
+                <button onClick={() => handleOpenForm(null)}
+                  style={{ padding: '10px 20px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(99,102,241,0.25)' }}>
+                  <MapPin size={15} /> Add New Address
+                </button>
+              </div>
             </div>
 
             {addrSuccess && (
@@ -2840,10 +3568,35 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
             {showAddressForm ? (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                style={{ border: '1.5px solid #7C3AED30', borderRadius: 20, padding: '1.75rem', background: '#faf5ff', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(124,58,237,0.08)' }}>
+                style={{ border: '1.5px solid #6366f130', borderRadius: 20, padding: '1.75rem', background: '#faf5ff', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(99,102,241,0.08)' }}>
                 <div style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: 18, color: '#0f172a' }}>
                   {editingAddress ? 'Edit Address' : 'Add New Address'}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleDetectLocationForAddress}
+                  disabled={geoAddressLoading}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 14,
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    marginBottom: 18,
+                    boxShadow: '0 4px 14px rgba(99,102,241,0.25)'
+                  }}
+                >
+                  <Compass size={18} /> {geoAddressLoading ? "Detecting Location..." : "📍 Autofill with Current Location (GPS)"}
+                </button>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {/* Address Label Pills */}
@@ -3068,41 +3821,42 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
               </div>
             )}
 
-            {/* View Map Modal */}
+            {/* View Map Modal / Draggable Pin Adjustment Modal */}
             {mapAddress && (
-              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                  style={{ background: 'white', borderRadius: 20, width: '90%', maxWidth: 480, padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <h4 style={{ margin: 0, fontWeight: 800, color: '#0f172a' }}>Location Map View</h4>
-                    <button onClick={() => setMapAddress(null)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#64748b' }}>✕</button>
-                  </div>
+              <LocationPickerModal
+                initialLocation={`${mapAddress.address_line1}, ${mapAddress.city}`}
+                initialCoords={mapAddress.latitude && mapAddress.longitude ? { lat: parseFloat(mapAddress.latitude), lng: parseFloat(mapAddress.longitude) } : null}
+                onClose={() => setMapAddress(null)}
+                onConfirm={async (confirmedPayload) => {
+                  setMapAddress(null)
+                  if (!confirmedPayload) return
 
-                  <div style={{ background: '#f1f5f9', borderRadius: 14, height: 180, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, border: '1px solid #cbd5e1', marginBottom: 14 }}>
-                    <MapPin size={36} color="#7C3AED" />
-                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{mapAddress.label_display || mapAddress.label}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                      Coordinates: {mapAddress.latitude || '37.7749'}, {mapAddress.longitude || '-122.4194'}
-                    </div>
-                  </div>
+                  const line1 = confirmedPayload.area ? [confirmedPayload.area, confirmedPayload.formatted_address?.split(',')[0]].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(', ') : (confirmedPayload.formatted_address || mapAddress.address_line1)
+                  const city = confirmedPayload.city || mapAddress.city || "Hosur"
+                  const state = confirmedPayload.state || mapAddress.state || "Tamil Nadu"
+                  const pincode = confirmedPayload.pincode || mapAddress.pincode || "635109"
 
-                  <div style={{ fontSize: '0.85rem', color: '#334155', fontWeight: 600, marginBottom: 16 }}>
-                    <div>{mapAddress.address_line1} {mapAddress.address_line2}</div>
-                    <div style={{ color: '#64748b' }}>{mapAddress.city}, {mapAddress.state} - {mapAddress.pincode}</div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapAddress.address_line1 + ', ' + mapAddress.city)}`, '_blank')}
-                      style={{ flex: 1, padding: '10px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}>
-                      Open in Google Maps
-                    </button>
-                    <button onClick={() => setMapAddress(null)}
-                      style={{ padding: '10px 18px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', color: '#475569' }}>
-                      Close
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
+                  try {
+                    const saveRes = await apiRequest(`/auth/customer/addresses/${mapAddress.id}/`, {
+                      method: 'PATCH',
+                      json: {
+                        address_line1: line1,
+                        city: city,
+                        state: state,
+                        pincode: pincode,
+                        latitude: confirmedPayload.latitude || mapAddress.latitude,
+                        longitude: confirmedPayload.longitude || mapAddress.longitude
+                      }
+                    })
+                    if (saveRes.success || saveRes.data || saveRes.id) {
+                      setAddrSuccess('Address pin location updated!')
+                      fetchAddresses()
+                    }
+                  } catch (e) {
+                    console.error("Failed to update address location:", e)
+                  }
+                }}
+              />
             )}
           </motion.div>
         )
@@ -4135,7 +4889,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 key={t.id}
                 onClick={() => onChangeTab(t.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 14, padding: '1rem 2rem', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', cursor: 'pointer',
                   background: activeTab === t.id ? 'white' : 'transparent',
                   borderLeft: `4px solid ${activeTab === t.id ? '#7C3AED' : 'transparent'}`,
                   color: activeTab === t.id ? '#7C3AED' : '#475569',
@@ -4144,7 +4898,14 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   transition: 'all 0.2s'
                 }}
               >
-                <t.icon size={20} color={activeTab === t.id ? '#7C3AED' : '#94a3b8'} /> {t.id}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <t.icon size={20} color={activeTab === t.id ? '#7C3AED' : '#94a3b8'} /> {t.id}
+                </div>
+                {t.badge > 0 && (
+                  <span style={{ background: '#7C3AED', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
+                    {t.badge}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -4181,16 +4942,559 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   )
 }
 
+/* ─────────────────────────────────────────────────────────────
+   STEP WORKFLOW CHECKOUT (Urban-style Accordion & Slot Booking)
+   ───────────────────────────────────────────────────────────── */
+
+function StepWorkflowCheckout({
+  category,
+  cart,
+  setCart,
+  selectedDate,
+  selectedTime,
+  onDateChange,
+  onTimeChange,
+  formData,
+  onChange,
+  onOpenMap,
+  onSubmit,
+  loading,
+  error,
+  onBack
+}) {
+  const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime)
+  const [avoidCalling, setAvoidCalling] = useState(true)
+  const [couponCode, setCouponCode] = useState("")
+  const [couponApplied, setCouponApplied] = useState(false)
+  const [tip, setTip] = useState(75)
+  const [customTip, setCustomTip] = useState("")
+  const [payMethod, setPayMethod] = useState("online")
+  const [editingPhone, setEditingPhone] = useState(false)
+  const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
+  const [showAddSearchModal, setShowAddSearchModal] = useState(false)
+  const [showMapModal, setShowMapModal] = useState(false)
+  const [selectedSearchLoc, setSelectedSearchLoc] = useState("")
+
+  const availableDates = useMemo(() => {
+    const dates = []
+    const today = new Date()
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today)
+      d.setDate(today.getDate() + i)
+      const dateStr = d.toISOString().split("T")[0]
+      let label = d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })
+      if (i === 0) label = `Today, ${d.getDate()} ${d.toLocaleDateString("en-US", { month: "short" })}`
+      if (i === 1) label = `Tomorrow, ${d.getDate()} ${d.toLocaleDateString("en-US", { month: "short" })}`
+      dates.push({ dateStr, label, dayName: d.toLocaleDateString("en-US", { weekday: "short" }), dayNum: d.getDate() })
+    }
+    return dates
+  }, [])
+
+  const timeSlots = [
+    "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
+    "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM"
+  ]
+
+  const items = cart && cart.length > 0 ? cart : [{ id: "def-1", name: category?.name || "Service Booking", price: 1198, quantity: 1 }]
+
+  const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const origTotal = Math.round(itemTotal * 1.1)
+  const discount = couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 100
+  const taxFee = 99
+  const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
+  const grandTotal = Math.max(0, itemTotal + taxFee - discount + tipAmount)
+
+  const addItem = (id) => {
+    setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i))
+  }
+  const removeItem = (id) => {
+    setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
+  }
+
+  const isSlotSelected = selectedDate && selectedTime
+
+  return (
+    <div className="w-full max-w-6xl mx-auto px-4 py-6 font-sans text-slate-800">
+      
+      {/* Top Offer Banner */}
+      <div className="mb-6 flex items-center gap-2 bg-emerald-50 border border-emerald-200/60 rounded-xl px-4 py-3 text-emerald-800 text-xs font-bold shadow-xs">
+        <TagIcon size={16} className="text-emerald-600 shrink-0" />
+        <span>Saving ₹{discount} on this order</span>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        {/* LEFT COLUMN: Steps / Workflow Accordion */}
+        <div className="lg:col-span-7 space-y-6">
+          
+          {/* Main Accordion Card */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
+            
+            {/* Step 1: Phone / Contact */}
+            <div className="p-5 flex items-start gap-4">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
+                <MapPin size={18} />
+              </div>
+              <div className="flex-1">
+                <span className="text-xs font-bold text-slate-500 block mb-0.5">Send booking details to</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-extrabold text-slate-900">
+                    +91 {formData.phone || "9150632938"}
+                  </span>
+                  <button onClick={() => setEditingPhone(!editingPhone)} className="text-xs font-bold text-indigo-600 hover:underline">
+                    {editingPhone ? "Save" : "Change"}
+                  </button>
+                </div>
+                {editingPhone && (
+                  <input
+                    type="text"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={onChange}
+                    placeholder="Enter phone number"
+                    className="mt-2 text-xs border border-slate-200 rounded-lg px-3 py-1.5 w-full outline-none focus:border-indigo-500"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Step 2: Address */}
+            <div className="p-5 flex items-start gap-4">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
+                <MapPin size={18} />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-500">Address</span>
+                  <button
+                    onClick={() => setShowSavedAddrModal(true)}
+                    className="border border-slate-200 rounded-lg px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <p className="text-xs font-bold text-slate-800 leading-snug">
+                  {formData.address || "fff, Banaswadi, Bengaluru, Karnataka, India"}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 3: Slot (Time & Date) */}
+            <div className="p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
+                  <Clock size={18} />
+                </div>
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-slate-500 block mb-2">Slot</span>
+                  
+                  {/* Select button or current slot */}
+                  {isSlotSelected && !showSlotPicker ? (
+                    <div className="flex items-center justify-between bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
+                      <div>
+                        <span className="text-xs font-black text-indigo-950 block">
+                          {selectedDate}
+                        </span>
+                        <span className="text-xs font-bold text-indigo-700">
+                          {selectedTime}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setShowSlotPicker(true)}
+                        className="text-xs font-bold text-indigo-600 hover:underline"
+                      >
+                        Change slot
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowSlotPicker(true)}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-indigo-600/20 active:scale-[0.99]"
+                    >
+                      Select time & date
+                    </button>
+                  )}
+
+                  {/* Inline Slot Picker Panel */}
+                  {showSlotPicker && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
+                      
+                      {/* Date Pills */}
+                      <div>
+                        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
+                          Select Date
+                        </label>
+                        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                          {availableDates.map(item => {
+                            const isSel = selectedDate === item.dateStr
+                            return (
+                              <button
+                                key={item.dateStr}
+                                onClick={() => onDateChange(item.dateStr)}
+                                className={`flex flex-col items-center justify-center min-w-[70px] p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                                  isSel
+                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                    : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300"
+                                }`}
+                              >
+                                <span className="text-[10px] font-bold opacity-80 uppercase">{item.dayName}</span>
+                                <span className="text-sm font-black mt-0.5">{item.dayNum}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Time Slot Grid */}
+                      <div>
+                        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
+                          Select Time Slot
+                        </label>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {timeSlots.map(t => {
+                            const isSel = selectedTime === t
+                            return (
+                              <button
+                                key={t}
+                                onClick={() => {
+                                  onTimeChange(t)
+                                  if (selectedDate) setShowSlotPicker(false)
+                                }}
+                                className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
+                                  isSel
+                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white"
+                                }`}
+                              >
+                                {t}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {isSlotSelected && (
+                        <div className="pt-2 text-right">
+                          <button
+                            onClick={() => setShowSlotPicker(false)}
+                            className="bg-indigo-600 text-white font-extrabold text-xs px-5 py-2 rounded-xl shadow-xs hover:bg-indigo-700 transition-all"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Step 4: Payment Method */}
+            <div className={`p-5 flex items-start gap-4 ${!isSlotSelected ? "opacity-50" : ""}`}>
+              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
+                <CreditCard size={18} />
+              </div>
+              <div className="flex-1">
+                <span className="text-xs font-bold text-slate-500 block mb-2">Payment Method</span>
+                
+                {isSlotSelected ? (
+                  <div className="space-y-3">
+                    <div
+                      onClick={() => setPayMethod("online")}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                        payMethod === "online"
+                          ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
+                          : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💳</div>
+                        <div>
+                          <span className="text-xs font-black text-slate-900 block">Pay Online</span>
+                          <span className="text-[10px] text-slate-500 font-medium">UPI / Cards / Netbanking</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">RECOMMENDED</span>
+                    </div>
+
+                    <div
+                      onClick={() => setPayMethod("cash")}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                        payMethod === "cash"
+                          ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
+                          : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💵</div>
+                        <div>
+                          <span className="text-xs font-black text-slate-900 block">Pay After Service</span>
+                          <span className="text-[10px] text-slate-500 font-medium">Pay cash or UPI to expert</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">CASH</span>
+                    </div>
+
+                    {error && (
+                      <div className="text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-xl">
+                        {error}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => onSubmit(payMethod)}
+                      disabled={loading}
+                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300"
+                    >
+                      {loading ? "Processing..." : `Confirm Booking · ₹${grandTotal.toLocaleString("en-IN")}`}
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs font-bold text-slate-400">Select slot above to unlock payment</span>
+                )}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Cancellation Policy */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-1">
+            <h4 className="text-xs font-black text-slate-900">Cancellation policy</h4>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Free cancellations if done more than 12 hrs before the service. A fee will be charged otherwise.
+            </p>
+            <button className="text-xs font-extrabold text-indigo-600 hover:underline pt-1">
+              Read full policy
+            </button>
+          </div>
+
+        </div>
+
+        {/* RIGHT COLUMN: Cart Items & Payment Summary */}
+        <div className="lg:col-span-5 space-y-5 lg:sticky lg:top-24">
+          
+          {/* Items Card */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+            <h4 className="text-sm font-black text-slate-900 border-b border-slate-100 pb-2">
+              {category?.name || "Services Added"}
+            </h4>
+
+            <div className="space-y-3">
+              {items.map(item => (
+                <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
+                  <span className="font-bold text-slate-800 flex-1">{item.name}</span>
+                  
+                  {/* Quantity controls */}
+                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2 py-0.5 bg-slate-50 font-bold">
+                    <button onClick={() => removeItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold">-</button>
+                    <span className="text-slate-800 font-black">{item.quantity}</span>
+                    <button onClick={() => addItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold">+</button>
+                  </div>
+
+                  {/* Price */}
+                  <div className="text-right">
+                    <span className="font-black text-slate-900 block">
+                      ₹{(item.price * item.quantity).toLocaleString("en-IN")}
+                    </span>
+                    {origTotal > itemTotal && (
+                      <span className="text-[10px] text-slate-400 line-through block">
+                        ₹{(origTotal * item.quantity).toLocaleString("en-IN")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Checkbox option */}
+            <div className="pt-2 border-t border-slate-100 flex items-start gap-2.5">
+              <input
+                type="checkbox"
+                id="avoidCalling"
+                checked={avoidCalling}
+                onChange={e => setAvoidCalling(e.target.checked)}
+                className="accent-indigo-600 mt-0.5 rounded shrink-0 cursor-pointer"
+              />
+              <label htmlFor="avoidCalling" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                Avoid calling before reaching the location
+              </label>
+            </div>
+          </div>
+
+          {/* Coupons Card */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                %
+              </div>
+              <span className="text-xs font-black text-slate-900">Coupons and offers</span>
+            </div>
+            <button
+              onClick={() => setCouponApplied(!couponApplied)}
+              className="text-xs font-extrabold text-indigo-600 hover:underline"
+            >
+              {couponApplied ? "1 applied ✓" : "9 offers >"}
+            </button>
+          </div>
+
+          {/* Payment Summary */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+            <h4 className="text-sm font-black text-slate-900 border-b border-slate-100 pb-2">
+              Payment summary
+            </h4>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>Item total</span>
+                <div className="text-right">
+                  <span className="line-through text-slate-400 mr-1.5">₹{origTotal.toLocaleString("en-IN")}</span>
+                  <span className="font-bold text-slate-800">₹{itemTotal.toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between text-slate-600">
+                <span>Taxes and Fee</span>
+                <span className="font-bold text-slate-800">₹{taxFee}</span>
+              </div>
+
+              {couponApplied && (
+                <div className="flex justify-between text-indigo-700 font-bold">
+                  <span>Coupon Discount</span>
+                  <span>-₹{discount}</span>
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 pt-2 flex justify-between font-black text-slate-900 text-sm">
+                <span>Total amount</span>
+                <span>₹{grandTotal.toLocaleString("en-IN")}</span>
+              </div>
+
+              <div className="flex justify-between font-black text-indigo-700 text-sm pt-1">
+                <span>Amount to pay</span>
+                <span>₹{grandTotal.toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+
+            {/* Tip Section */}
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <span className="text-xs font-bold text-slate-700 block">
+                Add a tip to thank the Professional
+              </span>
+
+              <div className="grid grid-cols-4 gap-2">
+                {[50, 75, 100].map(amt => {
+                  const isSel = tip === amt
+                  return (
+                    <button
+                      key={amt}
+                      onClick={() => setTip(isSel ? null : amt)}
+                      className={`relative py-2 rounded-xl border text-xs font-bold transition-all ${
+                        isSel
+                          ? "border-indigo-600 bg-indigo-50/60 text-indigo-700"
+                          : "border-slate-200 text-slate-700 hover:border-slate-300"
+                      }`}
+                    >
+                      ₹{amt}
+                      {amt === 75 && (
+                        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-emerald-100 text-emerald-800 text-[8px] font-black px-1.5 py-0.2 rounded-full whitespace-nowrap">
+                          POPULAR
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => setTip(tip === "custom" ? null : "custom")}
+                  className={`py-2 rounded-xl border text-xs font-bold transition-all ${
+                    tip === "custom"
+                      ? "border-indigo-600 bg-indigo-50/60 text-indigo-700"
+                      : "border-slate-200 text-slate-700 hover:border-slate-300"
+                  }`}
+                >
+                  Custom
+                </button>
+              </div>
+
+              {tip === "custom" && (
+                <input
+                  type="number"
+                  placeholder="Enter tip amount"
+                  value={customTip}
+                  onChange={e => setCustomTip(e.target.value)}
+                  className="w-full mt-2 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-500 font-bold"
+                />
+              )}
+
+              <span className="text-[10px] text-slate-400 block text-center pt-1">
+                100% of the tip goes to the professional.
+              </span>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {showSavedAddrModal && (
+        <SavedAddressesModal
+          onClose={() => setShowSavedAddrModal(false)}
+          currentAddress={formData.address}
+          onSelectAddress={(addr) => {
+            onChange({ target: { name: "address", value: addr } })
+          }}
+          onAddNewAddress={() => {
+            setShowSavedAddrModal(false)
+            setShowAddSearchModal(true)
+          }}
+        />
+      )}
+
+      {showAddSearchModal && (
+        <AddAddressSearchModal
+          onClose={() => setShowAddSearchModal(false)}
+          onSelectLocation={(loc) => {
+            setSelectedSearchLoc(loc)
+            setShowAddSearchModal(false)
+            setShowMapModal(true)
+          }}
+          onUseCurrentLocation={() => {
+            setSelectedSearchLoc("")
+            setShowAddSearchModal(false)
+            setShowMapModal(true)
+          }}
+        />
+      )}
+
+      {showMapModal && (
+        <LocationPickerModal
+          initialLocation={selectedSearchLoc || formData.address}
+          onClose={() => setShowMapModal(false)}
+          onConfirm={(loc) => {
+            onChange({ target: { name: "address", value: loc } })
+            setShowMapModal(false)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
 export function BookingPage() {
   const [searchParams] = useSearchParams()
-  // Arriving with a cart already built (e.g. "Proceed to Checkout" from the
-  // landing page's own package popup) skips straight to the date/time step
-  // instead of asking the user to re-add items here.
   const navigate = useNavigate()
   const routerLocation = useLocation()
   const incomingCart = routerLocation.state?.cart
   const incomingCategory = routerLocation.state?.category
-  const [step, setStep] = useState(incomingCart?.length ? 3 : 1)
+
+  // BookingPage is purely a checkout flow — if no cart arrives, go back to landing
+  useEffect(() => {
+    if (!incomingCart?.length && !incomingCategory) {
+      navigate("/", { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [step, setStep] = useState(incomingCart?.length ? 3 : 3)
   const [loading, setLoading] = useState(false)
   const [showCartMenu, setShowCartMenu] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
@@ -4208,13 +5512,18 @@ export function BookingPage() {
   const [dynamicReviews, setDynamicReviews] = useState([])
 
   const [searchQuery, setSearchQuery] = useState("")
-  const [location, setLocation] = useState("H37, Block H- Saket- Ne...")
+  const [location, setLocation] = useState("Set location")
   const [showLocPicker, setShowLocPicker] = useState(false)
   const [showPostFlow, setShowPostFlow] = useState(false)
   const [assignedTech, setAssignedTech] = useState(null)
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
   const contentRef = useRef()
+
+  // Auth state — customer profile + bookings
+  const { user, refreshMe } = useAuth()
+  const [customerBookings, setCustomerBookings] = useState([])
+  const hasNonDraftBookings = customerBookings.some(b => b.status !== "draft")
 
   useEffect(() => { contentRef.current?.scrollTo({ top: 0, behavior: "smooth" }) }, [step])
 
@@ -4283,34 +5592,28 @@ export function BookingPage() {
       }
     }
     loadCatalog()
-    // Fetch initial location
-    if (navigator.geolocation) {
-      setLocation("Detecting location...")
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lon = pos.coords.longitude;
-          fetch(`https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}`)
-            .then(res => res.json())
-            .then(data => {
-              if (data && data.features && data.features.length > 0) {
-                const p = data.features[0].properties;
-                const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
-                setLocation(display);
-              } else {
-                setLocation("Location not found");
-              }
-            })
-            .catch(() => setLocation("Unable to determine location"));
-        },
-        () => {
-          setLocation("Select a location");
-        }
-      );
-    } else {
-      setLocation("Select a location");
-    }
   }, [])
+
+  // Requirement 1 of Prompt 3: Resolve location from customer profile (last_known_location), fallback to "Set location"
+  useEffect(() => {
+    const locObj = user?.last_known_location || user?.lastKnownLocation
+    if (locObj) {
+      if (typeof locObj === "string" && locObj.trim()) {
+        setLocation(locObj)
+        return
+      }
+      if (locObj.label) {
+        setLocation(locObj.label)
+        return
+      }
+    }
+    if (user?.address) {
+      setLocation(user.address)
+      return
+    }
+    // Fallback if null or manual entry skipped
+    setLocation("Set location")
+  }, [user])
 
   useEffect(() => {
     let query = "";
@@ -4392,11 +5695,13 @@ export function BookingPage() {
 
 
   const resetAll = () => {
-    setStep(1); setCategory(null); setCart([]); setSelDate(""); setSelTime("")
+    setCategory(null); setCart([]); setSelDate(""); setSelTime("")
     setFormData({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "" })
     setPhotoFile(null); setPhotoPreview(null); setSuccessData(null); setError(null)
     setShowPostFlow(false); setAssignedTech(null)
     sessionStorage.removeItem(OTP_SESSION_KEY)
+    // No StepHome anymore — go back to landing page
+    navigate("/", { replace: true })
   }
 
   return (
@@ -4432,79 +5737,7 @@ export function BookingPage() {
         )}
       </AnimatePresence>
 
-      {/* Sticky Nav */}
-      <header className="uc-nav">
-        <div className="uc-nav-left">
-          <CalTrackLogo size="sm" showTagline={false} theme="light" />
-        </div>
 
-        <div className="uc-nav-right-icons">
-          <div className="uc-location-selector" onClick={() => setShowLocPicker(true)}>
-            <MapPin size={15} color="#64748b" />
-            <span className="uc-loc-text">{location.split(',')[0]}</span>
-            <ChevronDown size={14} color="#64748b" />
-          </div>
-          <div className="uc-nav-search">
-            <Search size={15} color="#94a3b8" />
-            <input type="text" placeholder="Search for 'AC service'" value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setStep(1); }} />
-          </div>
-          {/* Cart Dropdown */}
-          <div className="uc-cart-icon"
-            onMouseEnter={() => setShowCartMenu(true)}
-            onMouseLeave={() => setShowCartMenu(false)}
-            onClick={() => step > 1 && setStep(6)}>
-            <ShoppingCart size={20} color="#1e293b" />
-            {(cart.length > 0 || step > 1) && <span className="uc-cart-badge">{cart.reduce((a, c) => a + c.quantity, 0) || 1}</span>}
-
-            {showCartMenu && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem', zIndex: 1000, boxShadow: '0 10px 40px rgba(0,0,0,0.12)', width: 280, marginTop: '10px', cursor: 'default' }}>
-                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <ShoppingCart size={16} /> Cart {cart.length > 0 ? `(${cart.reduce((a, c) => a + c.quantity, 0)} Items)` : "(Empty)"}
-                </div>
-                <div style={{ height: 1, background: '#e2e8f0', margin: '0.5rem 0' }} />
-
-                {cart.length > 0 ? (
-                  <>
-                    {cart.map((c, idx) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '0.8rem 0', fontSize: '0.8rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                          <CheckCircle2 size={14} color="#10B981" style={{ marginTop: 2 }} />
-                          <div>
-                            <div style={{ fontWeight: 700, color: '#1e293b' }}>{c.quantity}x {c.name}</div>
-                            <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: 2 }}>{c.categoryName}</div>
-                          </div>
-                        </div>
-                        <div style={{ fontWeight: 800, color: '#1e293b' }}>{BOOKING_CURRENCY_SYMBOL}{c.price * c.quantity}</div>
-                      </div>
-                    ))}
-
-                    <div style={{ height: 1, background: '#e2e8f0', margin: '0.5rem 0' }} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 800, color: '#1e293b', margin: '0.8rem 0' }}>
-                      <span>Total Items : {cart.reduce((a, c) => a + c.quantity, 0)}</span>
-                      <span>Total Price : {BOOKING_CURRENCY_SYMBOL}{cart.reduce((a, c) => a + (c.price * c.quantity), 0)}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
-                      <button onClick={() => setStep(6)} style={{ width: '100%', padding: '0.6rem', background: '#f1f5f9', color: '#0f172a', fontWeight: 700, borderRadius: 8, border: 'none', cursor: 'pointer' }}>View Cart</button>
-                      <button onClick={() => setStep(6)} style={{ width: '100%', padding: '0.6rem', background: '#7C3AED', color: 'white', fontWeight: 700, borderRadius: 8, border: 'none', cursor: 'pointer' }}>Proceed to Booking</button>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ padding: '2rem 0', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>Your cart is empty</div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Profile Icon (Opens Account Portal directly) */}
-          <div className="uc-profile-icon" onClick={() => {
-            setShowAccountPortal(true);
-            setActiveAccountTab("My Profile");
-          }}>
-            <User size={20} color="#1e293b" />
-          </div>
-        </div>
-      </header>
 
       {/* Account Portal Modal */}
       <AnimatePresence>
@@ -4517,12 +5750,80 @@ export function BookingPage() {
         )}
       </AnimatePresence>
 
+      {/* Login flow removed from BookingPage — login is handled on LandingPage */}
 
-      {step > 1 && step <= 6 && (
-        <div className="uc-nav-summary">
-          <SummaryBar category={category} cart={cart} date={selDate} time={selTime} step={step} />
+      {/* Urban Style Top Navigation Header */}
+      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-2xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          
+          {/* Brand Logo & Urban Location Selector */}
+          <div className="flex items-center gap-3 sm:gap-6">
+            <div
+              className="flex items-center gap-2 select-none cursor-pointer"
+              onClick={() => { setStep(1); setCategory(null); }}
+            >
+              <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-600/20">
+                <Home className="w-5 h-5" strokeWidth={2.5} />
+              </div>
+              <span className="text-lg font-black tracking-tight text-slate-900 hidden sm:inline">CalServices</span>
+            </div>
+
+            <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
+            {/* Location Selector Pill */}
+            <button
+              onClick={() => setShowLocPicker(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[280px] truncate"
+            >
+              <MapPin size={15} className="text-indigo-600 shrink-0" />
+              <span className="truncate">{location || "Select Location"}</span>
+              <ChevronDown size={14} className="text-slate-400 shrink-0 ml-auto" />
+            </button>
+          </div>
+
+          {/* Right Controls: Cart & Profile Button */}
+          <div className="flex items-center gap-3">
+            {cart?.length > 0 && (
+              <button
+                onClick={() => setStep(3)}
+                className="relative p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 text-slate-700 hover:text-indigo-600 transition-all cursor-pointer"
+                title="View Cart"
+              >
+                <ShoppingCart size={18} />
+                <span className="absolute -top-1.5 -right-1.5 bg-indigo-600 text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                  {cart.length}
+                </span>
+              </button>
+            )}
+
+            {/* Urban Profile Icon Button */}
+            <button
+              onClick={() => {
+                if (user) {
+                  setActiveAccountTab(hasNonDraftBookings ? "My Bookings" : "My Profile")
+                  setShowAccountPortal(true)
+                } else {
+                  // Login is on LandingPage — redirect there
+                  navigate("/")
+                }
+              }}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/80 border border-indigo-100 text-indigo-950 font-black text-xs transition-all shadow-2xs cursor-pointer active:scale-95"
+            >
+              <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-[10px] shrink-0">
+                <User size={13} />
+              </div>
+              <span className="hidden sm:inline font-extrabold">
+                {user?.firstName || user?.username || "Login / Sign Up"}
+              </span>
+              <ChevronDown size={13} className="text-indigo-500 hidden sm:inline" />
+            </button>
+          </div>
+
         </div>
-      )}
+      </header>
+
+
+
 
 
 
@@ -4544,25 +5845,7 @@ export function BookingPage() {
             </motion.div>
           )}
 
-          {step === 1 && (
-            <motion.div key="step1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <StepHome
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                onSelect={cat => {
-                  setCategory(cat);
-                  const catId = (cat?.id || cat?.slug || "").toLowerCase();
-                  if (["electrical", "plumbing", "carpentry", "elec", "plum", "carp"].some(k => catId.includes(k))) {
-                    setShowSubCategoryChoiceModal(true);
-                  } else {
-                    setShowPackageModal(true);
-                  }
-                }}
-                categories={categoriesData}
-                dynamicReviews={dynamicReviews}
-              />
-            </motion.div>
-          )}
+          {/* Step 1 (StepHome) removed — service discovery lives on LandingPage */}
 
           {step === 4 && (
             <motion.div key="step4" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
@@ -4584,60 +5867,24 @@ export function BookingPage() {
             </motion.div>
           )}
 
-          {step === 3 && (
-            <motion.div key="step3" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
-              <div className="uc-step-container">
-                <StepSchedule
-                  category={category}
-                  selectedDate={selDate}
-                  selectedTime={selTime}
-                  onDateChange={setSelDate}
-                  onTimeChange={setSelTime}
-                  cart={cart}
-                  onNext={() => setStep(6)}
-                  onBack={() => setStep(5)}
-                />
-              </div>
-            </motion.div>
-          )}
-
-          {step === 5 && (
-            <motion.div key="step5" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
-              <div className="uc-step-container">
-                <StepDetails
-                  category={category}
-                  cart={cart}
-                  formData={formData}
-                  onChange={handleChange}
-                  photoFile={photoFile}
-                  onPhotoChange={handlePhoto}
-                  photoPreview={photoPreview}
-                  onNext={() => setStep(3)}
-                  onBack={() => setStep(4)}
-                  globalLocation={location}
-                  onOpenMap={() => setShowLocPicker(true)}
-                />
-              </div>
-            </motion.div>
-          )}
-
-          {step === 6 && (
-            <motion.div key="step6" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
-              <div className="uc-step-container">
-                <StepConfirm
-                  category={category}
-                  pkg={cart[0] || { name: "Multiple Items", priceStr: BOOKING_CURRENCY_SYMBOL + cart.reduce((a, c) => a + (c.price * c.quantity), 0) }}
-                  cart={cart}
-                  date={selDate}
-                  time={selTime}
-                  formData={formData}
-                  photoPreview={photoPreview}
-                  onBack={() => setStep(3)}
-                  onSubmit={handleSubmit}
-                  loading={loading}
-                  error={error}
-                />
-              </div>
+          {step >= 3 && step <= 6 && (
+            <motion.div key="workflowCheckout" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+              <StepWorkflowCheckout
+                category={category}
+                cart={cart}
+                setCart={setCart}
+                selectedDate={selDate}
+                selectedTime={selTime}
+                onDateChange={setSelDate}
+                onTimeChange={setSelTime}
+                formData={formData}
+                onChange={handleChange}
+                onOpenMap={() => setShowLocPicker(true)}
+                onSubmit={handleSubmit}
+                loading={loading}
+                error={error}
+                onBack={() => navigate("/", { replace: true })}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -7358,7 +8605,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   }}
                   className={`w-14 h-14 object-cover rounded-2xl mb-1.5 transition-all duration-200 ${
                     isSelected
-                      ? "scale-[1.08] shadow-md ring-2 ring-emerald-500 ring-offset-2"
+                      ? "scale-[1.08] shadow-md border-2 border-slate-800"
                       : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
                   }`}
                 />
@@ -7954,7 +9201,7 @@ export function BkStyles() {
         display: flex; align-items:center; justify-content:center;
         transition: all 0.3s;
       }
-      .uc-sb-done .uc-sb-dot { background:#10B981; color:white; }
+      .uc-sb-done .uc-sb-dot { background:#7C3AED; color:white; }
       .uc-sb-active .uc-sb-dot { background:#7C3AED; color:white; box-shadow:0 0 0 3px #7C3AED30; }
       .uc-sb-label {
         font-size: 0.65rem;
@@ -7963,7 +9210,7 @@ export function BkStyles() {
         white-space: nowrap;
       }
       .uc-sb-active .uc-sb-label { color:#7C3AED; }
-      .uc-sb-done .uc-sb-label  { color:#10B981; }
+      .uc-sb-done .uc-sb-label  { color:#7C3AED; }
       .uc-sb-line {
         flex: 1; height:2px;
         background: #e2e8f0;
@@ -7971,7 +9218,7 @@ export function BkStyles() {
         min-width: 20px;
         transition: background 0.4s;
       }
-      .uc-sb-line-done { background: #10B981; }
+      .uc-sb-line-done { background: #7C3AED; }
 
       /* •”••”• Main •”••”• */
       .uc-main {
@@ -8884,6 +10131,51 @@ export function BkStyles() {
   )
 }
 
+
+const KITCHEN_SUB_TABS = [
+  { id: "complete", name: "Complete Kitchen", image: "/mockups/kitchen_cleaning_hero.png" },
+  { id: "appliance", name: "Appliances", image: "/mockups/appliance_cleaning_hero.png" }
+];
+
+const COMPLETE_KITCHEN_SERVICE = {
+  id: "kitchen-deep-clean",
+  name: "Complete Kitchen Deep Cleaning",
+  price: 1999,
+  duration: "3 hrs",
+  includes: [
+    "Chimney exterior & exhaust fan degreasing",
+    "Countertop, sink, & wall tiles scrubbing",
+    "Cabinet exterior & interior wiping",
+    "Floor scrubbing and deep cleaning"
+  ]
+};
+
+const APPLIANCE_SERVICES = [
+  {
+    id: "chimney-clean",
+    name: "Chimney Deep Cleaning",
+    price: 999,
+    duration: "1.5 hrs",
+    image: "/mockups/appliance_cleaning_hero.png",
+    includes: ["Filter cleaning", "Baffle plate degreasing", "Outer body wipe"]
+  },
+  {
+    id: "fridge-clean",
+    name: "Refrigerator Deep Cleaning",
+    price: 799,
+    duration: "1 hr",
+    image: "/mockups/appliance_cleaning_hero.png",
+    includes: ["Shelves cleaning", "Inner walls disinfection", "Outer body wipe"]
+  },
+  {
+    id: "microwave-clean",
+    name: "Microwave Oven Cleaning",
+    price: 399,
+    duration: "30 mins",
+    image: "/mockups/appliance_cleaning_hero.png",
+    includes: ["Inner grease removal", "Glass plate cleaning", "Outer body wipe"]
+  }
+];
 
 export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
   const [activeTab, setActiveTab] = useState("complete");

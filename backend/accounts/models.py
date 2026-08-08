@@ -67,6 +67,9 @@ class User(AbstractBaseUser):
     # Extended profile fields
     bio = models.TextField(blank=True, default="")
     phone = models.CharField(max_length=30, blank=True, default="")
+    mobile_number = models.CharField(max_length=15, unique=True, null=True, blank=True, db_index=True)
+    profile_complete = models.BooleanField(default=False)
+    last_known_location = models.JSONField(null=True, blank=True, default=dict)
     timezone = models.CharField(max_length=60, default="UTC")
     language = models.CharField(max_length=10, default="en")
     avatar = models.ImageField(upload_to="avatars/", null=True, blank=True)
@@ -105,6 +108,31 @@ class User(AbstractBaseUser):
 
     def is_employee(self) -> bool:
         return self.role == self.Role.EMPLOYEE
+
+
+class OTPRequest(models.Model):
+    """
+    Mobile OTP Request model.
+    Stores hashed OTP codes with 5-minute expiration and attempt counters.
+    """
+    mobile_number = models.CharField(max_length=15, db_index=True)
+    otp_hash = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    attempt_count = models.IntegerField(default=0)
+    is_verified = models.BooleanField(default=False)
+    purpose = models.CharField(max_length=30, default="login")
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "OTP Request"
+        verbose_name_plural = "OTP Requests"
+
+    def __str__(self):
+        return f"OTP for {self.mobile_number} ({self.purpose}) - Verified: {self.is_verified}"
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
 
 
 class OTPAuditLog(models.Model):

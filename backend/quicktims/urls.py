@@ -2,7 +2,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import include, path
 
+from accounts.views import CustomerLocationDetectView
+
 urlpatterns = [
+    path("api/customer/location/detect/", CustomerLocationDetectView.as_view(), name="api-customer-location-detect"),
     path("api/auth/", include("accounts.urls")),
     path("api/company/", include("companies.urls")),
     path("api/employees/", include("employees.urls")),

@@ -7,10 +7,14 @@ import {
   ShieldCheck, BadgeCheck, Clock, Award, Headphones,
   Star, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight,
   Smartphone, Phone, Mail, X, ArrowRight,
-  ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet,
+  ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User,
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
+import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
+import { useAuth } from "../../state/auth/useAuth.js"
+import { apiUpdateCustomerLastLocation } from "../../api/authService.js"
+import { AnimatePresence } from "framer-motion"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -639,25 +643,45 @@ function LocationDropdown({ className = "" }) {
 }
 
 export function LandingPage() {
+  const { user, refreshMe } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState("")
   const [testimonialIdx, setTestimonialIdx] = useState(0)
   const location = useLocation()
   const [modalCart, setModalCart] = useState(location.state?.cart || [])
-  const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(false)
-  const [isElecModalOpen, setIsElecModalOpen] = useState(false)
-  const [isAcModalOpen, setIsAcModalOpen] = useState(false)
+  const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
+  const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
+  const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
   const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(location.state?.openHomePestModal || false)
+  const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
+  const [showAccountPortal, setShowAccountPortal] = useState(false)
+  const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
+  const [showLocationPickerModal, setShowLocationPickerModal] = useState(false)
+  const [activeLocationLabel, setActiveLocationLabel] = useState(null)
 
   useEffect(() => {
-    if (location.state?.openHomePestModal) {
-      setIsHomePestModalOpen(true)
-    }
+    if (location.state?.openHomePestModal) setIsHomePestModalOpen(true)
+    if (location.state?.openAcModal) setIsAcModalOpen(true)
+    if (location.state?.openElecModal) setIsElecModalOpen(true)
+    if (location.state?.openGoodsModal) setIsGoodsModalOpen(true)
   }, [location.state])
 
+  const handleCloseCategory = () => {
+    const rawCatKey = (activeCategory?.id || activeCategory?.slug || activeCategoryId || "").toLowerCase()
+    if (["hvac", "ac", "appliance"].some(k => rawCatKey.includes(k))) {
+      navigate("/home", { state: { openAcModal: true } })
+    } else if (["electrical", "plumbing", "carpentry", "elec"].some(k => rawCatKey.includes(k))) {
+      navigate("/home", { state: { openElecModal: true } })
+    } else if (["goods", "transport"].some(k => rawCatKey.includes(k))) {
+      navigate("/home", { state: { openGoodsModal: true } })
+    } else {
+      navigate("/home", { state: { openHomePestModal: true } })
+    }
+  }
+
   const goToBooking = () => navigate(routes.booking)
-  const goToLogin = () => navigate(routes.login)
+  const goToLogin = () => setShowCustomerEntryModal(true)
   const goToCategoryServices = (serviceCategoryId) => {
     navigate(serviceCategoryId ? `${routes.booking_services}?category=${serviceCategoryId}` : routes.booking_services)
   }
@@ -691,7 +715,7 @@ export function LandingPage() {
     }
   }, [isGoodsModalOpen, isElecModalOpen, isAcModalOpen, isHomePestModalOpen])
 
-  if (activeCategoryId === "cleaning" || activeCategoryId === "kitchen_cleaning") {
+  if (activeCategoryId && activeCategoryId !== "painting") {
     return (
       <>
       <div className="min-h-screen bg-[#F7FAF9] text-slate-800 flex flex-col" style={{ animation: "fadeUp 0.4s ease both" }}>
@@ -707,14 +731,34 @@ export function LandingPage() {
               <a href="#about" className="hover:text-slate-900" onClick={() => navigate("/home")}>About Us</a>
             </nav>
             <div className="flex items-center gap-3">
-              <button onClick={goToBooking} className="btn btnPrimary bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-full transition-colors">
+              {user ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveAccountTab("My Profile")
+                    setShowAccountPortal(true)
+                  }}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-950 font-black text-xs transition-all shadow-2xs cursor-pointer"
+                >
+                  <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-[10px] shrink-0">
+                    <User size={13} />
+                  </div>
+                  <span className="hidden sm:inline font-extrabold">
+                    Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={goToLogin}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition-all shadow-sm cursor-pointer"
+                >
+                  <User size={14} />
+                  <span>Login / Sign Up</span>
+                </button>
+              )}
+              <button onClick={goToBooking} className="btn btnPrimary bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-full transition-colors cursor-pointer">
                 Book Service
-              </button>
-              <button onClick={goToLogin} className="hidden sm:inline-flex border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors">
-                Login
-              </button>
-              <button onClick={() => navigate(routes.activation_journey)} className="hidden sm:inline-flex border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors">
-                Sign Up
               </button>
             </div>
           </div>
@@ -727,7 +771,7 @@ export function LandingPage() {
               category={activeCategory}
               cart={modalCart}
               setCart={setModalCart}
-              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
+              onClose={handleCloseCategory}
               onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
             />
           )}
@@ -737,7 +781,7 @@ export function LandingPage() {
               cart={modalCart}
               setCart={setModalCart}
               isFullPage={true}
-              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
+              onClose={handleCloseCategory}
               onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
             />
           )}
@@ -810,25 +854,61 @@ export function LandingPage() {
             <a href="#about" className="hover:text-slate-900 transition-colors">About Us</a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-8">
+            {/* Location Selector (Urban Company Style) */}
             <button
-              onClick={goToBooking}
-              className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-5 py-2 rounded-full transition-colors shadow-sm"
+              type="button"
+              onClick={() => setShowLocationPickerModal(true)}
+              className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              title="Location"
             >
-              Book Service
+              <MapPin className="w-5 h-5 text-slate-700 stroke-[1.75] shrink-0 group-hover:text-slate-900 transition-colors" />
+              <span className="truncate max-w-[180px] font-semibold text-slate-800">
+                {(() => {
+                  if (activeLocationLabel) return activeLocationLabel
+                  const locObj = user?.last_known_location || user?.lastKnownLocation
+                  if (locObj) {
+                    if (typeof locObj === "string" && locObj.trim()) return locObj
+                    if (locObj.label) return locObj.label
+                  }
+                  if (user?.address) return user.address
+                  return "Set location"
+                })()}
+              </span>
+              <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
             </button>
-            <button
-              onClick={goToLogin}
-              className="hidden sm:inline-flex border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors"
-            >
-              Login
-            </button>
-            <button
-              onClick={() => navigate(routes.activation_journey)}
-              className="hidden sm:inline-flex border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors"
-            >
-              Sign Up
-            </button>
+
+            {/* User Profile / Login (Urban Company Style) */}
+            {user ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveAccountTab("My Profile")
+                  setShowAccountPortal(true)
+                }}
+                className="flex items-center gap-2.5 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                  <User className="w-4 h-4 stroke-[1.75]" />
+                </div>
+                <span className="font-semibold text-slate-800">
+                  Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
+                </span>
+                <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={goToLogin}
+                className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                  <User className="w-4 h-4 stroke-[1.75]" />
+                </div>
+                <span className="font-semibold text-slate-800">Login / Sign Up</span>
+                <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -1651,6 +1731,49 @@ export function LandingPage() {
           onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
         />
       )
+    )}
+
+    <CustomerEntryFlowModal
+      isOpen={showCustomerEntryModal}
+      onClose={() => setShowCustomerEntryModal(false)}
+      onComplete={() => {
+        setShowCustomerEntryModal(false)
+        if (typeof refreshMe === "function") refreshMe()
+      }}
+    />
+
+    <AnimatePresence>
+      {showAccountPortal && (
+        <CustomerAccountModal
+          activeTab={activeAccountTab}
+          onChangeTab={setActiveAccountTab}
+          onClose={() => setShowAccountPortal(false)}
+        />
+      )}
+    </AnimatePresence>
+
+    {showLocationPickerModal && (
+      <AddAddressSearchModal
+        onClose={() => setShowLocationPickerModal(false)}
+        onSelectLocation={async (locStr) => {
+          setShowLocationPickerModal(false)
+          if (locStr) {
+            setActiveLocationLabel(locStr)
+            if (user) {
+              try {
+                await apiUpdateCustomerLastLocation({
+                  label: locStr,
+                  detected_at: new Date().toISOString()
+                })
+              } catch (e) {}
+              if (typeof refreshMe === "function") refreshMe()
+            }
+          }
+        }}
+        onUseCurrentLocation={() => {
+          setShowLocationPickerModal(false)
+        }}
+      />
     )}
     </>
   )

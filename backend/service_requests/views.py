@@ -300,14 +300,55 @@ class CustomerMyBookingsView(APIView):
         if user_full_name and len(user_full_name) >= 3:
             filters |= Q(customer_name__iexact=user_full_name)
 
+        # Exclude draft bookings from My Bookings list
         qs = (
             ServiceRequest.objects.filter(filters)
+            .exclude(status="draft")
             .select_related('company', 'assigned_employee', 'assigned_employee__user')
             .order_by("-id")
         )
         all_bookings = ServiceRequestListSerializer(qs, many=True, context={'request': request}).data
 
         return _success(data=all_bookings)
+
+
+class CustomerBookingRetryPaymentView(APIView):
+    """
+    POST /api/booking/<pk>/retry-payment/
+    Re-attempts payment on an existing pending_payment booking record.
+    Transitions (pending_payment, failed) -> (confirmed, paid) on success,
+    or sets payment_status -> failed on failure.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, pk):
+        try:
+            sr = ServiceRequest.objects.get(pk=pk)
+        except ServiceRequest.DoesNotExist:
+            return _error("Booking not found", status_code=status.HTTP_404_NOT_FOUND)
+
+        if sr.status not in ["pending_payment", "waiting_for_payment", "draft"]:
+            return _error("Booking is not in a payable status", status_code=status.HTTP_400_BAD_REQUEST)
+
+        payment_method = (request.data.get("payment_method") or sr.payment_method or "ONLINE").upper()
+        simulate_failure = request.data.get("simulate_failure", False)
+
+        if simulate_failure:
+            sr.payment_status = ServiceRequest.PaymentStatus.FAILED
+            sr.save(update_fields=["payment_status"])
+            return _error("Payment failed. Please retry.", status_code=status.HTTP_400_BAD_REQUEST, extra={"booking_id": sr.id, "payment_status": "failed"})
+
+        # Success: transition to CONFIRMED / PAID
+        try:
+            from .state_machine import apply_transition
+            apply_transition(sr, ServiceRequest.Status.CONFIRMED, new_payment_status=ServiceRequest.PaymentStatus.PAID)
+            sr.payment_method = payment_method
+            sr.save()
+        except ValidationError as ve:
+            return _error(str(ve), status_code=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ServiceRequestDetailSerializer(sr)
+        return _success(data=serializer.data, message="Payment completed successfully.")
 
 
 class FeedbackTokenView(APIView):

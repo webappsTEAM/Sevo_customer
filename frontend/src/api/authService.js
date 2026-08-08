@@ -73,6 +73,43 @@ export async function apiVerifyCustomerPhoneOTP(phone, otp) {
   })
 }
 
+// ── Prompt 2 Standardized OTP & Profile API Calls ───────────────────────────
+
+export async function apiRequestCustomerMobileOTP(mobile_number) {
+  return fetchJSON("/auth/customer/otp/request/", {
+    method: "POST",
+    body: JSON.stringify({ mobile_number })
+  })
+}
+
+export async function apiVerifyCustomerMobileOTP(mobile_number, otp_code) {
+  return fetchJSON("/auth/customer/otp/verify/", {
+    method: "POST",
+    body: JSON.stringify({ mobile_number, otp_code })
+  })
+}
+
+export async function apiCompleteCustomerProfile(customer_id, full_name, email = null) {
+  return fetchJSON("/auth/customer/profile/complete/", {
+    method: "POST",
+    body: JSON.stringify({ customer_id, full_name, email })
+  })
+}
+
+export async function apiUpdateCustomerLastLocation(location_data) {
+  return fetchJSON("/auth/customer/profile/update/", {
+    method: "PATCH",
+    body: JSON.stringify({ last_known_location: location_data })
+  })
+}
+
+export async function apiDetectCustomerLocation(latitude, longitude, accuracy = null) {
+  return fetchJSON("/customer/location/detect/", {
+    method: "POST",
+    body: JSON.stringify({ latitude, longitude, accuracy })
+  })
+}
+
 
 
 export async function apiFetchCustomerBookings() {
