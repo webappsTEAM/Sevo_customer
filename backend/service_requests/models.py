@@ -113,6 +113,30 @@ class ServiceRequest(models.Model):
     total_amount     = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     cart_data        = models.JSONField(default=list, blank=True)
 
+    # Goods Transport (truck/two-wheeler) + Packers & Movers — optional, only
+    # populated when service_category is one of the logistics categories.
+    # `address` above is reused as the pickup address; drop_address is the
+    # second leg these two flows need that most other service categories
+    # don't. Deliberately two nullable FKs rather than the architecture
+    # doc's full Trip/TripStop/AddressLink model — that N-address structure
+    # doesn't exist on this model today (see MODEL_CLASSIFICATION.md), and
+    # building it for a 2-address case would be the over-build Phase 5A's
+    # own rule warns against. Revisit if Packers & Movers ever needs
+    # multi-stop routing.
+    drop_address     = models.TextField(blank=True, default="")
+    logistics_tier   = models.ForeignKey(
+        "logistics.ServiceTier",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="service_requests",
+    )
+    logistics_lane    = models.ForeignKey(
+        "logistics.Lane",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="service_requests",
+    )
+
     # Payment workflow
     payment_method = models.CharField(
         max_length=10,

@@ -5,9 +5,15 @@ import {
   Clock, Package, Boxes, X, Sparkles, Navigation, Truck,
   CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed,
   User, Mail, MessageSquare, AlertCircle, Home, Bike, Check,
-  ClipboardList, Settings, Zap, Wrench, Search, Plus
+  ClipboardList, Settings, Zap, Wrench, Search, Plus, Calendar
 } from "lucide-react"
 import { routes } from "../routes.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
+import { createBooking } from "../../api/bookingService.js"
+import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
+import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
+
+const LOGISTICS_CITY = "hosur"
 
 /* ── Vector Diagrams for Packers & Movers Packages (NoBroker Style) ── */
 function OneBhkDiagram({ className = "w-full h-[120px]" }) {
@@ -183,41 +189,72 @@ function QRCodeGraphic({ className = "w-36 h-36" }) {
 }
 
 /* ── Hosur Location Database ── */
-const HOSUR_LOCATIONS_DATABASE = [
-  { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
-  { name: "SIPCOT Phase 1", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
-  { name: "SIPCOT Phase 2", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
-  { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Avalapalli Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Zuzuvadi", subtitle: "Hosur Border, Tamil Nadu", category: "Hosur Area" },
-  { name: "Mookandapalli", subtitle: "Industrial Belt, Hosur", category: "Hosur Area" },
-  { name: "Moranapalli", subtitle: "Industrial Hub, Hosur", category: "Hosur Area" },
-  { name: "Denkanikottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Rayakottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Thally Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
-  { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
-  { name: "Electronic City Phase 2", subtitle: "Bengaluru (~26 Kms)", category: "Bengaluru Hub" },
-  { name: "Whitefield", subtitle: "Bengaluru (~42 Kms)", category: "Bengaluru Hub" },
-  { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
-  { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
-  { name: "Chennai (Koyambedu / Port)", subtitle: "Tamil Nadu (310 Kms)", category: "Intercity Route" },
-  { name: "Coimbatore (Gandhipuram)", subtitle: "Tamil Nadu (310 Kms)", category: "Intercity Route" }
-]
+/* ── Maps backend ServiceTier.slug → the illustration for that package.
+   Diagrams stay local (purely cosmetic); everything else (name, capacity,
+   price, description) now comes from GET /api/logistics/tiers/. ── */
+const PACKERS_DIAGRAM_BY_SLUG = {
+  "1rk-1bhk-shifting": <OneBhkDiagram />,
+  "2bhk-3bhk-shifting": <TwoBhkDiagram />,
+  "villa-office-relocation": <ThreeBhkVillaDiagram />,
+}
 
-function filterLocationSuggestions(searchText) {
+const LOCATIONS_DATABASE = {
+  "HOSUR": [
+    { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
+    { name: "SIPCOT Phase 1", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
+    { name: "SIPCOT Phase 2", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
+    { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+    { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+    { name: "Avalapalli Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+    { name: "Zuzuvadi", subtitle: "Hosur Border, Tamil Nadu", category: "Hosur Area" },
+    { name: "Mookandapalli", subtitle: "Industrial Belt, Hosur", category: "Hosur Area" },
+    { name: "Moranapalli", subtitle: "Industrial Hub, Hosur", category: "Hosur Area" },
+    { name: "Denkanikottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+    { name: "Rayakottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+    { name: "Thally Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+    { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
+    { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
+    { name: "Electronic City Phase 2", subtitle: "Bengaluru (~26 Kms)", category: "Bengaluru Hub" },
+    { name: "Whitefield", subtitle: "Bengaluru (~42 Kms)", category: "Bengaluru Hub" },
+    { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
+    { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
+    { name: "Chennai (Koyambedu / Port)", subtitle: "Tamil Nadu (310 Kms)", category: "Intercity Route" },
+    { name: "Coimbatore (Gandhipuram)", subtitle: "Tamil Nadu (310 Kms)", category: "Intercity Route" }
+  ],
+  "BENGALURU": [
+    { name: "Koramangala", subtitle: "Bengaluru, Karnataka", category: "Bengaluru Central" },
+    { name: "Indiranagar", subtitle: "Bengaluru, Karnataka", category: "Bengaluru Central" },
+    { name: "Whitefield", subtitle: "Bengaluru, Karnataka", category: "Bengaluru IT Hub" },
+    { name: "Electronic City", subtitle: "Bengaluru, Karnataka", category: "Bengaluru IT Hub" },
+    { name: "HSR Layout", subtitle: "Bengaluru, Karnataka", category: "Bengaluru Central" },
+    { name: "Marathahalli", subtitle: "Bengaluru, Karnataka", category: "Bengaluru IT Hub" },
+    { name: "Jayanagar", subtitle: "Bengaluru, Karnataka", category: "Bengaluru South" },
+    { name: "JP Nagar", subtitle: "Bengaluru, Karnataka", category: "Bengaluru South" },
+    { name: "Bellandur", subtitle: "Bengaluru, Karnataka", category: "Bengaluru IT Hub" },
+    { name: "BTM Layout", subtitle: "Bengaluru, Karnataka", category: "Bengaluru South" },
+    { name: "Majestic", subtitle: "Bengaluru, Karnataka", category: "Bengaluru Central" },
+    { name: "Hosur (SIPCOT)", subtitle: "Tamil Nadu (~40 Kms)", category: "Intercity Route" }
+  ],
+  "CHENNAI": [
+    { name: "Anna Nagar", subtitle: "Chennai, Tamil Nadu", category: "Chennai Central" },
+    { name: "T Nagar", subtitle: "Chennai, Tamil Nadu", category: "Chennai Central" },
+    { name: "Velachery", subtitle: "Chennai, Tamil Nadu", category: "Chennai South" },
+    { name: "Adyar", subtitle: "Chennai, Tamil Nadu", category: "Chennai South" },
+    { name: "Tambaram", subtitle: "Chennai, Tamil Nadu", category: "Chennai South" },
+    { name: "OMR (Old Mahabalipuram Road)", subtitle: "Chennai, Tamil Nadu", category: "Chennai IT Corridor" },
+    { name: "Guindy", subtitle: "Chennai, Tamil Nadu", category: "Chennai Central" },
+    { name: "Porur", subtitle: "Chennai, Tamil Nadu", category: "Chennai West" },
+    { name: "Thiruvanmiyur", subtitle: "Chennai, Tamil Nadu", category: "Chennai South" },
+    { name: "Chromepet", subtitle: "Chennai, Tamil Nadu", category: "Chennai South" },
+    { name: "Koyambedu", subtitle: "Chennai, Tamil Nadu", category: "Chennai Central" }
+  ]
+}
+
+function filterLocationSuggestions(searchText, city = "HOSUR") {
+  const cityLocations = LOCATIONS_DATABASE[city] || LOCATIONS_DATABASE["HOSUR"]
+  
   if (!searchText || !searchText.trim()) {
-    return [
-      { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
-      { name: "SIPCOT Phase 1", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
-      { name: "SIPCOT Phase 2", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
-      { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-      { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-      { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
-      { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
-      { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" }
-    ]
+    return cityLocations.slice(0, 8)
   }
 
   const query = searchText.trim().toLowerCase()
@@ -225,7 +262,7 @@ function filterLocationSuggestions(searchText) {
   const wordStarts = []
   const containsMatches = []
 
-  HOSUR_LOCATIONS_DATABASE.forEach((item) => {
+  cityLocations.forEach((item) => {
     const nameLow = item.name.toLowerCase()
     const subLow = item.subtitle.toLowerCase()
 
@@ -425,9 +462,12 @@ export function PackersMoversBookingHosurPage() {
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [userType, setUserType] = useState("1 BHK House Shifting")
+  const [selectedRoute, setSelectedRoute] = useState(null)
 
   // Relocation Type
   const [relocationType, setRelocationType] = useState("Within City")
+  const [shiftingDateBetween, setShiftingDateBetween] = useState("")
+  const [flexibleDateBetween, setFlexibleDateBetween] = useState(false)
 
   const [inventoryBuilderOpen, setInventoryBuilderOpen] = useState(false)
   const [stepperStep, setStepperStep] = useState(2) // 1: Location, 2: Add Items, 3: Slots, 4: Summary
@@ -443,7 +483,7 @@ export function PackersMoversBookingHosurPage() {
   // Step 3: Date & Slot State
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedSlot, setSelectedSlot] = useState(null)
-  const [expandedSlotCategories, setExpandedSlotCategories] = useState({"Morning": true})
+  const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
 
   // Booking Flow State
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
@@ -462,8 +502,11 @@ export function PackersMoversBookingHosurPage() {
   // Suggestions Dropdown State
   const [showPickupSuggestions, setShowPickupSuggestions] = useState(false)
   const [showDropSuggestions, setShowDropSuggestions] = useState(false)
+  const [showCityDropdown, setShowCityDropdown] = useState(false)
+  const [selectedCity, setSelectedCity] = useState("HOSUR")
   const pickupWrapperRef = useRef(null)
   const dropWrapperRef = useRef(null)
+  const cityDropdownWrapperRef = useRef(null)
 
   // Live Location Detection State
   const [isDetectingLocation, setIsDetectingLocation] = useState(false)
@@ -475,9 +518,50 @@ export function PackersMoversBookingHosurPage() {
   // FAQ state
   const [openFaq, setOpenFaq] = useState(null)
 
+  // Catalog data — fetched from /api/logistics/ (backend/logistics app),
+  // replacing what used to be hardcoded PACKERS_PACKAGES/POPULAR_ROUTES/
+  // HOSUR_AREAS arrays.
+  const [fetchedTiers, setFetchedTiers] = useState([])
+  const [fetchedLanes, setFetchedLanes] = useState([])
+  const [serviceAreas, setServiceAreas] = useState([])
+  const [bookingError, setBookingError] = useState("")
+  const [bookingSubmitting, setBookingSubmitting] = useState(false)
+  const [lastBookingId, setLastBookingId] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadCatalog() {
+      try {
+        const [tiers, lanes, areas] = await Promise.all([
+          fetchServiceTiers("packers_movers", LOGISTICS_CITY),
+          fetchLanes("packers_movers", LOGISTICS_CITY),
+          fetchServiceAreas(LOGISTICS_CITY),
+        ])
+        if (cancelled) return
+        setFetchedTiers(tiers)
+        setFetchedLanes(lanes)
+        setServiceAreas(areas)
+      } catch (err) {
+        console.warn("Failed to load logistics catalog, falling back to static data:", err)
+      }
+    }
+    loadCatalog()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (inventoryBuilderOpen || vehicleSelectorOpen || loginModalOpen || bookingSuccessOpen) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = "unset"
+    }
+    return () => {
+      document.body.style.overflow = "unset"
+    }
+  }, [inventoryBuilderOpen, vehicleSelectorOpen, loginModalOpen, bookingSuccessOpen])
+
   useEffect(() => {
     window.scrollTo(0, 0)
-    document.body.style.overflow = "unset"
   }, [])
 
   useEffect(() => {
@@ -487,6 +571,9 @@ export function PackersMoversBookingHosurPage() {
       }
       if (dropWrapperRef.current && !dropWrapperRef.current.contains(e.target)) {
         setShowDropSuggestions(false)
+      }
+      if (cityDropdownWrapperRef.current && !cityDropdownWrapperRef.current.contains(e.target)) {
+        setShowCityDropdown(false)
       }
     }
 
@@ -505,8 +592,8 @@ export function PackersMoversBookingHosurPage() {
     }
   }, [])
 
-  const pickupSuggestions = filterLocationSuggestions(pickup)
-  const dropSuggestions = filterLocationSuggestions(drop)
+  const pickupSuggestions = filterLocationSuggestions(pickup, selectedCity)
+  const dropSuggestions = filterLocationSuggestions(drop, selectedCity)
 
   // Live location detection
   const handleFetchLiveLocation = (e) => {
@@ -557,13 +644,12 @@ export function PackersMoversBookingHosurPage() {
     )
   }
 
-  // Packages definition
-  const PACKERS_PACKAGES = [
+  // Static fallback — used only if the /api/logistics/ fetch above fails or
+  // hasn't resolved yet, so this page keeps working even if the backend is
+  // briefly unreachable.
+  const STATIC_PACKERS_PACKAGES = [
     {
-      id: "packers_1bhk",
-      name: "1 RK / 1 BHK Shifting",
-      capacity: "Up to 750 kg",
-      price: "₹1,499",
+      id: "packers_1bhk", name: "1 RK / 1 BHK Shifting", capacity: "Up to 750 kg", price: "₹1,499",
       diagram: <OneBhkDiagram />,
       details: {
         name: "1 RK / 1 BHK Complete Relocation",
@@ -574,10 +660,7 @@ export function PackersMoversBookingHosurPage() {
       }
     },
     {
-      id: "packers_2bhk",
-      name: "2 BHK / 3 BHK Shifting",
-      capacity: "Up to 1,800 kg",
-      price: "₹2,999",
+      id: "packers_2bhk", name: "2 BHK / 3 BHK Shifting", capacity: "Up to 1,800 kg", price: "₹2,999",
       diagram: <TwoBhkDiagram />,
       details: {
         name: "2 BHK / 3 BHK Full Home Relocation",
@@ -588,10 +671,7 @@ export function PackersMoversBookingHosurPage() {
       }
     },
     {
-      id: "packers_villa",
-      name: "Villa / Office Relocation",
-      capacity: "Custom Load",
-      price: "₹4,499",
+      id: "packers_villa", name: "Villa / Office Relocation", capacity: "Custom Load", price: "₹4,499",
       diagram: <ThreeBhkVillaDiagram />,
       details: {
         name: "Villa & Commercial Office Relocation",
@@ -603,16 +683,14 @@ export function PackersMoversBookingHosurPage() {
     }
   ]
 
-  // Hosur Areas
-  const HOSUR_AREAS = [
+  const STATIC_HOSUR_AREAS = [
     "Sipcot Phase 1", "Sipcot Phase 2", "Bagalur Road", "Mathigiri",
     "Zuzuvadi", "Avalapalli", "Moranapalli", "Mookandapalli",
     "Denkanikottai Road", "Rayakottai Road", "Thally Road", "Alasanatham",
     "Railway Station Area", "Dinnur", "Kelamangalam Road", "Kamaraj Nagar"
   ]
 
-  // Popular relocation routes
-  const POPULAR_ROUTES = [
+  const STATIC_POPULAR_ROUTES = [
     { to: "Electronic City Phase 1 & 2", distance: "28 km", time: "Same Day", fare: "₹2,800" },
     { to: "Whitefield / Bengaluru Hub", distance: "42 km", time: "Same Day", fare: "₹3,500" },
     { to: "Bengaluru Central (Majestic)", distance: "40 km", time: "Same Day", fare: "₹3,200" },
@@ -620,6 +698,40 @@ export function PackersMoversBookingHosurPage() {
     { to: "Salem Junction", distance: "155 km", time: "1-2 Days", fare: "₹8,500" },
     { to: "Chennai (Koyambedu / Port)", distance: "310 km", time: "1-2 Days", fare: "₹14,500" }
   ]
+
+  // Adapt backend ServiceTier rows to the { id, name, capacity, price,
+  // diagram, details } shape the rest of this page already renders.
+  function tierToPackage(tier) {
+    return {
+      id: tier.slug,
+      name: tier.name,
+      capacity: tier.capacity_label,
+      price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+      diagram: PACKERS_DIAGRAM_BY_SLUG[tier.slug] || <OneBhkDiagram />,
+      details: {
+        name: tier.name,
+        capacity: tier.description,
+        crew: "Professional packing crew + dedicated vehicle",
+        materials: "Bubble wrap, corrugated boxes, stretch film & tape included",
+        baseFare: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })} (Includes packing, loading & transport)`,
+      },
+      _tierId: tier.id,
+    }
+  }
+
+  const PACKERS_PACKAGES = fetchedTiers.length ? fetchedTiers.map(tierToPackage) : STATIC_PACKERS_PACKAGES
+
+  const HOSUR_AREAS = serviceAreas.length ? serviceAreas.map((a) => a.name) : STATIC_HOSUR_AREAS
+
+  const POPULAR_ROUTES = fetchedLanes.length
+    ? fetchedLanes.map((lane) => ({
+        to: lane.destination_label,
+        distance: lane.distance_km ? `${Number(lane.distance_km)} km` : "",
+        fare: `₹${Number(lane.fare).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+        time: lane.eta_label,
+        _laneId: lane.id,
+      }))
+    : STATIC_POPULAR_ROUTES
 
   // FAQs
   const FAQS = [
@@ -648,34 +760,86 @@ export function PackersMoversBookingHosurPage() {
     if (!selectedPackage) setSelectedPackage(PACKERS_PACKAGES[0])
   }
 
+  // Persists the booking to the backend (POST /api/booking/ — see
+  // service_requests.BookingCreateView).
+  const submitBooking = async () => {
+    setBookingError("")
+    setBookingSubmitting(true)
+    try {
+      const today = todayDateString()
+      const pkg = selectedPackage || PACKERS_PACKAGES[0]
+      const fare = Number(String(pkg.price).replace(/[^0-9.]/g, "")) || 0
+      const payload = {
+        customer_name: name || "Guest",
+        phone,
+        service_category: "packers_movers",
+        issue_title: `Packers & Movers — ${pkg.name}`,
+        description: userType,
+        address: pickup || "Hosur",
+        drop_address: drop,
+        preferred_date: today,
+        total_amount: fare,
+        payment_method: "COD",
+        cart_data: [{
+          package: pkg.name, price: pkg.price, route: selectedRoute?.to || null,
+          relocation_type: relocationType, inventory: inventoryItems,
+        }],
+      }
+      if (pkg._tierId) payload.logistics_tier = pkg._tierId
+      if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
+
+      const res = await createBooking(payload)
+      setLastBookingId(res?.data?.request_id || res?.request_id || null)
+      setBookingSuccessOpen(true)
+    } catch (err) {
+      setBookingError(err?.body?.message || "Couldn't confirm your booking. Please try again.")
+    } finally {
+      setBookingSubmitting(false)
+    }
+  }
+
   const handleBookNow = () => {
     if (!isSignedIn) {
       setVehicleSelectorOpen(false)
       setLoginModalOpen(true)
     } else {
       setVehicleSelectorOpen(false)
-      setBookingSuccessOpen(true)
+      submitBooking()
     }
   }
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!phone || phone.trim().length < 10) return
     setOtpLoading(true)
-    setTimeout(() => {
-      setOtpLoading(false)
+    setBookingError("")
+    try {
+      await apiRequestCustomerPhoneOTP(phone)
       setOtpSent(true)
       setOtpStep(true)
-    }, 1000)
+    } catch (err) {
+      setBookingError(err?.body?.detail || "Couldn't send OTP. Please check the number and try again.")
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
-  const handleVerifyOtp = () => {
-    if (otpValue.length < 4) return
-    setIsSignedIn(true)
-    setLoginModalOpen(false)
-    setOtpStep(false)
-    setOtpValue("")
-    setOtpSent(false)
-    setBookingSuccessOpen(true)
+  const handleVerifyOtp = async () => {
+    if (otpValue.length < 6) return
+    setOtpLoading(true)
+    setBookingError("")
+    try {
+      await apiVerifyCustomerPhoneOTP(phone, otpValue)
+      setIsSignedIn(true)
+      setLoginModalOpen(false)
+      setOtpStep(false)
+      setOtpValue("")
+      setOtpSent(false)
+      await submitBooking()
+    } catch (err) {
+      setBookingError(err?.body?.detail || "Invalid OTP. Please try again.")
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
   const handleItemCount = (item, delta) => {
@@ -731,42 +895,48 @@ export function PackersMoversBookingHosurPage() {
       </header>
 
       {/* ── Hero Section (Vertical Form Style) ────────────────────── */}
-      <section className="relative pt-10 pb-12 sm:pt-16 sm:pb-20 bg-gradient-to-br from-emerald-50/50 via-[#FAFCFB] to-slate-50 overflow-hidden border-b border-slate-200/50">
+      <section 
+        className="relative pt-10 pb-12 sm:pt-16 sm:pb-20 overflow-hidden border-b border-slate-200/50 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url('/hero_packers_bg.png')` }}
+      >
         
-        {/* Background Decorative Elements */}
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-emerald-100/50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-teal-50/50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
+        {/* Background Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/55 to-slate-950/80"></div>
 
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 flex flex-col lg:flex-row items-center gap-12 lg:gap-8">
+        {/* Background Decorative Elements */}
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-emerald-100/10 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-teal-50/10 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
+
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 flex flex-col md:flex-row items-center gap-12 md:gap-8">
           
           {/* Left Column: Text Content */}
-          <div className="flex-1 text-center lg:text-left pt-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-100/70 text-emerald-800 text-xs font-bold tracking-wide mb-6 shadow-sm border border-emerald-200/50">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+          <div className="flex-1 text-center md:text-left pt-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-emerald-300 text-xs font-bold tracking-wide mb-6 shadow-sm border border-white/25 backdrop-blur-sm">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
               Premium Packers & Movers
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-bold text-slate-800 tracking-tight leading-[1.15] mb-5">
+            <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-bold text-white tracking-tight leading-[1.15] mb-5 drop-shadow-lg">
               Affordable and Trusted <br className="hidden lg:block"/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-600">Relocation Services</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-teal-300">Relocation Services</span>
             </h1>
 
-            <p className="text-sm sm:text-[15px] lg:text-base text-slate-600 leading-relaxed mb-8 max-w-2xl mx-auto lg:mx-0 font-medium">
+            <p className="text-sm sm:text-[15px] lg:text-base text-slate-200 leading-relaxed mb-8 max-w-2xl mx-auto lg:mx-0 font-medium drop-shadow">
               Whether you're relocating your 1 BHK, 2 BHK, villa, or office across Hosur and beyond, our verified movers offer safe, hassle-free packing, loading, and on-time delivery.
             </p>
 
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-6 text-[13px] font-bold text-slate-700">
-              <span className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100">
-                <CheckCircle2 className="w-5 h-5 text-emerald-500" /> Professional Packing
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-6 text-[13px] font-bold text-emerald-300">
+              <span className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-xl shadow-sm border border-white/20 backdrop-blur-sm">
+                <CheckCircle2 className="w-5 h-5 text-emerald-300" /> Professional Packing
               </span>
-              <span className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100">
-                <ShieldCheck className="w-5 h-5 text-emerald-500" /> Verified Crew
+              <span className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-xl shadow-sm border border-white/20 backdrop-blur-sm">
+                <ShieldCheck className="w-5 h-5 text-emerald-300" /> Verified Crew
               </span>
             </div>
           </div>
 
           {/* Right Column: Vertical Form Card */}
-          <div className="w-full max-w-[440px] shrink-0 mt-4 lg:mt-0 relative z-10 font-sans antialiased">
+          <div className="w-full max-w-[440px] shrink-0 mt-4 md:mt-0 relative z-10 font-sans antialiased">
             <div className="bg-white rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.08)] overflow-hidden flex flex-col border border-slate-100">
               
               {/* Top Area (Soft Emerald) */}
@@ -808,115 +978,238 @@ export function PackersMoversBookingHosurPage() {
               <div className="px-6 py-6 bg-white flex-1 z-10">
                 <form onSubmit={handleGetEstimate} className="space-y-5">
                   
-                  {/* Select City */}
-                  <div>
-                    <label className="block text-[13px] font-semibold text-[#484848] mb-2">Select City</label>
-                    <div className="relative">
-                      <select className="w-full h-[54px] pl-4 pr-10 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors cursor-pointer appearance-none">
-                        <option value="HOSUR">HOSUR</option>
-                        <option value="BENGALURU">BENGALURU</option>
-                        <option value="CHENNAI">CHENNAI</option>
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <ChevronDown className="w-5 h-5 text-[#666666]" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Pickup and Drop Location */}
-                  <div>
-                    <label className="block text-[13px] font-semibold text-[#484848] mb-3">Select pickup and drop location</label>
-                    <div className="relative ml-2.5 border-l-[1.5px] border-[#E0E0E0] pl-6 space-y-4">
-                      
-                      {/* Pickup Input */}
-                      <div className="relative" ref={pickupWrapperRef}>
-                        <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#FF425C] bg-white"></div>
-                        <input
-                          type="text"
-                          placeholder="Shifting From (e.g. Sipcot Phase 1)"
-                          value={pickup}
-                          onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
-                          onChange={(e) => { setPickup(e.target.value); setShowPickupSuggestions(true); }}
-                          className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                          required
-                        />
-                        {/* Suggestions */}
-                        {showPickupSuggestions && (
-                          <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
-                            {pickupSuggestions.map((loc, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onMouseDown={(e) => {
-                                  e.preventDefault()
-                                  setPickup(loc.name)
-                                  setShowPickupSuggestions(false)
-                                }}
-                                className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
-                              >
-                                {loc.name}
-                              </button>
-                            ))}
+                  {relocationType === "Within City" && (
+                    <>
+                          {/* Select City */}
+                          <div className="relative z-20" ref={cityDropdownWrapperRef}>
+                            <label className="block text-[13px] font-semibold text-[#484848] mb-2">Select City</label>
+                            <div
+                              className={`relative w-full h-[54px] pl-4 pr-10 rounded-xl border ${showCityDropdown ? 'border-[#0B8860] ring-1 ring-[#0B8860]' : 'border-[#E0E0E0] hover:border-[#cccccc]'} bg-white flex items-center justify-between cursor-pointer transition-colors`}
+                              onClick={() => setShowCityDropdown(!showCityDropdown)}
+                            >
+                              <span className="text-[15px] font-medium text-[#333333]">{selectedCity}</span>
+                              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#666666]">
+                                {showCityDropdown ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                              </div>
+                            </div>
+                            {showCityDropdown && (
+                              <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-[#E0E0E0] rounded-xl shadow-lg z-50 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
+                                {["HOSUR", "BENGALURU", "CHENNAI"].map((city) => (
+                                  <div
+                                    key={city}
+                                    className={`px-4 py-3 text-[14px] font-medium cursor-pointer transition-colors ${
+                                      selectedCity === city
+                                        ? "bg-[#ecfdf5] text-[#0B8860]"
+                                        : "text-[#484848] hover:bg-slate-50"
+                                    }`}
+                                    onClick={() => {
+                                      setSelectedCity(city)
+                                      setShowCityDropdown(false)
+                                    }}
+                                  >
+                                    {city}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-
-                      {/* Drop Input */}
-                      <div className="relative" ref={dropWrapperRef}>
-                        <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#0B8860] bg-white"></div>
-                        <input
-                          type="text"
-                          placeholder="Shifting To (Destination)"
-                          value={drop}
-                          onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
-                          onChange={(e) => { setDrop(e.target.value); setShowDropSuggestions(true); }}
-                          className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                          required
-                        />
-                        {/* Suggestions */}
-                        {showDropSuggestions && (
-                          <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
-                            {dropSuggestions.map((loc, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onMouseDown={(e) => {
-                                  e.preventDefault()
-                                  setDrop(loc.name)
-                                  setShowDropSuggestions(false)
-                                }}
-                                className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
-                              >
-                                {loc.name}
-                              </button>
-                            ))}
+  
+                          {/* Pickup and Drop Location */}
+                          <div>
+                            <label className="block text-[13px] font-semibold text-[#484848] mb-3">Select pickup and drop location</label>
+                            <div className="relative ml-2.5 border-l-[1.5px] border-[#E0E0E0] pl-6 space-y-4">
+                              
+                              {/* Pickup Input */}
+                              <div className="relative" ref={pickupWrapperRef}>
+                                <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#FF425C] bg-white"></div>
+                                <input
+                                  type="text"
+                                  placeholder={selectedCity === "BENGALURU" ? "Koramangala, Bengaluru, Karnataka" : selectedCity === "CHENNAI" ? "Anna Nagar, Chennai, Tamil Nadu" : "Hosur Bus Stand, Central Hosur"}
+                                  value={pickup}
+                                  onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
+                                  onChange={(e) => { setPickup(e.target.value); setShowPickupSuggestions(true); }}
+                                  className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
+                                  required
+                                />
+                                {/* Suggestions */}
+                                {showPickupSuggestions && (
+                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
+                                    {pickupSuggestions.map((loc, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault()
+                                          setPickup(loc.name)
+                                          setShowPickupSuggestions(false)
+                                        }}
+                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
+                                      >
+                                        {loc.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+  
+                              {/* Drop Input */}
+                              <div className="relative" ref={dropWrapperRef}>
+                                <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#0B8860] bg-white"></div>
+                                <input
+                                  type="text"
+                                  placeholder={selectedCity === "BENGALURU" ? "Indiranagar, Bengaluru, Karnataka" : selectedCity === "CHENNAI" ? "T Nagar, Chennai, Tamil Nadu" : "SIPCOT Phase 1, Industrial Area, Hosur"}
+                                  value={drop}
+                                  onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
+                                  onChange={(e) => { setDrop(e.target.value); setShowDropSuggestions(true); }}
+                                  className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
+                                  required
+                                />
+                                {/* Suggestions */}
+                                {showDropSuggestions && (
+                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
+                                    {dropSuggestions.map((loc, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault()
+                                          setDrop(loc.name)
+                                          setShowDropSuggestions(false)
+                                        }}
+                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
+                                      >
+                                        {loc.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        )}
+                        </>
+                      )}
+
+                      {relocationType === "Between Cities" && (
+                        <>
+                          {/* Pickup and Drop Location */}
+                          <div>
+                            <label className="block text-[13px] font-semibold text-[#484848] mb-3">Search your City</label>
+                            <div className="relative ml-2.5 border-l-[1.5px] border-[#E0E0E0] pl-6 space-y-4">
+                              
+                              {/* Pickup Input */}
+                              <div className="relative" ref={pickupWrapperRef}>
+                                <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#FF425C] bg-white"></div>
+                                <input
+                                  type="text"
+                                  placeholder="Search Source City"
+                                  value={pickup}
+                                  onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
+                                  onChange={(e) => { setPickup(e.target.value); setShowPickupSuggestions(true); }}
+                                  className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
+                                  required
+                                />
+                                {/* Suggestions */}
+                                {showPickupSuggestions && (
+                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
+                                    {pickupSuggestions.map((loc, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault()
+                                          setPickup(loc.name)
+                                          setShowPickupSuggestions(false)
+                                        }}
+                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
+                                      >
+                                        {loc.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+  
+                              {/* Drop Input */}
+                              <div className="relative" ref={dropWrapperRef}>
+                                <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#0B8860] bg-white"></div>
+                                <input
+                                  type="text"
+                                  placeholder="Search Destination City"
+                                  value={drop}
+                                  onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
+                                  onChange={(e) => { setDrop(e.target.value); setShowDropSuggestions(true); }}
+                                  className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
+                                  required
+                                />
+                                {/* Suggestions */}
+                                {showDropSuggestions && (
+                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
+                                    {dropSuggestions.map((loc, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault()
+                                          setDrop(loc.name)
+                                          setShowDropSuggestions(false)
+                                        }}
+                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
+                                      >
+                                        {loc.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[13px] font-semibold text-[#484848] mb-3">Select Shifting Date</label>
+                            <div className="relative">
+                              <input
+                                type="date"
+                                value={shiftingDateBetween}
+                                onChange={(e) => setShiftingDateBetween(e.target.value)}
+                                className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
+                              />
+                            </div>
+                            <div className="mt-3 flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id="flexible-date"
+                                checked={flexibleDateBetween}
+                                onChange={(e) => setFlexibleDateBetween(e.target.checked)}
+                                className="w-4 h-4 rounded text-[#0B8860] border-slate-300 focus:ring-[#0B8860]"
+                              />
+                              <label htmlFor="flexible-date" className="text-[13px] text-[#484848] cursor-pointer">
+                                I'm flexible on my shifting date
+                              </label>
+                            </div>
+                          </div>
+                        </>
+                      )}
+  
+                      {/* Checkmarks */}
+                      <div className="pt-2 pb-2 flex flex-wrap items-center justify-center gap-3 text-[12px] font-medium text-[#666666]">
+                        <span className="flex items-center gap-1.5">
+                          <Check className="w-[15px] h-[15px] text-[#0B8860]" /> Professional Handling
+                        </span>
+                        <span className="w-[1px] h-3 bg-[#E0E0E0]"></span>
+                        <span className="flex items-center gap-1.5">
+                          <Check className="w-[15px] h-[15px] text-[#0B8860]" /> Transparent Pricing
+                        </span>
                       </div>
-
-                    </div>
+  
+                      {/* Button */}
+                      <button
+                        type="submit"
+                        className="w-full h-[54px] bg-[#FF425C] hover:bg-[#E63950] active:scale-[0.99] text-white font-bold text-[16px] rounded-xl transition-all cursor-pointer shadow-sm"
+                      >
+                        Check Prices
+                      </button>
+                    </form>
                   </div>
-
-                  {/* Checkmarks */}
-                  <div className="pt-2 pb-2 flex flex-wrap items-center justify-center gap-3 text-[12px] font-medium text-[#666666]">
-                    <span className="flex items-center gap-1.5">
-                      <Check className="w-[15px] h-[15px] text-[#0B8860]" /> Professional Handling
-                    </span>
-                    <span className="w-[1px] h-3 bg-[#E0E0E0]"></span>
-                    <span className="flex items-center gap-1.5">
-                      <Check className="w-[15px] h-[15px] text-[#0B8860]" /> Transparent Pricing
-                    </span>
-                  </div>
-
-                  {/* Button */}
-                  <button
-                    type="submit"
-                    className="w-full h-[54px] bg-[#0B8860] hover:bg-[#097552] active:scale-[0.99] text-white font-bold text-[16px] rounded-xl transition-all cursor-pointer shadow-sm"
-                  >
-                    Check Prices
-                  </button>
-                </form>
-              </div>
             </div>
           </div>
         </div>
@@ -988,6 +1281,42 @@ export function PackersMoversBookingHosurPage() {
         </div>
       </section>
 
+      {/* 🌟 Section: Comparison Table */}
+      <section className="py-6 sm:py-10 max-w-4xl mx-auto px-4 sm:px-6">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-[#F8F9FA] border-b border-slate-200">
+                <th className="py-4 sm:py-5 px-5 sm:px-8 text-sm sm:text-[15px] font-extrabold text-slate-800">Services</th>
+                <th className="py-4 sm:py-5 px-5 sm:px-8 text-sm sm:text-[15px] font-extrabold text-[#0B8860] text-center w-[30%] border-l border-slate-200 bg-emerald-50/30">CalServices</th>
+                <th className="py-4 sm:py-5 px-5 sm:px-8 text-sm sm:text-[15px] font-extrabold text-slate-500 text-center w-[30%] border-l border-slate-200">Local Vendors</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {[
+                "Vehicle Assurance",
+                "Verified Professional Partners",
+                "Regular Update",
+                "Packaging & Unpacking",
+                "Dismantling & Re-Assemble",
+                "Bubble / Foam Wrapping",
+                "Damage Assurance"
+              ].map((feature, i) => (
+                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="py-3.5 sm:py-4 px-5 sm:px-8 text-[13px] sm:text-[14px] font-medium text-slate-700">{feature}</td>
+                  <td className="py-3.5 sm:py-4 px-5 sm:px-8 text-center border-l border-slate-100 bg-emerald-50/10">
+                    <Check className="w-5 h-5 text-[#0B8860] mx-auto" strokeWidth={2.5} />
+                  </td>
+                  <td className="py-3.5 sm:py-4 px-5 sm:px-8 text-center border-l border-slate-100">
+                    <X className="w-5 h-5 text-red-400 mx-auto" strokeWidth={2.5} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* ── Section: Popular Relocation Routes from Hosur ─────────── */}
       <section className="py-12 sm:py-16 bg-slate-50/80 border-y border-slate-200/60">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
@@ -1007,6 +1336,7 @@ export function PackersMoversBookingHosurPage() {
                   key={idx}
                   onClick={() => {
                     setDrop(route.to)
+                    setSelectedRoute(route)
                     const bar = document.getElementById("estimate-bar")
                     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
                   }}
@@ -1098,32 +1428,32 @@ export function PackersMoversBookingHosurPage() {
           <div className="hidden lg:block absolute top-8 left-[12%] right-[12%] h-[2px] bg-slate-200 border-t-2 border-dashed border-slate-300"></div>
           
           <div className="flex flex-col items-center text-center relative z-10">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
-              <ClipboardList className="w-8 h-8 text-emerald-600" />
+            <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
+              <ClipboardList className="w-8 h-8 text-indigo-500" />
             </div>
             <h3 className="font-bold text-slate-900 mb-2">Share your Requirement</h3>
             <p className="text-xs text-slate-500">Give your move details and preferred timing to design a streamlined logistics strategy.</p>
           </div>
           
           <div className="flex flex-col items-center text-center relative z-10">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
-              <MessageSquare className="w-8 h-8 text-emerald-600" />
+            <div className="w-16 h-16 rounded-2xl bg-rose-50 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
+              <MessageSquare className="w-8 h-8 text-rose-500" />
             </div>
             <h3 className="font-bold text-slate-900 mb-2">Receive Instant Quote</h3>
             <p className="text-xs text-slate-500">Get a firm, transparent estimate instantly. Our fixed-rate model has no surprise additions.</p>
           </div>
           
           <div className="flex flex-col items-center text-center relative z-10">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
-              <User className="w-8 h-8 text-emerald-600" />
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
+              <User className="w-8 h-8 text-amber-500" />
             </div>
             <h3 className="font-bold text-slate-900 mb-2">Assign Quality Expert</h3>
             <p className="text-xs text-slate-500">To ensure safe relocation, a quality service expert will be allotted to your movement.</p>
           </div>
           
           <div className="flex flex-col items-center text-center relative z-10">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
-              <Truck className="w-8 h-8 text-emerald-600" />
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mb-4 border-4 border-white shadow-sm">
+              <Truck className="w-8 h-8 text-emerald-500" />
             </div>
             <h3 className="font-bold text-slate-900 mb-2">Professional Transport</h3>
             <p className="text-xs text-slate-500">Staff handles heavy lifting and loading with care using premium materials.</p>
@@ -1184,7 +1514,7 @@ export function PackersMoversBookingHosurPage() {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-[#f0f3fa] rounded-2xl p-6 text-center hover:shadow-md transition-shadow border border-slate-200/60">
+          <div className="bg-[#f8faff] rounded-2xl p-6 text-center hover:shadow-md transition-shadow border border-blue-200/60">
             <div className="w-12 h-12 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-3">
               <Package className="w-6 h-6 text-blue-600" />
             </div>
@@ -1425,11 +1755,18 @@ export function PackersMoversBookingHosurPage() {
             <button
               type="button"
               onClick={handleBookNow}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer"
+              disabled={bookingSubmitting}
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Book Now</span>
-              <ArrowRight className="w-4 h-4" />
+              {bookingSubmitting ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
+              ) : (
+                <><span>Book Now</span><ArrowRight className="w-4 h-4" /></>
+              )}
             </button>
+            {isSignedIn && bookingError && (
+              <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
+            )}
           </div>
         </div>
       )}
@@ -1473,9 +1810,9 @@ export function PackersMoversBookingHosurPage() {
             </div>
 
             {/* Body */}
-            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-white">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-[#F4F5F7] p-4 lg:p-6 gap-6">
               {/* Left Column (Inventory Builder) */}
-              <div className="flex-1 flex flex-col overflow-hidden relative">
+              <div className="flex-1 flex flex-col overflow-hidden relative bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100">
                 {stepperStep === 2 ? (
                   <>
 
@@ -1552,16 +1889,27 @@ export function PackersMoversBookingHosurPage() {
                       return (
                         <div key={subCat} className="border-b border-slate-100 last:border-b-0">
                           {/* Accordion Toggle */}
-                          <div className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                          <div 
+                            onClick={() => setExpandedSubcategories(prev => ({...prev, [subCat]: !isExpanded}))}
+                            className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-[13px] text-slate-700">{subCat}</span>
+                              {(() => {
+                                const addedCount = filteredItems.reduce((acc, item) => acc + (inventoryItems[item] || 0), 0);
+                                if (addedCount > 0) {
+                                  return (
+                                    <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 ml-1">
+                                      {addedCount} added
+                                    </span>
+                                  )
+                                }
+                                return null;
+                              })()}
                             </div>
-                            <button 
-                              onClick={() => setExpandedSubcategories(prev => ({...prev, [subCat]: !isExpanded}))}
-                              className="p-1.5 -mr-1.5 rounded-full hover:bg-slate-200 transition-colors cursor-pointer"
-                            >
+                            <div className="p-1.5 -mr-1.5 rounded-full hover:bg-slate-200 transition-colors">
                               <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                            </button>
+                            </div>
                           </div>
                           
                           {/* Items */}
@@ -1574,13 +1922,13 @@ export function PackersMoversBookingHosurPage() {
                                     <div key={item} className="flex items-center justify-between">
                                       <span className="text-[13px] text-slate-600 font-medium">{item}</span>
                                       {count > 0 ? (
-                                        <div className="flex items-center gap-3">
-                                          <button onClick={() => handleItemCount(item, -1)} className="w-7 h-7 flex items-center justify-center rounded border border-[#0B8860] text-[#0B8860] text-lg font-medium cursor-pointer hover:bg-[#0B8860]/5 transition-colors">-</button>
-                                          <span className="font-bold text-slate-800 text-sm min-w-[20px] text-center">{count}</span>
-                                          <button onClick={() => handleItemCount(item, 1)} className="w-7 h-7 flex items-center justify-center rounded border border-[#0B8860] text-[#0B8860] text-lg font-medium cursor-pointer hover:bg-[#0B8860]/5 transition-colors">+</button>
+                                        <div className="flex items-center border border-[#0B8860] rounded-md overflow-hidden text-[#0B8860] bg-white h-8">
+                                          <button onClick={() => handleItemCount(item, -1)} className="w-8 h-full flex items-center justify-center text-lg font-medium cursor-pointer hover:bg-[#0B8860]/10 transition-colors">-</button>
+                                          <span className="font-bold text-sm min-w-[20px] text-center">{count}</span>
+                                          <button onClick={() => handleItemCount(item, 1)} className="w-8 h-full flex items-center justify-center text-lg font-medium cursor-pointer hover:bg-[#0B8860]/10 transition-colors">+</button>
                                         </div>
                                       ) : (
-                                        <button onClick={() => handleItemCount(item, 1)} className="w-7 h-7 flex items-center justify-center rounded border border-[#0B8860]/40 text-[#0B8860] hover:bg-[#0B8860]/5 hover:border-[#0B8860] transition-colors cursor-pointer">
+                                        <button onClick={() => handleItemCount(item, 1)} className="w-8 h-8 flex items-center justify-center rounded-md border border-[#0B8860] text-[#0B8860] hover:bg-[#0B8860]/10 transition-colors cursor-pointer bg-white">
                                           <Plus className="w-4 h-4" />
                                         </button>
                                       )}
@@ -1607,7 +1955,7 @@ export function PackersMoversBookingHosurPage() {
                       setStepperStep(3)
                     }}
                     disabled={totalItemsCount === 0}
-                    className="px-10 py-3 bg-[#CBD5E1] hover:bg-[#0B8860] focus:bg-[#0B8860] text-white text-[14px] font-bold rounded-xl transition-all cursor-pointer aria-disabled:cursor-not-allowed aria-disabled:hover:bg-[#CBD5E1]"
+                    className="px-10 py-3 bg-[#0B8860] hover:bg-[#097350] focus:bg-[#097350] text-white text-[14px] font-bold rounded-xl transition-all cursor-pointer disabled:bg-[#CBD5E1] disabled:cursor-not-allowed aria-disabled:bg-[#CBD5E1] aria-disabled:cursor-not-allowed"
                     aria-disabled={totalItemsCount === 0}
                   >
                     Continue
@@ -1657,13 +2005,13 @@ export function PackersMoversBookingHosurPage() {
                       <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Slot</p>
                       <div className="space-y-4">
                         {Object.entries(SHIFTING_SLOTS).map(([timeOfDay, slots]) => {
-                          const isExpanded = !!expandedSlotCategories[timeOfDay]
+                          const isExpanded = expandedSlotCategory === timeOfDay
                           
                           return (
                             <div key={timeOfDay} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
                               <div 
                                 className="flex items-center justify-between cursor-pointer mb-2 group"
-                                onClick={() => setExpandedSlotCategories(prev => ({...prev, [timeOfDay]: !isExpanded}))}
+                                onClick={() => setExpandedSlotCategory(isExpanded ? null : timeOfDay)}
                               >
                                 <div className="flex items-center gap-2">
                                   {timeOfDay === "Morning" && <span className="text-slate-400">⛅</span>}
@@ -1702,17 +2050,25 @@ export function PackersMoversBookingHosurPage() {
                       {/* Carton Recommendation Banner */}
                       <div className="bg-[#F8F9FA] px-6 py-3 border-t border-slate-100 flex items-start gap-2">
                         <span className="text-lg leading-none">📦</span>
-                        <p className="text-[11px] text-slate-600 leading-relaxed pt-0.5">
-                          You've added 0 cartons. Based on your inventory, we estimate you'll need 3 for small items like books and clothes. 
-                          <span className="text-[#0B8860] font-bold hover:underline cursor-pointer ml-1 inline-block">Add 3 Cartons</span>
-                        </p>
+                        {(() => {
+                          const cartonItems = [
+                            ...(INVENTORY_DATA["Cartons"]?.["Self Carton"] || []), 
+                            ...(INVENTORY_DATA["Cartons"]?.["NoBroker Carton"] || [])
+                          ];
+                          const addedCartons = cartonItems.reduce((acc, item) => acc + (inventoryItems[item] || 0), 0);
+                          return (
+                            <p className="text-[11px] text-slate-600 leading-relaxed pt-0.5">
+                              You've added {addedCartons} carton{addedCartons !== 1 ? 's' : ''}. Based on your inventory, we estimate you'll need 3 for small items like books and clothes. 
+                              <span className="text-[#0B8860] font-bold hover:underline cursor-pointer ml-1 inline-block" onClick={() => {setStepperStep(2); setActiveCategory("Cartons")}}>Add 3 Cartons</span>
+                            </p>
+                          );
+                        })()}
                       </div>
                       
                       <div className="px-6 py-4 border-t border-slate-100">
                         <button
                           onClick={() => {
-                            setInventoryBuilderOpen(false)
-                            handleBookNow()
+                            setStepperStep(4)
                           }}
                           disabled={!selectedDate || !selectedSlot}
                           className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] disabled:bg-[#CBD5E1] text-white text-[14px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
@@ -1722,15 +2078,97 @@ export function PackersMoversBookingHosurPage() {
                       </div>
                     </div>
                   </>
+                ) : stepperStep === 4 ? (
+                  <>
+                    <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <button onClick={() => setStepperStep(3)} className="text-slate-400 hover:text-[#0B8860] cursor-pointer">
+                          <ArrowRight className="w-5 h-5 rotate-180" />
+                        </button>
+                        <h2 className="text-xl font-bold text-slate-800">Booking Summary</h2>
+                      </div>
+                      <button className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
+                        <Phone className="w-3.5 h-3.5" /> Get a call
+                      </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 pb-32">
+                      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-bold text-slate-800 text-base">Movement Details</h3>
+                          <button onClick={() => setStepperStep(1)} className="text-[13px] font-bold text-[#0B8860] hover:underline cursor-pointer">Edit</button>
+                        </div>
+                        <div className="space-y-4 relative ml-1">
+                          <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
+                          
+                          <div className="flex items-start gap-4 relative bg-white">
+                            <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                              <MapPin className="w-3.5 h-3.5 text-slate-700" />
+                            </div>
+                            <div className="pt-0.5">
+                              <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{pickup || "Hosur Origin"}</p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <input type="checkbox" className="w-3.5 h-3.5 accent-[#0B8860]" />
+                                <span className="text-[12px] text-slate-500">Is service lift available<span className="text-red-500">*</span></span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-4 relative bg-white">
+                            <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                              <MapPin className="w-3.5 h-3.5 text-slate-700" />
+                            </div>
+                            <div className="pt-0.5">
+                              <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{drop || "Destination"}</p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <input type="checkbox" className="w-3.5 h-3.5 accent-[#0B8860]" />
+                                <span className="text-[12px] text-slate-500">Is service lift available<span className="text-red-500">*</span></span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                              <Calendar className="w-4 h-4 text-indigo-600" />
+                            </div>
+                            <span className="text-[13px] text-slate-700 font-medium">
+                              {selectedDate ? `${selectedDate.fullDate.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})} | ` : ""}{selectedSlot || "Time not selected"}
+                            </span>
+                          </div>
+                          <button onClick={() => setStepperStep(3)} className="text-[13px] font-bold text-slate-500 border border-slate-200 px-4 py-1.5 rounded-full hover:bg-slate-50 transition-colors cursor-pointer">Explore Slots</button>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex items-center justify-between cursor-pointer hover:border-[#0B8860] transition-colors" onClick={() => setStepperStep(2)}>
+                        <h3 className="font-bold text-slate-800 text-base">Your Added Inventory ({Object.values(inventoryItems).reduce((a, b) => a + b, 0)})</h3>
+                        <ChevronDown className="w-5 h-5 text-slate-400 -rotate-90" />
+                      </div>
+                    </div>
+
+                    <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] flex items-center justify-between z-10">
+                      <div>
+                        <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">Token Amount</p>
+                        <p className="text-xl font-black text-slate-800">₹ 455</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setInventoryBuilderOpen(false)
+                          handleBookNow()
+                        }}
+                        className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer"
+                      >
+                        Confirm Booking
+                      </button>
+                    </div>
+                  </>
                 ) : null}
 </div>
 
               {/* Right Column (Booking Details) */}
-              <div className="hidden lg:block w-[340px] bg-slate-50 p-6 border-l border-slate-100 relative">
-                {/* Decorative side accent matching NoBroker */}
-                <div className="absolute right-0 top-1/4 bottom-1/4 w-12 bg-[#0B8860]/5 rounded-l-3xl -z-10 pointer-events-none"></div>
+              <div className="hidden lg:block w-[340px] relative shrink-0">
                 
-                <div className="bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 p-6">
+                <div className="bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 p-6 sticky top-0">
                   <h3 className="font-extrabold text-slate-800 text-[14px] mb-5">Booking Details</h3>
                   <div className="flex justify-between items-center mb-4">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Address</span>
@@ -1829,6 +2267,10 @@ export function PackersMoversBookingHosurPage() {
                   </label>
                 </div>
 
+                {bookingError && (
+                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
+                )}
+
                 <button
                   type="button"
                   onClick={handleSendOtp}
@@ -1843,28 +2285,30 @@ export function PackersMoversBookingHosurPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-2">
-                    Enter 4-digit OTP
+                    Enter 6-digit OTP
                   </label>
                   <input
                     type="text"
-                    maxLength={4}
+                    maxLength={6}
                     value={otpValue}
                     onChange={(e) => setOtpValue(e.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder="• • • •"
+                    placeholder="• • • • • •"
                     className="w-full text-center text-2xl tracking-[1em] font-extrabold bg-slate-50 border border-slate-200 rounded-xl py-3 text-slate-900 outline-none focus:border-emerald-500 focus:bg-white"
                   />
-                  <span className="text-[11px] text-slate-400 block text-center mt-2">
-                    (Use sample OTP <strong className="text-slate-700 font-mono">1234</strong> for quick test)
-                  </span>
                 </div>
+
+                {bookingError && (
+                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
+                )}
 
                 <button
                   type="button"
                   onClick={handleVerifyOtp}
-                  disabled={otpValue.length < 4}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                  disabled={otpLoading || bookingSubmitting || otpValue.length < 6}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
                 >
-                  Verify &amp; Confirm Booking
+                  {(otpLoading || bookingSubmitting) && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{bookingSubmitting ? "Confirming booking..." : otpLoading ? "Verifying..." : "Verify & Confirm Booking"}</span>
                 </button>
 
                 <div className="text-center">
@@ -1898,6 +2342,12 @@ export function PackersMoversBookingHosurPage() {
             </p>
 
             <div className="bg-slate-50 rounded-2xl p-4 text-left text-xs space-y-2 border border-slate-200 mb-6">
+              {lastBookingId && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Booking ID:</span>
+                  <span className="font-bold text-emerald-700">{lastBookingId}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Service:</span>
                 <span className="font-bold text-slate-900">{selectedPackage?.name || "Packers & Movers"}</span>

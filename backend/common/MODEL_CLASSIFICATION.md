@@ -34,6 +34,9 @@ that belongs to a person rather than a business.
 | `accounts.SavedAddress` | Belongs to a customer (`user` FK only); customers are global, so their address book is global. |
 | `service_requests.CatalogCategory` | Shared service taxonomy ("AC Repair", "Plumbing") — no `company` FK today. Marketplace-relevant: this is the natural place to introduce a shared cross-vendor taxonomy later. |
 | `service_requests.CatalogService` | Same — no `company` FK, FKs only to `CatalogCategory`. |
+| `logistics.ServiceTier` | Vehicle-class/package catalog for Goods Transport + Packers & Movers (Phase 14 MVP slice). Same shape as `CatalogService` — public, pre-login booking-page data, no `company` FK. |
+| `logistics.Lane` | Fixed-fare route catalog ("Popular Routes"). Same reasoning. |
+| `logistics.ServiceArea` | "Areas We Serve" list, shared across all three logistics categories per city. Same reasoning. |
 | `settings_hub.NotificationPreference` | Per-`user` only; applies uniformly whether the user is staff or customer. |
 | `settings_hub.LoginSession` | Per-`user` security record, not company business data. |
 | `settings_hub.LoginHistory` | Same. |
@@ -103,7 +106,7 @@ selectively via explicit querysets/permissions instead.
 
 ## Summary
 
-- **Global:** 11 models (+ the `reports` app, which has none of its own)
+- **Global:** 14 models (+ the `reports` app, which has none of its own)
 - **Company Scoped (direct):** 30 models across 11 apps
 - **Company Scoped (indirect):** 20 models
 - **Mixed:** 4 models (`User`, `ServiceRequest`, `RefundRequest`, `Complaint`)
