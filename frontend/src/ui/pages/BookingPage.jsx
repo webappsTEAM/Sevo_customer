@@ -62,7 +62,9 @@ function TwitterMark(props) {
 
 export const CATEGORIES = [
   { id: "cleaning", name: "Home Cleaning", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", desc: "Deep clean & sanitization", rating: "4.8", jobs: "50K+" },
+  { id: "sofa_cleaning", name: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=500&q=80&fit=crop", desc: "Sofa, mattress & carpet", rating: "4.8", jobs: "15K+" },
   { id: "kitchen_cleaning", name: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&q=80&fit=crop", desc: "Complete kitchen & appliance clean", rating: "4.8", jobs: "20K+" },
+  { id: "bathroom_cleaning", name: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", desc: "Bathroom deep cleaning & subscriptions", rating: "4.8", jobs: "25K+" },
   { id: "plumbing", name: "Plumbing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop", desc: "Leaks, pipes & fixtures", rating: "4.7", jobs: "30K+" },
   { id: "electrical", name: "Electrical", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop", desc: "Wiring, panels & lighting", rating: "4.8", jobs: "40K+" },
   { id: "carpentry", name: "Carpentry", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=500&q=80&fit=crop", desc: "Furniture & wood repairs", rating: "4.6", jobs: "15K+" },
@@ -7486,33 +7488,84 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 /* ─── Kitchen Cleaning Modal ──────────────────────────────────────────────── */
 const KITCHEN_SUB_TABS = [
   {
-    id: "complete",
-    name: "Complete Kitchen Cleaning",
-    image: "/mockups/kitchen_cleaning_hero.png",
+    id: "packages",
+    name: "Full Kitchen Packages",
+    image: "/mockups/kitchen_top_new.png",
   },
   {
     id: "appliance",
-    name: "Appliance Cleaning",
+    name: "Single Appliance & Specific Area Cleaning",
     image: "/mockups/appliance_cleaning_hero.png",
   },
+  {
+    id: "addons",
+    name: "Quick Extra Services (Mini Add-ons)",
+    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=500&q=80&fit=crop",
+  }
 ];
 
-const COMPLETE_KITCHEN_SERVICE = {
-  id: "complete-kitchen",
-  name: "Complete Kitchen Cleaning",
-  price: 999,
-  duration: "2 hrs 30 mins",
-  rating: "4.76",
-  reviews: "434K",
-  image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop",
-  includes: [
-    "Cleaning of objects & surfaces with steam machine",
-    "Scrubbing of countertops, backsplash & sink",
-    "Stovetop, burner & chimney exterior cleaning",
-    "Floor mopping & corner sweep",
-    "Cabinet exterior wipe-down & de-greasing",
-  ],
-};
+const FULL_KITCHEN_PACKAGES = [
+  {
+    id: "occ-basic",
+    name: "Occupied Kitchen Cleaning (Basic)",
+    price: 999,
+    duration: "2 hrs",
+    image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop",
+    includes: [
+      "Removes grease and grime",
+      "Cleans counters, stove, sink",
+      "Cleans cabinet exteriors"
+    ]
+  },
+  {
+    id: "occ-deep",
+    name: "Occupied Kitchen Cleaning ( Deep Clean)",
+    price: 1499,
+    duration: "3 hrs",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Removes stubborn grease buildup",
+      "Deep cleans kitchen surfaces",
+      "Cleans cabinets inside and outside"
+    ]
+  },
+  {
+    id: "occ-eco",
+    name: "Occupied Kitchen Cleaning (Eco-Safe)",
+    price: 1999,
+    duration: "3.5 hrs",
+    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+    includes: [
+      "Uses chemical-free cleaning methods",
+      "Removes grease with steam",
+      "Safe for kids and pets"
+    ]
+  },
+  {
+    id: "emp-basic",
+    name: "Empty Kitchen Cleaning (Basic)",
+    price: 899,
+    duration: "1.5 hrs",
+    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+    includes: [
+      "Removes grease and grime",
+      "Cleans counters, stove, sink",
+      "Ideal for empty kitchens"
+    ]
+  },
+  {
+    id: "emp-steam",
+    name: "Empty Kitchen Cleaning (Steam Deep Clean)",
+    price: 1299,
+    duration: "2 hrs",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Removes heavy grease buildup",
+      "Uses powerful steam cleaning",
+      "Cleans empty cabinet exteriors"
+    ]
+  }
+];
 
 const APPLIANCE_SERVICES = [
   {
@@ -7520,73 +7573,150 @@ const APPLIANCE_SERVICES = [
     name: "Fridge Cleaning",
     price: 399,
     duration: "45 mins",
-    rating: "4.83",
-    reviews: "164K",
     image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
     includes: [
-      "Deep cleaning of fridge exterior with steam machine",
-      "Wet wiping of interior to remove food spills, stains & odour",
-    ],
-    options: "3 options",
+      "Takes out all food items and places them back neatly after cleaning.",
+      "Washes shelves, trays, and interior walls to remove spills, stains, and bad smells."
+    ]
+  },
+  {
+    id: "chimney-cleaning",
+    name: "Chimney Cleaning",
+    price: 499,
+    duration: "45 mins",
+    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
+    includes: [
+      "Deep cleans filters and mesh to remove thick oil buildup and restore suction.",
+      "Wipes down the outer body of the chimney."
+    ]
+  },
+  {
+    id: "utility-area",
+    name: "Utility Area Cleaning",
+    price: 299,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
+    includes: [
+      "Complete washing of utility space floors, windows, and appliance exteriors."
+    ]
   },
   {
     id: "microwave-cleaning",
     name: "Microwave Cleaning",
     price: 199,
     duration: "15 mins",
-    rating: "4.82",
-    reviews: "36K",
     image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
     includes: [
-      "Deep cleaning of microwave exterior to remove grease & oil",
-      "Wet wiping of interior to remove burnt stains & odour",
-    ],
+      "Cleans inside walls to remove food splatters, oil stains, and odors.",
+      "Wipes down the outer glass and body."
+    ]
   },
   {
     id: "gas-stove-cleaning",
     name: "Gas Stove Cleaning",
     price: 99,
     duration: "20 mins",
-    rating: "4.80",
-    reviews: "59K",
     image: "https://images.unsplash.com/photo-1556909172-54557c7e4fb7?w=300&q=80&fit=crop",
     includes: [
-      "Stovetops, burners & knobs cleaning with steam machine",
-      "Wet wiping of interior to remove burnt stains & odour",
-    ],
-    options: "3 options",
+      "Scrubs burners, knobs, and stove surfaces to remove burnt food and sticky grease."
+    ]
   },
   {
-    id: "chimney-cleaning",
-    name: "Chimney Cleaning",
-    price: 349,
-    duration: "40 mins",
-    rating: "4.78",
-    reviews: "28K",
-    image: "https://images.unsplash.com/photo-1556909212-d5b604d0c90d?w=300&q=80&fit=crop",
+    id: "tiles-slab-cleaning",
+    name: "Kitchen Tiles & Slab Cleaning",
+    price: 399,
+    duration: "45 mins",
+    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
     includes: [
-      "Removal of grease & oil buildup from filters",
-      "Deep cleaning of chimney exterior & interior surfaces",
-    ],
+      "Removes oil spots from wall tiles and deep cleans grout lines and countertops."
+    ]
   },
   {
-    id: "dishwasher-cleaning",
-    name: "Dishwasher Cleaning",
+    id: "cabinet-trolley-cleaning",
+    name: "Cabinet & Trolley Cleaning",
+    price: 499,
+    duration: "1 hr",
+    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    includes: [
+      "Removes items, cleans inside drawers and shelves, and places items back neatly.",
+      "Removes oily fingerprint stains from cabinet doors."
+    ]
+  },
+  {
+    id: "oven-cleaning",
+    name: "Oven, Toaster & Grill Cleaning",
     price: 249,
     duration: "30 mins",
-    rating: "4.75",
-    reviews: "12K",
-    image: "https://images.unsplash.com/photo-1556909144-f5fcb1f8f05e?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop",
     includes: [
-      "Deep cleaning of dishwasher interior & door seal",
-      "Filter cleaning & deodorizing treatment",
-    ],
+      "Cleans interior crumbs, food spills, and outer grease buildup."
+    ]
+  }
+];
+
+const QUICK_EXTRA_SERVICES = [
+  {
+    id: "fan-cleaning",
+    name: "Ceiling Fan Cleaning",
+    price: 99,
+    duration: "15 mins",
+    image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop",
+    includes: ["Dust and grease removal from fan blades."]
   },
+  {
+    id: "utensil-rearrangement",
+    name: "Utensil Rearrangement",
+    price: 199,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+    includes: ["Safely taking out utensils, cleaning shelves, and putting them back."]
+  },
+  {
+    id: "sink-cleaning",
+    name: "Sink & Under-Sink Cleaning",
+    price: 149,
+    duration: "20 mins",
+    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
+    includes: ["Stain and odor removal for sinks and drainage areas."]
+  },
+  {
+    id: "dining-table",
+    name: "Dining Table Cleaning",
+    price: 99,
+    duration: "15 mins",
+    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    includes: ["Wiping down table surfaces and chairs."]
+  },
+  {
+    id: "kitchen-window",
+    name: "Kitchen Window Cleaning",
+    price: 149,
+    duration: "20 mins",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: ["Scrubbing glass panes and window tracks."]
+  },
+  {
+    id: "balcony-cleaning",
+    name: "Balcony Cleaning",
+    price: 299,
+    duration: "45 mins",
+    image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop",
+    includes: ["Floor and railing washing for small or large balconies."]
+  },
+  {
+    id: "window-cleaning",
+    name: "Window Cleaning",
+    price: 249,
+    duration: "40 mins",
+    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+    includes: ["Deep glass cleaning for small or large home windows."]
+  }
 ];
 
 export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
-  const [activeTab, setActiveTab] = useState("complete");
+  const [activeTab, setActiveTab] = useState("packages");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
 
   const addItemToCart = (id, name, price, duration) => {
     setCart(prev => {
@@ -7609,9 +7739,17 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
 
-  const filteredAppliances = APPLIANCE_SERVICES.filter(a =>
-    a.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const getActiveServices = () => {
+    let list = [];
+    if (activeTab === "packages") list = FULL_KITCHEN_PACKAGES;
+    else if (activeTab === "appliance") list = APPLIANCE_SERVICES;
+    else if (activeTab === "addons") list = QUICK_EXTRA_SERVICES;
+    
+    if (!searchQuery) return list;
+    return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  };
+
+  const activeServices = getActiveServices();
 
   return (
     <div className="w-full text-slate-700 bg-white">
@@ -7649,7 +7787,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
-                className="flex flex-col items-center justify-center p-1.5 transition-all cursor-pointer text-center bg-transparent w-[90px] shrink-0"
+                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[90px] shrink-0"
               >
                 <img
                   src={tab.image}
@@ -7679,155 +7817,81 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           <div className="pt-1">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
               <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
-              {activeTab === "complete" ? "Complete Kitchen Cleaning" : "Appliance Cleaning"}
+              {activeTab === "packages" ? "Full Kitchen Packages" : activeTab === "appliance" ? "Single Appliance & Specific Area Cleaning" : "Quick Extra Services (Mini Add-ons)"}
             </h3>
           </div>
 
-          {/* ── COMPLETE KITCHEN CLEANING ── */}
-          {activeTab === "complete" && (
-            <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
-              {/* Image Hero */}
-              <div className="w-full h-52 sm:h-64 bg-slate-100 overflow-hidden">
-                <img
-                  src="/mockups/kitchen_cleaning_hero.png"
-                  alt="Complete Kitchen Cleaning"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-
-              {/* Details */}
-              <div className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <h4 className="text-base font-black text-slate-900 mb-1">{COMPLETE_KITCHEN_SERVICE.name}</h4>
-
-                    <p className="text-xs font-bold text-slate-800 mt-1">
-                      Starts at ₹{COMPLETE_KITCHEN_SERVICE.price.toLocaleString("en-IN")}
-                      <span className="text-slate-400 font-normal ml-2">• {COMPLETE_KITCHEN_SERVICE.duration}</span>
-                    </p>
-                  </div>
-                  {/* Add button */}
-                  <div className="shrink-0">
-                    {getCount(COMPLETE_KITCHEN_SERVICE.id) > 0 ? (
-                      <div className="flex items-center gap-2 border border-emerald-500 rounded-lg px-3 py-2 text-sm font-bold text-emerald-700">
-                        <button onClick={() => removeItemFromCart(COMPLETE_KITCHEN_SERVICE.id)} className="hover:text-emerald-900">-</button>
-                        <span>{getCount(COMPLETE_KITCHEN_SERVICE.id)}</span>
-                        <button onClick={() => addItemToCart(COMPLETE_KITCHEN_SERVICE.id, COMPLETE_KITCHEN_SERVICE.name, COMPLETE_KITCHEN_SERVICE.price, COMPLETE_KITCHEN_SERVICE.duration)} className="hover:text-emerald-900">+</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => addItemToCart(COMPLETE_KITCHEN_SERVICE.id, COMPLETE_KITCHEN_SERVICE.name, COMPLETE_KITCHEN_SERVICE.price, COMPLETE_KITCHEN_SERVICE.duration)}
-                        className="bg-white border border-slate-300 text-emerald-600 font-extrabold text-xs px-5 py-2.5 rounded-full hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-1.5 uppercase"
-                      >
-                        <ShoppingCart size={13} className="text-emerald-600" /> Add
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Includes */}
-                <div className="mt-4 space-y-1.5 border-t border-slate-100 pt-3">
-                  {COMPLETE_KITCHEN_SERVICE.includes.map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <span className="text-slate-400 mt-0.5">•</span>
-                      <span>{item}</span>
+          <div className="space-y-0 divide-y divide-slate-100">
+            {activeServices.map((service, idx) => {
+              const count = getCount(service.id);
+              const isFirst = idx === 0 && !searchQuery;
+              return (
+                <div key={service.id} className="py-5 px-4 sm:px-5">
+                  {/* First item image hero */}
+                  {isFirst && (
+                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4">
+                      <img
+                        src={activeTab === "packages" ? "/mockups/kitchen_top_new.png" : activeTab === "appliance" ? "/mockups/appliance_cleaning_hero.png" : service.image}
+                        alt={service.name}
+                        className="w-full h-full object-cover object-top"
+                      />
                     </div>
-                  ))}
-                </div>
-                <button className="text-xs font-semibold text-blue-600 mt-3 hover:underline">View details</button>
-              </div>
-            </div>
-          )}
+                  )}
 
-          {/* ── APPLIANCE CLEANING ── */}
-          {activeTab === "appliance" && (
-            <div className="space-y-0 divide-y divide-slate-100">
-              {filteredAppliances.map((appliance, idx) => {
-                const count = getCount(appliance.id);
-                const isFirst = idx === 0;
-                return (
-                  <div key={appliance.id} className="py-5">
-                    {/* First item image hero */}
-                    {isFirst && (
-                      <div className="w-full h-48 bg-slate-100 rounded-2xl overflow-hidden mb-4">
-                        <img
-                          src="/mockups/appliance_cleaning_hero.png"
-                          alt={appliance.name}
-                          className="w-full h-full object-contain"
-                        />
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-black text-slate-900 mb-1">{service.name}</h4>
+
+                      <p className="text-xs font-bold text-slate-800">
+                        {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
+                        <span className="text-slate-400 font-normal ml-2">• {service.duration}</span>
+                      </p>
+                      <div className="mt-3 space-y-1">
+                        {service.includes.map((item, i) => (
+                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                            <span className="text-slate-400 mt-0.5">•</span>
+                            <span>{item}</span>
+                          </div>
+                        ))}
                       </div>
-                    )}
+                      <button 
+                        onClick={() => setSelectedServiceDetails(service)}
+                        className="text-xs font-semibold text-blue-600 mt-2 hover:underline"
+                      >
+                        View details
+                      </button>
+                      {service.options && (
+                        <p className="text-[11px] text-slate-400 mt-1">{service.options}</p>
+                      )}
+                    </div>
 
-                    <div className="flex items-start gap-4">
-                      <div className="flex-1">
-                        <h4 className="text-sm font-black text-slate-900 mb-1">{appliance.name}</h4>
-
-                        <p className="text-xs font-bold text-slate-800">
-                          {appliance.options ? `Starts at ₹${appliance.price}` : `₹${appliance.price}`}
-                          <span className="text-slate-400 font-normal ml-2">• {appliance.duration}</span>
-                        </p>
-                        <div className="mt-3 space-y-1">
-                          {appliance.includes.map((item, i) => (
-                            <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                              <span className="text-slate-400 mt-0.5">•</span>
-                              <span>{item}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <button className="text-xs font-semibold text-blue-600 mt-2 hover:underline">View details</button>
-                        {appliance.options && (
-                          <p className="text-[11px] text-slate-400 mt-1">{appliance.options}</p>
+                    {/* Image + add button */}
+                    <div className="relative shrink-0 w-28 pb-3 flex flex-col items-center">
+                      <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
+                        <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 z-10">
+                        {count > 0 ? (
+                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                            <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
+                            <span>{count}</span>
+                            <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-emerald-900">+</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)}
+                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
+                          >
+                            Add
+                          </button>
                         )}
                       </div>
-
-                      {/* Appliance image + add button */}
-                      {!isFirst && (
-                        <div className="shrink-0 flex flex-col items-center gap-2">
-                          <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100">
-                            <img src={appliance.image} alt={appliance.name} className="w-full h-full object-cover" />
-                          </div>
-                          {count > 0 ? (
-                            <div className="flex items-center gap-2 border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 w-full justify-between">
-                              <button onClick={() => removeItemFromCart(appliance.id)} className="hover:text-emerald-900">-</button>
-                              <span>{count}</span>
-                              <button onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)} className="hover:text-emerald-900">+</button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)}
-                              className="w-full bg-white border border-slate-300 text-emerald-600 font-extrabold text-[11px] px-3 py-1.5 rounded-full hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-1.5 uppercase"
-                            >
-                              <ShoppingCart size={11} className="text-emerald-600" /> Add
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {/* First item add button (inline) */}
-                      {isFirst && (
-                        <div className="shrink-0">
-                          {count > 0 ? (
-                            <div className="flex items-center gap-2 border border-emerald-500 rounded-lg px-3 py-2 text-sm font-bold text-emerald-700">
-                              <button onClick={() => removeItemFromCart(appliance.id)} className="hover:text-emerald-900">-</button>
-                              <span>{count}</span>
-                              <button onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)} className="hover:text-emerald-900">+</button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => addItemToCart(appliance.id, appliance.name, appliance.price, appliance.duration)}
-                              className="bg-white border border-slate-300 text-emerald-600 font-extrabold text-xs px-5 py-2.5 rounded-full hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-1.5 uppercase"
-                            >
-                              <ShoppingCart size={13} className="text-emerald-600" /> Add
-                            </button>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Right Column: Order Summary */}
@@ -7890,6 +7954,216 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           </div>
         </div>
       </div>
+
+      {selectedServiceDetails && (
+        <div className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans">
+            {/* Close button */}
+            <button 
+              onClick={() => setSelectedServiceDetails(null)} 
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Header: split hero image + promo card */}
+            <div className="flex h-36 border-b border-slate-100 shrink-0">
+              <div className="w-[60%] h-full bg-slate-100">
+                <img 
+                  src={selectedServiceDetails.image} 
+                  alt={selectedServiceDetails.name} 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="w-[40%] bg-amber-50/70 p-4 flex flex-col justify-center text-left border-l border-amber-100/50">
+                <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-0.5">FLAT 10% OFF</span>
+                <span className="text-[10px] text-slate-600 font-bold leading-tight mb-2">For New Users</span>
+                <span className="text-[9px] font-bold text-slate-500 bg-white border border-amber-200 rounded px-1.5 py-0.5 w-fit uppercase tracking-tight">CODE: NEWCLEAN10</span>
+              </div>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
+              {/* Title, rating and add wrap */}
+              <div className="border-b border-slate-100 pb-5">
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">{selectedServiceDetails.name}</h3>
+                
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
+                  <Star className="text-[#7C3AED] fill-[#7C3AED]" size={12} />
+                  <span className="text-slate-800">4.82</span>
+                  <span className="text-slate-400 font-normal underline">(4.5M reviews)</span>
+                </div>
+
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
+                  <div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Price</div>
+                    <div className="text-base font-black text-slate-900 mt-0.5">
+                      ₹{selectedServiceDetails.price}
+                      <span className="text-slate-400 text-xs font-normal ml-2">• {selectedServiceDetails.duration}</span>
+                    </div>
+                  </div>
+
+                  {/* Add button inside details modal */}
+                  <div className="w-24">
+                    {getCount(selectedServiceDetails.id) > 0 ? (
+                      <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
+                        <button onClick={() => removeItemFromCart(selectedServiceDetails.id)} className="hover:text-emerald-900">-</button>
+                        <span>{getCount(selectedServiceDetails.id)}</span>
+                        <button onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)} className="hover:text-emerald-900">+</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
+                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider"
+                      >
+                        Add
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Service includes */}
+              <div className="space-y-2.5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Includes</h4>
+                <div className="space-y-2">
+                  {selectedServiceDetails.includes ? (
+                    selectedServiceDetails.includes.map((item, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                        <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
+                        <span className="leading-relaxed">{item}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-slate-500">Includes complete surface scrubbing and dusting.</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Service does not include */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Does Not Include</h4>
+                <div className="space-y-2">
+                  {(selectedServiceDetails.id === "occ-basic" ? [
+                    "Cabinet interior cleaning, utensil removal, or restocking",
+                    "Deep chimney filter degreasing or appliance interior cleaning",
+                    "Chimney motor repair, plumbing fixes, or hardware work"
+                  ] : [
+                    "Chimney motor servicing or internal repair",
+                    "Utensil washing or cabinet reorganization unless opted",
+                    "Plumbing, electrical or masonry repairs"
+                  ]).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tools & Products We Use */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
+                <div className="space-y-2">
+                  {[
+                    "Food-safe surface degreasers & antibacterial sprays",
+                    "Non-abrasive scrubbing pads & microfiber towels",
+                    "High-reach dusting brushes for exhaust fans & windows"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* What You Need to Keep Ready */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
+                <div className="space-y-2">
+                  {[
+                    "Continuous water supply during the 2-hour service duration",
+                    "Working power socket near the kitchen area"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Our Service Guarantees */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Our Service Guarantees</h4>
+                <div className="space-y-2">
+                  {[
+                    "7-day re-clean assurance if you are not completely satisfied",
+                    "100% background-verified & trained cleaning professionals",
+                    "In-house damage protection coverage"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Customer Reviews */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800">Ananya S.</span>
+                    <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#7C3AED]">
+                      <Star className="fill-[#7C3AED] text-[#7C3AED]" size={12} />
+                      <span>5.0</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed italic">
+                    "Great service for regular maintenance! They cleaned all the grease off my stove and backsplash tiles quickly."
+                  </p>
+                </div>
+              </div>
+
+              {/* Frequently Asked Questions */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
+                <div className="space-y-2">
+                  {[
+                    "Will the cleaners move utensils from inside the cabinets?",
+                    "Do I need to provide any cleaning solutions or cloths?",
+                    "Can I add appliance cleaning along with this package?"
+                  ].map((q, idx) => (
+                    <div key={idx} className="border border-slate-100 rounded-xl p-3 flex justify-between items-center text-xs text-slate-700 bg-white shadow-sm font-semibold">
+                      <span>{q}</span>
+                      <span className="text-slate-400 text-base font-bold">+</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sticky Footer with teal proceed button */}
+            <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Occupied Kitchen Clean</div>
+              <button
+                onClick={() => {
+                  if (getCount(selectedServiceDetails.id) === 0) {
+                    addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration);
+                  }
+                  setSelectedServiceDetails(null);
+                }}
+                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider"
+              >
+                Proceed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
