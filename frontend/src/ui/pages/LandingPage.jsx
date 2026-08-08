@@ -11,6 +11,8 @@ import {
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
+import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
+import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -449,11 +451,11 @@ const CATEGORIES = [
 ]
 
 const HOME_SERVICES_SUB = [
-  { name: "Full house Cleaning", graphic: FullHouseCleaningGraphic, categoryId: "cleaning" },
-  { name: "Kitchen Cleaning", graphic: KitchenCleaningGraphic, categoryId: "cleaning", badge: "55 mins" },
+  { name: "Kitchen Cleaning", graphic: KitchenCleaningGraphic, categoryId: "kitchen_cleaning" },
+  { name: "Sofa Cleaning", graphic: SofaCleaningGraphic, categoryId: "sofa_cleaning" },
+  { name: "Bathroom Cleaning", graphic: BathroomCleaningGraphic, categoryId: "bathroom_cleaning" },
+  { name: "Full House Cleaning", graphic: FullHouseCleaningGraphic, categoryId: "cleaning" },
   { name: "Living & Bedroom Cleaning", graphic: BedroomCleaningGraphic, categoryId: "cleaning" },
-  { name: "Sofa Cleaning", graphic: SofaCleaningGraphic, categoryId: "cleaning" },
-  { name: "Bathroom Cleaning", graphic: BathroomCleaningGraphic, categoryId: "cleaning" },
   { name: "Weekly Cleaning", graphic: WeeklyCleaningGraphic, categoryId: "cleaning" },
 ]
 
@@ -586,7 +588,7 @@ export function LandingPage() {
     }
   }, [isGoodsModalOpen, isHomePestModalOpen])
 
-  if (activeCategoryId === "cleaning" || activeCategoryId === "kitchen_cleaning") {
+  if (activeCategoryId === "cleaning" || activeCategoryId === "kitchen_cleaning" || activeCategoryId === "sofa_cleaning" || activeCategoryId === "bathroom_cleaning") {
     return (
       <>
       <div className="min-h-screen bg-[#F7FAF9] text-slate-800 flex flex-col" style={{ animation: "fadeUp 0.4s ease both" }}>
@@ -626,7 +628,25 @@ export function LandingPage() {
               onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
             />
           )}
-          {activeCategory && activeCategory.id !== "kitchen_cleaning" && (
+          {activeCategory && activeCategory.id === "sofa_cleaning" && (
+            <SofaCleaningModal
+              category={activeCategory}
+              cart={modalCart}
+              setCart={setModalCart}
+              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
+              onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            />
+          )}
+          {activeCategory && activeCategory.id === "bathroom_cleaning" && (
+            <BathroomCleaningModal
+              category={activeCategory}
+              cart={modalCart}
+              setCart={setModalCart}
+              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
+              onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            />
+          )}
+          {activeCategory && activeCategory.id !== "kitchen_cleaning" && activeCategory.id !== "sofa_cleaning" && activeCategory.id !== "bathroom_cleaning" && (
             <CustomCleaningPackageModal
               category={activeCategory}
               cart={modalCart}
@@ -886,6 +906,8 @@ export function LandingPage() {
                         document.body.style.overflow = "unset"
                         if (item.name === "Kitchen Cleaning") {
                           navigate(`?category=kitchen_cleaning`)
+                        } else if (item.name === "Sofa Cleaning") {
+                          navigate(`?category=sofa_cleaning`)
                         } else {
                           navigate(`?category=${item.categoryId}`)
                         }
