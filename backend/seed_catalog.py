@@ -180,8 +180,22 @@ CATEGORIES_DATA = {
             {"name": "2-Hour Handyman", "payment": "BOTH", "price": 499, "duration": "2 hrs"},
             {"name": "Full Day Pro", "payment": "ONLINE_ONLY", "price": 999, "duration": "8 hrs"}
         ]
+    },
+    "Mason": {
+        "slug": "mason",
+        "image": "/mockups/service_building.png",
+        "desc": "Brick, plaster & civil work",
+        "services": [
+            {"name": "Brick & Block Work", "payment": "BOTH", "price": 999, "duration": "2 hrs"},
+            {"name": "Plastering & Wall Repair", "payment": "BOTH", "price": 499, "duration": "1 hr"},
+            {"name": "Wall & Partition Construction", "payment": "BOTH", "price": 999, "duration": "2 hrs"},
+            {"name": "House Construction", "payment": "BOTH", "price": 0, "duration": "Flexible"},
+            {"name": "Office / Commercial Construction", "payment": "BOTH", "price": 0, "duration": "Flexible"},
+            {"name": "Wall Breaking & Demolition", "payment": "BOTH", "price": 0, "duration": "Flexible"}
+        ]
     }
 }
+
 
 from django_tenants.utils import schema_context
 from companies.models import Company

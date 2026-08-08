@@ -48,6 +48,7 @@ from .serializers import (
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
 from .services.fulfillment_service import process_item_fulfillment
+from .services.logistics_pricing import resolve_logistics_fare
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,11 +119,72 @@ def _sr_qs(request):
 class CatalogCategoryListView(APIView):
     permission_classes = [permissions.AllowAny]
     def get(self, request):
-        from .models import CatalogCategory
+        from .models import CatalogCategory, CatalogService
         from .serializers import CatalogCategorySerializer
+        
+        # Auto-seed Masonry if it doesn't exist
+        if not CatalogCategory.objects.filter(slug='mason').exists():
+            mason_cat = CatalogCategory.objects.create(
+                name="Mason",
+                slug="mason",
+                image="/mockups/service_building.png",
+                description="Brick, plaster & civil work",
+                rating="4.8",
+                jobs_count_str="12K+"
+            )
+            CatalogService.objects.create(
+                category=mason_cat,
+                name="Brick & Block Work",
+                description="New walls & extensions",
+                price=999,
+                duration="2 hrs",
+                image="/mockups/service_building.png"
+            )
+            CatalogService.objects.create(
+                category=mason_cat,
+                name="Plastering & Wall Repair",
+                description="Internal & external plastering",
+                price=499,
+                duration="1 hr",
+                image="https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80&fit=crop"
+            )
+            CatalogService.objects.create(
+                category=mason_cat,
+                name="Wall & Partition Construction",
+                description="Room partitions & kitchen partitions",
+                price=999,
+                duration="2 hrs",
+                image="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80&fit=crop"
+            )
+            CatalogService.objects.create(
+                category=mason_cat,
+                name="House Construction",
+                description="Complete civil and structure construction",
+                price=0,
+                duration="Flexible",
+                image="https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&q=80&fit=crop"
+            )
+            CatalogService.objects.create(
+                category=mason_cat,
+                name="Office / Commercial Construction",
+                description="Internal partition and remodeling",
+                price=0,
+                duration="Flexible",
+                image="https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80&fit=crop"
+            )
+            CatalogService.objects.create(
+                category=mason_cat,
+                name="Wall Breaking & Demolition",
+                description="Partial wall removal and cutouts",
+                price=0,
+                duration="Flexible",
+                image="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=800&q=80&fit=crop"
+            )
+            
         cats = CatalogCategory.objects.all().order_by('name')
         data = CatalogCategorySerializer(cats, many=True).data
         return Response({"success": True, "data": data})
+
 
 class CatalogServiceListView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -171,6 +233,17 @@ class BookingCreateView(APIView):
             )
         company = _get_company(request)
 
+        # Goods Transport / Packers & Movers: never trust a client-submitted
+        # total_amount — recompute it from the server's own ServiceTier/Lane
+        # record. No-op for every other service_category. See
+        # GOODS_AND_TRANSPORT_IMPLEMENTATION_PLAN.md, Phase 3.
+        corrected_fare = resolve_logistics_fare(
+            service_category=serializer.validated_data.get("service_category", ""),
+            logistics_tier=serializer.validated_data.get("logistics_tier"),
+            logistics_lane=serializer.validated_data.get("logistics_lane"),
+            submitted_amount=serializer.validated_data.get("total_amount", 0),
+        )
+
         # Determine payment method and set initial statuses
         payment_method = (request.data.get("payment_method") or "COD").upper()
         if payment_method == "ONLINE":
@@ -194,6 +267,7 @@ class BookingCreateView(APIView):
                 status=initial_status,
                 payment_method=payment_method,
                 payment_status=initial_payment_status,
+                total_amount=corrected_fare,
             )
 
             # Sync name
@@ -234,6 +308,7 @@ class BookingCreateView(APIView):
                 status=initial_status,
                 payment_method=payment_method,
                 payment_status=initial_payment_status,
+                total_amount=corrected_fare,
             )
 
         # Send booking confirmation email
