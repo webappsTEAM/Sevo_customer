@@ -77,6 +77,7 @@ export const CATEGORIES = [
   { id: "appliance_repair", name: "Appliances", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop", desc: "Fridge, washer & oven repairs", rating: "4.8", jobs: "35K+" },
   { id: "security", name: "Security Systems", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop", desc: "CCTV & alarm systems", rating: "4.7", jobs: "10K+" },
   { id: "general", name: "General Repair", image: "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=500&q=80&fit=crop", desc: "Handyman & misc tasks", rating: "4.5", jobs: "45K+" },
+  { id: "kitchen_cleaning", name: "Kitchen Cleaning", image: "/mockups/kitchen_cleaning_hero.png", desc: "Deep clean your kitchen", rating: "4.8", jobs: "20K+" },
 ]
 
 function openGoogleSignInPopup(onSuccess, onError) {
