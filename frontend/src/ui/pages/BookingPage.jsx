@@ -18,6 +18,7 @@ import {
   apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError
 } from "../../api/authService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
+import { routes } from "../routes.js"
 import { apiRequest } from "../../api/client.js"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import "leaflet/dist/leaflet.css";
@@ -69,6 +70,7 @@ export const CATEGORIES = [
   { id: "hvac", name: "AC & Heating", image: "/mockups/service_hvac.png", desc: "AC service & installation", rating: "4.9", jobs: "60K+" },
   { id: "pest_control", name: "Pest Control", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=500&q=80&fit=crop", desc: "Termites, cockroaches & more", rating: "4.7", jobs: "25K+" },
   { id: "painting", name: "Painting", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&q=80&fit=crop", desc: "Walls, ceilings & textures", rating: "4.6", jobs: "20K+" },
+  { id: "mason", name: "Mason", image: "/mockups/service_building.png", desc: "Brick, plaster & civil work", rating: "4.8", jobs: "12K+" },
   { id: "appliance_repair", name: "Appliances", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop", desc: "Fridge, washer & oven repairs", rating: "4.8", jobs: "35K+" },
   { id: "security", name: "Security Systems", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop", desc: "CCTV & alarm systems", rating: "4.7", jobs: "10K+" },
   { id: "general", name: "General Repair", image: "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=500&q=80&fit=crop", desc: "Handyman & misc tasks", rating: "4.5", jobs: "45K+" },
@@ -419,26 +421,53 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
   const [search, setSearch] = useState(initialLocation || "")
   const [isFetching, setIsFetching] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
-  const [mapCenter, setMapCenter] = useState([28.524, 77.204]) // Default fallback
+  const [mapCenter, setMapCenter] = useState([12.7409, 77.8253]) // Default fallback to Hosur
   const [searchResults, setSearchResults] = useState([])
   const [mapObj, setMapObj] = useState(null)
   const isTyping = useRef(false)
 
-  // Center map on user's current location when modal opens
+  // Center map on user's current location when modal opens and auto-fill address
   useEffect(() => {
     if (navigator.geolocation && mapObj) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        setMapCenter([lat, lon]);
-        mapObj.flyTo([lat, lon], 14);
-      }, (err) => {
-        console.error("Geolocation failed", err);
-      });
+      setIsFetching(true);
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          setMapCenter([lat, lon]);
+          mapObj.flyTo([lat, lon], 15);
+
+          // Reverse geocode to get live street address immediately
+          try {
+            const res = await fetch(`https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}`);
+            const data = await res.json();
+            if (data && data.features && data.features.length > 0) {
+              const p = data.features[0].properties;
+              const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+              isTyping.current = false;
+              setSearch(display);
+            }
+          } catch (err) {
+            console.error("Initial reverse geocoding failed", err);
+          }
+          setIsFetching(false);
+        },
+        (err) => {
+          console.error("Geolocation failed", err);
+          // Fallback to Hosur center if GPS is denied or fails
+          setMapCenter([12.7409, 77.8253]);
+          mapObj.flyTo([12.7409, 77.8253], 14);
+          setIsFetching(false);
+        }
+      );
+    } else if (mapObj) {
+      // Fallback to Hosur if geolocation is not supported
+      setMapCenter([12.7409, 77.8253]);
+      mapObj.flyTo([12.7409, 77.8253], 14);
     }
   }, [mapObj]);
 
-  // Fetch location suggestions when typing
+  // Fetch location suggestions when typing (biased to Hosur coords)
   useEffect(() => {
     if (!search || search.length < 3 || !isTyping.current) {
       if (!search) setSearchResults([]);
@@ -448,7 +477,7 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
     setIsSearching(true);
     const delayDebounce = setTimeout(async () => {
       try {
-        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(search)}&limit=5`);
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(search)}&limit=5&lon=77.8253&lat=12.7409`);
         const data = await res.json();
         if (data && data.features) {
           const formatted = data.features.map(f => {
@@ -509,91 +538,339 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
     }
   }
 
+  // ── Phase 2: Address details form ──
+  const [phase, setPhase] = useState(1) // 1 = map, 2 = address form
+  const [houseNo, setHouseNo] = useState("")
+  const [landmarkInput, setLandmarkInput] = useState("")
+  const [saveAs, setSaveAs] = useState("Home")
+  const [floor, setFloor] = useState("")
+  const [hasLift, setHasLift] = useState("Yes")
+  const [altPhone, setAltPhone] = useState("")
+  const [directions, setDirections] = useState("")
+
+  const confirmedCity = search ? search.split(",")[0].trim() : "Location"
+
+  const handleConfirmLocation = () => {
+    if (!search || isFetching) return
+    setPhase(2)
+  }
+
+  const handleProceed = () => {
+    const liftStr = hasLift === "Yes" ? "Lift available" : "No lift";
+    const details = [
+      houseNo,
+      floor ? `Floor ${floor}` : "",
+      `(${liftStr})`,
+      landmarkInput
+    ].filter(Boolean).join(", ");
+    
+    let fullAddress = `${details}, ${search}`;
+    if (altPhone) fullAddress += ` | Alt Contact: ${altPhone}`;
+    if (directions) fullAddress += ` | Directions: ${directions}`;
+    
+    onConfirm(fullAddress)
+  }
+
+  // Shared styles
+  const overlayStyle = {
+    position: 'fixed', inset: 0, zIndex: 10001,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(3px)',
+  }
+
+  const modalStyle = {
+    width: '100%', maxWidth: 520,
+    background: '#ffffff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    margin: '1rem',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
+    fontFamily: 'inherit',
+  }
+
+  const headerStyle = {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '1rem 1.4rem',
+    borderBottom: '1px solid #f1f5f9',
+    background: '#ffffff',
+  }
+
+  const tealBtnStyle = {
+    width: '100%', padding: '0.85rem',
+    background: 'linear-gradient(135deg, #0d9488, #059669)',
+    color: 'white', border: 'none', borderRadius: 10,
+    fontWeight: 800, fontSize: '0.92rem', cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(13,148,136,0.22)',
+    transition: 'all 0.2s',
+  }
+
+  const inputStyle = {
+    width: '100%', padding: '0.7rem 0.9rem',
+    border: '1.5px solid #e2e8f0', borderRadius: 10,
+    fontSize: '0.88rem', color: '#0f172a', outline: 'none',
+    boxSizing: 'border-box', transition: 'border-color 0.2s',
+    fontFamily: 'inherit',
+  }
+
   return (
-    <div className="uc-modal-overlay" onClick={onClose} style={{ zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={overlayStyle} onClick={onClose}>
       <motion.div
-        className="uc-step-container"
-        style={{ width: '100%', maxWidth: 550, padding: 0, overflow: 'hidden', margin: '2rem' }}
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        style={modalStyle}
+        initial={{ opacity: 0, y: 30, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        exit={{ opacity: 0, y: 20, scale: 0.96 }}
+        transition={{ type: "spring", damping: 26, stiffness: 300 }}
         onClick={e => e.stopPropagation()}
       >
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e293b', padding: 0, display: 'flex' }}><ArrowLeft size={20} /></button>
-          <div style={{ flex: 1 }}>
-            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#1e293b' }}>Select Location</h3>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>Your service will be booked here</p>
-          </div>
-        </div>
-
-        {/* Interactive Map Placeholder */}
-        <div style={{ width: '100%', height: 250, position: 'relative', background: '#e2e8f0' }}>
-          <MapContainer
-            center={mapCenter}
-            zoom={14}
-            style={{ width: '100%', height: '100%' }}
-            zoomControl={false}
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; OpenStreetMap'
-            />
-            <MapEvents />
-          </MapContainer>
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 1000 }}>
-            <div style={{ transform: 'translateY(-18px)', color: '#ef4444', filter: 'drop-shadow(0 5px 5px rgba(0,0,0,0.3))' }}>
-              <MapPin size={42} fill="#ef4444" color="white" strokeWidth={1.5} />
+        {phase === 1 && (
+          <>
+            {/* Phase 1 Header */}
+            <div style={headerStyle}>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>Choose Service Location</h3>
+              <button onClick={onClose} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%' }}>
+                <X size={16} />
+              </button>
             </div>
-          </div>
-        </div>
 
-        <div style={{ padding: '1.5rem' }}>
-          <div className="uc-input-wrap" style={{ marginBottom: '1rem' }}>
-            <Search size={16} className="uc-field-icon" />
-            <input
-              className="uc-input"
-              placeholder={isFetching ? "Locating on map..." : "Search for area, street name..."}
-              value={search}
-              onChange={e => {
-                isTyping.current = true;
-                setSearch(e.target.value);
-              }}
-              autoFocus
-            />
-          </div>
-
-          <div style={{ maxHeight: 150, overflowY: 'auto', marginBottom: '1.5rem' }}>
-            {isSearching && (
-              <div style={{ padding: '0.75rem', textAlign: 'center', color: '#7C3AED', fontSize: '0.85rem', fontWeight: 600 }}>
-                Searching...
-              </div>
-            )}
-            {isTyping.current && search.length > 2 && searchResults.length === 0 && !isSearching && !isFetching && (
-              <div style={{ padding: '0.75rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
-                No matches found. Try a different spelling or more specific area.
-              </div>
-            )}
-            {searchResults.map((loc, i) => (
-              <div
-                key={i}
-                style={{ padding: '0.75rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', background: search === loc.display_name ? '#f8fafc' : 'white' }}
-                onClick={() => handleSelectResult(loc)}
+            {/* Leaflet Map */}
+            <div style={{ width: '100%', height: 240, position: 'relative', background: '#f1f5f9' }}>
+              <MapContainer
+                center={mapCenter}
+                zoom={14}
+                style={{ width: '100%', height: '100%' }}
+                zoomControl={false}
               >
-                <MapPin size={16} color={search === loc.display_name ? '#7C3AED' : '#94a3b8'} style={{ marginTop: 2 }} />
-                <div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: search === loc.display_name ? '#7C3AED' : '#1e293b' }}>{loc.display_name.split(',')[0]}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>{loc.display_name}</div>
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; OpenStreetMap'
+                />
+                <MapEvents />
+              </MapContainer>
+              {/* Centered teal pin */}
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 1000 }}>
+                <div style={{ transform: 'translateY(-18px)', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.22))' }}>
+                  <MapPin size={40} fill="#0d9488" color="white" strokeWidth={1.5} />
                 </div>
               </div>
-            ))}
-          </div>
+              {/* Fetching pill */}
+              {isFetching && (
+                <div style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', background: 'rgba(255,255,255,0.96)', border: '1px solid #e2e8f0', borderRadius: 20, padding: '4px 14px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', zIndex: 1001 }}>
+                  Locating on map…
+                </div>
+              )}
+            </div>
 
-          <button className="uc-btn-primary uc-btn-full" onClick={() => onConfirm(search)} disabled={isFetching || !search}>
-            Confirm Location
-          </button>
-        </div>
+            {/* Search & Confirm */}
+            <div style={{ padding: '1.1rem 1.4rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '0.5rem 0.85rem', marginBottom: '0.65rem', background: '#f8fafc' }}>
+                <Search size={15} color="#94a3b8" style={{ flexShrink: 0 }} />
+                <input
+                  style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.87rem', width: '100%', color: '#0f172a', fontWeight: 500 }}
+                  placeholder={isFetching ? "Locating on map..." : "Search for area, street name..."}
+                  value={search}
+                  onChange={e => { isTyping.current = true; setSearch(e.target.value); }}
+                  autoFocus
+                />
+              </div>
+
+              {(isSearching || searchResults.length > 0) && (
+                <div style={{ maxHeight: 150, overflowY: 'auto', marginBottom: '0.65rem', border: '1px solid #f1f5f9', borderRadius: 10, background: 'white', boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}>
+                  {isSearching && (
+                    <div style={{ padding: '0.7rem', textAlign: 'center', color: '#0d9488', fontSize: '0.82rem', fontWeight: 600 }}>Searching...</div>
+                  )}
+                  {searchResults.map((loc, i) => (
+                    <div
+                      key={i}
+                      style={{ padding: '0.65rem 0.85rem', display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', borderBottom: i < searchResults.length - 1 ? '1px solid #f8fafc' : 'none', background: search === loc.display_name ? '#f0fdf4' : 'white' }}
+                      onClick={() => handleSelectResult(loc)}
+                    >
+                      <MapPin size={14} color={search === loc.display_name ? '#0d9488' : '#94a3b8'} style={{ marginTop: 2, flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: '0.83rem', fontWeight: 700, color: search === loc.display_name ? '#0d9488' : '#1e293b' }}>{loc.display_name.split(',')[0]}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 1 }}>{loc.display_name}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {isTyping.current && search.length > 2 && searchResults.length === 0 && !isSearching && !isFetching && (
+                <div style={{ padding: '0.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem', marginBottom: '0.65rem' }}>
+                  No matches found. Try a different spelling.
+                </div>
+              )}
+
+              <button style={tealBtnStyle} onClick={handleConfirmLocation} disabled={isFetching || !search}>
+                Confirm Location
+              </button>
+            </div>
+          </>
+        )}
+
+        {phase === 2 && (
+          <>
+            {/* Phase 2 Header */}
+            <div style={headerStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#f0fdf4', border: '1.5px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Home size={16} color="#059669" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1 }}>{confirmedCity}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 2, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{search}</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setPhase(1)}
+                style={{ background: 'none', border: 'none', color: '#0d9488', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}
+              >
+                <MapPin size={13} /> Show Map
+              </button>
+            </div>
+
+            {/* Address Form */}
+            <div style={{ padding: '1.25rem 1.4rem', display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '62vh', overflowY: 'auto' }}>
+              {/* Row 1: House No & Floor */}
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <div style={{ flex: 2 }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: 6 }}>
+                    House / Flat / Block No. <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    style={inputStyle}
+                    placeholder="e.g. Flat 302, Block A"
+                    value={houseNo}
+                    onChange={e => setHouseNo(e.target.value)}
+                    autoFocus
+                    onFocus={e => e.target.style.borderColor = '#0d9488'}
+                    onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: 6 }}>
+                    Floor <span style={{ fontSize: '0.65rem', color: '#64748b' }}>(Opt)</span>
+                  </label>
+                  <input
+                    style={inputStyle}
+                    placeholder="e.g. 3rd"
+                    value={floor}
+                    onChange={e => setFloor(e.target.value)}
+                    onFocus={e => e.target.style.borderColor = '#0d9488'}
+                    onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Lift Availability */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: 6 }}>
+                  Is Lift Available? <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', gap: '0.55rem' }}>
+                  {['Yes', 'No'].map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setHasLift(opt)}
+                      style={{
+                        flex: 1, padding: '0.55rem 0',
+                        border: hasLift === opt ? '2px solid #0d9488' : '1.5px solid #e2e8f0',
+                        borderRadius: 10, background: hasLift === opt ? '#f0fdf4' : 'white',
+                        color: hasLift === opt ? '#059669' : '#475569',
+                        fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', transition: 'all 0.15s'
+                      }}
+                    >
+                      {opt === 'Yes' ? '🛗 Yes, Lift Available' : '🚫 No Lift (Stairs)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 3: Landmark */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: 6 }}>
+                  Landmark / Society Name <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  style={inputStyle}
+                  placeholder="e.g. near Metro Station, Green Park"
+                  value={landmarkInput}
+                  onChange={e => setLandmarkInput(e.target.value)}
+                  onFocus={e => e.target.style.borderColor = '#0d9488'}
+                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              {/* Row 4: Alternate Contact (Optional) */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: 6 }}>
+                  Alternate Contact Number <span style={{ fontSize: '0.65rem', color: '#64748b' }}>(Optional)</span>
+                </label>
+                <input
+                  style={inputStyle}
+                  type="tel"
+                  placeholder="e.g. +91 98765 43210"
+                  value={altPhone}
+                  onChange={e => setAltPhone(e.target.value)}
+                  onFocus={e => e.target.style.borderColor = '#0d9488'}
+                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              {/* Row 5: Directions (Optional) */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: 6 }}>
+                  Directions / Entry Notes <span style={{ fontSize: '0.65rem', color: '#64748b' }}>(Optional)</span>
+                </label>
+                <input
+                  style={inputStyle}
+                  placeholder="e.g. Gate code #1234, ring second bell"
+                  value={directions}
+                  onChange={e => setDirections(e.target.value)}
+                  onFocus={e => e.target.style.borderColor = '#0d9488'}
+                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              {/* Row 6: Save address as */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 800, color: '#334155', marginBottom: 8 }}>
+                  Save address as <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', gap: '0.55rem' }}>
+                  {[
+                    { label: 'Home', icon: <Home size={14} /> },
+                    { label: 'Work', icon: <Package size={14} /> },
+                    { label: 'Other', icon: <MapPin size={14} /> },
+                  ].map(({ label, icon }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => setSaveAs(label)}
+                      style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                        padding: '0.55rem 0', border: saveAs === label ? '2px solid #0d9488' : '1.5px solid #e2e8f0',
+                        borderRadius: 10, background: saveAs === label ? '#f0fdf4' : 'white',
+                        color: saveAs === label ? '#059669' : '#475569',
+                        fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', transition: 'all 0.15s',
+                      }}
+                    >
+                      {icon} {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                style={{ ...tealBtnStyle, marginTop: 4, opacity: (!houseNo.trim() || !landmarkInput.trim()) ? 0.55 : 1 }}
+                onClick={handleProceed}
+                disabled={!houseNo.trim() || !landmarkInput.trim()}
+              >
+                Proceed
+              </button>
+            </div>
+          </>
+        )}
       </motion.div>
     </div>
   )
@@ -4433,7 +4710,12 @@ export function BookingPage() {
   const routerLocation = useLocation()
   const incomingCart = routerLocation.state?.cart
   const incomingCategory = routerLocation.state?.category
-  const [step, setStep] = useState(incomingCart?.length ? 3 : 1)
+  const [step, setStep] = useState(() => {
+    if (routerLocation.state?.triggerLocPicker) {
+      return 1;
+    }
+    return incomingCart?.length ? 3 : 1;
+  })
   const [loading, setLoading] = useState(false)
   const [showCartMenu, setShowCartMenu] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
@@ -4443,6 +4725,8 @@ export function BookingPage() {
   const [cart, setCart] = useState(incomingCart || [])
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
+  const [urgency, setUrgency] = useState("Standard")
+  const [notes, setNotes] = useState("")
   const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "" })
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
@@ -4450,7 +4734,7 @@ export function BookingPage() {
   const [dynamicReviews, setDynamicReviews] = useState([])
 
   const [searchQuery, setSearchQuery] = useState("")
-  const [location, setLocation] = useState("H37, Block H- Saket- Ne...")
+  const [location, setLocation] = useState("Hosur, Tamil Nadu, India")
   const [showLocPicker, setShowLocPicker] = useState(false)
   const [showPostFlow, setShowPostFlow] = useState(false)
   const [assignedTech, setAssignedTech] = useState(null)
@@ -4574,17 +4858,23 @@ export function BookingPage() {
                 const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
                 setLocation(display);
               } else {
-                setLocation("Location not found");
+                setLocation("Hosur, Tamil Nadu, India");
               }
             })
-            .catch(() => setLocation("Unable to determine location"));
+            .catch(() => setLocation("Hosur, Tamil Nadu, India"));
         },
         () => {
-          setLocation("Select a location");
+          setLocation("Hosur, Tamil Nadu, India");
         }
       );
     } else {
-      setLocation("Select a location");
+      setLocation("Hosur, Tamil Nadu, India");
+    }
+
+    // Auto open location picker if triggerLocPicker was passed in navigation state
+    if (routerLocation.state?.triggerLocPicker) {
+      setShowLocPicker(true);
+      setShowPackageModal(true);
     }
   }, [])
 
@@ -4628,7 +4918,14 @@ export function BookingPage() {
     data.append("email", formData.email || "")
     data.append("service_category", category?.id || "general")
     data.append("issue_title", formData.issue_title || `${cart.map(c => c.name).join(', ')} — ${category?.name}`)
-    data.append("description", formData.description || "")
+    let finalDesc = formData.description || "";
+    if (urgency && urgency !== "Standard") {
+      finalDesc += `\n[Urgency: ${urgency}]`;
+    }
+    if (notes) {
+      finalDesc += `\n[Special Instructions: ${notes}]`;
+    }
+    data.append("description", finalDesc);
     data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
@@ -4684,7 +4981,15 @@ export function BookingPage() {
           <LocationPickerModal
             initialLocation={location}
             onClose={() => setShowLocPicker(false)}
-            onConfirm={(loc) => { setLocation(loc); setShowLocPicker(false); }}
+            onConfirm={(loc) => {
+              setLocation(loc);
+              setFormData(prev => ({ ...prev, address: loc }));
+              setShowLocPicker(false);
+              setShowPackageModal(false);
+              if (step === 1) {
+                setStep(3);
+              }
+            }}
           />
         )}
       </AnimatePresence>
@@ -4938,8 +5243,24 @@ export function BookingPage() {
               category={category}
               cart={cart}
               setCart={setCart}
-              onClose={() => setShowPackageModal(false)}
+              onClose={() => navigate("/home")}
               onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+              onGetEstimate={() => {
+                setShowLocPicker(true);
+              }}
+            />
+          ) : (category.id === "mason" || category.slug === "mason" || String(category.id) === "mason" || category.name?.toLowerCase() === "mason") ? (
+            <MasonPackageModal
+              category={category}
+              cart={cart}
+              setCart={setCart}
+              onClose={() => navigate("/home")}
+              onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+              onGetEstimate={() => {
+                setShowLocPicker(true);
+              }}
+              setPhotoFile={setPhotoFile}
+              setPhotoPreview={setPhotoPreview}
             />
           ) : (
             <PackageModal
@@ -4947,7 +5268,7 @@ export function BookingPage() {
               cart={cart}
               setCart={setCart}
               packagesData={packagesData}
-              onClose={() => setShowPackageModal(false)}
+              onClose={() => navigate("/home")}
               onCheckout={() => { setShowPackageModal(false); setStep(3); }}
             />
           )
@@ -4957,9 +5278,45 @@ export function BookingPage() {
   )
 }
 
-export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout }) {
+export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [expanded, setExpanded] = useState({})
+  const [activeDetailService, setActiveDetailService] = useState(null)
+  const { user } = useAuth();
+
+  const getSubOptionDescription = (id, serviceName) => {
+    switch(id) {
+      case "int-single-wall": return "Inspection of one focus wall, moisture checking, and measurement.";
+      case "int-one-room": return "Measurement and putty/paint assessment for a single room.";
+      case "int-multi-room": return "Comprehensive consultation for two or more rooms.";
+      case "int-full-home": return "Complete house painting assessment including all walls and ceilings.";
+      case "int-ceiling": return "Ceiling inspection, leakage check, and measurement.";
+      
+      case "ext-wall": return "Exterior wall check, cracks checking, and pressure wash assessment.";
+      case "ext-building": return "Full building external paint assessment and safety review.";
+      case "ext-compound": return "Compound wall length measurement and weather-coat suggestions.";
+      case "ext-terrace": return "Terrace floor assessment and heat-resistant paint options.";
+      
+      case "wp-terrace": return "Terrace leakage detection, mapping, and joint water testing.";
+      case "wp-bathroom": return "Bathroom floor and wall tile joint inspection for moisture.";
+      case "wp-wall": return "Moisture meter check of internal damp walls and leakage source detection.";
+      case "wp-roof": return "Roof slab checking, crack width testing, and protective coating assessment.";
+      case "wp-crack": return "Identification of structural/hairline cracks and sealant suggestions.";
+      
+      case "wm-doors": return "Wooden/metal doors surface rust check, sanding estimation.";
+      case "wm-windows": return "Window grill and frame surface protection check.";
+      case "wm-grills": return "Balcony/staircase grills rust removal and paint planning.";
+      case "wm-cabinets": return "Kitchen or bedroom wooden cabinet wood condition review.";
+      case "wm-gates": return "Main gate rust scraping and PU/enamel coat assessment.";
+      
+      case "td-texture": return "Consultation on accent wall patterns, stencils, and metallic textures.";
+      case "td-designer": return "Custom high-end designs, glazes, and pattern catalog showcase.";
+      case "td-stencil": return "Living room or bedroom stencil pattern consultation.";
+      case "td-accent": return "Single focal wall color selection and texture mockups.";
+      
+      default: return `Assessment and digital measurement of your ${serviceName.toLowerCase()}.`;
+    }
+  }
 
   const PAINTING_SERVICES = [
     {
@@ -4974,8 +5331,11 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         "Detailed masking & post-cleanup protection",
         "1-Year Service Warranty"
       ],
+      benefits: ["Premium Quality", "Verified Painters", "Clean Post-Service", "1-Year Warranty"],
       includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
-      excludes: ["Major plastering work", "Dampness treatment (available separately)"],
+      excludes: ["Major plastering work", "Dampness treatment (available separately)", "Electrical/re-wiring work"],
+      inspectionHighlights: ["Digital Wall Measurement", "Moisture Meter Inspection", "Wall Putty/Paint Damage Assessment"],
+      steps: ["Select Areas", "Free Inspection", "Detailed Quote", "Design Approval", "Expert Painting"],
       subOptions: [
         { id: "int-single-wall", name: "Single Wall", price: 0 },
         { id: "int-one-room", name: "One Room", price: 0 },
@@ -4996,8 +5356,11 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         "Double coat weather-defense paint",
         "Dust and dirt resistant finish"
       ],
-      includes: ["Pressure Washing", "Sanding & Crack Filling", "Exterior Primer", "2 Coats Weatherproof Paint", "Grill/Pipe Painting", "Post-Cleanup"],
-      excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)"],
+      benefits: ["Weatherproof Shield", "Scaffolding Safety", "Crack Treatment", "3-Year Warranty"],
+      includes: ["High Pressure Washing", "Sanding & Crack Filling", "Anti-Algae Exterior Primer", "2 Coats Weatherproof Paint", "Grill & Pipe Protective Coating", "Post-Service Cleaning"],
+      excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)", "Structural masonry / re-plastering"],
+      inspectionHighlights: ["Façade Crack Audit", "Moisture Meter Checking", "Safety & Scaffolding Planning"],
+      steps: ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
       subOptions: [
         { id: "ext-wall", name: "Exterior Wall", price: 0 },
         { id: "ext-building", name: "Building Exterior", price: 0 },
@@ -5016,8 +5379,11 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         "Terrace, Bathroom & External Wall Waterproofing",
         "We diagnose the cause. Fix it right. Waterproofing that lasts."
       ],
-      includes: ["Moisture Meter Inspection", "Leakage Detection", "Terrace Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Crack Filling"],
-      excludes: ["Re-tiling charges if tiling needs to be broken", "Major masonry reconstruction"],
+      benefits: ["Leakage Proof", "Damp & Mold Proof", "Advanced Chemicals", "3-Year Warranty"],
+      includes: ["Thermal Moisture Inspection", "Leakage Source Detection", "Terrace Joint Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Structural Crack Filling"],
+      excludes: ["Re-tiling charges (if floor tile needs to be broken)", "Major concrete reconstruction", "Plumbing piping re-routing"],
+      inspectionHighlights: ["Moisture Meter Scan", "Leakage Trace Mapping", "Wall/Ceiling Dampness Audit"],
+      steps: ["Inspect & Scan", "Detect Leakage Source", "Seal Cracks & Grout", "Apply Waterproof Barrier", "Water Tightness Test"],
       subOptions: [
         { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
         { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
@@ -5038,8 +5404,11 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         "PU coating or premium enamel paint",
         "High gloss or sophisticated matte finish"
       ],
-      includes: ["Rust Scraping & Sanding", "Wood Sanding", "Metal Anti-Rust Primer", "Wood Primer", "2 Coats PU or Enamel Paint", "Gloss/Matte Finish Selection"],
-      excludes: ["New wood carving repairs", "Major structural wood replacement"],
+      benefits: ["Anti-Rust Shield", "Premium Wood Polish", "High Gloss Spray Finish", "Durability Guarantee"],
+      includes: ["Rust Scraping & Mechanical Sanding", "Wood Sanding & Filler", "Metal Anti-Corrosion Primer", "Wood Base Primer", "2 Coats PU or Enamel Paint", "Finishing Selection (Gloss/Matte)"],
+      excludes: ["New wood carving or carpentry repairs", "Replacement of broken wood sections", "Glass frame replacements"],
+      inspectionHighlights: ["Rust Depth Measurement", "Wood Termite/Rot Inspection", "Measurement of Grills/Doors"],
+      steps: ["Select Items", "Sanding & Scraping", "Apply Protection Primer", "PU Polish / Enamel Paint", "Final Quality Polish"],
       subOptions: [
         { id: "wm-doors", name: "Doors", price: 0 },
         { id: "wm-windows", name: "Windows", price: 0 },
@@ -5059,8 +5428,11 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         "Premium metallic & non-metallic glazes",
         "Vibrant accent wall styling consultation"
       ],
-      includes: ["Texture Consultation", "Accent Wall Preparation", "Metallic Glazes", "Stencils decor", "Design Sign-off"],
-      excludes: ["Major masonry repairs"],
+      benefits: ["Accent Metallic Wall", "Custom Stencil Designs", "Textured Accent Finish", "Designer Showcase"],
+      includes: ["Texture / Pattern Consultation", "Accent Wall Preparation", "Premium Metallic Pattern Painting", "Custom Stencil Painting", "Post-Service Clean-up"],
+      excludes: ["Full room plain painting (available separately)", "Wallpaper scraping/removal", "Plaster board reconstruction"],
+      inspectionHighlights: ["Texture Catalog Consultation", "Accent Wall Surface Suitability Check", "Wall Size & Lighting Review"],
+      steps: ["Select Designer Theme", "Wall Surface Preparation", "Apply Base Coating", "Create Textured Finish", "Accent Highlights Finish"],
       subOptions: [
         { id: "td-texture", name: "Texture Finish", price: 0 },
         { id: "td-designer", name: "Designer Finish", price: 0 },
@@ -5079,6 +5451,12 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   }
 
   const contentRef = useRef(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [searchQuery]);
 
   const scrollToCard = (id) => {
     const card = cardRefs[id]?.current;
@@ -5164,11 +5542,48 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
+  const getSearchKeywords = (serviceId) => {
+    switch (serviceId) {
+      case "paint-interior":
+        return ["interior", "wall", "room", "house", "home", "inside", "ceiling", "putty", "paint", "painting"];
+      case "paint-exterior":
+        return ["exterior", "outside", "building", "facade", "compound", "terrace", "paint", "painting"];
+      case "paint-waterproofing":
+        return ["water", "proof", "proofing", "proffing", "profing", "leak", "damp", "wet", "rain", "moisture", "crack", "roof", "bathroom", "waterproofing"];
+      case "paint-wood-metal":
+        return ["wood", "metal", "door", "window", "grill", "gate", "polish", "enamel", "rust", "sanding", "cabinet", "paint", "painting"];
+      case "paint-texture":
+        return ["texture", "decor", "design", "stencil", "accent", "metallic", "glaze", "pattern", "paint", "painting"];
+      default:
+        return [];
+    }
+  };
+
   const filteredServices = searchQuery
-    ? PAINTING_SERVICES.filter(s =>
-        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.points.some(p => p.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
+    ? PAINTING_SERVICES.filter(s => {
+        try {
+          const queryLower = searchQuery.toLowerCase().trim();
+          if (!queryLower) return true;
+          const words = queryLower.split(/\s+/);
+          
+          const exactMatch = (s.name && s.name.toLowerCase().includes(queryLower)) ||
+                             (s.points && s.points.some(p => p && p.toLowerCase().includes(queryLower))) ||
+                             (s.includes && s.includes.some(inc => inc && inc.toLowerCase().includes(queryLower)));
+          if (exactMatch) return true;
+
+          const keywords = getSearchKeywords(s.id);
+          if (keywords && keywords.length > 0) {
+            return words.some(word => 
+              keywords.some(kw => kw && (kw.includes(word) || word.includes(kw)))
+            );
+          }
+          return false;
+        } catch (err) {
+          console.error("Error in search filter:", err);
+          const queryLower = searchQuery.toLowerCase().trim();
+          return s.name && s.name.toLowerCase().includes(queryLower);
+        }
+      })
     : PAINTING_SERVICES;
 
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -5184,1212 +5599,91 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         transition={{ duration: 0.25, ease: "easeOut" }}
         onClick={e => e.stopPropagation()}
       >
-        <style>{`
-          .uc-paint-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: #ffffff;
-            display: flex;
-            justify-content: center;
-            align-items: stretch;
-            z-index: 1000;
-          }
-          .uc-paint-modal {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            background: #ffffff;
-            border-radius: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            box-shadow: none;
-          }
-          .uc-paint-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            width: 100%;
-            padding: 0 2rem;
-          }
-          .uc-paint-header-inner {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-          }
-          .uc-paint-choices-container {
-            max-width: 800px;
-            margin: 2.5rem auto 0;
-            width: 100%;
-          }
-          .uc-paint-bottom-bar-inner {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-          }
-          .uc-paint-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.25rem 0;
-            border-bottom: 1px solid #f1f5f9;
-            background: #ffffff;
-            flex-shrink: 0;
-          }
-          .uc-paint-header-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-          }
-          .uc-paint-back-btn {
-            cursor: pointer;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #475569;
-            transition: all 0.2s;
-          }
-          .uc-paint-back-btn:hover {
-            background: #f1f5f9;
-            color: #0f172a;
-          }
-          .uc-paint-search-bar {
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-            background: #f8fafc;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 0.5rem 1rem;
-            width: 320px;
-            transition: all 0.2s;
-          }
-          .uc-paint-search-bar:focus-within {
-            border-color: #10b981;
-            background: #ffffff;
-            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
-          }
-          .uc-paint-search-bar input {
-            border: none;
-            background: transparent;
-            outline: none;
-            font-size: 0.85rem;
-            width: 100%;
-            color: #1e293b;
-            font-weight: 500;
-          }
-          .uc-paint-search-bar input::placeholder {
-            color: #94a3b8;
-          }
-          .uc-paint-header-right {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-          }
-          .uc-paint-my-bookings {
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: #475569;
-            transition: color 0.2s;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            padding: 0.5rem 1rem;
-            border-radius: 10px;
-          }
-          .uc-paint-my-bookings:hover {
-            color: #0f172a;
-            background: #f1f5f9;
-          }
-          .uc-paint-profile-icon {
-            cursor: pointer;
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            background: #f0fdf4;
-            border: 1px solid #dcfce7;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #059669;
-            transition: all 0.2s;
-          }
-          .uc-paint-profile-icon:hover {
-            background: #dcfce7;
-            transform: scale(1.05);
-          }
-          .uc-paint-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 2rem 0;
-            padding-bottom: ${totalQuantity > 0 ? '7.5rem' : '2.5rem'};
-            background: #ffffff;
-            scroll-behavior: smooth;
-          }
 
-          .uc-paint-main-layout {
-            display: grid;
-            grid-template-columns: 1fr 320px;
-            gap: 2.5rem;
-            align-items: start;
-            margin-top: 1.5rem;
-            isolation: isolate;
-          }
-          @media (max-width: 1024px) {
-            .uc-paint-main-layout {
-              grid-template-columns: 1fr;
-              gap: 2rem;
-            }
-          }
-
-          .uc-paint-hero-row {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            text-align: left;
-            margin-bottom: 1.5rem;
-          }
-          .uc-paint-sidebar-title {
-            font-size: 2.25rem;
-            font-weight: 900;
-            color: #0f172a;
-            line-height: 1.2;
-            margin: 0;
-            letter-spacing: -0.03em;
-          }
-          .uc-paint-sidebar-rating {
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: #475569;
-          }
-
-          /* Top Horizontal Category Navigation */
-          .uc-paint-horizontal-nav {
-            background: #ffffff;
-            border-bottom: 1.5px solid #f1f5f9;
-            padding: 0.75rem 2rem;
-            width: 100%;
-            flex-shrink: 0;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-          }
-          .uc-paint-horizontal-nav-list {
-            display: flex;
-            align-items: flex-start;
-            gap: 1.5rem;
-            overflow-x: auto;
-            scrollbar-width: none; /* Hide scrollbar in Firefox */
-            max-width: 1200px;
-            margin: 0 auto;
-          }
-          .uc-paint-horizontal-nav-list::-webkit-scrollbar {
-            display: none; /* Hide scrollbar in Chrome/Safari/Webkit */
-          }
-          .uc-paint-tab-btn {
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.4rem;
-            border: none;
-            background: none;
-            padding: 0.5rem 0.75rem;
-            border-radius: 12px;
-            transition: all 0.2s ease;
-            text-align: center;
-          }
-          .uc-paint-tab-btn:hover {
-            background: #f8fafc;
-          }
-          .uc-paint-tab-img {
-            width: 56px;
-            height: 56px;
-            border-radius: 12px;
-            object-fit: cover;
-            border: 2px solid transparent;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-          }
-          .uc-paint-tab-btn:hover .uc-paint-tab-img {
-            transform: scale(1.05);
-            border-color: #10b981;
-          }
-          .uc-paint-tab-label {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: #475569;
-            line-height: 1.2;
-            max-width: 72px;
-            white-space: normal;
-          }
-          .uc-paint-tab-btn:hover .uc-paint-tab-label {
-            color: #0f172a;
-          }
-          .uc-paint-middle-col {
-            display: flex;
-            flex-direction: column;
-            gap: 2rem;
-          }
-          .uc-paint-right-col {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-            position: sticky;
-            top: 2rem;
-            align-self: start;
-          }
-          .uc-paint-promise-card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 20px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
-          }
-          .uc-paint-promise-title-row {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-weight: 800;
-            color: #0f172a;
-            font-size: 0.95rem;
-            margin-bottom: 1rem;
-          }
-          .uc-paint-promise-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-          }
-          .uc-paint-promise-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.8rem;
-            font-weight: 700;
-            color: #475569;
-          }
-          .uc-paint-cart-card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 20px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
-            text-align: center;
-          }
-          .uc-paint-cart-card-title {
-            font-size: 1rem;
-            font-weight: 800;
-            color: #0f172a;
-            margin: 0 0 1.25rem 0;
-            text-align: left;
-          }
-          .uc-paint-empty-cart-img {
-            width: 50px;
-            height: 50px;
-            margin: 0.5rem auto 1rem;
-            opacity: 0.3;
-            display: block;
-          }
-          .uc-paint-empty-cart-text {
-            font-size: 0.82rem;
-            font-weight: 700;
-            color: #94a3b8;
-            margin: 0;
-          }
-          .uc-paint-cart-items {
-            display: flex;
-            flex-direction: column;
-            gap: 0.85rem;
-            margin-bottom: 1.25rem;
-            text-align: left;
-          }
-          .uc-paint-cart-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 0.6rem;
-            border-bottom: 1px dashed #f1f5f9;
-          }
-          .uc-paint-cart-item-info {
-            display: flex;
-            flex-direction: column;
-            gap: 0.1rem;
-          }
-          .uc-paint-cart-item-name {
-            font-size: 0.8rem;
-            font-weight: 800;
-            color: #1e293b;
-          }
-          .uc-paint-cart-item-price {
-            font-size: 0.78rem;
-            font-weight: 800;
-            color: #059669;
-          }
-          .uc-paint-cart-item-qty {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            border: 1px solid #10b981;
-            border-radius: 8px;
-            padding: 0.2rem 0.4rem;
-            background: #ffffff;
-          }
-          .uc-paint-cart-item-qty button {
-            border: none;
-            background: none;
-            color: #10b981;
-            font-size: 0.85rem;
-            font-weight: 900;
-            cursor: pointer;
-            padding: 0 0.1rem;
-          }
-          .uc-paint-cart-item-qty span {
-            font-size: 0.78rem;
-            font-weight: 800;
-            color: #1e293b;
-            min-width: 12px;
-            text-align: center;
-          }
-          .uc-paint-cart-subtotal {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-weight: 800;
-            font-size: 0.9rem;
-            color: #0f172a;
-            margin-bottom: 1.25rem;
-            padding-top: 0.4rem;
-          }
-          .uc-paint-cart-checkout-btn {
-            width: 100%;
-            cursor: pointer;
-            border: none;
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            padding: 0.8rem;
-            border-radius: 12px;
-            font-weight: 800;
-            font-size: 0.9rem;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);
-            transition: all 0.2s;
-          }
-          .uc-paint-cart-checkout-btn:hover {
-            opacity: 0.95;
-            transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.2);
-          }
-          @media (min-width: 1025px) {
-            .uc-paint-bottom-bar {
-              display: none !important;
-            }
-          }
-
-          .uc-paint-recent-projects {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.85rem 1.5rem;
-            background: #f8fafc;
-            border-radius: 16px;
-            border: 1px solid #e2e8f0;
-            margin-bottom: 2rem;
-          }
-          .uc-paint-recent-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-          }
-          .uc-paint-avatar-stack {
-            display: flex;
-            align-items: center;
-          }
-          .uc-paint-avatar-stack img {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            border: 2px solid white;
-            margin-left: -10px;
-            object-fit: cover;
-          }
-          .uc-paint-avatar-stack img:first-child {
-            margin-left: 0;
-          }
-          .uc-paint-avatar-badge {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: #cbd5e1;
-            border: 2px solid white;
-            margin-left: -10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-            font-weight: 800;
-            color: #1e293b;
-          }
-          .uc-paint-recent-text {
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: #334155;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-          }
-          .uc-paint-new-badge {
-            background: #4f46e5;
-            color: white;
-            font-size: 0.6rem;
-            font-weight: 800;
-            padding: 2px 6px;
-            border-radius: 6px;
-            letter-spacing: 0.02em;
-          }
-          .uc-paint-recent-btn {
-            cursor: pointer;
-            background: white;
-            border: 1.5px solid #10b981;
-            color: #10b981;
-            font-size: 0.8rem;
-            font-weight: 800;
-            padding: 0.45rem 1.25rem;
-            border-radius: 10px;
-            transition: all 0.2s;
-          }
-          .uc-paint-recent-btn:hover {
-            background: #f0fdf4;
-            border-color: #059669;
-            color: #059669;
-          }
-          .uc-paint-list {
-            display: flex;
-            flex-direction: column;
-            gap: 2rem;
-          }
-          .uc-paint-card {
-            background: #ffffff;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
-            transition: all 0.2s;
-          }
-          .uc-paint-card:hover {
-            border-color: #cbd5e1;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-          }
-          .uc-paint-card-img-box {
-            position: relative;
-            height: 240px;
-            overflow: hidden;
-          }
-          .uc-paint-card-img-box img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transition: transform 0.3s ease;
-          }
-          .uc-paint-card:hover .uc-paint-card-img-box img {
-            transform: scale(1.02);
-          }
-          .uc-paint-card-img-overlay {
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            padding: 1.5rem 1.75rem;
-            color: #ffffff;
-          }
-          .uc-paint-card-overlay-title {
-            font-size: 1.4rem;
-            font-weight: 800;
-            margin: 0;
-            letter-spacing: -0.01em;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-          }
-          .uc-paint-card-overlay-rating {
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
-            font-size: 0.85rem;
-            font-weight: 700;
-            background: rgba(0,0,0,0.5);
-            padding: 4px 10px;
-            border-radius: 8px;
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.15);
-          }
-          .uc-paint-card-body {
-            padding: 1.5rem 1.75rem;
-          }
-          .uc-paint-points {
-            list-style: none;
-            padding: 0;
-            margin: 0 0 1.25rem 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.65rem;
-          }
-          .uc-paint-point-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 0.6rem;
-            font-size: 0.88rem;
-            color: #475569;
-            line-height: 1.45;
-          }
-          .uc-paint-point-check {
-            color: #10b981;
-            margin-top: 3px;
-            flex-shrink: 0;
-          }
-          .uc-paint-show-more {
-            cursor: pointer;
-            background: none;
-            border: none;
-            padding: 0;
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: #10b981;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-            transition: color 0.2s;
-          }
-          .uc-paint-show-more:hover {
-            color: #059669;
-          }
-          .uc-paint-expanded-details {
-            margin-top: 1.25rem;
-            padding-top: 1.25rem;
-            border-top: 1px dashed #e2e8f0;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            animation: fadeIn 0.2s ease-out;
-          }
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .uc-paint-expand-section {
-            font-size: 0.82rem;
-          }
-          .uc-paint-expand-section-title {
-            font-weight: 800;
-            color: #1e293b;
-            margin-bottom: 0.35rem;
-            text-transform: uppercase;
-            font-size: 0.75rem;
-            letter-spacing: 0.02em;
-          }
-          .uc-paint-expand-section-content {
-            color: #64748b;
-            line-height: 1.5;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-          }
-          .uc-paint-tag-pill {
-            background: #f1f5f9;
-            color: #475569;
-            padding: 3px 8px;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 0.75rem;
-          }
-          .uc-paint-card-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 1.25rem;
-            padding-top: 1.25rem;
-            border-top: 1px solid #f1f5f9;
-          }
-          .uc-paint-card-price {
-            font-size: 0.85rem;
-            color: #64748b;
-            font-weight: 600;
-          }
-          .uc-paint-card-price-num {
-            font-size: 1.3rem;
-            color: #0f172a;
-            font-weight: 800;
-          }
-          .uc-paint-action-btn {
-            cursor: pointer;
-            background: #ffffff;
-            border: 1.5px solid #10b981;
-            color: #10b981;
-            font-size: 0.85rem;
-            font-weight: 800;
-            padding: 0.6rem 1.75rem;
-            border-radius: 12px;
-            transition: all 0.2s;
-            min-width: 150px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.05);
-          }
-          .uc-paint-action-btn:hover {
-            background: #f0fdf4;
-            border-color: #059669;
-            color: #059669;
-          }
-          .uc-paint-qty-selector {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border: 1.5px solid #10b981;
-            background: #f0fdf4;
-            border-radius: 12px;
-            padding: 0.5rem 0.85rem;
-            min-width: 150px;
-            font-weight: 800;
-            color: #059669;
-            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.08);
-          }
-          .uc-paint-qty-selector button {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 1.15rem;
-            font-weight: 900;
-            color: #059669;
-            padding: 0 0.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .uc-paint-bottom-bar {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            padding: 1.2rem 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 10;
-            box-shadow: 0 -6px 25px rgba(5, 150, 105, 0.25);
-          }
-          .uc-paint-bottom-left {
-            display: flex;
-            flex-direction: column;
-            gap: 0.15rem;
-          }
-          .uc-paint-bottom-items {
-            font-size: 0.8rem;
-            opacity: 0.9;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.02em;
-          }
-          .uc-paint-bottom-total {
-            font-size: 1.35rem;
-            font-weight: 900;
-            letter-spacing: -0.01em;
-          }
-          .uc-paint-bottom-btn {
-            cursor: pointer;
-            border: none;
-            background: #ffffff;
-            color: #059669;
-            font-size: 0.92rem;
-            font-weight: 800;
-            padding: 0.8rem 1.75rem;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-            transition: all 0.2s;
-          }
-          .uc-paint-bottom-btn:hover {
-            background: #f8fafc;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-          }
-          .uc-paint-bottom-btn:active {
-            transform: translateY(0);
-          }
-
-          /* Estimate Banner & Process Section styles */
-          .uc-paint-estimate-banner {
-            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-            border: 1px solid #bbf7d0;
-            border-radius: 24px;
-            padding: 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 2rem;
-            margin-top: 3rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01);
-            text-align: left;
-          }
-          .uc-paint-estimate-left {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            align-items: flex-start;
-          }
-          .uc-paint-estimate-title {
-            font-size: 1.35rem;
-            font-weight: 800;
-            color: #064e3b;
-            margin: 0;
-          }
-          .uc-paint-estimate-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-          }
-          .uc-paint-estimate-item {
-            font-size: 0.88rem;
-            font-weight: 600;
-            color: #14532d;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-          }
-          .uc-paint-estimate-btn {
-            cursor: pointer;
-            border: none;
-            background: #059669;
-            color: white;
-            padding: 0.7rem 1.5rem;
-            border-radius: 12px;
-            font-weight: 800;
-            font-size: 0.85rem;
-            box-shadow: 0 4px 10px rgba(5, 150, 105, 0.15);
-            transition: all 0.2s;
-          }
-          .uc-paint-estimate-btn:hover {
-            background: #047857;
-            transform: translateY(-1px);
-          }
-          .uc-paint-estimate-right {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #ffffff;
-            width: 90px;
-            height: 90px;
-            border-radius: 20px;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.04);
-            border: 1px solid #e2e8f0;
-            position: relative;
-            flex-shrink: 0;
-          }
-          .uc-paint-estimate-badge {
-            position: absolute;
-            bottom: -5px;
-            right: -5px;
-            background: #10b981;
-            color: white;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-          }
-
-          .uc-paint-process-section {
-            margin-top: 3.5rem;
-            padding-bottom: 2rem;
-            text-align: left;
-          }
-          .uc-paint-process-title {
-            font-size: 1.35rem;
-            font-weight: 800;
-            color: #0f172a;
-            margin-bottom: 2rem;
-          }
-          .uc-paint-process-steps {
-            display: flex;
-            flex-direction: column;
-            gap: 2.25rem;
-          }
-          .uc-paint-process-step {
-            display: flex;
-            align-items: flex-start;
-            gap: 1.5rem;
-            position: relative;
-          }
-          .uc-paint-process-step:not(:last-child)::after {
-            content: '';
-            position: absolute;
-            left: 20px;
-            top: 40px;
-            bottom: -25px;
-            width: 2px;
-            border-left: 2px dashed #cbd5e1;
-          }
-          .uc-paint-process-icon-box {
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            background: #f1f5f9;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #475569;
-            flex-shrink: 0;
-            z-index: 1;
-            border: 2px solid #ffffff;
-            box-shadow: 0 0 0 1px #e2e8f0;
-          }
-          .uc-paint-process-info {
-            display: flex;
-            flex-direction: column;
-            gap: 0.2rem;
-            padding-top: 0.3rem;
-          }
-          .uc-paint-process-name {
-            font-size: 0.95rem;
-            font-weight: 800;
-            color: #1e293b;
-          }
-          .uc-paint-process-desc {
-            font-size: 0.82rem;
-            color: #64748b;
-            font-weight: 500;
-          }
-
-          /* Sub-options styles */
-          .uc-paint-suboptions-section {
-            margin-top: 1.25rem;
-            padding-top: 1.25rem;
-            border-top: 1px solid #f1f5f9;
-            text-align: left;
-          }
-          .uc-paint-suboptions-title {
-            font-size: 0.85rem;
-            font-weight: 800;
-            color: #0f172a;
-            display: block;
-            margin-bottom: 0.75rem;
-          }
-          .uc-paint-chips-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-          }
-          .uc-paint-opt-chip {
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.6rem 1rem;
-            border-radius: 12px;
-            border: 1.5px solid #e2e8f0;
-            background: #ffffff;
-            color: #475569;
-            font-weight: 700;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-            outline: none;
-          }
-          .uc-paint-opt-chip:hover {
-            border-color: #cbd5e1;
-            background: #f8fafc;
-            transform: translateY(-0.5px);
-          }
-          .uc-paint-opt-chip.active {
-            border-color: #10b981;
-            background: #f0fdf4;
-            color: #047857;
-            box-shadow: 0 4px 10px rgba(16, 185, 129, 0.05);
-          }
-          .uc-paint-chip-status {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #f1f5f9;
-            color: #64748b;
-            font-size: 0.75rem;
-            font-weight: 800;
-            transition: all 0.2s;
-          }
-          .uc-paint-opt-chip.active .uc-paint-chip-status {
-            background: #10b981;
-            color: white;
-          }
-
-          /* App Banner & Main Footer styles */
-          .uc-paint-footer-section {
-            margin-top: 4rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-            width: 100%;
-            background: #ffffff;
-            border-top: 1px solid #f1f5f9;
-          }
-          .uc-paint-app-banner {
-            background: #f0fdf4;
-            border-radius: 24px;
-            padding: 2.25rem 2.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 2rem;
-            margin: 3rem 0;
-            border: 1px solid #dcfce7;
-            text-align: left;
-          }
-          @media (max-width: 768px) {
-            .uc-paint-app-banner {
-              flex-direction: column;
-              align-items: flex-start;
-              gap: 1.5rem;
-              padding: 1.5rem;
-            }
-          }
-          .uc-paint-app-banner-left {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-          }
-          .uc-paint-app-banner-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            background: #10b981;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
-          }
-          .uc-paint-app-banner-text {
-            display: flex;
-            flex-direction: column;
-            gap: 0.15rem;
-          }
-          .uc-paint-app-banner-tag {
-            font-size: 0.75rem;
-            font-weight: 800;
-            color: #059669;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-          }
-          .uc-paint-app-banner-title {
-            font-size: 1.25rem;
-            font-weight: 800;
-            color: #0f172a;
-            margin: 0;
-          }
-          .uc-paint-app-banner-desc {
-            font-size: 0.82rem;
-            color: #64748b;
-            font-weight: 500;
-            margin: 0;
-          }
-          .uc-paint-app-banner-right {
-            display: flex;
-            gap: 1rem;
-          }
-          @media (max-width: 480px) {
-            .uc-paint-app-banner-right {
-              flex-direction: column;
-              width: 100%;
-            }
-          }
-          .uc-paint-store-btn {
-            cursor: pointer;
-            border: none;
-            background: #0f172a;
-            color: white;
-            padding: 0.8rem 1.5rem;
-            border-radius: 12px;
-            font-weight: 800;
-            font-size: 0.82rem;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
-            transition: all 0.2s;
-            white-space: nowrap;
-          }
-          .uc-paint-store-btn:hover {
-            background: #1e293b;
-            transform: translateY(-1px);
-          }
-
-          .uc-paint-main-footer {
-            background: #f8fafc;
-            border-top: 1px solid #f1f5f9;
-            padding: 3.5rem 0;
-            width: 100%;
-          }
-          .uc-paint-main-footer-inner {
-            display: grid;
-            grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
-            gap: 3rem;
-            text-align: left;
-          }
-          @media (max-width: 768px) {
-            .uc-paint-main-footer-inner {
-              grid-template-columns: 1fr 1fr;
-              gap: 2rem;
-            }
-          }
-          @media (max-width: 480px) {
-            .uc-paint-main-footer-inner {
-              grid-template-columns: 1fr;
-            }
-          }
-          .uc-paint-footer-col {
-            display: flex;
-            flex-direction: column;
-            gap: 1.25rem;
-          }
-          .uc-paint-footer-logo-row {
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-          }
-          .uc-paint-footer-brand {
-            font-size: 1.25rem;
-            font-weight: 800;
-            color: #0f172a;
-            letter-spacing: -0.01em;
-          }
-          .uc-paint-footer-brand-desc {
-            font-size: 0.85rem;
-            color: #64748b;
-            line-height: 1.5;
-            margin: 0;
-            font-weight: 500;
-          }
-          .uc-paint-footer-socials {
-            display: flex;
-            gap: 0.75rem;
-          }
-          .uc-paint-social-icon {
-            cursor: pointer;
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #64748b;
-            transition: all 0.2s;
-          }
-          .uc-paint-social-icon:hover {
-            background: #10b981;
-            color: white;
-            border-color: #10b981;
-            transform: scale(1.05);
-          }
-          .uc-paint-footer-col-title {
-            font-size: 0.95rem;
-            font-weight: 800;
-            color: #0f172a;
-            margin: 0;
-          }
-          .uc-paint-footer-links {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-          }
-          .uc-paint-footer-links li {
-            font-size: 0.85rem;
-            color: #64748b;
-            font-weight: 500;
-            cursor: pointer;
-            transition: color 0.2s;
-          }
-          .uc-paint-footer-links li:hover {
-            color: #10b981;
-          }
-          .uc-paint-footer-contact {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.85rem;
-          }
-          .uc-paint-footer-contact li {
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-            font-size: 0.85rem;
-            color: #64748b;
-            font-weight: 500;
-          }
-          .uc-paint-footer-contact li svg {
-            color: #94a3b8;
-          }
-        `}</style>
 
         {/* Header */}
         <div className="uc-paint-header">
-          <div className="uc-paint-header-inner uc-paint-container">
+          <div className="uc-paint-header-inner">
             <div className="uc-paint-header-left">
-              <button className="uc-paint-back-btn" onClick={onClose} aria-label="Go back">
-                <ArrowLeft size={18} />
+              <button 
+                onClick={onClose} 
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", display: "flex", alignItems: "center", padding: "6px", borderRadius: "9999px", marginRight: "4px" }}
+                className="hover:bg-slate-100"
+                aria-label="Go back"
+              >
+                <ArrowLeft size={16} />
               </button>
+
+              {/* Logo */}
+              <div className="uc-paint-header-logo" onClick={onClose}>
+                <Home size={18} strokeWidth={2.5} />
+                <span><span style={{ color: "#0d9488" }}>Cal</span>Services</span>
+              </div>
+
+              {/* Navigation Links */}
+              <nav className="uc-paint-header-nav">
+                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home")}>Home</a>
+                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#categories")}>Services</a>
+                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#how-it-works")}>How It Works</a>
+                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#professionals")}>Professionals</a>
+                {user && (
+                  <a className="uc-paint-header-nav-link" onClick={() => navigate("/booking/checkout")}>My Bookings</a>
+                )}
+                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#about")}>Support</a>
+              </nav>
+            </div>
+
+            <div className="uc-paint-header-right">
+              {/* Search Bar */}
               <div className="uc-paint-search-bar">
-                <Search size={16} style={{ color: "#94a3b8" }} />
+                <Search size={15} style={{ color: "#94a3b8" }} />
                 <input
                   type="text"
-                  placeholder="Search Interior Painting, Waterproofing..."
+                  placeholder="Search painting..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
+                  style={{
+                    border: "none", outline: "none", fontSize: "0.8rem", width: "120px", marginLeft: "4px", background: "transparent"
+                  }}
                 />
                 {searchQuery && (
                   <button
                     style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}
                     onClick={() => setSearchQuery("")}
                   >
-                    <X size={14} />
+                    <X size={12} />
                   </button>
                 )}
               </div>
-            </div>
-            <div className="uc-paint-header-right">
-              <button className="uc-paint-my-bookings">
-                <Clock size={15} />
-                <span>My Bookings</span>
+
+              <button className="uc-paint-header-btn-book" onClick={() => {
+                const element = document.querySelector(".uc-paint-choices");
+                if (element) {
+                  element.scrollIntoView({ behavior: "smooth" });
+                }
+              }}>
+                Book Service
               </button>
-              <div className="uc-paint-profile-icon" title="Profile">
-                <User size={18} />
-              </div>
+
+              {!user ? (
+                <>
+                  <button className="uc-paint-header-btn-outline" onClick={() => navigate("/login")}>
+                    Login
+                  </button>
+                  <button className="uc-paint-header-btn-outline" onClick={() => navigate(routes.activation_journey || "/signup")}>
+                    Sign Up
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="uc-paint-header-icon-btn" title="Notifications">
+                    <Bell size={18} />
+                  </button>
+                  <div className="uc-paint-profile-icon" title="Profile">
+                    <User size={16} />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -6495,79 +5789,45 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                               ))}
                             </ul>
 
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1.25rem' }}>
                               <button
-                                className="uc-paint-show-more"
-                                onClick={() => toggleExpand(service.id)}
+                                onClick={() => setActiveDetailService(service)}
+                                style={{
+                                  background: 'none', border: 'none',
+                                  color: '#7C3AED', fontWeight: 800, fontSize: '0.85rem',
+                                  cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                  gap: '2px', padding: 0
+                                }}
                               >
-                                <span>{isExpanded ? "Show less" : "Show more"}</span>
-                                <span style={{ display: 'inline-block', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                                  <ChevronDown size={14} />
-                                </span>
+                                View details <ChevronRight size={14} />
                               </button>
                               <button
                                 className="uc-paint-action-btn"
-                                onClick={() => scrollToCard(service.id)}
+                                onClick={() => {
+                                  if (getParentCartCount(service.id) === 0) {
+                                    addSubOptionToCart(service.subOptions[0], service);
+                                  }
+                                  if (onGetEstimate) {
+                                    onGetEstimate();
+                                  } else {
+                                    onCheckout();
+                                  }
+                                }}
                                 style={{ padding: '0.5rem 1.4rem', fontSize: '0.8rem' }}
                               >
                                 GET ESTIMATE
                               </button>
                             </div>
 
-                            {isExpanded && (
-                              <div className="uc-paint-expanded-details">
-                                <div className="uc-paint-expand-section">
-                                  <div className="uc-paint-expand-section-title">What's Included:</div>
-                                  <div className="uc-paint-expand-section-content">
-                                    {service.includes.map((inc, i) => (
-                                      <span key={i} className="uc-paint-tag-pill" style={{ background: '#f0fdf4', color: '#166534' }}>{inc}</span>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div className="uc-paint-expand-section">
-                                  <div className="uc-paint-expand-section-title">What's Excluded:</div>
-                                  <div className="uc-paint-expand-section-content">
-                                    {service.excludes.map((exc, i) => (
-                                      <span key={i} className="uc-paint-tag-pill" style={{ background: '#fef2f2', color: '#991b1b' }}>{exc}</span>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Sub-Options Grid */}
-                            <div className="uc-paint-suboptions-section">
-                              <span className="uc-paint-suboptions-title">Select areas to inspect:</span>
-                              <div className="uc-paint-chips-grid">
-                                {service.subOptions.map(subOpt => {
-                                  const isSelected = getSubOptionCartCount(subOpt.id) > 0;
-                                  return (
-                                    <button
-                                      key={subOpt.id}
-                                      className={`uc-paint-opt-chip ${isSelected ? 'active' : ''}`}
-                                      onClick={() => isSelected ? removeSubOptionFromCart(subOpt.id) : addSubOptionToCart(subOpt, service)}
-                                    >
-                                      <span className="uc-paint-chip-status">{isSelected ? "✓" : "+"}</span>
-                                      <span>{subOpt.name}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            <div className="uc-paint-card-footer" style={{ borderTop: '1px solid #f1f5f9', marginTop: '1rem', paddingTop: '0.75rem' }}>
-                              <div className="uc-paint-card-price" style={{ textAlign: 'center', width: '100%' }}>
-                                {getParentCartCount(service.id) > 0 ? (
+                            {getParentCartCount(service.id) > 0 && (
+                              <div className="uc-paint-card-footer" style={{ borderTop: '1px solid #f1f5f9', marginTop: '1rem', paddingTop: '0.75rem' }}>
+                                <div className="uc-paint-card-price" style={{ textAlign: 'center', width: '100%' }}>
                                   <span style={{ color: '#059669', fontSize: '0.85rem', fontWeight: 800 }}>
                                     ✓ {getParentCartCount(service.id)} area(s) selected for site visit
                                   </span>
-                                ) : (
-                                  <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontWeight: 500 }}>
-                                    Select areas above to schedule consultation
-                                  </span>
-                                )}
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -6579,6 +5839,66 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         <p style={{ fontWeight: 600, fontSize: "0.9rem" }}>No painting services match your search.</p>
                       </div>
                     )}
+                  </div>
+
+                  {/* CalServices vs Local Vendor Comparison Table */}
+                  <div className="uc-paint-comparison-section" style={{ margin: "2rem 0", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.03)" }}>
+                    <div style={{ padding: "1.25rem 1.5rem 0.75rem", borderBottom: "1px solid #f1f5f9" }}>
+                      <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", textAlign: "left" }}>Why choose CalServices Painting?</h3>
+                      <p style={{ margin: "4px 0 0", fontSize: "0.78rem", color: "#64748b", textAlign: "left" }}>See how CalServices compares to typical local vendor services.</p>
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "500px" }}>
+                        <thead>
+                          <tr style={{ background: "#f8fafc" }}>
+                            <th style={{ padding: "1rem", textAlign: "left", fontSize: "0.8rem", fontWeight: 800, color: "#475569", width: "40%", borderRight: "2px solid #34d399" }}>Services</th>
+                            <th style={{ 
+                              padding: "1rem", textAlign: "center", fontSize: "0.85rem", fontWeight: 900, 
+                              color: "#0d9488", background: "#f0fdf4", width: "30%", borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399" 
+                            }}>
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                                <span style={{ color: "#0f172a", fontWeight: 900, letterSpacing: "0.02em" }}>CAL<span style={{ color: "#0d9488" }}>services</span></span>
+                              </div>
+                            </th>
+                            <th style={{ padding: "1rem", textAlign: "center", fontSize: "0.8rem", fontWeight: 800, color: "#64748b", width: "30%", borderLeft: "2px solid #34d399" }}>
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                                <User size={15} style={{ color: "#8b5cf6" }} />
+                                <span>Local Vendor</span>
+                              </div>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            { title: "100% Original Paint Brands", desc: "Genuine paints like Asian Paints or Berger." },
+                            { title: "Scientific Wall Moisture Test", desc: "We check walls before painting to prevent peeling." },
+                            { title: "Fixed Pricing (No Hidden Fees)", desc: "Paint & labor cost is completely included upfront." },
+                            { title: "Expert Trained Painters", desc: "Done by professional, verified painters." },
+                            { title: "Full Masking & Protection", desc: "We cover all furniture, floors, and switches safely." },
+                            { title: "Spotless Post-Paint Cleaning", desc: "Your home is left neat, tidy, and clean." },
+                            { title: "Damage Insurance up to ₹10,000", desc: "Free protection if anything gets accidentally damaged." },
+                            { title: "1-Year Peeling Warranty", desc: "Full service warranty against peeling or bubbling." }
+                          ].map((row, idx) => (
+                            <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                              <td style={{ padding: "0.85rem 1rem", fontSize: "0.78rem", fontWeight: 700, color: "#334155", textAlign: "left", borderRight: "2px solid #34d399" }}>
+                                <span style={{ marginRight: "6px", color: "#94a3b8" }}>•</span> 
+                                <span style={{ fontWeight: 800, color: "#1e293b" }}>{row.title}</span>
+                                <div style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 500, marginTop: "2px" }}>{row.desc}</div>
+                              </td>
+                              <td style={{ 
+                                padding: "0.85rem 1rem", textAlign: "center", background: "#f0fdf4",
+                                borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399" 
+                              }}>
+                                <Check size={16} strokeWidth={3} style={{ color: "#10b981", margin: "0 auto" }} />
+                              </td>
+                              <td style={{ padding: "0.85rem 1rem", textAlign: "center", borderLeft: "2px solid #34d399" }}>
+                                <X size={16} strokeWidth={2.5} style={{ color: "#ef4444", margin: "0 auto" }} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
 
                   {/* Get Estimate Banner */}
@@ -6620,8 +5940,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           <Calendar size={16} />
                         </div>
                         <div className="uc-paint-process-info">
-                          <span className="uc-paint-process-name">Book a Free Assessment</span>
-                          <span className="uc-paint-process-desc">Schedule a site inspection at your preferred time.</span>
+                          <span className="uc-paint-process-name">Book a Free Visit</span>
+                          <span className="uc-paint-process-desc">Choose a date and time for us to check your walls.</span>
                         </div>
                       </div>
                       <div className="uc-paint-process-step">
@@ -6629,8 +5949,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           <Cpu size={16} />
                         </div>
                         <div className="uc-paint-process-info">
-                          <span className="uc-paint-process-name">Digital Wall Measurement</span>
-                          <span className="uc-paint-process-desc">Get highly accurate pricing with precise digital measurement tools.</span>
+                          <span className="uc-paint-process-name">Accurate Laser Measurement</span>
+                          <span className="uc-paint-process-desc">We measure your walls using laser tools to give you a perfect price.</span>
                         </div>
                       </div>
                       <div className="uc-paint-process-step">
@@ -6638,8 +5958,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           <PaintRoller size={16} />
                         </div>
                         <div className="uc-paint-process-info">
-                          <span className="uc-paint-process-name">On-Time Execution</span>
-                          <span className="uc-paint-process-desc">We guarantee punctual startup and completion of your project.</span>
+                          <span className="uc-paint-process-name">On-Time Painting</span>
+                          <span className="uc-paint-process-desc">We start on time and finish on time, guaranteed.</span>
                         </div>
                       </div>
                       <div className="uc-paint-process-step">
@@ -6647,8 +5967,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           <ShieldCheck size={16} />
                         </div>
                         <div className="uc-paint-process-info">
-                          <span className="uc-paint-process-name">Clean-up & Quality Sign-off</span>
-                          <span className="uc-paint-process-desc">Spotless post-paint cleanup followed by a rigorous quality check.</span>
+                          <span className="uc-paint-process-name">Clean-up & Final Check</span>
+                          <span className="uc-paint-process-desc">We clean up all paint stains and check the quality of work.</span>
                         </div>
                       </div>
                     </div>
@@ -6834,10 +6154,2004 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
             </div>
           </motion.div>
         )}
+
+        {/* View Details Pop-up Modal (Switch Board style) */}
+        <AnimatePresence>
+          {activeDetailService && (
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 11000,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)',
+            }} onClick={() => setActiveDetailService(null)}>
+              <motion.div
+                initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                transition={{ type: "spring", damping: 25, stiffness: 320 }}
+                style={{
+                  background: '#ffffff', borderRadius: 24, width: '100%', maxWidth: 460,
+                  boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                  position: 'relative', display: 'flex', flexDirection: 'column',
+                  maxHeight: '85vh', overflow: 'hidden', margin: '1rem',
+                  fontFamily: 'inherit'
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Close icon */}
+                <button
+                  onClick={() => setActiveDetailService(null)}
+                  style={{
+                    position: 'absolute', top: 12, right: 12, width: 32, height: 32,
+                    borderRadius: '50%', background: 'rgba(255,255,255,0.9)', border: 'none',
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)', cursor: 'pointer', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', zIndex: 10, color: '#1e293b'
+                  }}
+                >
+                  <X size={16} />
+                </button>
+
+                {/* Hero Image */}
+                <div style={{ width: '100%', height: 160, position: 'relative', flexShrink: 0 }}>
+                  <img
+                    src={activeDetailService.image}
+                    alt={activeDetailService.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
+                  />
+                </div>
+
+                {/* Content Area */}
+                {(() => {
+                  const rating = parseFloat(activeDetailService.rating) || 4.8;
+                  const rawVal = parseFloat(activeDetailService.reviews);
+                  const multiplier = activeDetailService.reviews.toLowerCase().includes('k') ? 1000 : 1;
+                  const total = isNaN(rawVal) ? 100 : Math.round(rawVal * multiplier);
+                  
+                  let r5 = 0, r4 = 0, r3 = 0, r2 = 0, r1 = 0;
+                  if (rating >= 4.7) {
+                    r5 = Math.round(total * 0.88);
+                    r4 = Math.round(total * 0.08);
+                    r3 = Math.round(total * 0.02);
+                    r2 = Math.round(total * 0.01);
+                    r1 = Math.round(total * 0.01);
+                  } else if (rating >= 4.5) {
+                    r5 = Math.round(total * 0.78);
+                    r4 = Math.round(total * 0.12);
+                    r3 = Math.round(total * 0.06);
+                    r2 = Math.round(total * 0.02);
+                    r1 = Math.round(total * 0.02);
+                  } else {
+                    r5 = Math.round(total * 0.68);
+                    r4 = Math.round(total * 0.18);
+                    r3 = Math.round(total * 0.08);
+                    r2 = Math.round(total * 0.03);
+                    r1 = Math.round(total * 0.03);
+                  }
+                  const w5 = (r5 / total) * 100;
+                  const w4 = (r4 / total) * 100;
+                  const w3 = (r3 / total) * 100;
+                  const w2 = (r2 / total) * 100;
+                  const w1 = (r1 / total) * 100;
+
+                  return (
+                    <>
+                      <div style={{ padding: '1.25rem 1.5rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        {/* Title & Rating */}
+                        <div>
+                          <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a', textAlign: 'left' }}>{activeDetailService.name}</h3>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginTop: 4 }}>
+                            <Star size={12} style={{ fill: '#fbbf24', color: '#fbbf24' }} />
+                            <span>{activeDetailService.rating} ({activeDetailService.reviews} ratings)</span>
+                          </div>
+                        </div>
+
+                        <div style={{ height: '1px', background: '#f1f5f9', flexShrink: 0 }} />
+
+                        {/* QUICK BENEFITS */}
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(4, 1fr)',
+                          gap: '6px',
+                          marginTop: '0.2rem'
+                        }}>
+                          {activeDetailService.benefits.map((benefit, i) => {
+                            let icon = <Award size={14} color="#0d9488" />;
+                            if (benefit.toLowerCase().includes("premium") || benefit.toLowerCase().includes("accent")) icon = <Sparkles size={14} color="#b45309" />;
+                            if (benefit.toLowerCase().includes("verified") || benefit.toLowerCase().includes("safety") || benefit.toLowerCase().includes("tech")) icon = <ShieldCheck size={14} color="#2563eb" />;
+                            if (benefit.toLowerCase().includes("clean") || benefit.toLowerCase().includes("crack") || benefit.toLowerCase().includes("damp")) icon = <Brush size={14} color="#0d9488" />;
+                            if (benefit.toLowerCase().includes("warranty") || benefit.toLowerCase().includes("durability")) icon = <ShieldCheck size={14} color="#16a34a" />;
+
+                            return (
+                              <div key={i} style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'flex-start',
+                                padding: '8px 4px',
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '10px',
+                                textAlign: 'center',
+                                gap: '6px'
+                              }}>
+                                <div style={{
+                                  width: '26px',
+                                  height: '26px',
+                                  borderRadius: '50%',
+                                  background: '#ffffff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                                  flexShrink: 0
+                                }}>
+                                  {icon}
+                                </div>
+                                <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#334155', lineHeight: 1.2 }}>{benefit}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* WHAT'S INCLUDED */}
+                        <div style={{ textAlign: 'left', marginTop: '0.2rem' }}>
+                          <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>What's Included</h4>
+                          <ul style={{ paddingLeft: '1.25rem', margin: 0, fontSize: '0.82rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '0.4rem', listStyleType: 'disc' }}>
+                            {activeDetailService.includes.map((inc, i) => (
+                              <li key={i} style={{ lineHeight: 1.4 }}>{inc}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* WHAT WOULD YOU LIKE TO PAINT? (Suboptions list) */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                          <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'left' }}>
+                            {activeDetailService.name?.toLowerCase().includes("painting") ? "What would you like to paint?" : "What would you like to inspect?"}
+                          </h4>
+                          {activeDetailService.subOptions.map(subOpt => {
+                            const isSelected = getSubOptionCartCount(subOpt.id) > 0;
+                            const description = getSubOptionDescription(subOpt.id, activeDetailService.name);
+                            return (
+                              <div
+                                key={subOpt.id}
+                                style={{
+                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                  padding: '0.85rem 0', borderBottom: '1px dashed #f1f5f9', gap: '1rem'
+                                }}
+                              >
+                                <div style={{ flex: 1, textAlign: 'left' }}>
+                                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{subOpt.name}</div>
+                                  <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2, lineHeight: 1.3 }}>{description}</div>
+                                </div>
+                                <div style={{ shrink: 0 }}>
+                                  {isSelected ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '1.5px solid #0d9488', borderRadius: '8px', padding: '0.35rem 0.5rem', background: '#ffffff' }}>
+                                      <button
+                                        onClick={() => removeSubOptionFromCart(subOpt.id)}
+                                        style={{ border: 'none', background: 'none', color: '#0d9488', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px' }}
+                                      >
+                                        −
+                                      </button>
+                                      <span style={{ color: '#1e293b', fontWeight: 'extrabold', fontSize: '0.8rem', minWidth: '10px', textAlign: 'center' }}>
+                                        {getSubOptionCartCount(subOpt.id)}
+                                      </span>
+                                      <button
+                                        onClick={() => addSubOptionToCart(subOpt, activeDetailService)}
+                                        style={{ border: 'none', background: 'none', color: '#0d9488', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px' }}
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => addSubOptionToCart(subOpt, activeDetailService)}
+                                      style={{
+                                        border: '1.5px solid #0d9488', borderRadius: '8px',
+                                        padding: '0.35rem 1rem', background: '#ffffff', color: '#0d9488',
+                                        fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.2s',
+                                      }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = '#f0fdf4' }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = '#ffffff' }}
+                                    >
+                                      Add
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* FREE SITE INSPECTION CARD */}
+                        <div style={{
+                          display: 'flex', flexDirection: 'column', gap: '0.5rem',
+                          padding: '1rem', border: '1px dashed #34d399', borderRadius: '12px',
+                          background: '#f0fdf4', color: '#065f46', textAlign: 'left', marginTop: '0.2rem'
+                        }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Sparkles size={14} color="#059669" /> Free Site Inspection Included
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                            {activeDetailService.inspectionHighlights.map((high, i) => (
+                              <span key={i} style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', background: '#d1fae5', borderRadius: '6px' }}>{high}</span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* WHAT'S NOT INCLUDED */}
+                        <div style={{ textAlign: 'left', marginTop: '0.2rem' }}>
+                          <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>What's Not Included</h4>
+                          <ul style={{ paddingLeft: '1.25rem', margin: 0, fontSize: '0.82rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '0.4rem', listStyleType: 'disc' }}>
+                            {activeDetailService.excludes.map((exc, i) => (
+                              <li key={i} style={{ lineHeight: 1.4 }}>{exc}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* RATINGS & REVIEWS */}
+                        <div style={{ textAlign: 'left', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                          <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ratings & Reviews</h4>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1.25rem',
+                            padding: '1rem',
+                            border: '1.5px solid #e2e8f0',
+                            borderRadius: '16px',
+                            background: '#ffffff'
+                          }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '70px' }}>
+                              <span style={{ fontSize: '2.4rem', fontWeight: 900, color: '#1e293b', lineHeight: 1 }}>{rating.toFixed(2)}</span>
+                              <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700, marginTop: '4px' }}>avg rating</span>
+                            </div>
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                              {[
+                                { star: 5, count: r5, width: w5 },
+                                { star: 4, count: r4, width: w4 },
+                                { star: 3, count: r3, width: w3 },
+                                { star: 2, count: r2, width: w2 },
+                                { star: 1, count: r1, width: w1 },
+                              ].map(row => (
+                                <div key={row.star} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', fontWeight: 700, color: '#64748b' }}>
+                                  <span style={{ minWidth: '20px', display: 'flex', alignItems: 'center', gap: '2px', color: '#94a3b8' }}>
+                                    <Star size={11} style={{ fill: '#94a3b8', color: '#94a3b8' }} /> {row.star}
+                                  </span>
+                                  <div style={{ flex: 1, height: '5px', background: '#e2e8f0', borderRadius: '99px', overflow: 'hidden', position: 'relative' }}>
+                                    <div style={{ width: `${row.width}%`, height: '100%', background: '#334155', borderRadius: '99px' }} />
+                                  </div>
+                                  <span style={{ minWidth: '40px', textAlign: 'right', fontSize: '0.68rem', color: '#475569' }}>{row.count.toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* HOW CALTRACK WORKS */}
+                        <div style={{ textAlign: 'left', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', marginBottom: '1rem' }}>
+                          <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            How {activeDetailService.name?.toLowerCase().includes("painting") ? "painting" : "waterproofing"} works
+                          </h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', position: 'relative', paddingLeft: '0.5rem' }}>
+                            {[
+                              {
+                                title: "Book Home Inspection",
+                                desc: "Tell us preferred time to book",
+                                icon: <Calendar size={18} color="#6366f1" />
+                              },
+                              {
+                                title: "Measure & Estimate",
+                                desc: "Get accurate quotes with laser measurements",
+                                icon: <Calculator size={18} color="#f59e0b" />
+                              },
+                              {
+                                title: "Project Initiation",
+                                desc: "Guaranteed on time project initiation and completion",
+                                icon: <PaintRoller size={18} color="#10b981" />
+                              },
+                              {
+                                title: "Cleaning & Quality Check",
+                                desc: "Post paint cleanup and quality check",
+                                icon: <CheckCircle2 size={18} color="#06b6d4" />
+                              }
+                            ].map((step, i, arr) => (
+                              <div key={i} style={{ display: 'flex', gap: '1rem', position: 'relative', paddingBottom: i < arr.length - 1 ? '1.5rem' : '0' }}>
+                                {/* Timeline Line */}
+                                {i < arr.length - 1 && (
+                                  <div style={{
+                                    position: 'absolute', left: '17px', top: '34px', bottom: '0',
+                                    width: '2px', borderLeft: '2px dotted #cbd5e1'
+                                  }} />
+                                )}
+                                {/* Step Icon */}
+                                <div style={{
+                                  width: '36px', height: '36px', borderRadius: '50%', background: '#f8fafc',
+                                  border: '1.5px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  zIndex: 2, flexShrink: 0, boxShadow: '0 2px 5px rgba(0,0,0,0.03)'
+                                }}>
+                                  {step.icon}
+                                </div>
+                                {/* Step Text */}
+                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{step.title}</span>
+                                  <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px', lineHeight: 1.3 }}>{step.desc}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Fixed Get Estimate Button at bottom */}
+                      <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9', background: '#ffffff', flexShrink: 0 }}>
+                        <button
+                          onClick={() => {
+                            const selectedCount = getParentCartCount(activeDetailService.id);
+                            if (selectedCount === 0) {
+                              addSubOptionToCart(activeDetailService.subOptions[0], activeDetailService);
+                            }
+                            setActiveDetailService(null);
+                            if (onGetEstimate) {
+                              onGetEstimate();
+                            } else {
+                              onCheckout();
+                            }
+                          }}
+                          style={{
+                            width: '100%', padding: '0.8rem',
+                            background: 'linear-gradient(135deg, #0d9488, #059669)',
+                            color: 'white', border: 'none', borderRadius: 10,
+                            fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer',
+                            boxShadow: '0 4px 12px rgba(13,148,136,0.22)',
+                          }}
+                        >
+                          Get Estimate
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   )
 }
+
+export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, setPhotoFile, setPhotoPreview }) {
+  const [activeTab, setActiveTab] = useState("brick");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expanded, setExpanded] = useState({});
+  const [activeDetailService, setActiveDetailService] = useState(null);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // Questionnaire form states
+  const [generalDesc, setGeneralDesc] = useState("");
+  const [generalPhoto, setGeneralPhoto] = useState(null);
+  const [generalPhotoPreview, setGeneralPhotoPreview] = useState(null);
+
+  const [houseProject, setHouseProject] = useState({
+    desc: "",
+    details: "",
+    location: "",
+    photo: null,
+    photoPreview: null
+  });
+
+  const [officeProject, setOfficeProject] = useState({
+    type: "New Construction",
+    area: "",
+    location: "",
+    photo: null,
+    photoPreview: null
+  });
+
+  const handlePhotoUpload = (e, type) => {
+    const file = e.target.files[0];
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      if (type === "house") {
+        setHouseProject(prev => ({ ...prev, photo: file, photoPreview: previewUrl }));
+      } else if (type === "office") {
+        setOfficeProject(prev => ({ ...prev, photo: file, photoPreview: previewUrl }));
+      } else {
+        setGeneralPhoto(file);
+        setGeneralPhotoPreview(previewUrl);
+      }
+      if (setPhotoFile) setPhotoFile(file);
+      if (setPhotoPreview) setPhotoPreview(previewUrl);
+    }
+  };
+
+  const MASON_CATEGORIES = [
+    { id: "brick", name: "Brick & Block Work", icon: "🧱" },
+    { id: "plastering", name: "Plastering & Wall Repair", icon: "🪣" },
+    { id: "partition", name: "Wall & Partition Construction", icon: "📐" },
+    { id: "house", name: "House Construction", icon: "🏠" },
+    { id: "office", name: "Office / Commercial Construction", icon: "🏢" },
+    { id: "demolition", name: "Wall Breaking & Demolition", icon: "🕳️" }
+  ];
+
+  const MASON_SERVICES = [
+    // 1. Brick & Block Work
+    {
+      id: "brick-new",
+      catId: "brick",
+      name: "New Brick Wall",
+      price: 999,
+      priceStr: "Starting from ₹999",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "1.2K",
+      image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
+      includes: ["Material assessment", "Wall alignment checking", "Mortar preparation", "Brick laying", "Curing guidance"],
+      excludes: ["Plastering (available separately)", "Painting and structural slab work"],
+      inspectionHighlights: ["Site layout measurement", "Load-bearing suitability check"],
+      steps: ["Layout Planning", "Mortar Preparation", "Brick Alignment Laying", "Level Inspection", "Initial Curing"],
+      desc: "Build sturdy, high-quality new brick walls using premium cement mortar."
+    },
+    {
+      id: "brick-block",
+      catId: "brick",
+      name: "Block Wall Construction",
+      price: 1299,
+      priceStr: "Starting from ₹1,299",
+      duration: "Flexible",
+      rating: "4.7",
+      reviews: "950",
+      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+      includes: ["Concrete blocks supply", "Mortar mixing & application", "Joint reinforcement check", "Block laying"],
+      excludes: ["Foundation excavation", "Plastering"],
+      inspectionHighlights: ["Ground leveling check", "Alignment verification"],
+      steps: ["Site Prep", "Mortar Mix", "Block Laying", "Alignment Check", "Curing"],
+      desc: "Solid or hollow concrete block wall construction for durability and strength."
+    },
+    {
+      id: "brick-ext",
+      catId: "brick",
+      name: "Wall Extension",
+      price: 799,
+      priceStr: "Starting from ₹799",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "820",
+      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300&q=80&fit=crop",
+      includes: ["Anchoring into existing wall", "Brick/block extensions", "Cement mortar application"],
+      excludes: ["Breaking existing wall structures"],
+      inspectionHighlights: ["Joint integrity inspection", "Height limit check"],
+      steps: ["Drilling Anchors", "Mortar prep", "Extension building", "Alignment Check"],
+      desc: "Extend existing brick/block walls vertically or horizontally with secure joints."
+    },
+    {
+      id: "brick-repair",
+      catId: "brick",
+      name: "Brick/Block Wall Repair",
+      price: 499,
+      priceStr: "Starting from ₹499",
+      duration: "1-2 hrs",
+      rating: "4.6",
+      reviews: "1.1K",
+      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+      includes: ["Remove damaged bricks", "Mortar repointing", "New brick replacement"],
+      excludes: ["Entire wall reconstruction"],
+      inspectionHighlights: ["Structural safety audit"],
+      steps: ["Chipping old mortar", "Placing new bricks", "Pointing joints"],
+      desc: "Repair damaged bricks, crumbling mortar joints, and patch structural wall cracks."
+    },
+    {
+      id: "brick-small",
+      catId: "brick",
+      name: "Small Masonry Work",
+      price: 299,
+      priceStr: "Starting from ₹299",
+      duration: "1 hr",
+      rating: "4.7",
+      reviews: "2.4K",
+      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop",
+      includes: ["Minor cement patching", "fixing loose stones/tiles", "small structural adjustments"],
+      excludes: ["Major concrete work"],
+      inspectionHighlights: ["Inspection of repair spot"],
+      steps: ["Cleaning area", "Mortar application", "Smoothing/Finishing"],
+      desc: "Minor masonry adjustments, cement patching, and quick structural fixes."
+    },
+
+    // 2. Plastering & Wall Repair
+    {
+      id: "plaster-new",
+      catId: "plastering",
+      name: "New Wall Plastering",
+      price: 499,
+      priceStr: "Starting from ₹499",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "1.4K",
+      image: "https://images.unsplash.com/photo-1562259942-27364e0ee76b?w=300&q=80&fit=crop",
+      includes: ["Surface wetting", "Cement slurry coat", "Cement-sand plastering", "Screeding & leveling"],
+      excludes: ["Wall putty application", "Painting"],
+      inspectionHighlights: ["Alignment checks", "Moisture verification"],
+      steps: ["Wetting", "Plaster coat", "Level checks", "Smoothing finish"],
+      desc: "Smooth plastering for newly built brick or block walls to prepare for painting."
+    },
+    {
+      id: "plaster-re",
+      catId: "plastering",
+      name: "Re-Plastering",
+      price: 699,
+      priceStr: "Starting from ₹699",
+      duration: "Flexible",
+      rating: "4.7",
+      reviews: "890",
+      image: "https://images.unsplash.com/photo-1584820927500-11b3337a7c5a?w=300&q=80&fit=crop",
+      includes: ["Remove old damaged plaster", "Chipping wall surface", "Fresh plaster coat application"],
+      excludes: ["Damp-proof paint coats"],
+      inspectionHighlights: ["Hollow sound test", "Dampness level test"],
+      steps: ["Scraping", "Surface cleaning", "Plaster application", "Floating smooth"],
+      desc: "Remove old crumbling plaster, chip the surface, and apply a fresh new plaster coat."
+    },
+    {
+      id: "plaster-crack",
+      catId: "plastering",
+      name: "Crack Repair",
+      price: 399,
+      priceStr: "Starting from ₹399",
+      duration: "1 hr",
+      rating: "4.6",
+      reviews: "3.2K",
+      image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop",
+      includes: ["V-groove crack opening", "Bonding agent application", "Epoxy/cement grout filling"],
+      excludes: ["Foundation underpinning"],
+      inspectionHighlights: ["Crack depth validation"],
+      steps: ["Crack opening", "Cleaning", "Grouting", "Smoothing"],
+      desc: "Fix structural cracks on walls using professional bonding agents and epoxy/cement grout."
+    },
+    {
+      id: "plaster-dmg",
+      catId: "plastering",
+      name: "Damaged Plaster Repair",
+      price: 349,
+      priceStr: "Starting from ₹349",
+      duration: "1-2 hrs",
+      rating: "4.7",
+      reviews: "1.8K",
+      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+      includes: ["Chipping loose plaster", "Anti-dampness treatment", "Patch plastering & smoothing"],
+      excludes: ["Full room plastering"],
+      inspectionHighlights: ["Moisture level checks"],
+      steps: ["Chipping", "Treating", "Plastering patch", "Smoothing edge"],
+      desc: "Patch up specific areas of damp, peeling, or hollow plaster to restore smooth walls."
+    },
+    {
+      id: "plaster-ceil",
+      catId: "plastering",
+      name: "Ceiling Plaster Repair",
+      price: 599,
+      priceStr: "Starting from ₹599",
+      duration: "2 hrs",
+      rating: "4.5",
+      reviews: "670",
+      image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop",
+      includes: ["Safety support setup", "Chipping ceiling plaster", "Bonding mortar plastering"],
+      excludes: ["False ceiling installation"],
+      inspectionHighlights: ["Roof leakage checking"],
+      steps: ["Chipping ceiling", "Safety check", "Plaster patch", "Float smooth"],
+      desc: "Repair and smooth plaster on ceiling cracks or crumbling/damaged ceiling patches."
+    },
+
+    // 3. Wall & Partition Construction
+    {
+      id: "part-room",
+      catId: "partition",
+      name: "Room Partition",
+      price: 1999,
+      priceStr: "Starting from ₹1,999",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "950",
+      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
+      includes: ["Partition plan layout", "Anchor setup", "Brick/block partition walls construction"],
+      excludes: ["Painting and electrical wiring"],
+      inspectionHighlights: ["Floor load verification", "Alignment checks"],
+      steps: ["Marking boundaries", "Layout base", "Partition brickwork", "Level checks", "Finishing"],
+      desc: "Construct sturdy internal room dividers using bricks or concrete blocks."
+    },
+    {
+      id: "part-office",
+      catId: "partition",
+      name: "Office Partition",
+      price: 2499,
+      priceStr: "Starting from ₹2,499",
+      duration: "Flexible",
+      rating: "4.7",
+      reviews: "640",
+      image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=300&q=80&fit=crop",
+      includes: ["Layout marking", "Partition wall construction", "Joint mesh reinforcement"],
+      excludes: ["Glass partition windows", "IT cabling"],
+      inspectionHighlights: ["Blueprint validation"],
+      steps: ["Marking", "Frame installation", "Partition building", "Mesh prep", "Plastering"],
+      desc: "Professional office cubicle or meeting room partition walls construction."
+    },
+    {
+      id: "part-kitchen",
+      catId: "partition",
+      name: "Kitchen Partition",
+      price: 1499,
+      priceStr: "Starting from ₹1,499",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "1.1K",
+      image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&fit=crop",
+      includes: ["Custom brick partitions", "Counter top support construction", "Breakfast counter base"],
+      excludes: ["Granite counter top installation (available separately)"],
+      inspectionHighlights: ["Space optimization check"],
+      steps: ["Layout layout", "Support building", "Wall partition", "Finish plastering"],
+      desc: "Build custom kitchen partitions, breakfast counters, or partition storage bases."
+    },
+    {
+      id: "part-internal",
+      catId: "partition",
+      name: "New Internal Wall",
+      price: 1999,
+      priceStr: "Starting from ₹1,999",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "780",
+      image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop",
+      includes: ["Base anchor setup", "Internal brick/block wall building", "Plaster coat finishing"],
+      excludes: ["Electrical box carving"],
+      inspectionHighlights: ["Vertical alignment verification"],
+      steps: ["Anchor drill", "Mortar prep", "Wall building", "Plastering"],
+      desc: "Erect new internal partitioning walls for room modifications."
+    },
+    {
+      id: "part-ext",
+      catId: "partition",
+      name: "Wall Extension",
+      price: 999,
+      priceStr: "Starting from ₹999",
+      duration: "Flexible",
+      rating: "4.6",
+      reviews: "540",
+      image: "https://images.unsplash.com/photo-1534080391025-a77b068f64e0?w=300&q=80&fit=crop",
+      includes: ["Drill anchoring", "Extend current partitions", "Smoothing joint lines"],
+      excludes: ["Complete demolition"],
+      inspectionHighlights: ["Joint integrity check"],
+      steps: ["Joint preparation", "Mortar overlay", "Brickwork extension", "Finishing plaster"],
+      desc: "Extend current partition walls to change room structures and layout partitions."
+    },
+
+    // 4. House Construction
+    {
+      id: "house-comp",
+      catId: "house",
+      name: "Complete House Construction",
+      price: 0,
+      priceStr: "Site Visit ➔ Detailed Quotation",
+      duration: "Flexible",
+      rating: "4.9",
+      reviews: "420",
+      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+      includes: ["Architectural drawing review", "Foundation structure setup", "Brick & plaster finishing", "Project management"],
+      excludes: ["Painting and custom interiors (available separately)"],
+      inspectionHighlights: ["Ground/soil assessment", "Blueprint alignment"],
+      steps: ["Blueprint approval", "Excavation & Foundation", "Concrete structure pillars", "Superstructure brickwork", "Curing & Finish Plastering"],
+      desc: "Complete end-to-end structural civil construction and finishing from foundation to roof.",
+      customForm: "house"
+    },
+    {
+      id: "house-found",
+      catId: "house",
+      name: "Foundation Work",
+      price: 0,
+      priceStr: "Site Visit ➔ Detailed Quotation",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "350",
+      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300&q=80&fit=crop",
+      includes: ["Excavation checks", "Raft/footing layout", "Concrete pouring & reinforcing"],
+      excludes: ["Superstructure brickwork"],
+      inspectionHighlights: ["Soil bearing check"],
+      steps: ["Excavation", "Layout footing", "Iron reinforcement", "Concrete pour"],
+      desc: "Excavation, footings, and structural foundation civil work for custom plans."
+    },
+    {
+      id: "house-struct",
+      catId: "house",
+      name: "Structural Civil Work",
+      price: 0,
+      priceStr: "Site Visit ➔ Detailed Quotation",
+      duration: "Flexible",
+      rating: "4.9",
+      reviews: "280",
+      image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
+      includes: ["Column layout setting", "RCC slabs concrete", "Reinforcement steel tying"],
+      excludes: ["Brick wall partitioning"],
+      inspectionHighlights: ["Structural load checklist"],
+      steps: ["Column layout", "Steel frame assembly", "Concrete casting", "Curing"],
+      desc: "Columns, beams, and concrete slabs construction for custom building designs."
+    },
+    {
+      id: "house-brick",
+      catId: "house",
+      name: "Brick & Block Construction",
+      price: 0,
+      priceStr: "Site Visit ➔ Detailed Quotation",
+      duration: "Flexible",
+      rating: "4.7",
+      reviews: "560",
+      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+      includes: ["Bricklaying supervision", "Joint bonding checking", "Opening lintels installation"],
+      excludes: ["Concrete roof casting"],
+      inspectionHighlights: ["Wall alignment inspection"],
+      steps: ["Layout marking", "Mortar prep", "Superstructure brickwork", "Lintel casting"],
+      desc: "Bricklaying work for full structural plans under expert civil engineer supervision."
+    },
+    {
+      id: "house-finish",
+      catId: "house",
+      name: "Plastering & Finishing",
+      price: 0,
+      priceStr: "Site Visit ➔ Detailed Quotation",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "610",
+      image: "https://images.unsplash.com/photo-1562259942-27364e0ee76b?w=300&q=80&fit=crop",
+      includes: ["Double-coat plastering", "Floor leveling bed preparation", "Tile cement base"],
+      excludes: ["Premium paint colors coating"],
+      inspectionHighlights: ["Surface level checks"],
+      steps: ["Slurry coat", "Base plastering", "Finished smoothing", "Level curing"],
+      desc: "Smooth double-coat plastering and flooring civil base work for entire structures."
+    },
+    {
+      id: "house-renov",
+      catId: "house",
+      name: "House Renovation",
+      price: 0,
+      priceStr: "Site Visit ➔ Detailed Quotation",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "950",
+      image: "https://images.unsplash.com/photo-1584820927500-11b3337a7c5a?w=300&q=80&fit=crop",
+      includes: ["Demolition of target walls", "Retrofitting structural columns", "Civil adjustments"],
+      excludes: ["IT cabling"],
+      inspectionHighlights: ["Load bearing status check"],
+      steps: ["Site inspection", "Demolition", "Retrofitting", "Structural masonry", "Plastering"],
+      desc: "Full structural renovation, retrofitting, and layouts modifications for homes."
+    },
+    {
+      id: "house-room",
+      catId: "house",
+      name: "Extension / Additional Room",
+      price: 0,
+      priceStr: "Site Visit ➔ Detailed Quotation",
+      duration: "Flexible",
+      rating: "4.7",
+      reviews: "410",
+      image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop",
+      includes: ["Anchor setup in main structure", "Erect brick walls", "RCC roof casting"],
+      excludes: ["Painting & electrical wiring"],
+      inspectionHighlights: ["Load carrying verification"],
+      steps: ["Anchor setting", "Wall building", "Roof shuttering", "Concrete casting", "Finishing"],
+      desc: "Add a new room on your terrace or extend current floor plans."
+    },
+
+    // 5. Office / Commercial Construction
+    {
+      id: "office-comp",
+      catId: "office",
+      name: "Complete Office Civil Work",
+      price: 0,
+      priceStr: "Site Inspection ➔ Custom Quotation",
+      duration: "Flexible",
+      rating: "4.9",
+      reviews: "180",
+      image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=300&q=80&fit=crop",
+      includes: ["Commercial layout plan review", "Demolition & partitions setup", "Ceiling base structure work", "Flooring leveling"],
+      excludes: ["Ducting & electrical wire cabling"],
+      inspectionHighlights: ["Building regulation checklist"],
+      steps: ["Design analysis", "Site clearance", "Structural partitions", "Flooring base", "Ceiling prep"],
+      desc: "End-to-end office structural modification, columns, partitions, and layout changes.",
+      customForm: "office"
+    },
+    {
+      id: "office-new",
+      catId: "office",
+      name: "New Office Construction",
+      price: 0,
+      priceStr: "Site Inspection ➔ Custom Quotation",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "120",
+      image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=300&q=80&fit=crop",
+      includes: ["Commercial space mapping", "Full structural building layout", "Plastering & finishing"],
+      excludes: ["Furniture & desks setup"],
+      inspectionHighlights: ["Mall/Building guidelines compliance check"],
+      steps: ["Site inspection", "Foundation/Column work", "Superstructure building", "Finishing plastering"],
+      desc: "Full commercial space building and structural layout setups."
+    },
+    {
+      id: "office-renov",
+      catId: "office",
+      name: "Office Renovation",
+      price: 0,
+      priceStr: "Site Inspection ➔ Custom Quotation",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "320",
+      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop",
+      includes: ["Wall removal and space adjustment", "RCC slab modifications", "Civil flooring adjustments"],
+      excludes: ["Painting and networking"],
+      inspectionHighlights: ["Utility map checking"],
+      steps: ["Demolition", "Debris clearing", "Partition building", "Floor leveling"],
+      desc: "Modern office workspace redesign and structural civil modifications."
+    },
+    {
+      id: "office-comm",
+      catId: "office",
+      name: "Commercial Space Construction",
+      price: 0,
+      priceStr: "Site Inspection ➔ Custom Quotation",
+      duration: "Flexible",
+      rating: "4.7",
+      reviews: "220",
+      image: "https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=300&q=80&fit=crop",
+      includes: ["Shopfront structural prep", "Tile base leveling", "Masonry adjustments"],
+      excludes: ["Glass storefront glass fitting"],
+      inspectionHighlights: ["Mall guideline compliance verification"],
+      steps: ["Clearance", "Storefront framing", "Tile base casting", "Finishing"],
+      desc: "Structural modifications and civil preparations for retail shops, offices, and showrooms."
+    },
+    {
+      id: "office-part",
+      catId: "office",
+      name: "Office Partition",
+      price: 0,
+      priceStr: "Site Inspection ➔ Custom Quotation",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "530",
+      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
+      includes: ["Cubicle partitioning walls", "RCC partition blocks setting", "Finishing plaster coats"],
+      excludes: ["Drywall partition boards"],
+      inspectionHighlights: ["Height limits verification"],
+      steps: ["Layout marking", "Partition setting", "Mesh placement", "Plastering"],
+      desc: "Internal civil and partition modifications for office workspace separation."
+    },
+    {
+      id: "office-struct",
+      catId: "office",
+      name: "Structural Modification",
+      price: 0,
+      priceStr: "Site Inspection ➔ Custom Quotation",
+      duration: "Flexible",
+      rating: "4.9",
+      reviews: "150",
+      image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop",
+      includes: ["Column retrofitting check", "Beam strengthening", "Load diversion setup"],
+      excludes: ["Complete building demolition"],
+      inspectionHighlights: ["Structural design calculations audit"],
+      steps: ["Safety shoring", "Concrete chipping", "Steel strengthening", "Micro-concrete pour"],
+      desc: "Modification of columns, beams, or internal structural plans to change commercial layouts."
+    },
+    {
+      id: "office-floor",
+      catId: "office",
+      name: "Floor/Room Modification",
+      price: 0,
+      priceStr: "Site Inspection ➔ Custom Quotation",
+      duration: "Flexible",
+      rating: "4.7",
+      reviews: "260",
+      image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&fit=crop",
+      includes: ["Concrete floor leveling base", "Room size modifications", "Ceiling base casting"],
+      excludes: ["Wooden flooring panels (available separately)"],
+      inspectionHighlights: ["Level validation"],
+      steps: ["Surface chip", "Level guide setup", "Self-leveling grout pour", "Curing check"],
+      desc: "Civil work for floor leveling, concrete base prep, ceilings, and room conversions."
+    },
+
+    // 6. Wall Breaking & Demolition
+    {
+      id: "dem-part",
+      catId: "demolition",
+      name: "Partial Wall Breaking",
+      price: 499,
+      priceStr: "Starting from ₹499",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "1.1K",
+      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300&q=80&fit=crop",
+      includes: ["Safety support props", "Wall breaking", "Debris clearing"],
+      excludes: ["Load-bearing columns removal"],
+      inspectionHighlights: ["Load bearing verification", "Utility line checking"],
+      steps: ["Shoring props", "Wall breaking", "Clearing"],
+      desc: "Carefully break a portion of non-load-bearing brick/block walls."
+    },
+    {
+      id: "dem-rem",
+      catId: "demolition",
+      name: "Partition Removal",
+      price: 399,
+      priceStr: "Starting from ₹399",
+      duration: "1-2 hrs",
+      rating: "4.8",
+      reviews: "1.3K",
+      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop",
+      includes: ["Demolishing partition walls", "Debris packing & clearing"],
+      excludes: ["Rebuilding walls"],
+      inspectionHighlights: ["Utility mapping"],
+      steps: ["Breaking partition", "Packing debris", "Site clearing"],
+      desc: "Demolish and clear internal masonry partitions or divider walls."
+    },
+    {
+      id: "dem-door",
+      catId: "demolition",
+      name: "Door Opening",
+      price: 599,
+      priceStr: "Starting from ₹599",
+      duration: "2 hrs",
+      rating: "4.7",
+      reviews: "820",
+      image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop",
+      includes: ["Lintel beam installation support", "Opening cutting & edge leveling"],
+      excludes: ["Door frame installation"],
+      inspectionHighlights: ["Lintel suitability audit"],
+      steps: ["Marking cutout", "Lintel slot drill", "Wall cutout", "Edge plastering"],
+      desc: "Cut open brick/block walls to create a new door pathway and level the edges."
+    },
+    {
+      id: "dem-window",
+      catId: "demolition",
+      name: "Window Opening",
+      price: 499,
+      priceStr: "Starting from ₹499",
+      duration: "2 hrs",
+      rating: "4.8",
+      reviews: "640",
+      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop",
+      includes: ["Cutout marking", "Window breaking", "Edge smoothing plaster"],
+      excludes: ["Window frame installation"],
+      inspectionHighlights: ["Safety checks"],
+      steps: ["Marking", "Cutting outer perimeter", "Breaking wall", "Smoothing borders"],
+      desc: "Create a new window cutout on exterior or interior brick/block walls."
+    },
+    {
+      id: "dem-wall",
+      catId: "demolition",
+      name: "Wall Removal",
+      price: 999,
+      priceStr: "Starting from ₹999",
+      duration: "Flexible",
+      rating: "4.7",
+      reviews: "1.5K",
+      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300&q=80&fit=crop",
+      includes: ["Temporary shoring pillars setup", "Complete wall demolition", "Debris packing & clearing"],
+      excludes: ["Permit collection fees"],
+      inspectionHighlights: ["Load carrying check"],
+      steps: ["Safety props setup", "Electricity/Water shutdown check", "Wall demolition", "Clearing"],
+      desc: "Complete demolition of non-load bearing internal brick or block walls."
+    },
+    {
+      id: "dem-small",
+      catId: "demolition",
+      name: "Small Demolition Work",
+      price: 299,
+      priceStr: "Starting from ₹299",
+      duration: "1 hr",
+      rating: "4.6",
+      reviews: "2.1K",
+      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+      includes: ["Chipping tiles", "removing concrete shelves", "minor chipping work"],
+      excludes: ["Slab breaking"],
+      inspectionHighlights: ["Pipes map checks"],
+      steps: ["Chipping target areas", "Site cleaning"],
+      desc: "Minor structural breaking, built-in shelf removal, or tile/plaster chipping."
+    }
+  ];
+
+  const cardRefs = {
+    "brick-new": useRef(null), "brick-block": useRef(null), "brick-ext": useRef(null), "brick-repair": useRef(null), "brick-small": useRef(null),
+    "plaster-new": useRef(null), "plaster-re": useRef(null), "plaster-crack": useRef(null), "plaster-dmg": useRef(null), "plaster-ceil": useRef(null),
+    "part-room": useRef(null), "part-office": useRef(null), "part-kitchen": useRef(null), "part-internal": useRef(null), "part-ext": useRef(null),
+    "house-comp": useRef(null), "house-found": useRef(null), "house-struct": useRef(null), "house-brick": useRef(null), "house-finish": useRef(null), "house-renov": useRef(null), "house-room": useRef(null),
+    "office-comp": useRef(null), "office-new": useRef(null), "office-renov": useRef(null), "office-comm": useRef(null), "office-part": useRef(null), "office-struct": useRef(null), "office-floor": useRef(null),
+    "dem-part": useRef(null), "dem-rem": useRef(null), "dem-door": useRef(null), "dem-window": useRef(null), "dem-wall": useRef(null), "dem-small": useRef(null)
+  };
+
+  const contentRef = useRef(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [searchQuery, activeTab]);
+
+  const scrollToCard = (id) => {
+    const card = cardRefs[id]?.current;
+    if (!card) return;
+    const container = contentRef.current;
+    if (!container) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    const cardTop = card.getBoundingClientRect().top;
+    const containerTop = container.getBoundingClientRect().top;
+    const offset = cardTop - containerTop + container.scrollTop - 16;
+    container.scrollTo({ top: offset, behavior: 'smooth' });
+  };
+
+  const addToCart = (pkg) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === pkg.id);
+      if (existing) {
+        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
+      }
+      return [...prev, { ...pkg, quantity: 1, categoryName: "Mason" }];
+    });
+  };
+
+  const removeFromCart = (pkgId) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === pkgId);
+      if (!existing) return prev;
+      if (existing.quantity === 1) {
+        return prev.filter(c => c.id !== pkgId);
+      }
+      return prev.map(c => c.id === pkgId ? { ...c, quantity: c.quantity - 1 } : c);
+    });
+  };
+
+  const getCartCount = (pkgId) => {
+    const item = cart.find(c => c.id === pkgId);
+    return item ? item.quantity : 0;
+  };
+
+  const addCustomProjectToCart = (serviceId) => {
+    let item = null;
+    const s = MASON_SERVICES.find(x => x.id === serviceId);
+    if (serviceId === "house-comp") {
+      if (!houseProject.desc.trim()) {
+        alert("Please describe your house construction project details.");
+        return;
+      }
+      item = {
+        id: "house-comp",
+        name: "Complete House Construction",
+        shortName: "House Construction",
+        price: 0,
+        quantity: 1,
+        categoryName: "Mason",
+        description: `Project details: ${houseProject.desc}\nPlot/Building details: ${houseProject.details}\nSite location: ${houseProject.location}`,
+        photo: houseProject.photoPreview
+      };
+    } else if (serviceId === "office-comp") {
+      if (!officeProject.area.trim()) {
+        alert("Please specify the approximate area.");
+        return;
+      }
+      item = {
+        id: "office-comp",
+        name: "Complete Office Civil Work",
+        shortName: "Office Construction",
+        price: 0,
+        quantity: 1,
+        categoryName: "Mason",
+        description: `Project Type: ${officeProject.type}\nApproximate Area: ${officeProject.area}\nSite location: ${officeProject.location}`,
+        photo: officeProject.photoPreview
+      };
+    } else {
+      item = {
+        id: s.id,
+        name: s.name,
+        shortName: s.name,
+        price: s.price,
+        quantity: 1,
+        categoryName: "Mason",
+        description: generalDesc,
+        photo: generalPhotoPreview
+      };
+    }
+
+    setCart(prev => {
+      const clean = prev.filter(c => c.id !== serviceId);
+      return [...clean, item];
+    });
+  };
+
+  const getSearchKeywords = (serviceId) => {
+    if (serviceId.startsWith("brick")) return ["brick", "block", "wall", "cement", "laying", "extensions", "repair", "masonry"];
+    if (serviceId.startsWith("plaster")) return ["plaster", "plastering", "patch", "crack", "wall", "cement", "smooth"];
+    if (serviceId.startsWith("part")) return ["partition", "wall", "room", "kitchen", "office", "divider", "brickwork"];
+    if (serviceId.startsWith("house")) return ["house", "building", "home", "civil", "structure", "foundation", "construction"];
+    if (serviceId.startsWith("office")) return ["office", "commercial", "partition", "ceiling", "remodeling", "civil", "construction"];
+    if (serviceId.startsWith("dem")) return ["demolition", "breaking", "wall", "partial", "removal", "cutout", "debris"];
+    return [];
+  };
+
+  const filteredServices = searchQuery
+    ? MASON_SERVICES.filter(s => {
+        const queryLower = searchQuery.toLowerCase().trim();
+        const exactMatch = s.name.toLowerCase().includes(queryLower) || s.desc.toLowerCase().includes(queryLower);
+        if (exactMatch) return true;
+        const keywords = getSearchKeywords(s.id);
+        return queryLower.split(/\s+/).some(word => 
+          keywords.some(kw => kw && (kw.includes(word) || word.includes(kw)))
+        );
+      })
+    : MASON_SERVICES.filter(s => s.catId === activeTab);
+
+  const totalQuantity = cart.filter(c => c.id.startsWith("mason-")).reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = cart.filter(c => c.id.startsWith("mason-")).reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  return (
+    <div className="uc-paint-overlay" onClick={onClose}>
+      <motion.div
+        className="uc-paint-modal"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="uc-paint-header">
+          <div className="uc-paint-header-inner">
+            <div className="uc-paint-header-left">
+              <button 
+                onClick={onClose} 
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", display: "flex", alignItems: "center", padding: "6px", borderRadius: "9999px", marginRight: "4px" }}
+                className="hover:bg-slate-100"
+                aria-label="Go back"
+              >
+                <ArrowLeft size={16} />
+              </button>
+
+              {/* Logo */}
+              <div className="uc-paint-header-logo" onClick={onClose}>
+                <Home size={18} strokeWidth={2.5} />
+                <span><span style={{ color: "#0d9488" }}>Cal</span>Services</span>
+              </div>
+
+              {/* Navigation Links */}
+              <nav className="uc-paint-header-nav">
+                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home")}>Home</a>
+                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#categories")}>Services</a>
+                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#how-it-works")}>How It Works</a>
+                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#professionals")}>Professionals</a>
+                {user && (
+                  <a className="uc-paint-header-nav-link" onClick={() => navigate("/booking/checkout")}>My Bookings</a>
+                )}
+                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#about")}>Support</a>
+              </nav>
+            </div>
+
+            <div className="uc-paint-header-right">
+              {/* Search Bar */}
+              <div className="uc-paint-search-bar">
+                <Search size={15} style={{ color: "#94a3b8" }} />
+                <input
+                  type="text"
+                  placeholder="Search masonry..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  style={{
+                    border: "none", outline: "none", fontSize: "0.8rem", width: "120px", marginLeft: "4px", background: "transparent"
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}
+                    onClick={() => setSearchQuery("")}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              <button className="uc-paint-header-btn-book" onClick={() => {
+                const element = document.querySelector(".uc-paint-choices");
+                if (element) {
+                  element.scrollIntoView({ behavior: "smooth" });
+                }
+              }}>
+                Book Service
+              </button>
+
+              {!user ? (
+                <>
+                  <button className="uc-paint-header-btn-outline" onClick={() => navigate("/login")}>
+                    Login
+                  </button>
+                  <button className="uc-paint-header-btn-outline" onClick={() => navigate(routes.activation_journey || "/signup")}>
+                    Sign Up
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="uc-paint-header-icon-btn" title="Notifications">
+                    <Bell size={18} />
+                  </button>
+                  <div className="uc-paint-profile-icon" title="Profile">
+                    <User size={16} />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="uc-paint-horizontal-nav">
+          <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", display: "flex", gap: "1.25rem", padding: "10px 0 10px 2rem" }}>
+            {MASON_CATEGORIES.map(cat => {
+              const isActive = activeTab === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  className={`uc-paint-tab-btn ${isActive ? "active" : ""}`}
+                  onClick={() => { setActiveTab(cat.id); setSearchQuery(""); }}
+                  style={{
+                    background: "transparent", border: "none", cursor: "pointer",
+                    display: "flex", flexDirection: "column", alignItems: "center", width: "90px"
+                  }}
+                >
+                  <div style={{
+                    width: "56px", height: "56px", borderRadius: "16px",
+                    background: isActive ? "#0d9488" : "#f0fdf4",
+                    border: isActive ? "1.5px solid #0d9488" : "1.5px solid #dcfce7",
+                    color: isActive ? "#ffffff" : "#059669",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem",
+                    boxShadow: isActive ? "0 4px 12px rgba(13,148,136,0.25)" : "0 2px 6px rgba(0, 0, 0, 0.04)",
+                    transition: "all 0.2s ease"
+                  }}>
+                    {cat.icon}
+                  </div>
+                  <span className="uc-paint-tab-label" style={{
+                    marginTop: "6px", fontSize: "0.68rem", lineHeight: "1.2",
+                    fontWeight: isActive ? 900 : 700, color: isActive ? "#0f172a" : "#64748b",
+                    textAlign: "center"
+                  }}>
+                    {cat.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Content Container - Only this scrolls */}
+        <div className="uc-paint-content" ref={contentRef}>
+          <div className="uc-paint-container">
+            {/* Title & Rating */}
+            <div className="uc-paint-hero-row">
+              <h2 className="uc-paint-sidebar-title">Masonry & Civil Services</h2>
+              <div className="uc-paint-sidebar-rating">
+                <Star size={14} style={{ fill: "#fbbf24", color: "#fbbf24" }} />
+                <span>4.8 (Verified Structural Professionals)</span>
+              </div>
+            </div>
+
+            <div className="uc-paint-main-layout">
+              {/* Middle Column - Choices Cards */}
+              <div className="uc-paint-middle-col">
+                <div className="uc-paint-choices">
+                  <h3 className="uc-paint-section-title">
+                    {MASON_CATEGORIES.find(c => c.id === activeTab)?.name}
+                  </h3>
+                  
+                  {/* Demolition Structural Warning Banner */}
+                  {activeTab === "demolition" && (
+                    <div style={{
+                      display: "flex", gap: "10px", padding: "1rem", borderRadius: "12px",
+                      background: "#fff1f2", border: "1.5px solid #ffe4e6", color: "#be123c",
+                      fontSize: "0.82rem", fontWeight: 800, marginBottom: "1.25rem", textAlign: "left",
+                      alignItems: "center"
+                    }}>
+                      <span style={{ fontSize: "1.2rem" }}>⚠️</span>
+                      <span>Structural wall removal requires professional site inspection and approval.</span>
+                    </div>
+                  )}
+
+                  <div className="uc-paint-list" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                    {filteredServices.map(service => {
+                      const count = getCartCount(service.id);
+                      return (
+                        <div
+                          key={service.id}
+                          ref={cardRefs[service.id]}
+                          style={{
+                            borderBottom: "1.5px solid #f1f5f9", padding: "1.25rem 0",
+                            background: "#ffffff", display: "flex", flexDirection: "column"
+                          }}
+                        >
+                          <div style={{ display: "flex", gap: "1.25rem", textAlign: "left", alignItems: "flex-start" }}>
+                            {/* Left Info Column */}
+                            <div style={{ flex: 1 }}>
+                              <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: "0 0 4px 0" }}>{service.name}</h4>
+                              <p style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0d9488", margin: 0 }}>
+                                {service.priceStr}
+                                {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
+                              </p>
+                              <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
+                              
+                              {/* Includes Badges */}
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                                {service.includes.slice(0, 3).map((inc, i) => (
+                                  <span key={i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: "12px" }}>
+                                    ✓ {inc}
+                                  </span>
+                                ))}
+                              </div>
+
+                              <button
+                                onClick={() => setActiveDetailService(service)}
+                                style={{
+                                  background: "none", border: "none", color: "#0d9488", fontWeight: 800, fontSize: "0.75rem",
+                                  cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", marginTop: "12px", padding: 0
+                                }}
+                              >
+                                View details <ChevronRight size={13} />
+                              </button>
+                            </div>
+
+                            {/* Right Image/Button Column */}
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                              <div style={{ width: "112px", height: "96px", borderRadius: "16px", overflow: "hidden", background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
+                                <img
+                                  src={service.image}
+                                  alt={service.name}
+                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  onError={e => {
+                                    e.target.onerror = null;
+                                    e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop";
+                                  }}
+                                />
+                              </div>
+
+                              {/* Cart Controls */}
+                              {service.customForm ? (
+                                count > 0 ? (
+                                  <div style={{ display: "flex", alignItems: "center", gap: "4px", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "4px 10px", borderRadius: "20px" }}>
+                                    <span style={{ fontSize: "0.7rem", color: "#166534", fontWeight: 900 }}>✓ Requested</span>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => addCustomProjectToCart(service.id)}
+                                    style={{
+                                      background: "linear-gradient(135deg, #0d9488, #059669)", color: "#ffffff", border: "none", borderRadius: "20px",
+                                      padding: "6px 14px", fontSize: "0.72rem", fontWeight: 800, cursor: "pointer",
+                                      boxShadow: "0 2px 6px rgba(13,148,136,0.2)"
+                                    }}
+                                  >
+                                    GET ESTIMATE
+                                  </button>
+                                )
+                              ) : (
+                                count > 0 ? (
+                                  <div style={{
+                                    display: "flex", alignItems: "center", gap: "12px", border: "1.5px solid #0d9488",
+                                    background: "#f0fdf4", borderRadius: "20px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 900, color: "#0f766e"
+                                  }}>
+                                    <button onClick={() => removeFromCart(service.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>-</button>
+                                    <span>{count}</span>
+                                    <button onClick={() => addToCart(service)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>+</button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => addToCart(service)}
+                                    style={{
+                                      background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0d9488", borderRadius: "20px",
+                                      padding: "5px 16px", fontSize: "0.72rem", fontWeight: 800, cursor: "pointer",
+                                      boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
+                                    }}
+                                  >
+                                    + ADD
+                                  </button>
+                                )
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Questionnaire Inputs Embedded inside Complete construction cards (when not added yet) */}
+                          {service.customForm === "house" && count === 0 && (
+                            <div style={{ background: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                              <div style={{ textAlign: "left" }}>
+                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Project details</label>
+                                <textarea
+                                  value={houseProject.desc}
+                                  onChange={e => setHouseProject(prev => ({ ...prev, desc: e.target.value }))}
+                                  placeholder="Describe your vision (e.g. floors, preferred materials)..."
+                                  style={{ width: "100%", height: "80px", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem", resize: "none", fontFamily: "inherit" }}
+                                />
+                              </div>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", textAlign: "left" }}>
+                                  <div>
+                                    <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Plot details</label>
+                                    <input
+                                      type="text"
+                                      value={houseProject.details}
+                                      onChange={e => setHouseProject(prev => ({ ...prev, details: e.target.value }))}
+                                      placeholder="e.g. 30x40 plot..."
+                                      style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Location address</label>
+                                    <input
+                                      type="text"
+                                      value={houseProject.location}
+                                      onChange={e => setHouseProject(prev => ({ ...prev, location: e.target.value }))}
+                                      placeholder="Full address in Hosur..."
+                                      style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
+                                    />
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: "left" }}>
+                                  <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Drawings/Photos</label>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={e => handlePhotoUpload(e, "house")}
+                                    style={{ fontSize: "0.75rem", color: "#64748b" }}
+                                  />
+                                  {houseProject.photoPreview && (
+                                    <img src={houseProject.photoPreview} alt="Preview" style={{ marginTop: "10px", width: "100px", height: "75px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
+                                  )}
+                                </div>
+                            </div>
+                          )}
+
+                          {service.customForm === "office" && count === 0 && (
+                            <div style={{ background: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                              <div style={{ textAlign: "left" }}>
+                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "6px" }}>Project Type</label>
+                                <div style={{ display: "flex", gap: "0.5rem" }}>
+                                  {["New Construction", "Renovation", "Modification"].map(t => (
+                                    <button
+                                      key={t}
+                                      type="button"
+                                      onClick={() => setOfficeProject(prev => ({ ...prev, type: t }))}
+                                      style={{
+                                        flex: 1, padding: "0.5rem 0.25rem", borderRadius: "8px", border: officeProject.type === t ? "1.5px solid #0d9488" : "1px solid #cbd5e1",
+                                        background: officeProject.type === t ? "#f0fdf4" : "#ffffff", color: officeProject.type === t ? "#0d9488" : "#475569",
+                                        fontWeight: 800, fontSize: "0.75rem", cursor: "pointer", transition: "all 0.15s"
+                                      }}
+                                    >
+                                      {t}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", textAlign: "left" }}>
+                                <div>
+                                  <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Approx Area (sqft)</label>
+                                  <input
+                                    type="text"
+                                    value={officeProject.area}
+                                    onChange={e => setOfficeProject(prev => ({ ...prev, area: e.target.value }))}
+                                    placeholder="e.g. 1500 sqft..."
+                                    style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Location address</label>
+                                  <input
+                                    type="text"
+                                    value={officeProject.location}
+                                    onChange={e => setOfficeProject(prev => ({ ...prev, location: e.target.value }))}
+                                    placeholder="Full address in Hosur..."
+                                    style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
+                                  />
+                                </div>
+                              </div>
+                              <div style={{ textAlign: "left" }}>
+                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Drawings/Photos</label>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={e => handlePhotoUpload(e, "office")}
+                                  style={{ fontSize: "0.75rem", color: "#64748b" }}
+                                />
+                                {officeProject.photoPreview && (
+                                  <img src={officeProject.photoPreview} alt="Preview" style={{ marginTop: "10px", width: "100px", height: "75px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* General description box for standard masonry when added */}
+                          {!service.customForm && count > 0 && (
+                            <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                              <div style={{ textAlign: "left" }}>
+                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Describe requirement (optional)</label>
+                                <textarea
+                                  value={generalDesc}
+                                  onChange={e => setGeneralDesc(e.target.value)}
+                                  placeholder="Explain your needs in detail (e.g. wall size, crack types)..."
+                                  style={{ width: "100%", height: "60px", padding: "0.5rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem", resize: "none", fontFamily: "inherit" }}
+                                />
+                              </div>
+                              <div style={{ textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <div>
+                                  <label style={{ fontSize: "0.75rem", fontWeight: 800, color: "#475569", display: "inline-block", marginRight: "10px" }}>Upload photo</label>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={e => handlePhotoUpload(e, "general")}
+                                    style={{ fontSize: "0.75rem", color: "#64748b" }}
+                                  />
+                                </div>
+                                {generalPhotoPreview && (
+                                  <img src={generalPhotoPreview} alt="Preview" style={{ width: "60px", height: "45px", objectFit: "cover", borderRadius: "4px", border: "1px solid #cbd5e1" }} />
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                  </div>
+                </div>
+
+                {/* Free Site Inspection Details Block */}
+                <div style={{ background: "#f0fdf4", padding: "1.5rem", borderRadius: "16px", border: "1px dashed #34d399", textAlign: "left", margin: "2rem 0" }}>
+                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "0.95rem", fontWeight: 900, color: "#065f46", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Sparkles size={16} color="#059669" /> 🟢 Free Site Inspection Included
+                  </h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1rem" }}>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <Check size={14} style={{ color: "#10b981", marginTop: "3px" }} />
+                      <div>
+                        <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#065f46" }}>Area measurement</span>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "#374151" }}>Accurate site measuring to avoid estimation errors.</p>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <Check size={14} style={{ color: "#10b981", marginTop: "3px" }} />
+                      <div>
+                        <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#065f46" }}>Surface/structure assessment</span>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "#374151" }}>Expert analysis of wall health, structural load, or dampness source.</p>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <Check size={14} style={{ color: "#10b981", marginTop: "3px" }} />
+                      <div>
+                        <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#065f46" }}>Material requirement</span>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "#374151" }}>Itemized details of cement, sand, brick, or steel required.</p>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <Check size={14} style={{ color: "#10b981", marginTop: "3px" }} />
+                      <div>
+                        <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#065f46" }}>Work scope estimation</span>
+                        <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "#374151" }}>Detailed labor cost and timeline projection.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CalServices vs Local Contractor Comparison Block */}
+                <div className="uc-paint-comparison-section" style={{ margin: "2rem 0", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.03)" }}>
+                  <div style={{ padding: "1.25rem 1.5rem 0.75rem", borderBottom: "1px solid #f1f5f9" }}>
+                    <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", textAlign: "left" }}>Why choose CalServices Masonry?</h3>
+                    <p style={{ margin: "4px 0 0", fontSize: "0.78rem", color: "#64748b", textAlign: "left" }}>See how CalServices compares to typical local contractors.</p>
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "500px" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc" }}>
+                          <th style={{ padding: "1rem", textAlign: "left", fontSize: "0.8rem", fontWeight: 800, color: "#475569", width: "40%", borderRight: "2px solid #34d399" }}>Services</th>
+                          <th style={{ 
+                            padding: "1rem", textAlign: "center", fontSize: "0.85rem", fontWeight: 900, 
+                            color: "#0d9488", background: "#f0fdf4", width: "30%", borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399" 
+                          }}>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                              <span style={{ color: "#0f172a", fontWeight: 900, letterSpacing: "0.02em" }}>CAL<span style={{ color: "#0d9488" }}>services</span></span>
+                            </div>
+                          </th>
+                          <th style={{ padding: "1rem", textAlign: "center", fontSize: "0.8rem", fontWeight: 800, color: "#64748b", width: "30%", borderLeft: "2px solid #34d399" }}>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                              <User size={15} style={{ color: "#8b5cf6" }} />
+                              <span>Local Contractor</span>
+                            </div>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { title: "Accurate Structural Estimation", desc: "No guess estimation. Real calculations." },
+                          { title: "Verified Masonry Experts", desc: "Background-checked, certified professionals." },
+                          { title: "Fixed, Itemized Material Cost", desc: "Transparent breakdown of sand, cement, bricks." },
+                          { title: "Cleanup After Construction Debris", desc: "We clear all debris and construction mess." },
+                          { title: "1-Year Structural Warranty", desc: "1-year warranty against cracks or dampness repair." }
+                        ].map((row, idx) => (
+                          <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                            <td style={{ padding: "0.85rem 1rem", fontSize: "0.78rem", fontWeight: 700, color: "#334155", textAlign: "left", borderRight: "2px solid #34d399" }}>
+                              <span style={{ marginRight: "6px", color: "#94a3b8" }}>•</span> 
+                              <span style={{ fontWeight: 800, color: "#1e293b" }}>{row.title}</span>
+                              <div style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 500, marginTop: "2px" }}>{row.desc}</div>
+                            </td>
+                            <td style={{ 
+                              padding: "0.85rem 1rem", textAlign: "center", background: "#f0fdf4",
+                              borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399" 
+                            }}>
+                              <Check size={16} strokeWidth={3} style={{ color: "#10b981", margin: "0 auto" }} />
+                            </td>
+                            <td style={{ padding: "0.85rem 1rem", textAlign: "center", borderLeft: "2px solid #34d399" }}>
+                              <X size={16} strokeWidth={2.5} style={{ color: "#ef4444", margin: "0 auto" }} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column - Promise & Cart Summary */}
+              <div className="uc-paint-right-col">
+                <div className="uc-paint-promise-card">
+                  <div className="uc-paint-promise-title-row">
+                    <ShieldCheck size={18} style={{ color: "#059669" }} />
+                    <span>CalServices Promise</span>
+                  </div>
+                  <ul className="uc-paint-promise-list">
+                    <li className="uc-paint-promise-item">
+                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
+                      <span>Verified Professionals</span>
+                    </li>
+                    <li className="uc-paint-promise-item">
+                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
+                      <span>1-Year Structural Warranty</span>
+                    </li>
+                    <li className="uc-paint-promise-item">
+                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
+                      <span>Debris Post-Service Cleanup</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="uc-paint-cart-card">
+                  <h4 className="uc-paint-cart-card-title">Your Cart</h4>
+                  {cart.filter(c => c.id.startsWith("mason-")).length === 0 ? (
+                    <div>
+                      <ShoppingCart className="uc-paint-empty-cart-img" style={{ color: "#94a3b8" }} />
+                      <p className="uc-paint-empty-cart-text">No items in your cart</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="uc-paint-cart-items">
+                        {cart.filter(c => c.id.startsWith("mason-")).map(item => (
+                          <div key={item.id} className="uc-paint-cart-item">
+                            <div className="uc-paint-cart-item-info">
+                              <span className="uc-paint-cart-item-name">{item.name}</span>
+                              {item.price > 0 && (
+                                <span className="uc-paint-cart-item-price">{BOOKING_CURRENCY_SYMBOL}{item.price.toLocaleString()}</span>
+                              )}
+                            </div>
+                            <div className="uc-paint-cart-item-qty">
+                              <button onClick={() => removeFromCart(item.id)}>−</button>
+                              <span>{item.quantity}</span>
+                              <button onClick={() => addToCart(item)}>+</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="uc-paint-cart-subtotal">
+                        <span>Site Inspection</span>
+                        <span style={{ color: '#059669', fontWeight: 800 }}>FREE</span>
+                      </div>
+                      <button className="uc-paint-cart-checkout-btn" onClick={onCheckout}>
+                        Book Free Inspection
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* App Banner & Main Footer */}
+          <div className="uc-paint-footer-section">
+            <div className="uc-paint-container">
+              <div className="uc-paint-app-banner">
+                <div className="uc-paint-app-banner-left">
+                  <div className="uc-paint-app-banner-icon">
+                    <Smartphone size={24} style={{ color: "#ffffff" }} />
+                  </div>
+                  <div className="uc-paint-app-banner-text">
+                    <span className="uc-paint-app-banner-tag">Book on the go!</span>
+                    <h4 className="uc-paint-app-banner-title">Download the CalServices App</h4>
+                    <p className="uc-paint-app-banner-desc">Faster booking, real-time tracking & exclusive app offers.</p>
+                  </div>
+                </div>
+                <div className="uc-paint-app-banner-right">
+                  <button className="uc-paint-store-btn">Get it on Google Play</button>
+                  <button className="uc-paint-store-btn" style={{ marginLeft: '1rem' }}>Download on App Store</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="uc-paint-main-footer">
+              <div className="uc-paint-container uc-paint-main-footer-inner">
+                {/* Col 1 */}
+                <div className="uc-paint-footer-col">
+                  <div className="uc-paint-footer-logo-row">
+                    <CalTrackLogo size={24} />
+                    <span className="uc-paint-footer-brand">CalServices</span>
+                  </div>
+                  <p className="uc-paint-footer-brand-desc">
+                    Your trusted partner for all home services. Quality you can count on.
+                  </p>
+                  <div className="uc-paint-footer-socials">
+                    <span className="uc-paint-social-icon"><FacebookMark style={{ width: 16, height: 16 }} /></span>
+                    <span className="uc-paint-social-icon"><InstagramMark style={{ width: 16, height: 16 }} /></span>
+                    <span className="uc-paint-social-icon"><YoutubeMark style={{ width: 16, height: 16 }} /></span>
+                    <span className="uc-paint-social-icon"><TwitterMark style={{ width: 16, height: 16 }} /></span>
+                  </div>
+                </div>
+
+                {/* Col 2 */}
+                <div className="uc-paint-footer-col">
+                  <h5 className="uc-paint-footer-col-title">Services</h5>
+                  <ul className="uc-paint-footer-links">
+                    <li>Home Services & Pest Control</li>
+                    <li>Paintings</li>
+                    <li>Mason</li>
+                    <li>AC & Appliance</li>
+                  </ul>
+                </div>
+
+                {/* Col 3 */}
+                <div className="uc-paint-footer-col">
+                  <h5 className="uc-paint-footer-col-title">Company</h5>
+                  <ul className="uc-paint-footer-links">
+                    <li>About Us</li>
+                    <li>Careers</li>
+                    <li>Blog</li>
+                    <li>Become a Partner</li>
+                  </ul>
+                </div>
+
+                {/* Col 4 */}
+                <div className="uc-paint-footer-col">
+                  <h5 className="uc-paint-footer-col-title">Need Help?</h5>
+                  <ul className="uc-paint-footer-contact">
+                    <li>
+                      <Phone size={14} />
+                      <span>+91 98765 43210</span>
+                    </li>
+                    <li>
+                      <Mail size={14} />
+                      <span>support@calservices.com</span>
+                    </li>
+                    <li>
+                      <Clock size={14} />
+                      <span>Mon - Sun (8 AM - 8 PM)</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Cart Bar */}
+        {totalQuantity > 0 && (
+          <motion.div
+            className="uc-paint-bottom-bar"
+            initial={{ y: 100 }}
+            animate={{ y: 0 }}
+            exit={{ y: 100 }}
+          >
+            <div className="uc-paint-container uc-paint-bottom-bar-inner">
+              <div className="uc-paint-bottom-left">
+                <span className="uc-paint-bottom-items">{totalQuantity} Service(s) selected</span>
+                <span className="uc-paint-bottom-total">Free Site Inspection</span>
+              </div>
+              <button className="uc-paint-bottom-btn" onClick={onCheckout}>
+                Book Inspection <ArrowRight size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Detail Popup Modal */}
+        <AnimatePresence>
+          {activeDetailService && (
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 11000,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(8px)'
+            }} onClick={() => setActiveDetailService(null)}>
+              <motion.div
+                initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                transition={{ type: "spring", damping: 25, stiffness: 320 }}
+                style={{
+                  background: '#ffffff', borderRadius: 28, width: '100%', maxWidth: 480,
+                  boxShadow: '0 25px 60px -15px rgba(0,0,0,0.3)',
+                  position: 'relative', display: 'flex', flexDirection: 'column',
+                  maxHeight: '85vh', overflow: 'hidden', margin: '1rem',
+                  fontFamily: 'inherit'
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Close icon */}
+                <button
+                  onClick={() => setActiveDetailService(null)}
+                  style={{
+                    position: 'absolute', top: 16, right: 16, width: 34, height: 34,
+                    borderRadius: '50%', background: 'rgba(255,255,255,0.95)', border: 'none',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)', cursor: 'pointer', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', zIndex: 10, color: '#0f172a',
+                    transition: 'all 0.2s'
+                  }}
+                  className="hover:scale-105 active:scale-95"
+                >
+                  <X size={16} strokeWidth={2.5} />
+                </button>
+
+                {/* Hero Image */}
+                <div style={{ width: '100%', height: 180, position: 'relative', flexShrink: 0 }}>
+                  <img
+                    src={activeDetailService.image}
+                    alt={activeDetailService.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
+                  />
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.4))' }} />
+                </div>
+
+                {/* Content Area */}
+                <div style={{ padding: '1.5rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  {/* Title & Rating */}
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', textAlign: 'left', letterSpacing: '-0.02em' }}>{activeDetailService.name}</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.82rem', fontWeight: 700, color: '#64748b', marginTop: 6 }}>
+                      <Star size={14} style={{ fill: '#fbbf24', color: '#fbbf24' }} />
+                      <span style={{ color: '#0f172a', fontWeight: 800 }}>{activeDetailService.rating}</span>
+                      <span>({activeDetailService.reviews} verified jobs)</span>
+                    </div>
+                  </div>
+
+                  <div style={{ height: '1px', background: '#f1f5f9', flexShrink: 0 }} />
+
+                  {/* QUICK BENEFITS */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: '8px'
+                  }}>
+                    {[
+                      { label: "Verified Experts", icon: <ShieldCheck size={14} color="#0d9488" /> },
+                      { label: "1-Yr Warranty", icon: <Award size={14} color="#0f766e" /> },
+                      { label: "Debris Clean-up", icon: <Sparkles size={14} color="#b45309" /> },
+                      { label: "Safety First", icon: <Lock size={14} color="#2563eb" /> }
+                    ].map((benefit, i) => (
+                      <div key={i} style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'flex-start',
+                        padding: '10px 4px',
+                        background: '#f0fdf4',
+                        border: '1.5px solid #dcfce7',
+                        borderRadius: '12px',
+                        textAlign: 'center',
+                        gap: '6px'
+                      }}>
+                        <div style={{
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '50%',
+                          background: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+                          flexShrink: 0
+                        }}>
+                          {benefit.icon}
+                        </div>
+                        <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#115e59', lineHeight: 1.2 }}>{benefit.label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* WHAT'S INCLUDED */}
+                  <div style={{ textAlign: 'left' }}>
+                    <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '50%', background: '#dcfce7', color: '#15803d', fontSize: '0.7rem' }}>✓</span> What's Included
+                    </h4>
+                    <ul style={{ padding: 0, margin: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {activeDetailService.includes.map((inc, i) => (
+                        <li key={i} style={{ fontSize: '0.82rem', color: '#334155', display: 'flex', alignItems: 'flex-start', gap: '8px', lineHeight: 1.4 }}>
+                          <span style={{ color: '#10b981', fontWeight: 'bold', marginTop: '1px' }}>•</span>
+                          <span>{inc}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* WHAT'S EXCLUDED */}
+                  <div style={{ textAlign: 'left', background: '#fff1f2', padding: '1rem', borderRadius: '16px', border: '1px solid #ffe4e6' }}>
+                    <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#9f1239', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '50%', background: '#ffe4e6', color: '#be123c', fontSize: '0.7rem' }}>✕</span> What's Excluded
+                    </h4>
+                    <ul style={{ padding: 0, margin: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {activeDetailService.excludes.map((exc, i) => (
+                        <li key={i} style={{ fontSize: '0.82rem', color: '#9f1239', display: 'flex', alignItems: 'flex-start', gap: '8px', lineHeight: 1.4 }}>
+                          <span style={{ color: '#f43f5e', fontWeight: 'bold', marginTop: '1px' }}>•</span>
+                          <span>{exc}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* FREE SITE INSPECTION CARD */}
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: '0.5rem',
+                    padding: '1.25rem', border: '1px dashed #34d399', borderRadius: '16px',
+                    background: '#f0fdf4', color: '#065f46', textAlign: 'left'
+                  }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Sparkles size={14} color="#059669" /> Free Site Inspection Highlights
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                      {activeDetailService.inspectionHighlights.map((high, i) => (
+                        <span key={i} style={{ fontSize: '0.72rem', fontWeight: 700, padding: '4px 10px', background: '#d1fae5', borderRadius: '8px', color: '#065f46' }}>{high}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* EXECUTION STEPS TIMELINE */}
+                  <div style={{ textAlign: 'left' }}>
+                    <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Execution Steps</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                      {activeDetailService.steps.map((step, i) => {
+                        const isLast = i === activeDetailService.steps.length - 1;
+                        return (
+                          <div key={i} style={{ display: 'flex', gap: '1rem', position: 'relative' }}>
+                            {/* Icon/Timeline Dot */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <div style={{
+                                width: '22px', height: '22px', borderRadius: '50%',
+                                background: '#e2e8f0', display: 'flex', alignItems: 'center',
+                                justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800, color: '#475569',
+                                border: '2px solid #ffffff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                zIndex: 2
+                              }}>
+                                {i + 1}
+                              </div>
+                              {!isLast && (
+                                <div style={{
+                                  width: '2px', flex: 1, background: '#e2e8f0',
+                                  margin: '4px 0', minHeight: '24px'
+                                }} />
+                              )}
+                            </div>
+                            {/* Text */}
+                            <div style={{ paddingBottom: isLast ? 0 : '1rem', textAlign: 'left' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#1e293b' }}>{step}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </div>
+  );
+}
+
 export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, isFullPage = false }) {
   const [activeSubTab, setActiveSubTab] = useState("Furnished Apartment");
   const [bhkSelections, setBhkSelections] = useState({
@@ -8097,6 +9411,1230 @@ export function BkStyles() {
   return (
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+
+      /* ── Premium Modal Styles for Painting & Masonry ── */
+      .uc-paint-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #ffffff;
+        display: flex;
+        justify-content: center;
+        align-items: stretch;
+        z-index: 1000;
+      }
+      .uc-paint-modal {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        background: #ffffff;
+        border-radius: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        box-shadow: none;
+      }
+      .uc-paint-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        width: 100%;
+        padding: 0 2rem;
+      }
+      .uc-paint-header-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+      .uc-paint-choices-container {
+        max-width: 800px;
+        margin: 2.5rem auto 0;
+        width: 100%;
+      }
+      .uc-paint-bottom-bar-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+      .uc-paint-header {
+        position: sticky;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 64px;
+        background: #ffffff;
+        border-bottom: 1px solid #e2e8f0;
+        z-index: 100;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        flex-shrink: 0;
+      }
+      .uc-paint-header-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 2rem;
+        width: 100%;
+      }
+      .uc-paint-header-left {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+      }
+      .uc-paint-header-logo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #0f172a;
+        cursor: pointer;
+        user-select: none;
+      }
+      .uc-paint-header-logo svg {
+        color: #0d9488;
+      }
+      .uc-paint-header-nav {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        margin-left: 1.5rem;
+      }
+      .uc-paint-header-nav-link {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #475569;
+        text-decoration: none;
+        cursor: pointer;
+        transition: color 0.15s ease;
+      }
+      .uc-paint-header-nav-link:hover {
+        color: #0d9488;
+      }
+      .uc-paint-header-right {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      .uc-paint-header-btn-book {
+        background: #0d9488;
+        color: #ffffff;
+        font-size: 0.8rem;
+        font-weight: 700;
+        padding: 0.5rem 1.1rem;
+        border-radius: 9999px;
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      .uc-paint-header-btn-book:hover {
+        background: #0f766e;
+      }
+      .uc-paint-header-btn-outline {
+        background: transparent;
+        border: 1px solid #cbd5e1;
+        color: #475569;
+        font-size: 0.8rem;
+        font-weight: 700;
+        padding: 0.5rem 1.1rem;
+        border-radius: 9999px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .uc-paint-header-btn-outline:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+        color: #1e293b;
+      }
+      .uc-paint-header-icon-btn {
+        background: none;
+        border: none;
+        color: #64748b;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 9999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s ease;
+      }
+      .uc-paint-header-icon-btn:hover {
+        background: #f1f5f9;
+        color: #1e293b;
+      }
+      .uc-paint-search-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 9999px;
+        padding: 0.4rem 0.85rem;
+        width: 220px;
+        transition: all 0.2s;
+      }
+      .uc-paint-search-bar:focus-within {
+        border-color: #10b981;
+        background: #ffffff;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+      }
+      .uc-paint-profile-icon {
+        cursor: pointer;
+        width: 32px;
+        height: 32px;
+        border-radius: 9999px;
+        background: #f0fdf4;
+        border: 1px solid #dcfce7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #059669;
+        transition: all 0.2s;
+      }
+      .uc-paint-profile-icon:hover {
+        background: #dcfce7;
+        transform: scale(1.05);
+      }
+      .uc-paint-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 2rem 0;
+        background: #ffffff;
+        scroll-behavior: smooth;
+      }
+
+      .uc-paint-main-layout {
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 2.5rem;
+        align-items: start;
+        margin-top: 1.5rem;
+        isolation: isolate;
+      }
+      @media (max-width: 1024px) {
+        .uc-paint-main-layout {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+        }
+      }
+
+      .uc-paint-hero-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: left;
+        margin-bottom: 1.5rem;
+      }
+      .uc-paint-sidebar-title {
+        font-size: 2.25rem;
+        font-weight: 900;
+        color: #0f172a;
+        line-height: 1.2;
+        margin: 0;
+        letter-spacing: -0.03em;
+      }
+      .uc-paint-sidebar-rating {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #475569;
+      }
+
+      /* Top Horizontal Category Navigation */
+      .uc-paint-horizontal-nav {
+        background: #ffffff;
+        border-bottom: 1.5px solid #f1f5f9;
+        padding: 0.75rem 2rem;
+        width: 100%;
+        flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      }
+      .uc-paint-horizontal-nav-list {
+        display: flex;
+        align-items: flex-start;
+        gap: 1.5rem;
+        overflow-x: auto;
+        scrollbar-width: none; /* Hide scrollbar in Firefox */
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .uc-paint-horizontal-nav-list::-webkit-scrollbar {
+        display: none; /* Hide scrollbar in Chrome/Safari/Webkit */
+      }
+      .uc-paint-tab-btn {
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+        border: none;
+        background: none;
+        padding: 0.5rem 0.75rem;
+        border-radius: 12px;
+        transition: all 0.2s ease;
+        text-align: center;
+      }
+      .uc-paint-tab-btn:hover {
+        background: #f8fafc;
+      }
+      .uc-paint-tab-img {
+        width: 56px;
+        height: 56px;
+        border-radius: 12px;
+        object-fit: cover;
+        border: 2px solid transparent;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      }
+      .uc-paint-tab-btn:hover .uc-paint-tab-img {
+        transform: scale(1.05);
+        border-color: #10b981;
+      }
+      .uc-paint-tab-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #475569;
+        line-height: 1.2;
+        max-width: 72px;
+        white-space: normal;
+      }
+      .uc-paint-tab-btn:hover .uc-paint-tab-label {
+        color: #0f172a;
+      }
+      .uc-paint-middle-col {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+      .uc-paint-right-col {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        position: sticky;
+        top: 2rem;
+        align-self: start;
+      }
+      .uc-paint-promise-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+      }
+      .uc-paint-promise-title-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 800;
+        color: #0f172a;
+        font-size: 0.95rem;
+        margin-bottom: 1rem;
+      }
+      .uc-paint-promise-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .uc-paint-promise-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #475569;
+      }
+      .uc-paint-cart-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+        text-align: center;
+      }
+      .uc-paint-cart-card-title {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0 0 1.25rem 0;
+        text-align: left;
+      }
+      .uc-paint-empty-cart-img {
+        width: 50px;
+        height: 50px;
+        margin: 0.5rem auto 1rem;
+        opacity: 0.3;
+        display: block;
+      }
+      .uc-paint-empty-cart-text {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #94a3b8;
+        margin: 0;
+      }
+      .uc-paint-cart-items {
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+        margin-bottom: 1.25rem;
+        text-align: left;
+      }
+      .uc-paint-cart-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 0.6rem;
+        border-bottom: 1px dashed #f1f5f9;
+      }
+      .uc-paint-cart-item-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+      }
+      .uc-paint-cart-item-name {
+        font-size: 0.8rem;
+        font-weight: 800;
+        color: #1e293b;
+      }
+      .uc-paint-cart-item-price {
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: #059669;
+      }
+      .uc-paint-cart-item-qty {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        border: 1px solid #10b981;
+        border-radius: 8px;
+        padding: 0.2rem 0.4rem;
+        background: #ffffff;
+      }
+      .uc-paint-cart-item-qty button {
+        border: none;
+        background: none;
+        color: #10b981;
+        font-size: 0.85rem;
+        font-weight: 900;
+        cursor: pointer;
+        padding: 0 0.1rem;
+      }
+      .uc-paint-cart-item-qty span {
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: #1e293b;
+        min-width: 12px;
+        text-align: center;
+      }
+      .uc-paint-cart-subtotal {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 800;
+        font-size: 0.9rem;
+        color: #0f172a;
+        margin-bottom: 1.25rem;
+        padding-top: 0.4rem;
+      }
+      .uc-paint-cart-checkout-btn {
+        width: 100%;
+        cursor: pointer;
+        border: none;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        padding: 0.8rem;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 0.9rem;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);
+        transition: all 0.2s;
+      }
+      .uc-paint-cart-checkout-btn:hover {
+        opacity: 0.95;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(16, 185, 129, 0.2);
+      }
+      @media (min-width: 1025px) {
+        .uc-paint-bottom-bar {
+          display: none !important;
+        }
+      }
+
+      .uc-paint-recent-projects {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.85rem 1.5rem;
+        background: #f8fafc;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 2rem;
+      }
+      .uc-paint-recent-left {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      .uc-paint-avatar-stack {
+        display: flex;
+        align-items: center;
+      }
+      .uc-paint-avatar-stack img {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 2px solid white;
+        margin-left: -10px;
+        object-fit: cover;
+      }
+      .uc-paint-avatar-stack img:first-child {
+        margin-left: 0;
+      }
+      .uc-paint-avatar-badge {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #cbd5e1;
+        border: 2px solid white;
+        margin-left: -10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: #1e293b;
+      }
+      .uc-paint-recent-text {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #334155;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .uc-paint-recent-text .uc-paint-new-badge {
+        background: #4f46e5;
+        color: white;
+        font-size: 0.6rem;
+        font-weight: 800;
+        padding: 2px 6px;
+        border-radius: 6px;
+        letter-spacing: 0.02em;
+      }
+      .uc-paint-recent-btn {
+        cursor: pointer;
+        background: white;
+        border: 1.5px solid #10b981;
+        color: #10b981;
+        font-size: 0.8rem;
+        font-weight: 800;
+        padding: 0.45rem 1.25rem;
+        border-radius: 10px;
+        transition: all 0.2s;
+      }
+      .uc-paint-recent-btn:hover {
+        background: #f0fdf4;
+        border-color: #059669;
+        color: #059669;
+      }
+      .uc-paint-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+      .uc-paint-card {
+        background: #ffffff;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+        transition: all 0.2s;
+      }
+      .uc-paint-card:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+      }
+      .uc-paint-card-img-box {
+        position: relative;
+        height: 240px;
+        overflow: hidden;
+      }
+      .uc-paint-card-img-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+      }
+      .uc-paint-card:hover .uc-paint-card-img-box img {
+        transform: scale(1.02);
+      }
+      .uc-paint-card-img-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        padding: 1.5rem 1.75rem;
+        color: #ffffff;
+      }
+      .uc-paint-card-overlay-title {
+        font-size: 1.4rem;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -0.01em;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      }
+      .uc-paint-card-overlay-rating {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        background: rgba(0,0,0,0.5);
+        padding: 4px 10px;
+        border-radius: 8px;
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.15);
+      }
+      .uc-paint-card-body {
+        padding: 1.5rem 1.75rem;
+      }
+      .uc-paint-points {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 1.25rem 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+      }
+      .uc-paint-point-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        font-size: 0.88rem;
+        color: #475569;
+        line-height: 1.45;
+      }
+      .uc-paint-point-check {
+        color: #10b981;
+        margin-top: 3px;
+        flex-shrink: 0;
+      }
+      .uc-paint-show-more {
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #10b981;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        transition: color 0.2s;
+      }
+      .uc-paint-show-more:hover {
+        color: #059669;
+      }
+      .uc-paint-expanded-details {
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px dashed #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        animation: fadeIn 0.2s ease-out;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-5px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .uc-paint-expand-section {
+        font-size: 0.82rem;
+      }
+      .uc-paint-expand-section-title {
+        font-weight: 800;
+        color: #1e293b;
+        margin-bottom: 0.35rem;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.02em;
+      }
+      .uc-paint-expand-section-content {
+        color: #64748b;
+        line-height: 1.5;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .uc-paint-tag-pill {
+        background: #f1f5f9;
+        color: #475569;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.75rem;
+      }
+      .uc-paint-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid #f1f5f9;
+      }
+      .uc-paint-card-price {
+        font-size: 0.85rem;
+        color: #64748b;
+        font-weight: 600;
+      }
+      .uc-paint-card-price-num {
+        font-size: 1.3rem;
+        color: #0f172a;
+        font-weight: 800;
+      }
+      .uc-paint-action-btn {
+        cursor: pointer;
+        background: #ffffff;
+        border: 1.5px solid #10b981;
+        color: #10b981;
+        font-size: 0.85rem;
+        font-weight: 800;
+        padding: 0.6rem 1.75rem;
+        border-radius: 12px;
+        transition: all 0.2s;
+        min-width: 150px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.05);
+      }
+      .uc-paint-action-btn:hover {
+        background: #f0fdf4;
+        border-color: #059669;
+        color: #059669;
+      }
+      .uc-paint-qty-selector {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border: 1.5px solid #10b981;
+        background: #f0fdf4;
+        border-radius: 12px;
+        padding: 0.5rem 0.85rem;
+        min-width: 150px;
+        font-weight: 800;
+        color: #059669;
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.08);
+      }
+      .uc-paint-qty-selector button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1.15rem;
+        font-weight: 900;
+        color: #059669;
+        padding: 0 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .uc-paint-bottom-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        padding: 1.2rem 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 10;
+        box-shadow: 0 -6px 25px rgba(5, 150, 105, 0.25);
+      }
+      .uc-paint-bottom-left {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+      .uc-paint-bottom-items {
+        font-size: 0.8rem;
+        opacity: 0.9;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      .uc-paint-bottom-total {
+        font-size: 1.35rem;
+        font-weight: 900;
+        letter-spacing: -0.01em;
+      }
+      .uc-paint-bottom-btn {
+        cursor: pointer;
+        border: none;
+        background: #ffffff;
+        color: #059669;
+        font-size: 0.92rem;
+        font-weight: 800;
+        padding: 0.8rem 1.75rem;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        transition: all 0.2s;
+      }
+      .uc-paint-bottom-btn:hover {
+        background: #f8fafc;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+      }
+      .uc-paint-bottom-btn:active {
+        transform: translateY(0);
+      }
+
+      /* Estimate Banner & Process Section styles */
+      .uc-paint-estimate-banner {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        border: 1px solid #bbf7d0;
+        border-radius: 24px;
+        padding: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 2rem;
+        margin-top: 3rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01);
+        text-align: left;
+      }
+      .uc-paint-estimate-left {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+      }
+      .uc-paint-estimate-title {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #064e3b;
+        margin: 0;
+      }
+      .uc-paint-estimate-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .uc-paint-estimate-item {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #14532d;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .uc-paint-estimate-btn {
+        cursor: pointer;
+        border: none;
+        background: #059669;
+        color: white;
+        padding: 0.7rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 0.85rem;
+        box-shadow: 0 4px 10px rgba(5, 150, 105, 0.15);
+        transition: all 0.2s;
+      }
+      .uc-paint-estimate-btn:hover {
+        background: #047857;
+        transform: translateY(-1px);
+      }
+      .uc-paint-estimate-right {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        width: 90px;
+        height: 90px;
+        border-radius: 20px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.04);
+        border: 1px solid #e2e8f0;
+        position: relative;
+        flex-shrink: 0;
+      }
+      .uc-paint-estimate-badge {
+        position: absolute;
+        bottom: -5px;
+        right: -5px;
+        background: #10b981;
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      }
+
+      .uc-paint-process-section {
+        margin-top: 3.5rem;
+        padding-bottom: 2rem;
+        text-align: left;
+      }
+      .uc-paint-process-title {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 2rem;
+      }
+      .uc-paint-process-steps {
+        display: flex;
+        flex-direction: column;
+        gap: 2.25rem;
+      }
+      .uc-paint-process-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 1.5rem;
+        position: relative;
+      }
+      .uc-paint-process-step:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        left: 20px;
+        top: 40px;
+        bottom: -25px;
+        width: 2px;
+        border-left: 2px dashed #cbd5e1;
+      }
+      .uc-paint-process-icon-box {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #475569;
+        flex-shrink: 0;
+        z-index: 1;
+        border: 2px solid #ffffff;
+        box-shadow: 0 0 0 1px #e2e8f0;
+      }
+      .uc-paint-process-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        padding-top: 0.3rem;
+      }
+      .uc-paint-process-name {
+        font-size: 0.95rem;
+        font-weight: 800;
+        color: #1e293b;
+      }
+      .uc-paint-process-desc {
+        font-size: 0.82rem;
+        color: #64748b;
+        font-weight: 500;
+      }
+
+      /* Sub-options styles */
+      .uc-paint-suboptions-section {
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid #f1f5f9;
+        text-align: left;
+      }
+      .uc-paint-suboptions-title {
+        font-size: 0.85rem;
+        font-weight: 800;
+        color: #0f172a;
+        display: block;
+        margin-bottom: 0.75rem;
+      }
+      .uc-paint-chips-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+      .uc-paint-opt-chip {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 1rem;
+        border-radius: 12px;
+        border: 1.5px solid #e2e8f0;
+        background: #ffffff;
+        color: #475569;
+        font-weight: 700;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+        outline: none;
+      }
+      .uc-paint-opt-chip:hover {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+        transform: translateY(-0.5px);
+      }
+      .uc-paint-opt-chip.active {
+        border-color: #10b981;
+        background: #f0fdf4;
+        color: #047857;
+        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.05);
+      }
+      .uc-paint-chip-status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #f1f5f9;
+        color: #64748b;
+        font-size: 0.75rem;
+        font-weight: 800;
+        transition: all 0.2s;
+      }
+      .uc-paint-opt-chip.active .uc-paint-chip-status {
+        background: #10b981;
+        color: white;
+      }
+
+      /* App Banner & Main Footer styles */
+      .uc-paint-footer-section {
+        margin-top: 4rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        width: 100%;
+        background: #ffffff;
+        border-top: 1px solid #f1f5f9;
+      }
+      .uc-paint-app-banner {
+        background: #f0fdf4;
+        border-radius: 24px;
+        padding: 2.25rem 2.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 2rem;
+        margin: 3rem 0;
+        border: 1px solid #dcfce7;
+        text-align: left;
+      }
+      @media (max-width: 768px) {
+        .uc-paint-app-banner {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 1.5rem;
+          padding: 1.5rem;
+        }
+      }
+      .uc-paint-app-banner-left {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+      }
+      .uc-paint-app-banner-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: #10b981;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+      }
+      .uc-paint-app-banner-text {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+      .uc-paint-app-banner-tag {
+        font-size: 0.75rem;
+        font-weight: 800;
+        color: #059669;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .uc-paint-app-banner-title {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+      }
+      .uc-paint-app-banner-desc {
+        font-size: 0.82rem;
+        color: #64748b;
+        font-weight: 500;
+        margin: 0;
+      }
+      .uc-paint-app-banner-right {
+        display: flex;
+        gap: 1rem;
+      }
+      @media (max-width: 480px) {
+        .uc-paint-app-banner-right {
+          flex-direction: column;
+          width: 100%;
+        }
+      }
+      .uc-paint-store-btn {
+        cursor: pointer;
+        border: none;
+        background: #0f172a;
+        color: white;
+        padding: 0.8rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 0.82rem;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+        transition: all 0.2s;
+        white-space: nowrap;
+      }
+      .uc-paint-store-btn:hover {
+        background: #1e293b;
+        transform: translateY(-1px);
+      }
+
+      .uc-paint-main-footer {
+        background: #f8fafc;
+        border-top: 1px solid #f1f5f9;
+        padding: 3.5rem 0;
+        width: 100%;
+      }
+      .uc-paint-main-footer-inner {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
+        gap: 3rem;
+        text-align: left;
+      }
+      @media (max-width: 768px) {
+        .uc-paint-main-footer-inner {
+          grid-template-columns: 1fr 1fr;
+          gap: 2rem;
+        }
+      }
+      @media (max-width: 480px) {
+        .uc-paint-main-footer-inner {
+          grid-template-columns: 1fr;
+        }
+      }
+      .uc-paint-footer-col {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      }
+      .uc-paint-footer-logo-row {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .uc-paint-footer-brand {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #0f172a;
+        letter-spacing: -0.01em;
+      }
+      .uc-paint-footer-brand-desc {
+        font-size: 0.85rem;
+        color: #64748b;
+        line-height: 1.5;
+        margin: 0;
+        font-weight: 500;
+      }
+      .uc-paint-footer-socials {
+        display: flex;
+        gap: 0.75rem;
+      }
+      .uc-paint-social-icon {
+        cursor: pointer;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        transition: all 0.2s;
+      }
+      .uc-paint-social-icon:hover {
+        background: #10b981;
+        color: white;
+        border-color: #10b981;
+        transform: scale(1.05);
+      }
+      .uc-paint-footer-col-title {
+        font-size: 0.95rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+      }
+      .uc-paint-footer-links {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .uc-paint-footer-links li {
+        font-size: 0.85rem;
+        color: #64748b;
+        font-weight: 500;
+        cursor: pointer;
+        transition: color 0.2s;
+      }
+      .uc-paint-footer-links li:hover {
+        color: #10b981;
+      }
+      .uc-paint-footer-contact {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+      }
+      .uc-paint-footer-contact li {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.85rem;
+        color: #64748b;
+        font-weight: 500;
+      }
+      .uc-paint-footer-contact li svg {
+        color: #94a3b8;
+      }
+
+      /* ── Root ── */
+      .uc-root {
+        min-height: 100vh;
+        background: #ffffff;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        color: #1e293b;
+        display: flex;
+        flex-direction: column;
+        overflow-x: hidden;
+      }
 
       @keyframes bk-spin { to { transform:rotate(360deg); } }
       .spin-icon { animation: bk-spin 0.8s linear infinite; display:inline-block; }
