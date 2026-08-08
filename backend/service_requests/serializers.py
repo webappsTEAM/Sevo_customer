@@ -80,6 +80,8 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "service_category", "issue_title", "description", "address",
             "preferred_date", "preferred_time", "total_amount", "cart_data",
             "photo", "payment_method",
+            # Goods Transport / Packers & Movers — optional, unused by other categories
+            "drop_address", "logistics_tier", "logistics_lane",
         )
         extra_kwargs = {
             "description":    {"required": False, "allow_blank": True},
@@ -88,6 +90,9 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
             "payment_method": {"required": False, "allow_null": True, "allow_blank": True},
             "preferred_time": {"required": False, "allow_blank": True, "allow_null": True},
             "cart_data":      {"required": False},
+            "drop_address":   {"required": False, "allow_blank": True},
+            "logistics_tier": {"required": False, "allow_null": True},
+            "logistics_lane": {"required": False, "allow_null": True},
         }
 
     def validate_cart_data(self, value):

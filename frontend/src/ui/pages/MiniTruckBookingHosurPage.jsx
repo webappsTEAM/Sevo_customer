@@ -7,6 +7,12 @@ import {
   User, Mail, MessageSquare, AlertCircle
 } from "lucide-react"
 import { routes } from "../routes.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
+import { createBooking } from "../../api/bookingService.js"
+import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
+import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
+
+const LOGISTICS_CITY = "hosur"
 
 /* ── Vehicle Dimension Diagrams matching Image 1 & Image 4 (Professional & Colorful) ── */
 function ThreeWheelerDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
@@ -393,6 +399,16 @@ function QRCodeGraphic({ className = "w-36 h-36" }) {
   )
 }
 
+/* ── Maps backend ServiceTier.slug → the illustration for that vehicle.
+   Diagrams stay local (purely cosmetic); everything else (name, capacity,
+   price, description) now comes from GET /api/logistics/tiers/. ── */
+const TRUCK_DIAGRAM_BY_SLUG = {
+  "3-wheeler": <ThreeWheelerDiagram />,
+  "tata-ace": <TataAceDiagram />,
+  "pickup-8ft": <Pickup8ftDiagram />,
+  "1-7-ton": <OnePointSevenTonDiagram />,
+}
+
 /* ── Hosur & Nearby Location Suggestions Database ── */
 const HOSUR_LOCATIONS_DATABASE = [
   // Hosur Central & Transit Landmarks
@@ -568,6 +584,40 @@ export function MiniTruckBookingHosurPage() {
   // FAQ open states
   const [openFaq, setOpenFaq] = useState(null)
 
+  // Catalog data — fetched from /api/logistics/ (backend/logistics app),
+  // replacing what used to be hardcoded LIGHT_VEHICLES/HEAVY_VEHICLES/
+  // LONG_DISTANCE_ROUTES/HOSUR_AREAS arrays.
+  const [truckTiers, setTruckTiers] = useState([])
+  const [truckLanes, setTruckLanes] = useState([])
+  const [serviceAreas, setServiceAreas] = useState([])
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [bookingError, setBookingError] = useState("")
+  const [bookingSubmitting, setBookingSubmitting] = useState(false)
+  const [lastBookingId, setLastBookingId] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadCatalog() {
+      try {
+        const [tiers, lanes, areas] = await Promise.all([
+          fetchServiceTiers("truck", LOGISTICS_CITY),
+          fetchLanes("truck", LOGISTICS_CITY),
+          fetchServiceAreas(LOGISTICS_CITY),
+        ])
+        if (cancelled) return
+        setTruckTiers(tiers)
+        setTruckLanes(lanes)
+        setServiceAreas(areas)
+      } catch (err) {
+        console.warn("Failed to load logistics catalog, falling back to static data:", err)
+      } finally {
+        if (!cancelled) setCatalogLoading(false)
+      }
+    }
+    loadCatalog()
+    return () => { cancelled = true }
+  }, [])
+
   useEffect(() => {
     window.scrollTo(0, 0)
     document.body.style.overflow = "unset"
@@ -667,71 +717,107 @@ export function MiniTruckBookingHosurPage() {
     )
   }
 
-  // Vehicle Lists matching Image 1 (Light) & Image 4 (Heavy)
-  const LIGHT_VEHICLES = [
+  // Static fallback — used only if the /api/logistics/ fetch above fails or
+  // hasn't resolved yet, so this page keeps working even if the backend is
+  // briefly unreachable. When the fetch succeeds, the backend-sourced
+  // truckTiers/truckLanes/serviceAreas below take over.
+  const HARDCODED_DETAILS_BY_SLUG = {
+    "3-wheeler": {
+      suitableFor: [
+        "Groceries & provisions",
+        "Small parcels & packages",
+        "Clothing & cartons",
+        "Small household items",
+        "Small appliances",
+        "Office supplies",
+        "Local shop deliveries"
+      ],
+      bestFor: "Small and lightweight goods within Hosur."
+    },
+    "tata-ace": {
+      suitableFor: [
+        "Household furniture",
+        "Home appliances",
+        "Grocery & retail stock",
+        "Multiple cartons",
+        "Small business goods",
+        "Electronics",
+        "Small construction materials",
+        "Shop/warehouse deliveries"
+      ],
+      bestFor: "Medium-sized household and commercial deliveries."
+    },
+    "pickup-8ft": {
+      suitableFor: [
+        "Sofas, beds & wardrobes",
+        "Refrigerators & washing machines",
+        "Furniture sets",
+        "Bulk cartons",
+        "Construction materials",
+        "Business/industrial goods",
+        "Machinery & equipment",
+        "Warehouse stock"
+      ],
+      bestFor: "Larger and heavier household or commercial goods."
+    },
+    "1-7-ton": {
+      suitableFor: [
+        "Heavy furniture",
+        "Large appliances",
+        "Bulk construction materials",
+        "Industrial equipment",
+        "Machinery",
+        "Large commercial stock",
+        "Multiple cartons & packages",
+        "Warehouse/industrial goods"
+      ],
+      bestFor: "Heavy and bulky goods requiring higher load capacity."
+    }
+  }
+
+  const STATIC_LIGHT_VEHICLES = [
     {
-      id: "3wheeler",
-      name: "3 Wheeler",
-      capacity: "500kg",
-      price: "₹160",
+      id: "3-wheeler", name: "3 Wheeler", capacity: "500kg", price: "₹160",
       diagram: <ThreeWheelerDiagram />,
       details: {
-        name: "3 Wheeler Mini Cargo",
-        capacity: "500 kg",
-        dimensions: "5.5 ft x 4 ft x 4 ft (5ft height, 6ft length)",
-        idealFor: "Small appliances, electronics, carton boxes, luggage shifting",
-        baseFare: "₹160 (Includes first 1.0 km)"
+        name: "3 Wheeler", capacity: "500 kg capacity",
+        suitableFor: HARDCODED_DETAILS_BY_SLUG["3-wheeler"].suitableFor,
+        bestFor: HARDCODED_DETAILS_BY_SLUG["3-wheeler"].bestFor,
       }
     },
     {
-      id: "tata_ace",
-      name: "Tata Ace",
-      capacity: "750kg",
-      price: "₹205",
+      id: "tata-ace", name: "Tata Ace", capacity: "750kg", price: "₹205",
       diagram: <TataAceDiagram />,
       details: {
-        name: "Tata Ace (Chota Hathi)",
-        capacity: "750 kg",
-        dimensions: "7 ft x 4.5 ft x 5 ft (6ft height, 7ft length)",
-        idealFor: "1 RK / 1 BHK furniture, home appliances, retail supply transport",
-        baseFare: "₹205 (Includes first 1.0 km)"
+        name: "Tata Ace", capacity: "750 kg capacity",
+        suitableFor: HARDCODED_DETAILS_BY_SLUG["tata-ace"].suitableFor,
+        bestFor: HARDCODED_DETAILS_BY_SLUG["tata-ace"].bestFor,
       }
     }
   ]
 
-  const HEAVY_VEHICLES = [
+  const STATIC_HEAVY_VEHICLES = [
     {
-      id: "pickup_8ft",
-      name: "Pickup 8ft",
-      capacity: "1250 kg",
-      price: "₹300",
+      id: "pickup-8ft", name: "Pickup 8ft", capacity: "1250 kg", price: "₹300",
       diagram: <Pickup8ftDiagram />,
       details: {
-        name: "Pickup 8ft (Closed Container)",
-        capacity: "1250 kg",
-        dimensions: "8 ft x 5 ft x 5.5 ft (5.5ft height, 8ft length)",
-        idealFor: "Bulky electronics, commercial goods, furniture, home shifting",
-        baseFare: "₹300 (Includes first 1.0 km)"
+        name: "Pickup 8ft", capacity: "1250 kg capacity",
+        suitableFor: HARDCODED_DETAILS_BY_SLUG["pickup-8ft"].suitableFor,
+        bestFor: HARDCODED_DETAILS_BY_SLUG["pickup-8ft"].bestFor,
       }
     },
     {
-      id: "1_7_ton",
-      name: "1.7 ton",
-      capacity: "1700 kg",
-      price: "₹380",
+      id: "1-7-ton", name: "1.7 ton", capacity: "1700 kg", price: "₹380",
       diagram: <OnePointSevenTonDiagram />,
       details: {
-        name: "1.7 Ton Heavy Bolero Pickup",
-        capacity: "1700 kg",
-        dimensions: "9 ft x 5.5 ft x 6.1 ft (6.1ft height, 9ft length)",
-        idealFor: "Heavy manufacturing loads, industrial raw materials, large 2 BHK relocation",
-        baseFare: "₹380 (Includes first 1.0 km)"
+        name: "1.7 Ton", capacity: "1700 kg capacity",
+        suitableFor: HARDCODED_DETAILS_BY_SLUG["1-7-ton"].suitableFor,
+        bestFor: HARDCODED_DETAILS_BY_SLUG["1-7-ton"].bestFor,
       }
     }
   ]
 
-  // Routes from Hosur (Explicitly specified by User)
-  const LONG_DISTANCE_ROUTES = [
+  const STATIC_LONG_DISTANCE_ROUTES = [
     { to: "Bengaluru", distance: "40 Kms", fare: "₹900", time: "~1.5 hrs" },
     { to: "Krishnagiri", distance: "55 Kms", fare: "₹1200", time: "~1.2 hrs" },
     { to: "Salem", distance: "155 Kms", fare: "₹3000", time: "~3.5 hrs" },
@@ -743,13 +829,49 @@ export function MiniTruckBookingHosurPage() {
     { to: "Madurai", distance: "380 Kms", fare: "₹7500", time: "~7.5 hrs" },
   ]
 
-  // Hosur Areas We Serve
-  const HOSUR_AREAS = [
+  const STATIC_HOSUR_AREAS = [
     "Sipcot Phase 1", "Sipcot Phase 2", "Bagalur Road", "Mathigiri",
     "Zuzuvadi", "Avalapalli", "Moranapalli", "Mookandapalli",
     "Denkanikottai Road", "Rayakottai Road", "Thally Road", "Alasanatham",
     "Railway Station Area", "Dinnur", "Kelamangalam Road", "Kamaraj Nagar"
   ]
+
+  // Adapt backend ServiceTier rows to the { id, name, capacity, price,
+  // diagram, details } shape the rest of this page already renders.
+  function tierToVehicle(tier) {
+    return {
+      id: tier.slug,
+      name: tier.name,
+      capacity: tier.capacity_label,
+      price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+      diagram: TRUCK_DIAGRAM_BY_SLUG[tier.slug] || <ThreeWheelerDiagram />,
+      details: {
+        name: tier.name,
+        capacity: `${tier.capacity_label} capacity`,
+        suitableFor: HARDCODED_DETAILS_BY_SLUG[tier.slug]?.suitableFor || [],
+        bestFor: HARDCODED_DETAILS_BY_SLUG[tier.slug]?.bestFor || tier.description,
+      },
+      _tierId: tier.id,
+    }
+  }
+
+  const backendLight = truckTiers.filter((t) => t.weight_class === "light").map(tierToVehicle)
+  const backendHeavy = truckTiers.filter((t) => t.weight_class === "heavy").map(tierToVehicle)
+
+  const LIGHT_VEHICLES = backendLight.length ? backendLight : STATIC_LIGHT_VEHICLES
+  const HEAVY_VEHICLES = backendHeavy.length ? backendHeavy : STATIC_HEAVY_VEHICLES
+
+  const LONG_DISTANCE_ROUTES = truckLanes.length
+    ? truckLanes.map((lane) => ({
+        to: lane.destination_label,
+        distance: lane.distance_km ? `${Number(lane.distance_km)} Kms` : "",
+        fare: `₹${Number(lane.fare).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+        time: lane.eta_label,
+        _laneId: lane.id,
+      }))
+    : STATIC_LONG_DISTANCE_ROUTES
+
+  const HOSUR_AREAS = serviceAreas.length ? serviceAreas.map((a) => a.name) : STATIC_HOSUR_AREAS
 
   // FAQs
   const FAQS = [
@@ -812,6 +934,42 @@ export function MiniTruckBookingHosurPage() {
     if (!selectedVehicle) setSelectedVehicle(allVehicles[0])
   }
 
+  // Persists the booking to the backend (POST /api/booking/ — see
+  // service_requests.BookingCreateView). Runs after OTP verification, or
+  // immediately if the customer is already signed in.
+  const submitBooking = async () => {
+    setBookingError("")
+    setBookingSubmitting(true)
+    try {
+      const today = todayDateString()
+      const vehicle = selectedVehicle || LIGHT_VEHICLES[0]
+      const fare = Number(String(vehicle.price).replace(/[^0-9.]/g, "")) || 0
+      const payload = {
+        customer_name: name || "Guest",
+        phone,
+        service_category: "goods_transport_truck",
+        issue_title: `Truck booking — ${vehicle.name}`,
+        description: userType,
+        address: pickup || "Hosur",
+        drop_address: drop,
+        preferred_date: today,
+        total_amount: fare,
+        payment_method: "COD",
+        cart_data: [{ tier: vehicle.name, price: vehicle.price, route: selectedRoute?.to || null }],
+      }
+      if (vehicle._tierId) payload.logistics_tier = vehicle._tierId
+      if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
+
+      const res = await createBooking(payload)
+      setLastBookingId(res?.data?.request_id || res?.request_id || null)
+      setBookingSuccessOpen(true)
+    } catch (err) {
+      setBookingError(err?.body?.message || "Couldn't confirm your booking. Please try again.")
+    } finally {
+      setBookingSubmitting(false)
+    }
+  }
+
   const handleConfirmAndBook = () => {
     // Called from the old Instant Estimate modal "Confirm & Book"
     if (!isSignedIn) {
@@ -819,7 +977,7 @@ export function MiniTruckBookingHosurPage() {
       setLoginModalOpen(true)
     } else {
       setEstimateModalOpen(false)
-      setBookingSuccessOpen(true)
+      submitBooking()
     }
   }
 
@@ -830,29 +988,42 @@ export function MiniTruckBookingHosurPage() {
       setLoginModalOpen(true)
     } else {
       setVehicleSelectorOpen(false)
-      setBookingSuccessOpen(true)
+      submitBooking()
     }
   }
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!phone || phone.trim().length < 10) return
     setOtpLoading(true)
-    setTimeout(() => {
-      setOtpLoading(false)
+    setBookingError("")
+    try {
+      await apiRequestCustomerPhoneOTP(phone)
       setOtpSent(true)
       setOtpStep(true)
-    }, 1200)
+    } catch (err) {
+      setBookingError(err?.body?.detail || "Couldn't send OTP. Please check the number and try again.")
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
-  const handleVerifyOtp = () => {
-    if (otpValue.length < 4) return
-    // Mark user as signed in and show success
-    setIsSignedIn(true)
-    setLoginModalOpen(false)
-    setOtpStep(false)
-    setOtpValue("")
-    setOtpSent(false)
-    setBookingSuccessOpen(true)
+  const handleVerifyOtp = async () => {
+    if (otpValue.length < 6) return
+    setOtpLoading(true)
+    setBookingError("")
+    try {
+      await apiVerifyCustomerPhoneOTP(phone, otpValue)
+      setIsSignedIn(true)
+      setLoginModalOpen(false)
+      setOtpStep(false)
+      setOtpValue("")
+      setOtpSent(false)
+      await submitBooking()
+    } catch (err) {
+      setBookingError(err?.body?.detail || "Invalid OTP. Please try again.")
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
   return (
@@ -895,41 +1066,45 @@ export function MiniTruckBookingHosurPage() {
       </header>
 
       {/* ── Hero Section (Page 1) ──────────────────────────────── */}
-      <section className="relative pt-10 pb-8 sm:pt-14 sm:pb-12 bg-gradient-to-b from-emerald-50/50 via-[#FAFCFB] to-[#FAFCFB] border-b border-slate-100/60">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100/70 text-emerald-800 text-xs font-bold tracking-wide mb-4">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+      <section
+        className="relative pt-10 pb-8 sm:pt-14 sm:pb-12 border-b border-slate-100/60 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url('/hero_minitruck_bg.png')` }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/55 to-slate-950/80"></div>
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 text-center z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-bold tracking-wide mb-4 shadow-sm border border-white/25 backdrop-blur-sm">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
             Hosur Mini Truck Service
           </div>
 
-          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight max-w-3xl mx-auto">
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight max-w-3xl mx-auto drop-shadow-lg">
             Affordable and Trusted Mini Truck Booking in Hosur
           </h1>
 
-          <p className="mt-4 text-sm sm:text-base text-slate-600 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-4 text-sm sm:text-base text-slate-200 max-w-2xl mx-auto leading-relaxed drop-shadow">
             Whether you're relocating, transporting furniture, or delivering commercial goods, our mini truck booking service in Hosur offers reliable, safe, and cost-effective transportation
           </p>
 
-          <div className="mt-5 flex items-center justify-center gap-3 text-xs font-semibold text-emerald-700">
+          <div className="mt-5 flex items-center justify-center gap-3 text-xs font-semibold text-emerald-300">
             <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> On-Demand in 15 mins
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> On-Demand in 15 mins
             </span>
-            <span>•</span>
+            <span className="text-white/40">•</span>
             <span className="flex items-center gap-1">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" /> Verified Drivers
+              <ShieldCheck className="w-4 h-4 text-emerald-400" /> Verified Drivers
             </span>
-            <span>•</span>
+            <span className="text-white/40">•</span>
             <span className="flex items-center gap-1">
-              <Clock className="w-4 h-4 text-emerald-600" /> Transparent Pricing
+              <Clock className="w-4 h-4 text-emerald-400" /> Transparent Pricing
             </span>
           </div>
         </div>
 
         {/* ── Quick Estimate Bar (Page 1) ──────────────────────── */}
-        <div id="estimate-bar" className="max-w-7xl mx-auto px-4 sm:px-6 mt-8">
+        <div id="estimate-bar" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 mt-8">
           <form
             onSubmit={handleGetEstimate}
-            className="bg-white rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/80 p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-3.5 items-end"
+            className="bg-white rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/80 p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 sm:gap-3.5 items-end"
           >
             {/* Pickup */}
             <div ref={pickupWrapperRef} className="flex flex-col text-left relative">
@@ -1221,7 +1396,7 @@ export function MiniTruckBookingHosurPage() {
       </section>
 
       {/* ── Section: Book Mini Trucks in Hosur (Matching Image 1 & 4) ── */}
-      <section className="py-12 sm:py-16 max-w-5xl mx-auto px-4 sm:px-6">
+      <section className="pt-6 sm:pt-8 pb-12 sm:pb-16 max-w-5xl mx-auto px-4 sm:px-6">
         <div className="text-center">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Book Mini Trucks in Hosur
@@ -1293,51 +1468,7 @@ export function MiniTruckBookingHosurPage() {
         </div>
       </section>
 
-      {/* ── Section: Popular Long Distance Routes from Hosur (User Requested) ── */}
-      <section className="py-12 sm:py-16 bg-slate-50/80 border-y border-slate-200/60">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Popular Long Distance Routes from Hosur
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
-              Guaranteed lowest rates with transparent per-kilometer pricing across Tamil Nadu &amp; Karnataka
-            </p>
-          </div>
 
-          <div className="bg-[#EFF6FF]/60 border border-blue-100 rounded-3xl p-5 sm:p-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {LONG_DISTANCE_ROUTES.map((route, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => handleRouteSelect(route)}
-                  className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
-                      to {route.to} <span className="text-xs font-semibold text-slate-400">({route.distance})</span>
-                    </span>
-                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                      {route.time}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-xs text-slate-500">
-                      fare from <span className="text-base font-extrabold text-slate-900">{route.fare}</span>
-                    </span>
-                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                      Select <ArrowRight className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Section: Areas We Serve in Hosur (Page 2) ─────────── */}
       <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6 text-center">
         <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mb-6">
           Areas We Serve in Hosur
@@ -1509,24 +1640,24 @@ export function MiniTruckBookingHosurPage() {
             >
               <X className="w-4 h-4" />
             </button>
-            <h3 className="text-lg font-extrabold text-slate-900">{activeVehicleDetails.name}</h3>
-            <div className="mt-4 space-y-2.5 text-xs text-slate-600">
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">Payload Capacity:</span>
-                <span className="font-bold text-slate-800">{activeVehicleDetails.capacity}</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">Dimensions:</span>
-                <span className="font-bold text-slate-800">{activeVehicleDetails.dimensions}</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">Estimated Base Fare:</span>
-                <span className="font-bold text-emerald-700">{activeVehicleDetails.baseFare}</span>
-              </div>
-              <div className="py-1.5">
-                <span className="font-semibold text-slate-500 block mb-1">Recommended Usage:</span>
-                <p className="text-slate-700 bg-slate-50 p-2.5 rounded-xl">{activeVehicleDetails.idealFor}</p>
-              </div>
+            <h3 className="text-xl font-extrabold text-slate-900">{activeVehicleDetails.name}</h3>
+            <p className="text-sm font-semibold text-slate-500 mt-1">{activeVehicleDetails.capacity}</p>
+
+            <div className="mt-6">
+              <span className="font-bold text-slate-900 block mb-3">Suitable for:</span>
+              <ul className="space-y-2">
+                {activeVehicleDetails.suitableFor?.map((item, idx) => (
+                  <li key={idx} className="flex items-start text-sm text-slate-700">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-2 shrink-0 mt-0.5" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <span className="font-bold text-slate-900">Best for: </span>
+              <span className="text-sm text-slate-700">{activeVehicleDetails.bestFor}</span>
             </div>
             <button
               onClick={() => {
@@ -1609,11 +1740,15 @@ export function MiniTruckBookingHosurPage() {
               <button
                 type="button"
                 onClick={handleConfirmAndBook}
-                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/25 transition-colors cursor-pointer"
+                disabled={bookingSubmitting}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold text-xs shadow-md shadow-emerald-600/25 transition-colors cursor-pointer"
               >
-                Confirm &amp; Book
+                {bookingSubmitting ? "Confirming..." : "Confirm & Book"}
               </button>
             </div>
+            {bookingError && (
+              <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
+            )}
           </div>
         </div>
       )}
@@ -1677,10 +1812,14 @@ export function MiniTruckBookingHosurPage() {
               <button
                 type="button"
                 onClick={handleBookNow}
-                className="mt-3 w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+                disabled={bookingSubmitting}
+                className="mt-3 w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                Book Now
+                {bookingSubmitting ? (<><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>) : "Book Now"}
               </button>
+              {isSignedIn && bookingError && (
+                <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
+              )}
             </div>
 
             {/* Right: Select Vehicle */}
@@ -1733,7 +1872,7 @@ export function MiniTruckBookingHosurPage() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex max-h-[92vh]"
+            className="bg-transparent rounded-3xl max-w-[780px] w-full shadow-2xl relative overflow-hidden flex max-h-[92vh]"
           >
             <button
               onClick={() => { setLoginModalOpen(false); setOtpStep(false); setOtpValue("") }}
@@ -1743,7 +1882,7 @@ export function MiniTruckBookingHosurPage() {
             </button>
 
             {/* Left: Delivery Person Photo */}
-            <div className="hidden sm:block sm:w-[42%] shrink-0 bg-gradient-to-br from-slate-700 to-slate-900 relative overflow-hidden">
+            <div className="hidden sm:block sm:w-[40%] shrink-0 bg-gradient-to-br from-slate-700 to-slate-900 relative overflow-hidden">
               <div className="absolute inset-0 flex items-center justify-center">
                 {/* Logistics professional illustration placeholder */}
                 <div className="text-center px-6">
@@ -1758,7 +1897,7 @@ export function MiniTruckBookingHosurPage() {
             </div>
 
             {/* Right: Form */}
-            <div className="flex-1 p-6 sm:p-8 flex flex-col justify-center overflow-y-auto">
+            <div className="flex-1 bg-white p-6 sm:p-10 flex flex-col justify-center overflow-y-auto">
               <div className="mb-6">
                 <h2 className="text-2xl font-extrabold text-slate-900">Welcome! 👋</h2>
                 <p className="text-sm text-slate-500 mt-1">Sign in or make an account to complete your order with us.</p>
@@ -1780,9 +1919,10 @@ export function MiniTruckBookingHosurPage() {
                   {/* Phone */}
                   <div className="flex items-center gap-2.5 border border-slate-200 rounded-xl px-3.5 h-12 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/20 transition-all bg-white">
                     <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                    <div className="text-sm font-semibold text-slate-600 border-r border-slate-200 pr-2.5 mr-1">+91</div>
                     <input
                       type="tel"
-                      placeholder="Enter your Phone Number"
+                      placeholder="Phone Number"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       maxLength={10}
@@ -1819,6 +1959,10 @@ export function MiniTruckBookingHosurPage() {
                     <span className="text-emerald-700 font-semibold cursor-pointer hover:underline">privacy policy</span>
                   </p>
 
+                  {bookingError && (
+                    <p style={{ color: "var(--bad)", fontSize: 13, textAlign: "center" }}>{bookingError}</p>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleSendOtp}
@@ -1839,8 +1983,8 @@ export function MiniTruckBookingHosurPage() {
                     <p className="text-base font-extrabold text-emerald-700">+91 {phone}</p>
                   </div>
                   {/* OTP Input */}
-                  <div className="flex justify-center gap-3">
-                    {[0,1,2,3].map((i) => (
+                  <div className="flex justify-center gap-2 sm:gap-3">
+                    {[0,1,2,3,4,5].map((i) => (
                       <input
                         key={i}
                         type="text"
@@ -1853,25 +1997,43 @@ export function MiniTruckBookingHosurPage() {
                           setOtpValue(arr.join(""))
                           if (val && e.target.nextSibling) e.target.nextSibling.focus()
                         }}
-                        className="w-14 h-14 text-center text-2xl font-extrabold border-2 border-slate-200 focus:border-emerald-500 rounded-2xl outline-none transition-colors text-slate-900"
+                        className="w-[45px] sm:w-[54px] h-[54px] sm:h-[64px] text-center text-2xl sm:text-3xl font-extrabold border-2 border-slate-200 focus:border-emerald-500 rounded-2xl outline-none transition-colors text-slate-900"
                       />
                     ))}
                   </div>
+                  {bookingError && (
+                    <p style={{ color: "var(--bad)", fontSize: 13, textAlign: "center" }}>{bookingError}</p>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleVerifyOtp}
-                    disabled={otpValue.replace(/\D/g,"").length < 4}
-                    className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+                    disabled={otpLoading || bookingSubmitting || otpValue.replace(/\D/g,"").length < 6}
+                    className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
                   >
-                    Verify OTP &amp; Book
+                    {otpLoading || bookingSubmitting ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> {bookingSubmitting ? "Confirming booking..." : "Verifying..."}</>
+                    ) : (
+                      "Verify OTP & Book"
+                    )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => { setOtpStep(false); setOtpValue("") }}
-                    className="w-full text-xs text-slate-500 hover:text-emerald-700 font-semibold transition-colors cursor-pointer"
-                  >
-                    ← Change number
-                  </button>
+                  <div className="flex items-center justify-between mt-2 px-1">
+                    <button
+                      type="button"
+                      onClick={() => { setOtpStep(false); setOtpValue("") }}
+                      className="text-xs text-slate-500 hover:text-emerald-700 font-semibold transition-colors cursor-pointer"
+                    >
+                      ← Change number
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={otpLoading}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {otpLoading ? "Resending..." : "Resend OTP"}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1905,6 +2067,9 @@ export function MiniTruckBookingHosurPage() {
             <p className="text-sm text-slate-600 leading-relaxed mb-1">
               Our service partner will contact you shortly.
             </p>
+            {lastBookingId && (
+              <p className="text-xs font-bold text-emerald-700 mb-1">Booking ID: {lastBookingId}</p>
+            )}
             <p className="text-xs text-slate-400 mb-6">
               {pickup && drop ? `${pickup} → ${drop}` : "Your booking has been placed successfully."}
             </p>

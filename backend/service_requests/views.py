@@ -48,6 +48,7 @@ from .serializers import (
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
 from .services.fulfillment_service import process_item_fulfillment
+from .services.logistics_pricing import resolve_logistics_fare
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -232,6 +233,17 @@ class BookingCreateView(APIView):
             )
         company = _get_company(request)
 
+        # Goods Transport / Packers & Movers: never trust a client-submitted
+        # total_amount — recompute it from the server's own ServiceTier/Lane
+        # record. No-op for every other service_category. See
+        # GOODS_AND_TRANSPORT_IMPLEMENTATION_PLAN.md, Phase 3.
+        corrected_fare = resolve_logistics_fare(
+            service_category=serializer.validated_data.get("service_category", ""),
+            logistics_tier=serializer.validated_data.get("logistics_tier"),
+            logistics_lane=serializer.validated_data.get("logistics_lane"),
+            submitted_amount=serializer.validated_data.get("total_amount", 0),
+        )
+
         # Determine payment method and set initial statuses
         payment_method = (request.data.get("payment_method") or "COD").upper()
         if payment_method == "ONLINE":
@@ -255,6 +267,7 @@ class BookingCreateView(APIView):
                 status=initial_status,
                 payment_method=payment_method,
                 payment_status=initial_payment_status,
+                total_amount=corrected_fare,
             )
 
             # Sync name
@@ -295,6 +308,7 @@ class BookingCreateView(APIView):
                 status=initial_status,
                 payment_method=payment_method,
                 payment_status=initial_payment_status,
+                total_amount=corrected_fare,
             )
 
         # Send booking confirmation email

@@ -7,6 +7,12 @@ import {
   User, Mail, MessageSquare, AlertCircle, Bike, Check
 } from "lucide-react"
 import { routes } from "../routes.js"
+import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
+import { createBooking } from "../../api/bookingService.js"
+import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
+import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
+
+const LOGISTICS_CITY = "hosur"
 
 /* ── 2 Wheeler Dimension Diagram matching user screenshot (40cm x 40cm box on bike) ── */
 function TwoWheelerDimensionDiagram({ className = "w-full max-w-[240px] h-[120px]" }) {
@@ -166,6 +172,14 @@ function QRCodeGraphic({ className = "w-36 h-36" }) {
 }
 
 /* ── Hosur & Nearby Location Suggestions Database ── */
+/* ── Maps backend ServiceTier.slug → the illustration for that vehicle.
+   Diagrams stay local (purely cosmetic); everything else (name, capacity,
+   price, description) now comes from GET /api/logistics/tiers/. ── */
+const TWO_WHEELER_DIAGRAM_BY_SLUG = {
+  "2-wheeler": <TwoWheelerDimensionDiagram />,
+  "2-wheeler-electric-express": <TwoWheelerDimensionDiagram />,
+}
+
 const HOSUR_LOCATIONS_DATABASE = [
   { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
   { name: "Hosur Railway Station", subtitle: "Station Road, Hosur", category: "Hosur Central" },
@@ -286,6 +300,7 @@ export function TwoWheelerBookingHosurPage() {
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [userType, setUserType] = useState("Personal Use / Delivery")
+  const [selectedRoute, setSelectedRoute] = useState(null)
 
   // Booking Flow State
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
@@ -316,6 +331,37 @@ export function TwoWheelerBookingHosurPage() {
 
   // FAQ state
   const [openFaq, setOpenFaq] = useState(null)
+
+  // Catalog data — fetched from /api/logistics/ (backend/logistics app),
+  // replacing what used to be hardcoded TWO_WHEELER_VEHICLES/POPULAR_ROUTES/
+  // HOSUR_AREAS arrays.
+  const [fetchedTiers, setFetchedTiers] = useState([])
+  const [fetchedLanes, setFetchedLanes] = useState([])
+  const [serviceAreas, setServiceAreas] = useState([])
+  const [bookingError, setBookingError] = useState("")
+  const [bookingSubmitting, setBookingSubmitting] = useState(false)
+  const [lastBookingId, setLastBookingId] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadCatalog() {
+      try {
+        const [tiers, lanes, areas] = await Promise.all([
+          fetchServiceTiers("two_wheeler", LOGISTICS_CITY),
+          fetchLanes("two_wheeler", LOGISTICS_CITY),
+          fetchServiceAreas(LOGISTICS_CITY),
+        ])
+        if (cancelled) return
+        setFetchedTiers(tiers)
+        setFetchedLanes(lanes)
+        setServiceAreas(areas)
+      } catch (err) {
+        console.warn("Failed to load logistics catalog, falling back to static data:", err)
+      }
+    }
+    loadCatalog()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -413,48 +459,65 @@ export function TwoWheelerBookingHosurPage() {
     )
   }
 
-  // 2 Wheeler Fleet Definition
-  const TWO_WHEELER_VEHICLES = [
+  // Static fallback — used only if the /api/logistics/ fetch above fails or
+  // hasn't resolved yet, so this page keeps working even if the backend is
+  // briefly unreachable.
+
+  const HARDCODED_DETAILS_BY_SLUG = {
+    "2-wheeler": {
+      suitableFor: [
+        "Small parcels & packages",
+        "Documents & files",
+        "Clothing & accessories",
+        "Medicines & essentials",
+        "Food & grocery orders",
+        "Small electronic items"
+      ],
+      bestFor: "Small, lightweight local deliveries."
+    },
+    "2-wheeler-electric-express": {
+      suitableFor: [
+        "Small parcels & packages",
+        "Documents & files",
+        "Clothing & accessories",
+        "Food & grocery orders",
+        "Medicines & essentials",
+        "Small electronic items",
+        "Urgent deliveries"
+      ],
+      bestFor: "Fast and lightweight local deliveries."
+    }
+  }
+
+  const STATIC_TWO_WHEELER_VEHICLES = [
     {
-      id: "2wheeler_std",
-      name: "2 Wheeler",
-      capacity: "20 kg",
-      price: "₹48",
+      id: "2-wheeler", name: "2 Wheeler", capacity: "20 kg", price: "₹48",
       diagram: <TwoWheelerDimensionDiagram />,
       details: {
-        name: "2 Wheeler Parcel Delivery",
-        capacity: "20 kg",
-        dimensions: "40 cm x 40 cm x 40 cm (Closed waterproof cargo box)",
-        idealFor: "Documents, packages, office supplies, food, grocery, electronics, medicine delivery",
-        baseFare: "₹48 (Includes 1.0 km & 25 mins order time)"
+        name: "2 Wheeler Parcel Delivery", capacity: "20 kg capacity",
+        suitableFor: HARDCODED_DETAILS_BY_SLUG["2-wheeler"].suitableFor,
+        bestFor: HARDCODED_DETAILS_BY_SLUG["2-wheeler"].bestFor,
       }
     },
     {
-      id: "2wheeler_ev",
-      name: "2 Wheeler Electric / Express",
-      capacity: "20 kg",
-      price: "₹55",
+      id: "2-wheeler-electric-express", name: "2 Wheeler Electric / Express", capacity: "20 kg", price: "₹55",
       diagram: <TwoWheelerDimensionDiagram />,
       details: {
-        name: "2 Wheeler Express (Zero Emission EV)",
-        capacity: "20 kg",
-        dimensions: "40 cm x 40 cm x 40 cm (Secure sealed cargo carrier)",
-        idealFor: "Urgent same-hour deliveries, corporate dispatch, eco-friendly local courier",
-        baseFare: "₹55 (Includes 1.0 km & 20 mins order time)"
+        name: "2 Wheeler Express (Zero Emission EV)", capacity: "20 kg capacity",
+        suitableFor: HARDCODED_DETAILS_BY_SLUG["2-wheeler-electric-express"].suitableFor,
+        bestFor: HARDCODED_DETAILS_BY_SLUG["2-wheeler-electric-express"].bestFor,
       }
     }
   ]
 
-  // Hosur Areas We Serve
-  const HOSUR_AREAS = [
+  const STATIC_HOSUR_AREAS = [
     "Sipcot Phase 1", "Sipcot Phase 2", "Bagalur Road", "Mathigiri",
     "Zuzuvadi", "Avalapalli", "Moranapalli", "Mookandapalli",
     "Denkanikottai Road", "Rayakottai Road", "Thally Road", "Alasanatham",
     "Railway Station Area", "Dinnur", "Kelamangalam Road", "Kamaraj Nagar"
   ]
 
-  // Popular routes
-  const POPULAR_ROUTES = [
+  const STATIC_POPULAR_ROUTES = [
     { to: "SIPCOT Phase 1 & 2", distance: "4 km", time: "12 mins", fare: "₹65" },
     { to: "Bagalur Road", distance: "6 km", time: "15 mins", fare: "₹78" },
     { to: "Attibele Border", distance: "8 km", time: "18 mins", fare: "₹95" },
@@ -462,6 +525,39 @@ export function TwoWheelerBookingHosurPage() {
     { to: "Bengaluru Central (Majestic)", distance: "40 km", time: "65 mins", fare: "₹340" },
     { to: "Krishnagiri Town", distance: "55 km", time: "80 mins", fare: "₹450" }
   ]
+
+  // Adapt backend ServiceTier rows to the { id, name, capacity, price,
+  // diagram, details } shape the rest of this page already renders.
+  function tierToVehicle(tier) {
+    return {
+      id: tier.slug,
+      name: tier.name,
+      capacity: tier.capacity_label,
+      price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+      diagram: TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug] || <TwoWheelerDimensionDiagram />,
+      details: {
+        name: tier.name,
+        capacity: `${tier.capacity_label} capacity`,
+        suitableFor: HARDCODED_DETAILS_BY_SLUG[tier.slug]?.suitableFor || [],
+        bestFor: HARDCODED_DETAILS_BY_SLUG[tier.slug]?.bestFor || tier.description,
+      },
+      _tierId: tier.id,
+    }
+  }
+
+  const TWO_WHEELER_VEHICLES = fetchedTiers.length ? fetchedTiers.map(tierToVehicle) : STATIC_TWO_WHEELER_VEHICLES
+
+  const HOSUR_AREAS = serviceAreas.length ? serviceAreas.map((a) => a.name) : STATIC_HOSUR_AREAS
+
+  const POPULAR_ROUTES = fetchedLanes.length
+    ? fetchedLanes.map((lane) => ({
+        to: lane.destination_label,
+        distance: lane.distance_km ? `${Number(lane.distance_km)} km` : "",
+        fare: `₹${Number(lane.fare).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+        time: lane.eta_label,
+        _laneId: lane.id,
+      }))
+    : STATIC_POPULAR_ROUTES
 
   // FAQs tailored for 2 Wheeler
   const FAQS = [
@@ -510,34 +606,83 @@ export function TwoWheelerBookingHosurPage() {
     if (!selectedVehicle) setSelectedVehicle(TWO_WHEELER_VEHICLES[0])
   }
 
+  // Persists the booking to the backend (POST /api/booking/ — see
+  // service_requests.BookingCreateView).
+  const submitBooking = async () => {
+    setBookingError("")
+    setBookingSubmitting(true)
+    try {
+      const today = todayDateString()
+      const vehicle = selectedVehicle || TWO_WHEELER_VEHICLES[0]
+      const fare = Number(String(vehicle.price).replace(/[^0-9.]/g, "")) || 0
+      const payload = {
+        customer_name: name || "Guest",
+        phone,
+        service_category: "goods_transport_two_wheeler",
+        issue_title: `Two-wheeler delivery — ${vehicle.name}`,
+        description: userType,
+        address: pickup || "Hosur",
+        drop_address: drop,
+        preferred_date: today,
+        total_amount: fare,
+        payment_method: "COD",
+        cart_data: [{ tier: vehicle.name, price: vehicle.price, route: selectedRoute?.to || null }],
+      }
+      if (vehicle._tierId) payload.logistics_tier = vehicle._tierId
+      if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
+
+      const res = await createBooking(payload)
+      setLastBookingId(res?.data?.request_id || res?.request_id || null)
+      setBookingSuccessOpen(true)
+    } catch (err) {
+      setBookingError(err?.body?.message || "Couldn't confirm your booking. Please try again.")
+    } finally {
+      setBookingSubmitting(false)
+    }
+  }
+
   const handleBookNow = () => {
     if (!isSignedIn) {
       setVehicleSelectorOpen(false)
       setLoginModalOpen(true)
     } else {
       setVehicleSelectorOpen(false)
-      setBookingSuccessOpen(true)
+      submitBooking()
     }
   }
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!phone || phone.trim().length < 10) return
     setOtpLoading(true)
-    setTimeout(() => {
-      setOtpLoading(false)
+    setBookingError("")
+    try {
+      await apiRequestCustomerPhoneOTP(phone)
       setOtpSent(true)
       setOtpStep(true)
-    }, 1000)
+    } catch (err) {
+      setBookingError(err?.body?.detail || "Couldn't send OTP. Please check the number and try again.")
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
-  const handleVerifyOtp = () => {
-    if (otpValue.length < 4) return
-    setIsSignedIn(true)
-    setLoginModalOpen(false)
-    setOtpStep(false)
-    setOtpValue("")
-    setOtpSent(false)
-    setBookingSuccessOpen(true)
+  const handleVerifyOtp = async () => {
+    if (otpValue.length < 6) return
+    setOtpLoading(true)
+    setBookingError("")
+    try {
+      await apiVerifyCustomerPhoneOTP(phone, otpValue)
+      setIsSignedIn(true)
+      setLoginModalOpen(false)
+      setOtpStep(false)
+      setOtpValue("")
+      setOtpSent(false)
+      await submitBooking()
+    } catch (err) {
+      setBookingError(err?.body?.detail || "Invalid OTP. Please try again.")
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
   return (
@@ -580,41 +725,45 @@ export function TwoWheelerBookingHosurPage() {
       </header>
 
       {/* ── Hero Section (Uniform Image 2 Style) ────────────────────── */}
-      <section className="relative pt-10 pb-8 sm:pt-14 sm:pb-12 bg-gradient-to-b from-emerald-50/50 via-[#FAFCFB] to-[#FAFCFB] border-b border-slate-100/60">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100/70 text-emerald-800 text-xs font-bold tracking-wide mb-4">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+      <section 
+        className="relative pt-10 pb-8 sm:pt-14 sm:pb-12 border-b border-slate-100/60 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url('/hero_twowheeler_bg.png')` }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/55 to-slate-950/80"></div>
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 text-center z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-bold tracking-wide mb-4 shadow-sm border border-white/25 backdrop-blur-sm">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
             Hosur Two-Wheeler Service
           </div>
 
-          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight max-w-3xl mx-auto">
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight max-w-3xl mx-auto drop-shadow-lg">
             Affordable and Trusted Two-Wheeler Delivery in Hosur
           </h1>
 
-          <p className="mt-4 text-sm sm:text-base text-slate-600 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-4 text-sm sm:text-base text-slate-200 max-w-2xl mx-auto leading-relaxed drop-shadow">
             Whether you're sending documents, daily essentials, or parcel deliveries across the city, our two-wheeler courier service in Hosur offers fast, safe, and cost-effective delivery
           </p>
 
-          <div className="mt-5 flex items-center justify-center gap-3 text-xs font-semibold text-emerald-700">
+          <div className="mt-5 flex items-center justify-center gap-3 text-xs font-semibold text-emerald-300">
             <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> On-Demand in 15 mins
+              <CheckCircle2 className="w-4 h-4 text-emerald-300" /> On-Demand in 15 mins
             </span>
             <span>•</span>
             <span className="flex items-center gap-1">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" /> Verified Drivers
+              <ShieldCheck className="w-4 h-4 text-emerald-300" /> Verified Drivers
             </span>
             <span>•</span>
             <span className="flex items-center gap-1">
-              <Clock className="w-4 h-4 text-emerald-600" /> Transparent Pricing
+              <Clock className="w-4 h-4 text-emerald-300" /> Transparent Pricing
             </span>
           </div>
         </div>
 
         {/* ── Quick Estimate Bar (Matching Image 2 Exactly) ────────── */}
-        <div id="estimate-bar" className="max-w-7xl mx-auto px-4 sm:px-6 mt-8">
+        <div id="estimate-bar" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 mt-8">
           <form
             onSubmit={handleGetEstimate}
-            className="bg-white rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/80 p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-3.5 items-end"
+            className="bg-white rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/80 p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 sm:gap-3.5 items-end"
           >
             {/* Pickup */}
             <div ref={pickupWrapperRef} className="flex flex-col text-left relative">
@@ -906,7 +1055,7 @@ export function TwoWheelerBookingHosurPage() {
       </section>
 
       {/* ── Section: Book Two-Wheelers in Hosur (Uniform Centered Cards Style) ── */}
-      <section className="py-12 sm:py-16 max-w-5xl mx-auto px-4 sm:px-6">
+      <section className="pt-6 sm:pt-8 pb-12 sm:pb-16 max-w-5xl mx-auto px-4 sm:px-6">
         <div className="text-center">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Book Two-Wheelers in Hosur
@@ -990,6 +1139,7 @@ export function TwoWheelerBookingHosurPage() {
                   key={idx}
                   onClick={() => {
                     setDrop(route.to)
+                    setSelectedRoute(route)
                     const bar = document.getElementById("estimate-bar")
                     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
                   }}
@@ -1170,7 +1320,7 @@ export function TwoWheelerBookingHosurPage() {
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-extrabold text-slate-900">{activeVehicleDetails.details.name}</h3>
+              <h3 className="text-xl font-extrabold text-slate-900">{activeVehicleDetails.details.name}</h3>
               <button
                 onClick={() => setActiveVehicleDetails(null)}
                 className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors"
@@ -1178,28 +1328,27 @@ export function TwoWheelerBookingHosurPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
+            <p className="text-sm font-semibold text-slate-500 mt-1 mb-4">{activeVehicleDetails.details.capacity}</p>
 
             <div className="flex items-center justify-center py-4 bg-slate-50 rounded-2xl mb-4">
               {activeVehicleDetails.diagram}
             </div>
 
-            <div className="space-y-3 text-xs text-slate-700">
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">Payload Capacity:</span>
-                <span className="font-bold text-slate-900">{activeVehicleDetails.details.capacity}</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">Cargo Dimensions:</span>
-                <span className="font-bold text-slate-900">{activeVehicleDetails.details.dimensions}</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="font-semibold text-slate-500">Base Fare:</span>
-                <span className="font-bold text-emerald-700">{activeVehicleDetails.details.baseFare}</span>
-              </div>
-              <div className="py-1.5">
-                <span className="font-semibold text-slate-500 block mb-1">Ideal For:</span>
-                <span className="text-slate-800 leading-relaxed">{activeVehicleDetails.details.idealFor}</span>
-              </div>
+            <div className="mt-6">
+              <span className="font-bold text-slate-900 block mb-3">Suitable for:</span>
+              <ul className="space-y-2">
+                {activeVehicleDetails.details.suitableFor?.map((item, idx) => (
+                  <li key={idx} className="flex items-start text-sm text-slate-700">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-2 shrink-0 mt-0.5" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <span className="font-bold text-slate-900">Best for: </span>
+              <span className="text-sm text-slate-700">{activeVehicleDetails.details.bestFor}</span>
             </div>
 
             <button
@@ -1282,11 +1431,18 @@ export function TwoWheelerBookingHosurPage() {
             <button
               type="button"
               onClick={handleBookNow}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer"
+              disabled={bookingSubmitting}
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Book Now</span>
-              <ArrowRight className="w-4 h-4" />
+              {bookingSubmitting ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
+              ) : (
+                <><span>Book Now</span><ArrowRight className="w-4 h-4" /></>
+              )}
             </button>
+            {isSignedIn && bookingError && (
+              <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
+            )}
           </div>
         </div>
       )}
@@ -1359,6 +1515,10 @@ export function TwoWheelerBookingHosurPage() {
                   </label>
                 </div>
 
+                {bookingError && (
+                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
+                )}
+
                 <button
                   type="button"
                   onClick={handleSendOtp}
@@ -1373,28 +1533,30 @@ export function TwoWheelerBookingHosurPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-2">
-                    Enter 4-digit OTP
+                    Enter 6-digit OTP
                   </label>
                   <input
                     type="text"
-                    maxLength={4}
+                    maxLength={6}
                     value={otpValue}
                     onChange={(e) => setOtpValue(e.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder="• • • •"
+                    placeholder="• • • • • •"
                     className="w-full text-center text-2xl tracking-[1em] font-extrabold bg-slate-50 border border-slate-200 rounded-xl py-3 text-slate-900 outline-none focus:border-emerald-500 focus:bg-white"
                   />
-                  <span className="text-[11px] text-slate-400 block text-center mt-2">
-                    (Use sample OTP <strong className="text-slate-700 font-mono">1234</strong> for quick test)
-                  </span>
                 </div>
+
+                {bookingError && (
+                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
+                )}
 
                 <button
                   type="button"
                   onClick={handleVerifyOtp}
-                  disabled={otpValue.length < 4}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                  disabled={otpLoading || bookingSubmitting || otpValue.length < 6}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
                 >
-                  Verify &amp; Confirm Booking
+                  {(otpLoading || bookingSubmitting) && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{bookingSubmitting ? "Confirming booking..." : otpLoading ? "Verifying..." : "Verify & Confirm Booking"}</span>
                 </button>
 
                 <div className="text-center">
@@ -1428,6 +1590,12 @@ export function TwoWheelerBookingHosurPage() {
             </p>
 
             <div className="bg-slate-50 rounded-2xl p-4 text-left text-xs space-y-2 border border-slate-200 mb-6">
+              {lastBookingId && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Booking ID:</span>
+                  <span className="font-bold text-emerald-700">{lastBookingId}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Service:</span>
                 <span className="font-bold text-slate-900">{selectedVehicle?.name || "2 Wheeler Delivery"}</span>
