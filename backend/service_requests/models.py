@@ -43,7 +43,9 @@ class ServiceRequest(models.Model):
     """Master record: created by public booking, driven through state machine."""
 
     class Status(models.TextChoices):
+        DRAFT                 = "draft",                 "Draft"
         NEW_REQUEST           = "new_request",           "New Request"
+        PENDING_PAYMENT       = "pending_payment",       "Pending Payment"
         WAITING_FOR_PAYMENT   = "waiting_for_payment",   "Waiting for Payment"
         CONFIRMED             = "confirmed",             "Confirmed"
         REVIEWED              = "reviewed",              "Reviewed"
@@ -58,6 +60,8 @@ class ServiceRequest(models.Model):
         FEEDBACK_RECEIVED     = "feedback_received",     "Feedback Received"
         CLOSED                = "closed",                "Closed"
         REJECTED              = "rejected",              "Rejected"
+        CANCELLED             = "cancelled",             "Cancelled"
+        RESCHEDULED           = "rescheduled",           "Rescheduled"
         REWORK_REQUESTED      = "rework_requested",      "Rework Requested"
         FOLLOW_UP_REQUIRED    = "follow_up_required",    "Follow-up Required"
 
@@ -72,13 +76,14 @@ class ServiceRequest(models.Model):
         ONLINE = "ONLINE", "Online Payment"
 
     class PaymentStatus(models.TextChoices):
-        PENDING    = "pending",    "Pending"
-        PROCESSING = "processing", "Processing"
-        COLLECTED  = "collected",  "Collected"
-        PAID       = "paid",       "Paid"
-        FAILED     = "failed",     "Failed"
-        CANCELLED  = "cancelled",  "Cancelled"
-        REFUNDED   = "refunded",   "Refunded"
+        PENDING            = "pending",            "Pending"
+        PROCESSING         = "processing",         "Processing"
+        COLLECTED          = "collected",          "Collected"
+        PAID               = "paid",               "Paid"
+        FAILED             = "failed",             "Failed"
+        CANCELLED          = "cancelled",          "Cancelled"
+        REFUNDED           = "refunded",           "Refunded"
+        PARTIALLY_REFUNDED = "partially_refunded", "Partially Refunded"
 
     # Human-readable ID (SR-0001, SR-0002, ...)
     request_id = models.CharField(max_length=20, unique=True, blank=True)
@@ -145,7 +150,7 @@ class ServiceRequest(models.Model):
         blank=True,
     )
     payment_status = models.CharField(
-        max_length=15,
+        max_length=30,
         choices=PaymentStatus.choices,
         default=PaymentStatus.PENDING,
         blank=True,

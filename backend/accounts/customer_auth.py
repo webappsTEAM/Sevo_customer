@@ -452,3 +452,111 @@ class CustomerGoogleLoginView(APIView):
                 {"detail": f"Internal server error during Google login: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# ── Prompt 1: New Standardized Mobile OTP API Views ───────────────────────────
+
+from .services import request_otp, verify_otp, complete_customer_profile, RateLimitError, InvalidOTPError
+from rest_framework.exceptions import NotFound, ValidationError
+
+class CustomerOTPRequestAPIView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        mobile_number = request.data.get("mobile_number") or request.data.get("phone")
+        if not mobile_number:
+            return Response(
+                {"success": False, "error": {"code": "INVALID_INPUT", "message": "mobile_number is required."}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            res = request_otp(mobile_number)
+            return Response(res, status=status.HTTP_200_OK)
+        except RateLimitError as e:
+            return Response(
+                {"success": False, "error": {"code": e.code, "message": e.message, **e.extra}},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+        except (ValueError, ValidationError) as e:
+            return Response(
+                {"success": False, "error": {"code": "INVALID_INPUT", "message": str(e)}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": {"code": "SERVER_ERROR", "message": str(e)}},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class CustomerOTPVerifyAPIView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        mobile_number = request.data.get("mobile_number") or request.data.get("phone")
+        otp_code = request.data.get("otp_code") or request.data.get("otp")
+        if not mobile_number or not otp_code:
+            return Response(
+                {"success": False, "error": {"code": "INVALID_INPUT", "message": "mobile_number and otp_code are required."}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            res = verify_otp(mobile_number, otp_code)
+            response = Response(res, status=status.HTTP_200_OK)
+            if "auth_token" in res.get("data", {}):
+                access_token = res["data"]["auth_token"]
+                refresh_token = res["data"].get("refresh_token")
+                return _set_auth_cookies(response, access_token, refresh_token)
+            return response
+        except InvalidOTPError as e:
+            return Response(
+                {"success": False, "error": {"code": e.code, "message": e.message, **e.extra}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except (ValueError, ValidationError) as e:
+            return Response(
+                {"success": False, "error": {"code": "INVALID_INPUT", "message": str(e)}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": {"code": "SERVER_ERROR", "message": str(e)}},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class CustomerProfileCompleteAPIView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        customer_id = request.data.get("customer_id")
+        if not customer_id and request.user.is_authenticated:
+            customer_id = request.user.id
+
+        full_name = request.data.get("full_name")
+        email = request.data.get("email")
+
+        if not customer_id or not full_name:
+            return Response(
+                {"success": False, "error": {"code": "INVALID_INPUT", "message": "customer_id and full_name are required."}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            res = complete_customer_profile(customer_id, full_name, email)
+            return Response(res, status=status.HTTP_200_OK)
+        except NotFound as e:
+            return Response(
+                {"success": False, "error": {"code": "NOT_FOUND", "message": str(e)}},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except (ValueError, ValidationError) as e:
+            return Response(
+                {"success": False, "error": {"code": "INVALID_INPUT", "message": str(e)}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"success": False, "error": {"code": "SERVER_ERROR", "message": str(e)}},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+

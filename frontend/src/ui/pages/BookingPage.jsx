@@ -6,25 +6,33 @@ import {
   Search, MapPin, Phone, Mail, User, Shield, CheckCircle2, Star,
   ChevronRight, ChevronLeft, ArrowLeft, Clock, Calendar, Camera,
   Upload, AlertCircle, Check, X, Info, Zap, Lock, Settings,
-  Droplets, Wind, Bug, Brush, PaintRoller, Cpu, Hammer, Package, Sparkles,
-  Home, RefreshCw, MessageSquare, KeyRound, ShieldCheck,
-  LogIn, ChevronDown, Award, Users, ThumbsUp, ArrowRight,
+  Droplets, Wind, Bug, Brush, Cpu, Hammer, Package, Sparkles,
+  Home, RefreshCw, MessageSquare, KeyRound, ShieldCheck, Compass,
+  LogIn, ChevronDown, ChevronUp, Plus, Award, Users, ThumbsUp, ArrowRight,
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
-  CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket, Calculator, Smartphone
+  CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
+  Calculator, PaintRoller, Smartphone, MoreVertical
 } from "lucide-react"
 import {
   apiRequestCustomerEmailOTP, apiVerifyCustomerEmailOTP,
   apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP,
-  apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError
+  apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError,
+  apiUpdateCustomerLastLocation, apiDetectCustomerLocation
 } from "../../api/authService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { routes } from "../routes.js"
 import { apiRequest } from "../../api/client.js"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
+import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 
 let BOOKING_CURRENCY_SYMBOL = "₹";
+
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   DATA
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
+
 
 function FacebookMark(props) {
   return (
@@ -60,6 +68,7 @@ function TwitterMark(props) {
 /* ─────────────────────────────────────────────────────────────────────────
    DATA
    ───────────────────────────────────────────────────────────────────────── */
+
 
 export const CATEGORIES = [
   { id: "cleaning", name: "Home Cleaning", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", desc: "Deep clean & sanitization", rating: "4.8", jobs: "50K+" },
@@ -178,7 +187,7 @@ const PACKAGES = {
   general: [
     { id: "basic", name: "1 Hr Handyman", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", includes: ["Any general task", "Basic tools"], excludes: ["Materials", "Electrical/plumbing"] },
     { id: "standard", name: "2 Hr Handyman", price: 499, priceStr: "₹499", duration: "2 hrs", popular: true, tag: "Most Booked", includes: ["Multiple small tasks", "Tools included", "Experienced pro"], excludes: ["Materials"] },
-    { id: "complete", name: "Full Day Pro", price: 999, priceStr: "₹999", duration: "8 hrs", popular: false, tag: "Best Value", includes: ["Unlimited tasks", "All tools", "Priority scheduling"], excludes: ["Materials above ₹500"] },
+    { id: "complete", name: "Full Day Pro", price: 999, priceStr: "₹999", duration: "8 hrs", popular: false, tag: "Best Value", includes: ["Unlimited tasks", "All tools", "Priority scheduling"], excludes: ["Materials above •‚¹500"] },
   ],
   carpentry: [
     { id: "carp-std", name: "Standard Repair", price: 499, priceStr: "₹499", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop", includes: ["Minor Woodwork", "Hinge Replacement", "Basic Fixes"], excludes: [] },
@@ -198,8 +207,9 @@ const PACKAGES = {
 }
 
 const TIME_SLOTS = [
-  { period: "Afternoon", icon: "â˜€ï¸", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
-  { period: "Evening", icon: "🌆", slots: [{ t: "17:00", l: "5:00 PM" }, { t: "18:00", l: "6:00 PM" }, { t: "19:00", l: "7:00 PM" }] },
+  { period: "Morning", icon: "ðŸŒ…", slots: [{ t: "07:00", l: "7:00 AM" }, { t: "08:00", l: "8:00 AM" }, { t: "09:00", l: "9:00 AM" }, { t: "10:00", l: "10:00 AM" }, { t: "11:00", l: "11:00 AM" }] },
+  { period: "Afternoon", icon: "•˜•ï¸", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
+  { period: "Evening", icon: "ðŸŒ†", slots: [{ t: "17:00", l: "5:00 PM" }, { t: "18:00", l: "6:00 PM" }, { t: "19:00", l: "7:00 PM" }] },
 ]
 
 const REVIEWS = [
@@ -228,96 +238,9 @@ function generateAvatarUrl(name) {
 
 const OTP_SESSION_KEY = "bk_cust_verified"
 
-/* ─────────────────────────────────────────────────────────────────────────
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    HELPERS
-   ───────────────────────────────────────────────────────────────────────── */
-
-const DEFAULT_CAT_IMAGES = {
-  hvac: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=500&q=80&fit=crop",
-  appliances: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop",
-  appliance_repair: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop",
-  cleaning: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop",
-  plumbing: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop",
-  electrical: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop",
-  carpentry: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=500&q=80&fit=crop",
-  pest_control: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=500&q=80&fit=crop",
-  painting: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&q=80&fit=crop",
-  security: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop",
-  general: "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=500&q=80&fit=crop",
-}
-
-function getCategoryFallbackImage(name = "", slug = "") {
-  const s = (slug || "").toLowerCase();
-  const n = (name || "").toLowerCase();
-  for (const [key, val] of Object.entries(DEFAULT_CAT_IMAGES)) {
-    if (s.includes(key) || n.includes(key) || (key === "hvac" && (n.includes("ac") || n.includes("heating")))) {
-      return val;
-    }
-  }
-  return "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop";
-}
-
-function formatErrorMessage(err, defaultMsg = "An error occurred") {
-  if (!err) return defaultMsg;
-  if (typeof err === "string") return err;
-  if (typeof err.message === "string") return err.message;
-  if (typeof err.detail === "string") return err.detail;
-  if (err.body) {
-    if (typeof err.body === "string") return err.body;
-    if (typeof err.body.message === "string") return err.body.message;
-    if (typeof err.body.detail === "string") return err.body.detail;
-    if (typeof err.body === "object") {
-      const msgs = [];
-      for (const [key, val] of Object.entries(err.body)) {
-        const strVal = Array.isArray(val) ? val.join(", ") : (typeof val === "object" ? JSON.stringify(val) : String(val));
-        msgs.push(`${key}: ${strVal}`);
-      }
-      if (msgs.length > 0) return msgs.join(" | ");
-    }
-  }
-  if (typeof err === "object") {
-    const msgs = [];
-    for (const [key, val] of Object.entries(err)) {
-      if (key === "success" || key === "status") continue;
-      const strVal = Array.isArray(val) ? val.join(", ") : (typeof val === "object" ? JSON.stringify(val) : String(val));
-      msgs.push(`${key}: ${strVal}`);
-    }
-    if (msgs.length > 0) return msgs.join(" | ");
-  }
-  return String(err);
-}
-
-function getFullImageUrl(rawUrl, catName = "", catSlug = "") {
-  const url = typeof rawUrl === "string" ? rawUrl.trim() : (rawUrl?.url || "");
-  if (!url) return getCategoryFallbackImage(catName, catSlug);
-
-  if (typeof url === "string" && url.includes("/media/")) {
-    const idx = url.indexOf("/media/");
-    return url.substring(idx);
-  }
-
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
-    return url;
-  }
-
-  if (url.startsWith("media/")) {
-    return `/${url}`;
-  }
-
-  if (url.startsWith("avatars/") || url.startsWith("catalog/") || url.startsWith("services/")) {
-    return `/media/${url}`;
-  }
-
-  if (url.startsWith("/")) {
-    return url;
-  }
-
-  if (url.includes(".") || url.includes("-") || url.includes("_")) {
-    return `/media/catalog/${url}`;
-  }
-
-  return getCategoryFallbackImage(catName, catSlug);
-}
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function getNextDays(n = 21) {
   const out = []
@@ -341,9 +264,9 @@ function getNextDays(n = 21) {
 
 const DAYS_LIST = getNextDays(21)
 
-/* ─────────────────────────────────────────────────────────────────────────
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    MINI COMPONENTS
-   ───────────────────────────────────────────────────────────────────────── */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function Tag({ children, color = "#7C3AED" }) {
   return (
@@ -400,7 +323,7 @@ function SummaryBar({ category, cart, date, time, step }) {
       </span>
       {cart && cart.length > 0 && <>
         <ChevronRight size={12} style={{ color: "#cbd5e1" }} />
-        <span style={{ color: "#7C3AED" }}>{totalItems} item{totalItems > 1 ? 's' : ''} · {BOOKING_CURRENCY_SYMBOL}{totalPrice}</span>
+        <span style={{ color: "#7C3AED" }}>{totalItems} item{totalItems > 1 ? 's' : ''} Â· {BOOKING_CURRENCY_SYMBOL}{totalPrice}</span>
       </>}
       {date && <>
         <ChevronRight size={12} style={{ color: "#cbd5e1" }} />
@@ -413,24 +336,493 @@ function SummaryBar({ category, cart, date, time, step }) {
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   STEP 1 — HOME (Hero + Services)
-   ───────────────────────────────────────────────────────────────────────── */
-/* ─────────────────────────────────────────────────────────────────────────
-   LOCATION PICKER MODAL
-   ───────────────────────────────────────────────────────────────────────── */
-function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 1 •” HOME (Hero + Services)
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   /* ─────────────────────────────────────────────────────────────
+   SAVED ADDRESSES MODAL (Urban-style Address Selector)
+   ───────────────────────────────────────────────────────────── */
+
+function SavedAddressesModal({
+  onClose,
+  onSelectAddress,
+  currentAddress,
+  onAddNewAddress
+}) {
+  const [addresses, setAddresses] = useState([
+    { id: "addr-1", title: "Home", text: "fff, Banaswadi, Bengaluru, Karnataka, India" },
+    { id: "addr-2", title: "Home", text: "5, Poonahally, Tamil Nadu, India" },
+    { id: "addr-3", title: "65yu6", text: "t6ytt, Jayamahal Main Rd, Nandi Durga Road Extension, Jayamahal, Bengaluru, Karnataka 560046, India" },
+    { id: "addr-4", title: "Home", text: "12, Bangalore Cantonment Railway Station, Cantonment Railway Quarters, Shivaji Nagar, Bengaluru, Karnataka, India" }
+  ])
+
+  const [selectedId, setSelectedId] = useState(() => {
+    const found = addresses.find(a => a.text === currentAddress)
+    return found ? found.id : addresses[0].id
+  })
+
+  const [menuOpenId, setMenuOpenId] = useState(null)
+
+  const handleProceed = () => {
+    const sel = addresses.find(a => a.id === selectedId)
+    if (sel) {
+      onSelectAddress(sel.text)
+    }
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose}>
+      <motion.div
+        className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-100 relative max-h-[90vh] flex flex-col font-sans text-slate-800"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Floating Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-white hover:bg-slate-100 text-slate-800 flex items-center justify-center shadow-lg border border-slate-200 transition-transform active:scale-95 cursor-pointer z-10"
+        >
+          <X size={20} />
+        </button>
+
+        {/* Title */}
+        <h3 className="text-xl font-black text-slate-900 mb-4">
+          Saved addresses
+        </h3>
+
+        {/* Add another address button */}
+        <button
+          onClick={() => {
+            onAddNewAddress()
+          }}
+          className="flex items-center gap-2 text-indigo-600 font-extrabold text-sm hover:underline mb-4 py-1 text-left cursor-pointer"
+        >
+          <Plus size={18} className="stroke-[3]" /> Add another address
+        </button>
+
+        <div className="h-px bg-slate-100 -mx-6 mb-4" />
+
+        {/* Address List */}
+        <div className="flex-1 overflow-y-auto space-y-4 pr-1 divide-y divide-slate-100">
+          {addresses.map((item) => {
+            const isSelected = selectedId === item.id
+            return (
+              <div
+                key={item.id}
+                onClick={() => setSelectedId(item.id)}
+                className={`pt-3 first:pt-0 flex items-start gap-3 cursor-pointer group`}
+              >
+                {/* Custom Radio Circle */}
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${
+                  isSelected ? "border-slate-900 bg-white" : "border-slate-300 group-hover:border-slate-400"
+                }`}>
+                  {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />}
+                </div>
+
+                {/* Address Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-black text-slate-900 block">
+                      {item.title}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setMenuOpenId(menuOpenId === item.id ? null : item.id)
+                      }}
+                      className="text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-100"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed mt-0.5 pr-2">
+                    {item.text}
+                  </p>
+
+                  {/* 3-dots popup options */}
+                  {menuOpenId === item.id && (
+                    <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-2 flex gap-3 text-xs font-bold">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onAddNewAddress()
+                        }}
+                        className="text-indigo-600 hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setAddresses(prev => prev.filter(a => a.id !== item.id))
+                          setMenuOpenId(null)
+                        }}
+                        className="text-rose-600 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Sticky Proceed Button */}
+        <div className="pt-5 border-t border-slate-100 mt-4">
+          <button
+            onClick={handleProceed}
+            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99] cursor-pointer"
+          >
+            Proceed
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ADD ADDRESS SEARCH MODAL (Urban-style "Add another address" flow)
+   ───────────────────────────────────────────────────────────── */
+
+export function AddAddressSearchModal({
+  onClose,
+  onSelectLocation,
+  onUseCurrentLocation,
+  savedAddresses: initialSaved = []
+}) {
+  const [query, setQuery] = useState("")
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState([])
+  const [isGeoLoading, setIsGeoLoading] = useState(false)
+  const [geoError, setGeoError] = useState("")
+  const [savedAddrs, setSavedAddrs] = useState(initialSaved)
+
+  // Auto fetch saved addresses on mount if logged in
+  useEffect(() => {
+    async function loadSaved() {
+      try {
+        const res = await apiRequest('/auth/customer/addresses/')
+        if (res && res.success && Array.isArray(res.data)) {
+          setSavedAddrs(res.data)
+        }
+      } catch (e) {
+        // guest or non-auth
+      }
+    }
+    loadSaved()
+  }, [])
+
+  // Debounced geocoding search
+  useEffect(() => {
+    if (!query || query.length < 3) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
+    setIsSearching(true)
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`)
+        const data = await res.json()
+        if (data && data.features) {
+          const formatted = data.features.map(f => {
+            const p = f.properties
+            const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ")
+            return {
+              title: p.name || display.split(',')[0],
+              details: display,
+              lat: f.geometry.coordinates[1],
+              lon: f.geometry.coordinates[0]
+            }
+          })
+          setSearchResults(formatted)
+        } else {
+          setSearchResults([])
+        }
+      } catch (err) {
+        console.error(err)
+      }
+      setIsSearching(false)
+    }, 400)
+    return () => clearTimeout(delayDebounce)
+  }, [query])
+
+  const handleUseCurrentLocationClick = () => {
+    if (!navigator.geolocation) {
+      setGeoError("Geolocation is not supported by your browser.")
+      return
+    }
+    setIsGeoLoading(true)
+    setGeoError("")
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6))
+        const lng = parseFloat(pos.coords.longitude.toFixed(6))
+        const acc = pos.coords.accuracy
+
+        try {
+          let readableLocation = ""
+          try {
+            const backendDetect = await apiDetectCustomerLocation(lat, lng, acc)
+            if (backendDetect && backendDetect.success && backendDetect.data) {
+              const d = backendDetect.data
+              readableLocation = [d.area, d.city, d.state].filter(Boolean).join(", ")
+            }
+          } catch (e) {}
+
+          if (!readableLocation) {
+            try {
+              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`)
+              const data = await res.json()
+              if (data && data.address) {
+                const a = data.address
+                readableLocation = [a.road || a.suburb || a.neighbourhood, a.city || a.town || a.village, a.state].filter(Boolean).join(", ")
+              }
+            } catch (e) {}
+          }
+
+          if (!readableLocation) readableLocation = `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+
+          onSelectLocation(readableLocation)
+          onClose()
+        } catch (e) {
+          setGeoError("Unable to detect location. Please try again.")
+        } finally {
+          setIsGeoLoading(false)
+        }
+      },
+      (err) => {
+        setIsGeoLoading(false)
+        if (err.code === 1) {
+          setGeoError("Location permission denied. Please allow location access.")
+        } else if (err.code === 2) {
+          setGeoError("Unable to detect high-accuracy GPS position.")
+        } else if (err.code === 3) {
+          setGeoError("Location request timed out.")
+        } else {
+          setGeoError("Failed to detect location.")
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    )
+  }
+
+  const recents = [
+    { title: "Banashankari", details: "Bengaluru, Karnataka, India" },
+    { title: "Bangalore Palace", details: "Palace Cross Road, Vasanth Nagar, Bengaluru, Karnataka, India" }
+  ]
+
+  return (
+    <div className="fixed inset-0 z-[10002] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose}>
+      <motion.div
+        className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-100 relative max-h-[90vh] flex flex-col font-sans text-slate-800"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Top Header: Arrow + Search Input */}
+        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 mb-4">
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors shrink-0 cursor-pointer"
+            title="Back"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="Search for your location/society/apartment"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-indigo-600 focus:bg-white focus:ring-2 focus:ring-indigo-600/10 transition-all placeholder:text-slate-400"
+              autoFocus
+            />
+            {query ? (
+              <button
+                onClick={() => setQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Use current location option */}
+        <button
+          onClick={handleUseCurrentLocationClick}
+          disabled={isGeoLoading}
+          className="flex items-center gap-3 text-purple-700 hover:text-purple-800 font-extrabold text-xs py-2.5 px-1 rounded-xl transition-colors cursor-pointer group mb-3 hover:bg-purple-50/50"
+        >
+          <div className="w-7 h-7 rounded-full bg-purple-100/70 flex items-center justify-center text-purple-700 shrink-0 group-hover:bg-purple-200/70 transition-colors">
+            {isGeoLoading ? (
+              <RefreshCw size={15} className="animate-spin text-purple-700" />
+            ) : (
+              <Compass size={15} className="stroke-[2.5]" />
+            )}
+          </div>
+          <div>
+            <span className="block text-purple-700 font-extrabold text-xs">
+              {isGeoLoading ? "Detecting location..." : "Use current location"}
+            </span>
+            <span className="block text-[10px] text-purple-600/70 font-medium">Using GPS for exact address</span>
+          </div>
+        </button>
+
+        {geoError && (
+          <div className="mb-3 px-3 py-2 bg-red-50 border border-red-100 rounded-xl text-[11px] font-bold text-red-600 flex items-center gap-2">
+            <AlertCircle size={14} className="shrink-0" />
+            <span>{geoError}</span>
+          </div>
+        )}
+
+        <div className="h-px bg-slate-100 -mx-6 mb-4" />
+
+        {/* Content Body: Search Results OR (Saved + Recents) */}
+        <div className="flex-1 overflow-y-auto space-y-5 pr-1 text-slate-800">
+          {query.length >= 3 ? (
+            <div>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">
+                Search Results
+              </span>
+              {isSearching ? (
+                <div className="py-6 text-center text-xs font-bold text-indigo-600 flex items-center justify-center gap-2">
+                  <RefreshCw size={14} className="animate-spin" />
+                  <span>Searching locations...</span>
+                </div>
+              ) : searchResults.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {searchResults.map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => onSelectLocation(item.details)}
+                      className="py-3 flex items-start gap-3 cursor-pointer hover:bg-slate-50 rounded-xl px-2 transition-colors"
+                    >
+                      <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="text-xs font-black text-slate-900 block">{item.title}</span>
+                        <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{item.details}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-6 text-center text-xs text-slate-400">
+                  No matching locations found.
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Saved Section */}
+              {savedAddrs && savedAddrs.length > 0 ? (
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Saved</h4>
+                  <div className="space-y-3">
+                    {savedAddrs.map((addr, idx) => {
+                      const displayAddr = [addr.address_line1, addr.address_line2, addr.city, addr.state, addr.pincode].filter(Boolean).join(", ")
+                      return (
+                        <div
+                          key={addr.id || idx}
+                          onClick={() => onSelectLocation(displayAddr)}
+                          className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
+                            <Home size={15} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-slate-900 capitalize group-hover:text-purple-700 transition-colors">
+                                {addr.label_display || addr.label || "Home"}
+                              </span>
+                              {addr.is_default && (
+                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-md">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5 truncate">
+                              {displayAddr}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <button onClick={() => { onClose(); onSelectLocation("") }} className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
+                    View more
+                  </button>
+                </div>
+              ) : null}
+
+              {/* Recents Section */}
+              <div>
+                <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Recents</h4>
+                <div className="space-y-3">
+                  {recents.map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => onSelectLocation(item.details)}
+                      className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
+                        <Clock size={15} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-black text-slate-900 block group-hover:text-purple-700 transition-colors">
+                          {item.title}
+                        </span>
+                        <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5">
+                          {item.details}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
+                  View more
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer info */}
+        <div className="pt-3 border-t border-slate-100 mt-3 flex items-center justify-center gap-1.5 text-[10px] text-slate-400 font-semibold">
+          <span>powered by</span>
+          <span className="font-bold text-slate-600">Google</span>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoords }) {
   const [search, setSearch] = useState(initialLocation || "")
   const [isFetching, setIsFetching] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
-  const [mapCenter, setMapCenter] = useState([12.7409, 77.8253]) // Default fallback to Hosur
+  const [isUpdatingAddress, setIsUpdatingAddress] = useState(false)
+  const [inlineError, setInlineError] = useState("")
+  const [locationPayload, setLocationPayload] = useState(null)
+  const [mapCenter, setMapCenter] = useState(initialCoords ? [initialCoords.lat, initialCoords.lng] : [12.7409, 77.8253]) // Default fallback to Hosur
   const [searchResults, setSearchResults] = useState([])
   const [mapObj, setMapObj] = useState(null)
   const isTyping = useRef(false)
+  const debounceTimerRef = useRef(null)
 
   // Center map on user's current location when modal opens and auto-fill address
   useEffect(() => {
-    if (navigator.geolocation && mapObj) {
+    if (!initialCoords && navigator.geolocation && mapObj) {
       setIsFetching(true);
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
@@ -456,87 +848,104 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
         },
         (err) => {
           console.error("Geolocation failed", err);
-          // Fallback to Hosur center if GPS is denied or fails
           setMapCenter([12.7409, 77.8253]);
           mapObj.flyTo([12.7409, 77.8253], 14);
           setIsFetching(false);
         }
       );
     } else if (mapObj) {
-      // Fallback to Hosur if geolocation is not supported
-      setMapCenter([12.7409, 77.8253]);
-      mapObj.flyTo([12.7409, 77.8253], 14);
+      if (initialCoords) {
+        setMapCenter([initialCoords.lat, initialCoords.lng]);
+        mapObj.flyTo([initialCoords.lat, initialCoords.lng], 15);
+      } else {
+        setMapCenter([12.7409, 77.8253]);
+        mapObj.flyTo([12.7409, 77.8253], 14);
+      }
     }
-  }, [mapObj]);
+  }, [mapObj, initialCoords])
 
   // Fetch location suggestions when typing (biased to Hosur coords)
   useEffect(() => {
     if (!search || search.length < 3 || !isTyping.current) {
-      if (!search) setSearchResults([]);
-      setIsSearching(false);
-      return;
+      if (!search) setSearchResults([])
+      setIsSearching(false)
+      return
     }
-    setIsSearching(true);
+    setIsSearching(true)
     const delayDebounce = setTimeout(async () => {
       try {
         const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(search)}&limit=5&lon=77.8253&lat=12.7409`);
         const data = await res.json();
         if (data && data.features) {
           const formatted = data.features.map(f => {
-            const p = f.properties;
-            const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+            const p = f.properties
+            const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ")
             return {
               display_name: display,
               lat: f.geometry.coordinates[1],
               lon: f.geometry.coordinates[0]
             }
-          });
-          setSearchResults(formatted);
+          })
+          setSearchResults(formatted)
         } else {
-          setSearchResults([]);
+          setSearchResults([])
         }
-      } catch (err) { console.error(err); }
-      setIsSearching(false);
+      } catch (err) { console.error(err) }
+      setIsSearching(false)
     }, 600)
     return () => clearTimeout(delayDebounce)
   }, [search])
 
   function MapEvents() {
     const map = useMapEvents({
-      moveend: async (e) => {
-        const center = e.target.getCenter();
-        setMapCenter([center.lat, center.lng]);
+      moveend: (e) => {
+        const center = e.target.getCenter()
+        setMapCenter([center.lat, center.lng])
+        setIsUpdatingAddress(true)
+        setInlineError("")
 
-        setIsFetching(true);
-        try {
-          const res = await fetch(`https://photon.komoot.io/reverse?lon=${center.lng}&lat=${center.lat}`);
-          const data = await res.json();
-          if (data && data.features && data.features.length > 0) {
-            const p = data.features[0].properties;
-            const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
-            isTyping.current = false;
-            setSearch(display);
-            setSearchResults([]); // clear suggestions when dragged manually
-          }
-        } catch (err) {
-          console.error("Geocoding failed", err);
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
         }
-        setIsFetching(false);
+
+        debounceTimerRef.current = setTimeout(async () => {
+          try {
+            const lat = parseFloat(center.lat.toFixed(6))
+            const lng = parseFloat(center.lng.toFixed(6))
+            const res = await apiDetectCustomerLocation(lat, lng)
+
+            if (res && res.success && res.data) {
+              const d = res.data
+              setLocationPayload(d)
+              const readableStr = [d.area, d.city, d.state].filter(Boolean).join(", ")
+              isTyping.current = false
+              setSearch(readableStr || d.formatted_address)
+              setSearchResults([])
+              setInlineError("")
+            } else {
+              setInlineError("Unable to update address for this pin location.")
+            }
+          } catch (err) {
+            setInlineError("Unable to update address for this pin location.")
+          } finally {
+            setIsUpdatingAddress(false)
+          }
+        }, 500)
       }
-    });
+    })
     useEffect(() => { if (!mapObj) setMapObj(map) }, [map, mapObj])
-    return null;
+    return null
   }
 
   const handleSelectResult = (result) => {
-    isTyping.current = false;
-    setSearch(result.display_name);
-    setSearchResults([]);
-    const lat = parseFloat(result.lat);
-    const lon = parseFloat(result.lon);
-    setMapCenter([lat, lon]);
+    isTyping.current = false
+    setSearch(result.display_name)
+    setSearchResults([])
+    const lat = parseFloat(result.lat)
+    const lon = parseFloat(result.lon)
+    setMapCenter([lat, lon])
     if (mapObj) {
-      mapObj.flyTo([lat, lon], 14);
+      mapObj.flyTo([lat, lon], 15)
     }
   }
 
@@ -654,10 +1063,10 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
                   <MapPin size={40} fill="#0d9488" color="white" strokeWidth={1.5} />
                 </div>
               </div>
-              {/* Fetching pill */}
-              {isFetching && (
+              {/* Fetching / Updating pill */}
+              {(isFetching || isUpdatingAddress) && (
                 <div style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', background: 'rgba(255,255,255,0.96)', border: '1px solid #e2e8f0', borderRadius: 20, padding: '4px 14px', fontSize: '0.75rem', fontWeight: 700, color: '#475569', zIndex: 1001 }}>
-                  Locating on map…
+                  {isUpdatingAddress ? "Updating location..." : "Locating on map…"}
                 </div>
               )}
             </div>
@@ -693,6 +1102,12 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {inlineError && (
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ef4444', marginBottom: '0.5rem' }}>
+                  {inlineError}
                 </div>
               )}
 
@@ -878,11 +1293,14 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation }) {
   )
 }
 
-function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicReviews }) {
+function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicReviews, user }) {
   const [rotIdx, setRotIdx] = useState(0)
   const safeCats = categories && categories.length > 0 ? categories : CATEGORIES;
   const featured = safeCats.slice(0, 6)
   const rotWords = featured.map(c => c.name)
+
+  const displayName = user?.firstName || user?.first_name || user?.full_name || user?.username
+  const greeting = displayName ? `Hi, ${displayName} 👋` : "Hi, Guest 👋"
 
   useEffect(() => {
     const t = setInterval(() => setRotIdx(i => (i + 1) % rotWords.length), 4500)
@@ -901,7 +1319,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
           <div className="uc-hero">
             <div className="uc-hero-inner">
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                <p className="uc-hero-tag">⭐ India's #1 Home Services Platform</p>
+                <p className="uc-hero-tag">•­ India's #1 Home Services Platform</p>
                 <h1 className="uc-hero-h1">
                   Professional
                   <br />
@@ -920,7 +1338,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
                   <br />
                   at your doorstep
                 </h1>
-                <p className="uc-hero-sub">Trained & verified experts · Transparent pricing · Real-time tracking</p>
+                <p className="uc-hero-sub">Trained & verified experts Â· Transparent pricing Â· Real-time tracking</p>
               </motion.div>
 
               {/* Search Bar */}
@@ -928,7 +1346,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
                 <Search size={18} className="uc-search-icon" />
                 <input
                   className="uc-search-input"
-                  placeholder="Search for services (e.g. AC repair, deep cleaning…)"
+                  placeholder="Search for services (e.g. AC repair, deep cleaning•¦)"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                 />
@@ -942,7 +1360,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
               {/* Trust pills */}
               <motion.div className="uc-trust-row" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
                 <span><ShieldCheck size={13} /> Verified Pros</span>
-                <span><Star size={13} style={{ fill: "#fbbf24", color: "#fbbf24" }} /> 4.8★ Rated</span>
+                <span><Star size={13} style={{ fill: "#fbbf24", color: "#fbbf24" }} /> 4.8•˜… Rated</span>
                 <span><Users size={13} /> 1M+ Happy Homes</span>
                 <span><Award size={13} /> 30-Day Guarantee</span>
               </motion.div>
@@ -960,15 +1378,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
                 transition={{ duration: 1.2 }}
                 className="uc-feature-slide"
               >
-                <img
-                  src={getFullImageUrl(featured[rotIdx].image, featured[rotIdx].name, featured[rotIdx].slug)}
-                  alt={featured[rotIdx].name}
-                  className="uc-feature-img"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = featured[rotIdx].fallbackImage || getCategoryFallbackImage(featured[rotIdx].name, featured[rotIdx].slug);
-                  }}
-                />
+                <img src={featured[rotIdx].image} alt={featured[rotIdx].name} className="uc-feature-img" />
                 <div className="uc-feature-overlay">
                   <div className="uc-feature-text">
                     <h3>{featured[rotIdx].name}</h3>
@@ -997,6 +1407,8 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
           {filtered.map((cat, i) => (
             <motion.button
               key={cat.id}
+              id={`cat-card-${cat.id}`}
+              data-cat-id={cat.id}
               className="uc-cat-card"
               onClick={() => onSelect(cat)}
               initial={{ opacity: 0, y: 20 }}
@@ -1006,15 +1418,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
               whileTap={{ scale: 0.97 }}
             >
               <div className="uc-cat-img-wrap">
-                <img
-                  src={cat.image}
-                  alt={cat.name}
-                  className="uc-cat-image"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = cat.fallbackImage || getCategoryFallbackImage(cat.name, cat.slug);
-                  }}
-                />
+                <img src={cat.image} alt={cat.name} className="uc-cat-image" />
                 <div className="uc-cat-overlay">
                   <span className="uc-cat-btn">Book Now</span>
                 </div>
@@ -1023,7 +1427,8 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
                 <div className="uc-cat-name">{cat.name}</div>
                 <div className="uc-cat-desc">{cat.desc}</div>
                 <div className="uc-cat-meta">
-                  <span className="uc-cat-jobs font-semibold">{cat.jobs} bookings</span>
+                  <StarRow rating={cat.rating} size={11} />
+                  <span className="uc-cat-jobs">{cat.jobs} bookings</span>
                 </div>
               </div>
             </motion.button>
@@ -1087,13 +1492,12 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   STEP 2 — PACKAGE SELECTION
-   ───────────────────────────────────────────────────────────────────────── */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 2 •” PACKAGE SELECTION
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, packagesData }) {
-  const rawList = (packagesData && (packagesData[category?.id] || packagesData[category?.slug] || packagesData[category?.name?.toLowerCase()])) || PACKAGES[category?.id] || PACKAGES[category?.slug] || []
-  const packages = rawList.map(p => ({ ...p, priceStr: BOOKING_CURRENCY_SYMBOL + p.price }))
+  const packages = ((packagesData && packagesData[category?.id]) || PACKAGES[category?.id] || []).map(p => ({ ...p, priceStr: BOOKING_CURRENCY_SYMBOL + p.price }))
 
   return (
     <div className="uc-step-page">
@@ -1109,7 +1513,7 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
       </div>
 
       <h2 className="uc-step-h2">Choose your package</h2>
-      <p className="uc-step-sub">Transparent pricing · No hidden charges</p>
+      <p className="uc-step-sub">Transparent pricing Â· No hidden charges</p>
 
       <div className="uc-pkg-grid">
         {packages.map(pkg => {
@@ -1124,7 +1528,7 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
             >
               {pkg.tag && (
                 <div className="uc-pkg-tag" style={{ background: pkg.popular ? "#7C3AED" : "#059669" }}>
-                  {pkg.popular ? "⭐ " : "✅ "}{pkg.tag}
+                  {pkg.popular ? "•­ " : "•œ… "}{pkg.tag}
                 </div>
               )}
 
@@ -1176,111 +1580,169 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   STEP 3 — SCHEDULE
-   ───────────────────────────────────────────────────────────────────────── */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 3 •” SCHEDULE
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
-const LOCAL_TIME_SLOTS = [
-  { period: "Morning", icon: "🌅", slots: [{ t: "07:00", l: "7:00 AM" }, { t: "08:00", l: "8:00 AM" }, { t: "09:00", l: "9:00 AM" }, { t: "10:00", l: "10:00 AM" }, { t: "11:00", l: "11:00 AM" }] },
-  { period: "Afternoon", icon: "☀️", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
-  { period: "Evening", icon: "🌆", slots: [{ t: "17:00", l: "5:00 PM" }, { t: "18:00", l: "6:00 PM" }, { t: "19:00", l: "7:00 PM" }] },
-]
-
-function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTimeChange, onNext, onBack }) {
+function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTimeChange, onNext, onBack, cart }) {
   const dateScrollRef = useRef()
   const canContinue = selectedDate && selectedTime
+  const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
+  const taxFee = 99
+  const grandTotal = totalPrice + taxFee
 
-  const scrollDates = (dir) => {
-    if (dateScrollRef.current) {
-      dateScrollRef.current.scrollBy({ left: dir === 'left' ? -220 : 220, behavior: 'smooth' })
-    }
+  // Urban time slots: Morning / Afternoon / Evening
+  const UC_TIME_SLOTS = [
+    { period: 'Morning', icon: '🌅', slots: ['07:00','08:00','09:00','10:00','11:00','12:00'] },
+    { period: 'Afternoon', icon: '☀️', slots: ['12:00','13:00','14:00','15:00','16:00','17:00'] },
+    { period: 'Evening', icon: '🌙', slots: ['17:00','18:00','19:00','20:00','21:00'] },
+  ]
+  const formatSlot = t => {
+    const [h] = t.split(':').map(Number)
+    const ampm = h < 12 ? 'AM' : 'PM'
+    const h12 = h % 12 === 0 ? 12 : h % 12
+    return `${h12}:00 ${ampm}`
   }
 
   return (
-    <div className="uc-step-page">
-      <div className="uc-step-back" onClick={onBack}><ArrowLeft size={16} /> Back</div>
-      <h2 className="uc-step-h2">When should we come?</h2>
-      <p className="uc-step-sub">Pick a date and time that works for you</p>
-
-      {/* Date Scroll */}
-      <div className="uc-date-section">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-          <div className="uc-subsection-label" style={{ marginBottom: 0 }}><Calendar size={14} /> Select Date</div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              onClick={() => scrollDates('left')}
-              title="Scroll Left"
-              style={{
-                width: 30, height: 30, borderRadius: '50%', border: '1.5px solid #cbd5e1',
-                background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: '#475569', transition: 'all 0.15s ease'
-              }}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => scrollDates('right')}
-              title="Scroll Right"
-              style={{
-                width: 30, height: 30, borderRadius: '50%', border: '1.5px solid #cbd5e1',
-                background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: '#475569', transition: 'all 0.15s ease'
-              }}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
+    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 960, margin: '0 auto', padding: '0 0 80px' }}>
+      {/* LEFT: Slot Picker */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 99, border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem', color: '#64748b', transition: 'all 0.18s' }}>
+            <ArrowLeft size={14} /> Back
+          </button>
         </div>
 
-        <div className="uc-date-scroll" ref={dateScrollRef}>
-          {DAYS_LIST.map(d => (
-            <button
-              key={d.iso}
-              className={`uc-date-pill ${selectedDate === d.iso ? "uc-date-pill--sel" : ""}`}
-              onClick={() => onDateChange(d.iso)}
-            >
-              {d.today && <div className="uc-date-today-tag">Today</div>}
-              <div className="uc-date-day">{d.day}</div>
-              <div className="uc-date-num">{d.date}</div>
-              <div className="uc-date-mon">{d.month}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Time Slots */}
-      <div className="uc-time-section">
-        <div className="uc-subsection-label"><Clock size={14} /> Select Time Slot</div>
-        {LOCAL_TIME_SLOTS.map(group => (
-          <div key={group.period} className="uc-time-group">
-            <div className="uc-time-period-label">{group.icon} {group.period}</div>
-            <div className="uc-time-slots">
-              {group.slots.map(s => (
-                <button
-                  key={s.t}
-                  className={`uc-time-slot ${selectedTime === s.t ? "uc-time-slot--sel" : ""}`}
-                  onClick={() => onTimeChange(s.t)}
-                >
-                  {s.l}
-                </button>
-              ))}
+        {/* Service info row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc', borderRadius: 14, padding: '14px 16px', marginBottom: 22, border: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: '1.8rem' }}>{category?.emoji || '🔧'}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{category?.name || 'Service'}</div>
+            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>
+              {cart && cart.length > 0 ? cart.map(c => `${c.quantity}x ${c.name}`).join(' · ') : 'Selected services'}
             </div>
           </div>
-        ))}
+          <div style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.1rem' }}>₹{totalPrice.toLocaleString()}</div>
+        </div>
+
+        {/* Date Section */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Calendar size={15} color="#7C3AED" /> Select Date
+          </div>
+          <div ref={dateScrollRef} style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8, scrollbarWidth: 'none' }}>
+            {DAYS_LIST.map(d => (
+              <button
+                key={d.iso}
+                onClick={() => onDateChange(d.iso)}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  minWidth: 62, padding: '10px 8px', borderRadius: 14, border: `2px solid ${selectedDate === d.iso ? '#7C3AED' : '#e2e8f0'}`,
+                  background: selectedDate === d.iso ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : 'white',
+                  cursor: 'pointer', transition: 'all 0.18s', flexShrink: 0, position: 'relative'
+                }}
+              >
+                {d.today && (
+                  <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: '#7C3AED', color: 'white', fontSize: '0.52rem', fontWeight: 800, padding: '2px 7px', borderRadius: 99, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>TODAY</div>
+                )}
+                <div style={{ fontSize: '0.68rem', fontWeight: 700, color: selectedDate === d.iso ? 'rgba(255,255,255,0.85)' : '#94a3b8', marginBottom: 4 }}>{d.day}</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 900, color: selectedDate === d.iso ? 'white' : '#0f172a', lineHeight: 1 }}>{d.date}</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 700, color: selectedDate === d.iso ? 'rgba(255,255,255,0.8)' : '#94a3b8', marginTop: 3 }}>{d.month}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Time Section */}
+        <div>
+          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Clock size={15} color="#7C3AED" /> Select Time Slot
+          </div>
+          {UC_TIME_SLOTS.map(group => (
+            <div key={group.period} style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {group.icon} {group.period}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {group.slots.map(t => (
+                  <button
+                    key={`${group.period}-${t}`}
+                    onClick={() => onTimeChange(t)}
+                    style={{
+                      padding: '8px 18px', borderRadius: 99,
+                      border: `2px solid ${selectedTime === t ? '#7C3AED' : '#e2e8f0'}`,
+                      background: selectedTime === t ? '#7C3AED' : 'white',
+                      color: selectedTime === t ? 'white' : '#374151',
+                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.18s'
+                    }}
+                  >
+                    {formatSlot(t)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* CTA */}
+        <div style={{ position: 'sticky', bottom: 0, background: 'white', padding: '16px 0', borderTop: '1px solid #e2e8f0', marginTop: 8 }}>
+          <button
+            onClick={onNext}
+            disabled={!canContinue}
+            style={{
+              width: '100%', padding: '14px', borderRadius: 14,
+              background: canContinue ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#e2e8f0',
+              color: canContinue ? 'white' : '#94a3b8',
+              fontWeight: 800, fontSize: '1rem', border: 'none', cursor: canContinue ? 'pointer' : 'not-allowed',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              boxShadow: canContinue ? '0 4px 20px rgba(124,58,237,0.3)' : 'none', transition: 'all 0.18s'
+            }}
+          >
+            <Calendar size={17} /> Select {selectedDate && selectedTime ? `${selectedDate} at ${formatSlot(selectedTime)}` : 'Date & Time'}
+            <ChevronRight size={17} />
+          </button>
+        </div>
       </div>
 
-      <div className="uc-step-footer">
-        <button className="uc-btn-primary" onClick={onNext} disabled={!canContinue}>
-          Continue <ChevronRight size={16} />
-        </button>
+      {/* RIGHT: Order Summary */}
+      <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 24 }}>
+        <div style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 20px rgba(0,0,0,0.06)' }}>
+          <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>Order Summary</div>
+          {cart && cart.map((c, i) => (
+            <div key={i} style={{ padding: '12px 18px', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b' }}>{c.name}</div>
+                <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 2 }}>Qty: {c.quantity}</div>
+              </div>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.85rem' }}>₹{(c.price * c.quantity).toLocaleString()}</div>
+            </div>
+          ))}
+          <div style={{ padding: '12px 18px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}>
+              <span>Item total</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{totalPrice.toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}>
+              <span>Taxes & Fee</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span>
+            </div>
+          </div>
+          <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>Total Amount</span>
+            <span style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.05rem' }}>₹{grandTotal.toLocaleString()}</span>
+          </div>
+          <div style={{ padding: '0 18px 14px', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Shield size={11} /> SSL Secured · Pay at doorstep
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   STEP 4 — PHONE OTP IDENTITY
-   ───────────────────────────────────────────────────────────────────────── */
+
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 4 •” PHONE OTP IDENTITY
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function StepLogin({ category, onVerified, onBack }) {
   const { user, refreshMe } = useAuth()
@@ -1450,7 +1912,7 @@ function StepLogin({ category, onVerified, onBack }) {
           {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
 
           <button className="uc-btn-primary uc-btn-full" onClick={sendOtp} disabled={!nameOk || !phoneOk || loading}>
-            {loading ? <><RefreshCw size={15} className="spin-icon" /> Sending…</> : <><MessageSquare size={15} /> Send OTP</>}
+            {loading ? <><RefreshCw size={15} className="spin-icon" /> Sending•¦</> : <><MessageSquare size={15} /> Send OTP</>}
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -1508,7 +1970,7 @@ function StepLogin({ category, onVerified, onBack }) {
 
           {devCode && (
             <div className="uc-dev-banner">
-              <Zap size={13} /> Dev mode — code: <strong>{devCode}</strong> (auto-filled)
+              <Zap size={13} /> Dev mode •” code: <strong>{devCode}</strong> (auto-filled)
             </div>
           )}
 
@@ -1526,7 +1988,7 @@ function StepLogin({ category, onVerified, onBack }) {
           {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
 
           <button className="uc-btn-primary uc-btn-full" onClick={verifyOtp} disabled={otp.join("").length < 4 || loading}>
-            {loading ? <><RefreshCw size={15} className="spin-icon" /> Verifying…</> : <><ShieldCheck size={15} /> Verify &amp; Continue</>}
+            {loading ? <><RefreshCw size={15} className="spin-icon" /> Verifying•¦</> : <><ShieldCheck size={15} /> Verify &amp; Continue</>}
           </button>
 
           <div className="uc-resend">
@@ -1546,21 +2008,22 @@ function StepLogin({ category, onVerified, onBack }) {
           </motion.div>
           <div className="uc-success-title">Identity Verified!</div>
           <div className="uc-success-sub">Welcome, {name} ðŸ‘‹</div>
-          <div className="uc-success-sub" style={{ color: "#94a3b8", fontSize: "0.78rem" }}>Loading your booking form…</div>
+          <div className="uc-success-sub" style={{ color: "#94a3b8", fontSize: "0.78rem" }}>Loading your booking form•¦</div>
         </motion.div>
       )}
     </div>
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   STEP 5 — CUSTOMER DETAILS
-   ───────────────────────────────────────────────────────────────────────── */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 5 •” CUSTOMER DETAILS
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoChange, photoPreview, onNext, onBack, globalLocation, onOpenMap }) {
   const fileRef = useRef()
   const { user } = useAuth()
   const phoneClean = (formData.phone || "").replace(/[\s\-\(\)\+]/g, "")
+
   const phoneValid = phoneClean.length >= 7 && /^\d+$/.test(phoneClean)
   const ok = formData.customer_name && phoneValid && formData.address && formData.issue_title
 
@@ -1572,7 +2035,7 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
 
   useEffect(() => {
     if (!formData.issue_title && cart && cart.length > 0) {
-      const defaultTitle = cart.map(c => c.name).join(', ') + (category ? ` — ${category.name}` : '');
+      const defaultTitle = cart.map(c => c.name).join(', ') + (category ? ` •” ${category.name}` : '');
       onChange({ target: { name: 'issue_title', value: defaultTitle } })
     }
   }, [cart, category, formData.issue_title])
@@ -1656,7 +2119,7 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
             className="uc-textarea"
             name="description"
             rows={3}
-            placeholder="Any specific issues, brand of appliance, how long the problem has been occurring…"
+            placeholder="Any specific issues, brand of appliance, how long the problem has been occurring•¦"
             value={formData.description}
             onChange={onChange}
           />
@@ -1678,7 +2141,7 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
               <>
                 <Camera size={24} style={{ color: "#94a3b8" }} />
                 <div className="uc-photo-text">Click to attach a photo of the issue</div>
-                <div className="uc-photo-hint">JPG, PNG — helps our expert prepare</div>
+                <div className="uc-photo-hint">JPG, PNG •” helps our expert prepare</div>
               </>
             )}
             <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onPhotoChange} />
@@ -1695,168 +2158,202 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   STEP 6 — CONFIRM
-   ───────────────────────────────────────────────────────────────────────── */
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+   STEP 6 •” CONFIRM
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, onBack, onSubmit, loading, error }) {
   const [agreed, setAgreed] = useState(false)
+  const [payMethod, setPayMethod] = useState('cash') // 'cash' | 'online'
+  const [couponCode, setCouponCode] = useState('')
+  const [couponApplied, setCouponApplied] = useState(false)
+  const [tip, setTip] = useState(null) // null | 50 | 75 | 100 | 'custom'
+  const [customTip, setCustomTip] = useState('')
   const [showPayment, setShowPayment] = useState(false)
+
   const displayDate = date ? new Date(date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" }) : ""
-  const displayTime = time ? TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === time)?.l : ""
+  const UC_TIME_FORMATS = (t) => { if (!t) return ''; const [h] = t.split(':').map(Number); const ampm = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:00 ${ampm}` }
+  const displayTime = UC_TIME_FORMATS(time)
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (pkg?.price || 0)
+  const taxFee = 99
+  const discount = couponApplied ? Math.floor(totalPrice * 0.1) : 0
+  const tipAmount = tip === 'custom' ? (parseInt(customTip) || 0) : (tip || 0)
+  const grandTotal = totalPrice + taxFee - discount + tipAmount
 
   // Gather service/package info
   const serviceItems = cart && cart.length > 0 ? cart : (pkg ? [pkg] : [])
-  const totalDuration = serviceItems.reduce((a, c) => {
-    const match = (c.duration || "").match(/(\d+)/)
-    return a + (match ? parseInt(match[1]) : 0)
-  }, 0)
-  const techCount = Math.ceil(totalDuration / 4) || 1
 
   return (
-    <div className="uc-step-page">
-      <div className="uc-step-back" onClick={onBack}><ArrowLeft size={16} /> Back</div>
-      <h2 className="uc-step-h2">Review & confirm</h2>
-      <p className="uc-step-sub">Check all the details before booking</p>
+    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 960, margin: '0 auto', padding: '0 0 80px', flexWrap: 'wrap' }}>
 
-      <div className="uc-confirm-layout">
-        {/* Summary Card */}
-        <div className="uc-summary-card">
-          <div className="uc-summary-hero" style={{ background: `linear-gradient(135deg,#7C3AED,#a855f7)` }}>
-            <span style={{ fontSize: "2rem" }}>{category?.emoji || "🔧"}</span>
-            <div>
-              <div style={{ fontWeight: 800, color: "white", fontSize: "1rem" }}>{category?.name || "Service"}</div>
-              <div style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.75rem" }}>
-                {cart && cart.length > 0 ? `${cart.reduce((a, c) => a + c.quantity, 0)} Item${cart.reduce((a, c) => a + c.quantity, 0) > 1 ? 's' : ''} Selected` : pkg?.name}
-              </div>
-            </div>
-          </div>
+      {/* LEFT: Payment Method + Details */}
+      <div style={{ flex: 1, minWidth: 280 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 99, border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem', color: '#64748b' }}>
+            <ArrowLeft size={14} /> Back
+          </button>
+          <div style={{ fontWeight: 900, fontSize: '1.15rem', color: '#0f172a' }}>Payment</div>
+        </div>
 
-          {/* Service/Package detail chips */}
-          <div style={{ padding: "0.85rem 1rem", background: "#f8fafc", display: "flex", flexWrap: "wrap", gap: "0.5rem", borderBottom: "1px solid #e2e8f0" }}>
+        {/* Booking Summary Chips */}
+        <div style={{ background: '#f8fafc', borderRadius: 14, padding: '14px 16px', marginBottom: 18, border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             {serviceItems.slice(0, 3).map((item, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, background: "white", border: "1px solid #e2e8f0", borderRadius: 99, padding: "4px 10px", fontSize: "0.72rem", fontWeight: 700, color: "#1e293b" }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'white', border: '1px solid #e2e8f0', borderRadius: 99, padding: '4px 10px', fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>
                 <CheckCircle2 size={11} color="#10B981" />{item.name}
               </div>
             ))}
-            {serviceItems.length > 3 && <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#7C3AED", padding: "4px 10px" }}>+{serviceItems.length - 3} more</div>}
+            {serviceItems.length > 3 && <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#7C3AED', padding: '4px 10px' }}>+{serviceItems.length - 3} more</div>}
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            {displayDate && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}><Calendar size={13} color="#7C3AED" /> {displayDate}</div>}
+            {displayTime && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}><Clock size={13} color="#7C3AED" /> {displayTime}</div>}
+            {formData.address && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}><MapPin size={13} color="#7C3AED" /> {formData.address.slice(0, 40)}{formData.address.length > 40 ? '...' : ''}</div>}
+          </div>
+        </div>
+
+        {/* Payment Method */}
+        <div style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 18, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
+          <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <CreditCard size={16} color="#7C3AED" /> Payment Method
           </div>
 
-          {/* Key stats row */}
-          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0" }}>
-            {[
-              { icon: <Clock size={13} />, label: "Duration", value: totalDuration > 0 ? `${totalDuration} Hr${totalDuration > 1 ? 's' : ''}` : (serviceItems[0]?.duration || "As needed") },
-              { icon: <Users size={13} />, label: "Technicians", value: `${techCount} Pro${techCount > 1 ? 's' : ''}` },
-              { icon: <Award size={13} />, label: "Guarantee", value: "30-Day" },
-            ].map((s, i) => (
-              <div key={i} style={{ flex: 1, padding: "0.75rem", textAlign: "center", borderRight: i < 2 ? "1px solid #e2e8f0" : "none" }}>
-                <div style={{ display: "flex", justifyContent: "center", color: "#7C3AED", marginBottom: 3 }}>{s.icon}</div>
-                <div style={{ fontSize: "0.75rem", fontWeight: 900, color: "#0f172a" }}>{s.value}</div>
-                <div style={{ fontSize: "0.62rem", color: "#94a3b8", fontWeight: 600 }}>{s.label}</div>
+          {/* Online */}
+          <div onClick={() => setPayMethod('online')} style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: payMethod === 'online' ? '#faf5ff' : 'white', transition: 'all 0.18s', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: payMethod === 'online' ? '#ede9fe' : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>💳</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                Pay Online
+                <span style={{ background: '#ede9fe', color: '#7C3AED', fontSize: '0.58rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #ddd6fe' }}>RECOMMENDED</span>
               </div>
-            ))}
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 3 }}>UPI / Card / NetBanking</div>
+              {payMethod === 'online' && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {['Google Pay', 'PhonePe', 'Paytm', 'BHIM', 'Card'].map(app => (
+                    <span key={app} style={{ padding: '4px 12px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: '0.7rem', fontWeight: 700, background: '#faf5ff', color: '#7C3AED' }}>{app}</span>
+                  ))}
+                </motion.div>
+              )}
+            </div>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${payMethod === 'online' ? '#7C3AED' : '#cbd5e1'}`, background: payMethod === 'online' ? '#7C3AED' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+              {payMethod === 'online' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'white' }} />}
+            </div>
           </div>
 
-          <div className="uc-summary-body">
-            <div className="uc-summary-row"><Calendar size={14} /> <span>{displayDate || date}</span></div>
-            <div className="uc-summary-row"><Clock size={14} /> <span>{displayTime || time}</span></div>
-            <div className="uc-summary-row"><User size={14} /> <span>{formData.customer_name}</span></div>
-            <div className="uc-summary-row"><Phone size={14} /> <span>{formData.phone}</span></div>
-            <div className="uc-summary-row"><MapPin size={14} /> <span>{formData.address}</span></div>
-            {photoPreview && (
-              <div style={{ marginTop: "0.75rem" }}>
-                <img src={photoPreview} alt="Issue" style={{ width: "100%", borderRadius: 10, objectFit: "cover", maxHeight: 120 }} />
+          {/* Cash */}
+          <div onClick={() => setPayMethod('cash')} style={{ padding: '16px 18px', cursor: 'pointer', background: payMethod === 'cash' ? '#faf5ff' : 'white', transition: 'all 0.18s', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: payMethod === 'cash' ? '#ede9fe' : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>💵</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                Pay After Service
+                <span style={{ background: '#f0fdf4', color: '#10B981', fontSize: '0.58rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #bbf7d0' }}>CASH</span>
               </div>
-            )}
-          </div>
-
-          {/* Price Breakdown */}
-          <div className="uc-price-box">
-            {cart && cart.length > 0 ? (
-              cart.map((c, i) => (
-                <div key={i} className="uc-price-row">
-                  <span>{c.quantity}x {c.name}</span>
-                  <span>{BOOKING_CURRENCY_SYMBOL}{c.price * c.quantity}</span>
-                </div>
-              ))
-            ) : (
-              <div className="uc-price-row">
-                <span>{pkg?.name}</span>
-                <span>{pkg?.priceStr}</span>
-              </div>
-            )}
-            <div className="uc-price-row uc-price-free">
-              <span>Platform fee</span>
-              <span style={{ color: "#10B981", fontWeight: 700 }}>FREE</span>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 3 }}>Pay when the service is done</div>
+              {payMethod === 'cash' && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {['No upfront payment', 'Pay only on completion', 'Any denomination'].map((d, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.72rem', color: '#059669', fontWeight: 600 }}>
+                      <CheckCircle2 size={11} /> {d}
+                    </div>
+                  ))}
+                </motion.div>
+              )}
             </div>
-            <div className="uc-price-row uc-price-free">
-              <span>Travel charges</span>
-              <span style={{ color: "#10B981", fontWeight: 700 }}>FREE</span>
-            </div>
-            <div className="uc-price-total">
-              <span>Total</span>
-              <span>{BOOKING_CURRENCY_SYMBOL}{totalPrice}</span>
-            </div>
-            <div style={{ textAlign: "center", fontSize: "0.68rem", color: "#94a3b8", marginTop: "0.25rem" }}>
-              Pay at doorstep · No advance required
+            <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${payMethod === 'cash' ? '#7C3AED' : '#cbd5e1'}`, background: payMethod === 'cash' ? '#7C3AED' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+              {payMethod === 'cash' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'white' }} />}
             </div>
           </div>
         </div>
 
-        {/* Includes */}
-        <div className="uc-confirm-includes">
-          <div className="uc-includes-title">What's included</div>
-          {cart && cart.length > 0 ? (
-            cart.flatMap(c => c.includes).filter((v, i, a) => a.indexOf(v) === i).map((item, i) => (
-              <div key={i} className="uc-includes-row">
-                <CheckCircle2 size={14} style={{ color: "#10B981", flexShrink: 0 }} />
-                <span>{item}</span>
-              </div>
-            ))
-          ) : (
-            pkg?.includes?.map(item => (
-              <div key={item} className="uc-includes-row">
-                <CheckCircle2 size={14} style={{ color: "#10B981", flexShrink: 0 }} />
-                <span>{item}</span>
-              </div>
-            ))
-          )}
-
-          <div className="uc-guarantee-box">
-            <Award size={18} style={{ color: "#7C3AED" }} />
-            <div>
-              <div style={{ fontWeight: 800, fontSize: "0.8rem", color: "#1e293b" }}>30-Day Quality Guarantee</div>
-              <div style={{ fontSize: "0.72rem", color: "#64748b" }}>Free re-service if you're not satisfied</div>
+        {/* Coupon */}
+        <div style={{ background: 'white', borderRadius: 14, border: '1px solid #e2e8f0', padding: '14px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: '1.1rem' }}>🏷️</span>
+          {couponApplied ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontWeight: 700, color: '#10B981', fontSize: '0.85rem' }}>✓ SAVE10 applied! You save ₹{discount}</div>
+              <button onClick={() => { setCouponApplied(false); setCouponCode('') }} style={{ fontSize: '0.72rem', color: '#ef4444', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}>Remove</button>
             </div>
+          ) : (
+            <>
+              <input value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} placeholder="Enter coupon code" style={{ flex: 1, border: 'none', outline: 'none', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', background: 'transparent' }} />
+              <button onClick={() => { if (couponCode === 'SAVE10') setCouponApplied(true) }} style={{ padding: '6px 14px', borderRadius: 99, background: couponCode ? '#7C3AED' : '#e2e8f0', color: couponCode ? 'white' : '#94a3b8', fontWeight: 800, fontSize: '0.75rem', border: 'none', cursor: 'pointer' }}>Apply</button>
+            </>
+          )}
+        </div>
+
+
+        {/* Agreement */}
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 18 }}>
+          <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ accentColor: '#7C3AED', marginTop: 2, flexShrink: 0 }} />
+          <span style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.5 }}>I agree to the <a href="#" className="uc-link">Terms of Service</a> and <a href="#" className="uc-link">Privacy Policy</a>. The technician will arrive at the scheduled time.</span>
+        </label>
+
+        {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
+
+        <button
+          onClick={() => { if (agreed && !loading) { if (payMethod === 'online') setShowPayment(true); else onSubmit('cash') } }}
+          disabled={!agreed || loading}
+          style={{ width: '100%', padding: '15px', borderRadius: 14, background: agreed && !loading ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#e2e8f0', color: agreed && !loading ? 'white' : '#94a3b8', fontWeight: 800, fontSize: '1rem', border: 'none', cursor: agreed && !loading ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: agreed && !loading ? '0 4px 20px rgba(124,58,237,0.3)' : 'none', transition: 'all 0.18s' }}
+        >
+          {loading ? <><RefreshCw size={16} className="spin-icon" /> Processing…</> : <><CheckCheck size={16} /> Confirm Booking · ₹{grandTotal.toLocaleString()}</>}
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 10, fontSize: '0.68rem', color: '#94a3b8' }}>
+          <Shield size={11} /> 256-bit SSL · Your info is secure
+        </div>
+      </div>
+
+      {/* RIGHT: Order Summary */}
+      <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 24 }}>
+        <div style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 20px rgba(0,0,0,0.06)' }}>
+          <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>Order Summary</div>
+          {serviceItems.map((item, i) => (
+            <div key={i} style={{ padding: '12px 18px', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b' }}>{item.name}</div>
+                {item.quantity > 1 && <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 2 }}>Qty: {item.quantity}</div>}
+              </div>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.85rem' }}>₹{((item.price || 0) * (item.quantity || 1)).toLocaleString()}</div>
+            </div>
+          ))}
+
+          {/* Tip Selector */}
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: 10 }}>
+              💝 Tip for your professional <span style={{ fontSize: '0.58rem', color: '#10B981', fontWeight: 800, background: '#f0fdf4', padding: '2px 6px', borderRadius: 99, border: '1px solid #bbf7d0' }}>POPULAR</span>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[50, 75, 100].map(amt => (
+                <button key={amt} onClick={() => setTip(tip === amt ? null : amt)} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: `2px solid ${tip === amt ? '#7C3AED' : '#e2e8f0'}`, background: tip === amt ? '#ede9fe' : 'white', color: tip === amt ? '#7C3AED' : '#374151', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.18s' }}>₹{amt}</button>
+              ))}
+              <button onClick={() => setTip(tip === 'custom' ? null : 'custom')} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: `2px solid ${tip === 'custom' ? '#7C3AED' : '#e2e8f0'}`, background: tip === 'custom' ? '#ede9fe' : 'white', color: tip === 'custom' ? '#7C3AED' : '#374151', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer', transition: 'all 0.18s' }}>Custom</button>
+            </div>
+            {tip === 'custom' && <input type="number" value={customTip} onChange={e => setCustomTip(e.target.value)} placeholder="Enter amount" style={{ marginTop: 8, width: '100%', padding: '8px 12px', border: '2px solid #7C3AED', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />}
           </div>
 
-          <label className="uc-agree">
-            <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ accentColor: "#7C3AED" }} />
-            <span>I agree to the <a href="#" className="uc-link">Terms of Service</a> and <a href="#" className="uc-link">Privacy Policy</a></span>
-          </label>
+          {/* Price Breakdown */}
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}><span>Item total</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{totalPrice.toLocaleString()}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: discount > 0 ? 6 : 0 }}><span>Taxes & Fee</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span></div>
+            {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#10B981', marginBottom: tipAmount > 0 ? 6 : 0 }}><span>Coupon discount</span><span style={{ fontWeight: 700 }}>-₹{discount}</span></div>}
+            {tipAmount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}><span>Tip</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{tipAmount}</span></div>}
+          </div>
 
-          {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
-
-          <button
-            className="uc-btn-primary uc-btn-full"
-            onClick={() => { if (agreed && !loading) setShowPayment(true) }}
-            disabled={!agreed || loading}
-          >
-            {loading ? <><RefreshCw size={16} className="spin-icon" /> Processing…</> : <><CreditCard size={16} /> Choose Payment & Confirm</>}
-          </button>
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginTop: "0.75rem", fontSize: "0.7rem", color: "#94a3b8" }}>
-            <Shield size={12} /> Secured & encrypted · Pay on arrival
+          <div style={{ padding: '14px 18px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '0.95rem' }}>Amount to Pay</div>
+              <div style={{ fontSize: '0.62rem', color: '#94a3b8', marginTop: 1 }}>Includes all taxes & fees</div>
+            </div>
+            <div style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.15rem' }}>₹{grandTotal.toLocaleString()}</div>
           </div>
         </div>
       </div>
 
+      {/* Online Payment Modal */}
       <AnimatePresence>
         {showPayment && (
           <PaymentModal
-            total={totalPrice}
-            allowedMethods={cart.some(c => c.payment_policy === 'ONLINE_ONLY') ? ['online'] : ['cash', 'online']}
+            total={grandTotal}
+            allowedMethods={['online']}
             onClose={() => setShowPayment(false)}
             onConfirm={(method) => { setShowPayment(false); onSubmit(method) }}
           />
@@ -1866,9 +2363,10 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
+
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    PAYMENT MODAL
-   ───────────────────────────────────────────────────────────────────────── */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onConfirm, bookingId }) {
   const [selected, setSelected] = useState(allowedMethods.includes('online') && allowedMethods.length === 1 ? 'online' : 'cash')
@@ -1917,8 +2415,8 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   }
 
   const options = [
-    { id: "cash", icon: <CreditCard size={24} color="#10B981" />, label: "Cash on Service", sub: "Pay after service is completed", badge: "Most Popular", badgeColor: "#10B981", detail: ["No upfront payment", "Pay only on completion", "Any denomination accepted"] },
-    { id: "online", icon: <Wallet size={24} color="#7C3AED" />, label: "Pay via UPI", sub: "Google Pay, PhonePe, Paytm, BHIM", badge: "Instant", badgeColor: "#7C3AED", detail: ["100% secure & encrypted", "Instant confirmation", "Invoice emailed immediately"] },
+    { id: "cash", icon: "ðŸ’µ", label: "Cash on Service", sub: "Pay after service is completed", badge: "Most Popular", badgeColor: "#10B981", detail: ["No upfront payment", "Pay only on completion", "Any denomination accepted"] },
+    { id: "online", icon: "ðŸ“±", label: "Pay via UPI", sub: "Google Pay, PhonePe, Paytm, BHIM", badge: "Instant", badgeColor: "#7C3AED", detail: ["100% secure & encrypted", "Instant confirmation", "Invoice emailed immediately"] },
   ].filter(o => allowedMethods.includes(o.id))
 
   if (showOnlineSheet) {
@@ -1941,7 +2439,7 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
             {payPhase === 'processing' && (
               <div style={{ textAlign: 'center', padding: '2rem 0' }}>
                 <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ display: 'inline-block', marginBottom: '1.5rem' }}><RefreshCw size={48} color="#7C3AED" /></motion.div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Processing UPI Payment…</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Processing UPI Payment•¦</div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Please do not close this window</div>
               </div>
             )}
@@ -1951,9 +2449,9 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
                   style={{ width: 72, height: 72, borderRadius: '50%', background: 'linear-gradient(135deg,#10B981,#34D399)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem' }}>
                   <Check size={36} color="white" />
                 </motion.div>
-                <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Payment Successful! 🎉</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Payment Successful! ðŸŽ‰</div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Your booking is now confirmed</div>
-                <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.78rem', color: '#166534', fontWeight: 600 }}>✅ Amount {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()} debited successfully</div>
+                <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.78rem', color: '#166534', fontWeight: 600 }}>•œ… Amount {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()} debited successfully</div>
               </div>
             )}
             {payPhase === 'failed' && (
@@ -1986,7 +2484,7 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
             )}
             {payPhase === null && (
               <div style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                <Shield size={11} /> 256-bit SSL · UPI Encryption
+                <Shield size={11} /> 256-bit SSL Â· UPI Encryption
               </div>
             )}
           </div>
@@ -1996,103 +2494,53 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 10010, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 10010, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
       <motion.div initial={{ y: 300, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 300, opacity: 0 }}
         transition={{ type: 'spring', damping: 28, stiffness: 300 }} onClick={e => e.stopPropagation()}
-        style={{ background: 'white', borderRadius: '28px 28px 0 0', width: '100%', maxWidth: 540, paddingBottom: '2.25rem', overflow: 'hidden', boxShadow: '0 -20px 50px rgba(0,0,0,0.15)' }}>
-        <div style={{ padding: '1.5rem 1.75rem 0', position: 'relative' }}>
-          <div style={{ width: 40, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 1.25rem' }} />
-
-          <button onClick={onClose} style={{ position: 'absolute', right: 24, top: 20, width: 32, height: 32, borderRadius: '50%', background: '#f1f5f9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}>
-            <X size={18} />
-          </button>
-
-          <h3 style={{ margin: '0 0 0.25rem', fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em' }}>Choose Payment Method</h3>
-          <p style={{ margin: '0 0 1.25rem', color: '#64748b', fontSize: '0.85rem', fontWeight: 500 }}>Total: <strong style={{ color: '#7C3AED', fontSize: '1.1rem', fontWeight: 900 }}>{BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}</strong></p>
+        style={{ background: 'white', borderRadius: '24px 24px 0 0', width: '100%', maxWidth: 520, paddingBottom: '2.5rem' }}>
+        <div style={{ padding: '1.75rem 1.75rem 0' }}>
+          <div style={{ width: 40, height: 4, background: '#e2e8f0', borderRadius: 99, margin: '0 auto 1.5rem' }} />
+          <h3 style={{ margin: '0 0 0.25rem', fontSize: '1.3rem', fontWeight: 900, color: '#0f172a' }}>Choose Payment Method</h3>
+          <p style={{ margin: '0 0 1.25rem', color: '#64748b', fontSize: '0.85rem' }}>Total: <strong style={{ color: '#7C3AED', fontSize: '1.05rem' }}>{BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}</strong></p>
         </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0 1.75rem', marginBottom: '1.5rem' }}>
-          {options.map(opt => {
-            const isSel = selected === opt.id
-            const themeColor = opt.id === 'cash' ? '#10B981' : '#7C3AED'
-            const activeBg = opt.id === 'cash' ? '#f0fdf4' : '#faf5ff'
-            const iconBg = opt.id === 'cash' ? '#10B98118' : '#7C3AED18'
-            const shadowColor = opt.id === 'cash' ? 'rgba(16,185,129,0.15)' : 'rgba(124,58,237,0.15)'
-
-            return (
-              <div key={opt.id} onClick={() => setSelected(opt.id)}
-                style={{
-                  border: `2px solid ${isSel ? themeColor : '#e2e8f0'}`,
-                  borderRadius: 18,
-                  padding: '1.1rem 1.2rem',
-                  cursor: 'pointer',
-                  background: isSel ? activeBg : 'white',
-                  transition: 'all 0.2s ease',
-                  boxShadow: isSel ? `0 8px 24px ${shadowColor}` : '0 2px 6px rgba(0,0,0,0.02)'
-                }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 14, background: isSel ? iconBg : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${isSel ? themeColor + '30' : '#e2e8f0'}` }}>
-                    {opt.icon}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0 1.75rem', marginBottom: '1.25rem' }}>
+          {options.map(opt => (
+            <div key={opt.id} onClick={() => setSelected(opt.id)}
+              style={{ border: `2px solid ${selected === opt.id ? '#7C3AED' : '#e2e8f0'}`, borderRadius: 16, padding: '1rem 1.1rem', cursor: 'pointer', background: selected === opt.id ? '#f5f3ff' : 'white', transition: 'all 0.2s' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: selected === opt.id ? '#7C3AED18' : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', flexShrink: 0 }}>{opt.icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {opt.label}
+                    <span style={{ background: opt.badgeColor + '18', color: opt.badgeColor, fontSize: '0.6rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: `1px solid ${opt.badgeColor}30` }}>{opt.badge}</span>
                   </div>
-
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {opt.label}
-                      <span style={{ background: opt.badgeColor + '18', color: opt.badgeColor, fontSize: '0.62rem', fontWeight: 800, padding: '2px 9px', borderRadius: 99, border: `1px solid ${opt.badgeColor}30`, letterSpacing: '0.02em' }}>
-                        {opt.badge}
-                      </span>
-                    </div>
-                    <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 4, fontWeight: 500 }}>{opt.sub}</div>
-
-                    {isSel && (
-                      <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
-                        style={{
-                          marginTop: '0.85rem',
-                          paddingTop: '0.75rem',
-                          borderTop: `1px dashed ${themeColor}35`,
-                        }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
-                          {opt.detail.map((d, i) => (
-                            <span key={i} style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 6,
-                              fontSize: '0.74rem', color: opt.id === 'cash' ? '#065f46' : '#5b21b6',
-                              fontWeight: 700, background: opt.id === 'cash' ? '#d1fae5' : '#ede9fe',
-                              padding: '4px 10px', borderRadius: 8, border: `1px solid ${themeColor}30`
-                            }}>
-                              <CheckCircle2 size={13} color={themeColor} /> {d}
-                            </span>
-                          ))}
+                  <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: 3 }}>{opt.sub}</div>
+                  {selected === opt.id && (
+                    <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      {opt.detail.map((d, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.73rem', color: '#059669', fontWeight: 600 }}>
+                          <CheckCircle2 size={12} /> {d}
                         </div>
-                      </motion.div>
-                    )}
-                  </div>
-
-                  <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${isSel ? themeColor : '#cbd5e1'}`, background: isSel ? themeColor : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                    {isSel && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
-                  </div>
+                      ))}
+                    </motion.div>
+                  )}
+                </div>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${selected === opt.id ? '#7C3AED' : '#cbd5e1'}`, background: selected === opt.id ? '#7C3AED' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                  {selected === opt.id && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
                 </div>
               </div>
-            )
-          })}
+            </div>
+          ))}
         </div>
-
         <div style={{ padding: '0 1.75rem' }}>
           <button onClick={handleConfirm} disabled={confirming}
-            style={{
-              width: '100%', padding: '1rem',
-              background: selected === 'cash' ? 'linear-gradient(135deg,#10B981,#059669)' : 'linear-gradient(135deg,#7C3AED,#6D28D9)',
-              color: 'white', fontWeight: 900, fontSize: '1rem', border: 'none', borderRadius: 16,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              boxShadow: selected === 'cash' ? '0 6px 20px rgba(16,185,129,0.35)' : '0 6px 20px rgba(124,58,237,0.35)',
-              transition: 'all 0.2s ease'
-            }}>
-            {confirming ? <><RefreshCw size={18} className="spin-icon" /> Processing...</> :
-              selected === 'online' ? <><Lock size={18} /> Continue to Pay {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}</> :
-                <><CheckCheck size={18} /> Confirm & Book Service</>}
+            style={{ width: '100%', padding: '1rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', fontWeight: 800, fontSize: '1rem', border: 'none', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 20px rgba(124,58,237,0.3)' }}>
+            {confirming ? <><RefreshCw size={16} className="spin-icon" /> Processing•¦</> :
+              selected === 'online' ? <><CreditCard size={16} /> Continue to Pay {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}</> :
+                <><CheckCheck size={16} /> Confirm Booking</>}
           </button>
-
-          <div style={{ textAlign: 'center', marginTop: '0.85rem', fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontWeight: 600 }}>
-            <Shield size={12} color="#10B981" /> 256-bit SSL encrypted · Your info is safe
+          <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+            <Shield size={11} /> 256-bit SSL encrypted Â· Your info is safe
           </div>
         </div>
       </motion.div>
@@ -2100,12 +2548,20 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    POST-BOOKING ANIMATED FLOW
-   ───────────────────────────────────────────────────────────────────────── */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTime, onDone }) {
   const [phase, setPhase] = useState(0)
+
+  const MOCK_TECH = {
+    name: "Ravi Kumar",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
+    rating: 4.9,
+    jobs: 284,
+    eta: "25 mins",
+  }
 
   useEffect(() => {
     const timers = [
@@ -2119,21 +2575,21 @@ function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTi
   const phases = [
     {
       icon: <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}><RefreshCw size={52} color="#7C3AED" /></motion.div>,
-      title: "Creating your booking…",
+      title: "Creating your booking•¦",
       sub: "Submitting your service request securely",
     },
     {
       icon: <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ repeat: Infinity, duration: 0.8 }}><Users size={52} color="#F59E0B" /></motion.div>,
-      title: "Finding your expert…",
+      title: "Finding your expert•¦",
       sub: "Matching you with the best professional nearby",
     },
     {
       icon: <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}><CheckCircle2 size={52} color="#10B981" /></motion.div>,
-      title: "Professional Assigned! ✅",
+      title: "Professional Assigned! •œ…",
       sub: "Your expert is confirmed and on their way",
     },
     {
-      icon: <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 12 }}><span style={{ fontSize: '3.5rem' }}>🎉</span></motion.div>,
+      icon: <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 12 }}><span style={{ fontSize: '3.5rem' }}>ðŸŽ‰</span></motion.div>,
       title: "Booking Confirmed!",
       sub: "Your booking is all set. Tap below to track.",
     },
@@ -2171,10 +2627,23 @@ function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTi
           <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.3rem', fontWeight: 900, color: '#0f172a' }}>{cur.title}</h3>
           <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}>{cur.sub}</p>
 
+          {phase === 2 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+              style={{ marginTop: '1.5rem', background: '#f8fafc', borderRadius: 14, padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
+            >
+              <img src={MOCK_TECH.avatar} alt={MOCK_TECH.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '2px solid #7C3AED30' }} />
+              <div style={{ flex: 1, textAlign: 'left' }}>
+                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{MOCK_TECH.name}</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>•­ {MOCK_TECH.rating} Â· {MOCK_TECH.jobs} jobs</div>
+              </div>
+              <div style={{ background: '#10B98115', color: '#10B981', fontWeight: 800, fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, border: '1px solid #10B98130' }}>ETA {MOCK_TECH.eta}</div>
+            </motion.div>
+          )}
+
           {phase === 3 && (
             <motion.button
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-              onClick={() => onDone(null)}
+              onClick={() => onDone(MOCK_TECH)}
               style={{ marginTop: '1.5rem', width: '100%', padding: '0.875rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', fontWeight: 800, fontSize: '0.95rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
             >
               <MapPin size={16} /> Track My Booking
@@ -2186,25 +2655,23 @@ function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTi
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    LIVE TRACKING PAGE
-   ───────────────────────────────────────────────────────────────────────── */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 function LiveTrackingPage({ successData, technician, category, cart, formData, selDate, selTime, onBookAgain }) {
   const rid = successData?.request_id || successData?.id || "BK" + Date.now().toString().slice(-6)
   const [etaMinutes, setEtaMinutes] = useState(25)
-  const totalPrice = cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (successData?.estimated_cost || 0)
-  const displayDate = selDate ? new Date(selDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : (successData?.scheduled_date || "Today")
-  const displayTime = selTime ? LOCAL_TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === selTime)?.l : (successData?.time_slot || "Upcoming")
-
-  const tech = technician || successData?.technician || null
+  const totalPrice = cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
+  const displayDate = selDate ? new Date(selDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : ""
+  const displayTime = selTime ? TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === selTime)?.l : ""
 
   const trackSteps = [
-    { label: "Booking Confirmed", icon: <CheckCircle2 size={16} color="#10B981" />, done: true, time: "Just now" },
-    { label: "Expert Assigned", icon: <User size={16} color="#7C3AED" />, done: !!tech, time: tech ? "Assigned" : "Pending" },
-    { label: "Expert On The Way", icon: <MapPin size={16} color="#64748b" />, done: false, time: "Pending" },
-    { label: "Service In Progress", icon: <Clock size={16} color="#64748b" />, done: false, time: "Scheduled" },
-    { label: "Service Completed", icon: <Award size={16} color="#64748b" />, done: false, time: "Pending" },
+    { label: "Booking Confirmed", icon: "•œ…", done: true, time: "Just now" },
+    { label: "Expert Assigned", icon: "ðŸ‘¨•ðŸ”§", done: false, time: "Pending" },
+    { label: "Expert On The Way", icon: "ðŸ›µ", done: false, time: "Pending" },
+    { label: "Service In Progress", icon: "•š™ï¸", done: false, time: "Scheduled" },
+    { label: "Service Completed", icon: "ðŸŒŸ", done: false, time: "Pending" },
   ]
 
   useEffect(() => {
@@ -2212,6 +2679,8 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
     const t = setInterval(() => setEtaMinutes(m => m > 0 ? m - 1 : 0), 60000)
     return () => clearInterval(t)
   }, [etaMinutes])
+
+  const tech = technician || { name: "Ravi Kumar", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face", rating: 4.9, jobs: 284, eta: "25 mins" }
 
   return (
     <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 640, margin: '0 auto', padding: '1.5rem' }}>
@@ -2221,99 +2690,71 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
         >
           <CheckCircle2 size={44} color="white" />
         </motion.div>
-        <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.6rem', fontWeight: 900, color: '#0f172a' }}>Booking Confirmed! 🎉</h2>
-        <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.9rem' }}>{tech ? `${tech.name} has been assigned` : "Your request is registered & being assigned"}</p>
+        <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.6rem', fontWeight: 900, color: '#0f172a' }}>Booking Confirmed! ðŸŽ‰</h2>
+        <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.9rem' }}>Your expert is on the way</p>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '6px 16px' }}>
           <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
           <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#0f172a', fontFamily: 'monospace' }}>#{rid}</span>
         </div>
       </div>
 
-      {/* Technician Info or Assignment in Progress Card */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-        style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0' }}
+        style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
       >
-        {tech ? (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ position: 'relative' }}>
-                <img src={tech.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face"} alt={tech.name} style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '3px solid #7C3AED30' }} />
-                <div style={{ position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: '50%', background: '#10B981', border: '2px solid white' }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{tech.name}</div>
-                {tech.rating && <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>⭐  {tech.rating} · {tech.jobs || '50+'} jobs completed</div>}
-                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                  <span style={{ background: '#10B98112', color: '#10B981', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #10B98125' }}>Verified Pro</span>
-                  <span style={{ background: '#7C3AED12', color: '#7C3AED', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #7C3AED25' }}>Background Checked</span>
-                </div>
-              </div>
-              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg,#F59E0B,#FBBF24)', borderRadius: 12, padding: '0.6rem 1rem', color: 'white' }}>
-                <div style={{ fontSize: '1.4rem', fontWeight: 900 }}>{etaMinutes}</div>
-                <div style={{ fontSize: '0.65rem', fontWeight: 700 }}>MIN ETA</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-              <button onClick={() => alert(`Calling ${tech.name}...`)}
-                style={{ flex: 1, padding: '0.7rem', background: '#7C3AED', color: 'white', fontWeight: 700, fontSize: '0.85rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <Phone size={15} /> Call Expert
-              </button>
-              <button onClick={() => alert("Chat feature coming soon!")}
-                style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', color: '#0f172a', fontWeight: 700, fontSize: '0.85rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <MessageSquare size={15} /> Chat
-              </button>
-            </div>
-          </>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', padding: '0.35rem 0' }}>
-            <div style={{ width: 56, height: 56, borderRadius: 16, background: '#7C3AED12', border: '1.5px solid #7C3AED25', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <RefreshCw size={26} color="#7C3AED" className="spin-icon" />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1rem' }}>Matching Expert</span>
-                <span style={{ background: '#7C3AED15', color: '#7C3AED', fontSize: '0.65rem', fontWeight: 800, padding: '2px 9px', borderRadius: 99, border: '1px solid #7C3AED30' }}>
-                  Assignment Pending
-                </span>
-              </div>
-              <div style={{ color: '#64748b', fontSize: '0.82rem', lineHeight: 1.45 }}>
-                Admin is finding the best verified technician in your area. You will receive notification details shortly.
-              </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ position: 'relative' }}>
+            <img src={tech.avatar} alt={tech.name} style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '3px solid #7C3AED30' }} />
+            <div style={{ position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: '50%', background: '#10B981', border: '2px solid white' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{tech.name}</div>
+            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>•­ {tech.rating} Â· {tech.jobs} jobs completed</div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <span style={{ background: '#10B98112', color: '#10B981', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #10B98125' }}>Verified Pro</span>
+              <span style={{ background: '#7C3AED12', color: '#7C3AED', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #7C3AED25' }}>Background Checked</span>
             </div>
           </div>
-        )}
+          <div style={{ textAlign: 'center', background: 'linear-gradient(135deg,#F59E0B,#FBBF24)', borderRadius: 12, padding: '0.6rem 1rem', color: 'white' }}>
+            <div style={{ fontSize: '1.4rem', fontWeight: 900 }}>{etaMinutes}</div>
+            <div style={{ fontSize: '0.65rem', fontWeight: 700 }}>MIN ETA</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+          <button onClick={() => alert(`Calling ${tech.name}...`)}
+            style={{ flex: 1, padding: '0.7rem', background: '#7C3AED', color: 'white', fontWeight: 700, fontSize: '0.85rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Phone size={15} /> Call Expert
+          </button>
+          <button onClick={() => alert("Chat feature coming soon!")}
+            style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', color: '#0f172a', fontWeight: 700, fontSize: '0.85rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <MessageSquare size={15} /> Chat
+          </button>
+        </div>
       </motion.div>
 
-      {/* Booking Details Card */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-        style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0' }}
+        style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
       >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <FileText size={16} color="#7C3AED" /> Booking Details
-        </div>
+        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>ðŸ“‹ Booking Details</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', fontSize: '0.8rem' }}>
           {[
-            { label: 'Service', value: category?.name || cart?.[0]?.name },
+            { label: 'Service', value: category?.name },
             { label: 'Date', value: displayDate },
             { label: 'Time', value: displayTime },
-            { label: 'Address', value: formData?.address || formData?.location, span: true },
+            { label: 'Address', value: formData?.address, span: true },
             { label: 'Total Amount', value: `${BOOKING_CURRENCY_SYMBOL}${totalPrice}`, highlight: true },
           ].map((r, i) => (
             <div key={i} style={{ ...(r.span ? { gridColumn: '1/-1' } : {}), background: '#f8fafc', borderRadius: 10, padding: '0.5rem 0.75rem' }}>
               <div style={{ color: '#94a3b8', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase' }}>{r.label}</div>
-              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2 }}>{r.value || '—'}</div>
+              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2 }}>{r.value || '•”'}</div>
             </div>
           ))}
         </div>
       </motion.div>
 
-      {/* Live Tracking Timeline Card */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-        style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0' }}
+        style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
       >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <MapPin size={16} color="#7C3AED" /> Live Tracking
-        </div>
+        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>ðŸ—ºï¸ Live Tracking</div>
         {trackSteps.map((s, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.5rem 0', position: 'relative' }}>
             {i < trackSteps.length - 1 && <div style={{ position: 'absolute', left: 18, top: 36, width: 2, height: 24, background: s.done ? '#10B981' : '#e2e8f0' }} />}
@@ -2336,9 +2777,9 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    STEP INDICATOR BAR
-   ───────────────────────────────────────────────────────────────────────── */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 const STEP_LABELS = ["Service", "Package", "Schedule", "Identity", "Details", "Confirm"]
 
@@ -2365,15 +2806,15 @@ function StepBar({ step, total }) {
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    MAIN PAGE
-   ───────────────────────────────────────────────────────────────────────── */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
-/* ─────────────────────────────────────────────────────────────────────────
+/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    CUSTOMER ACCOUNT MODAL
-   ───────────────────────────────────────────────────────────────────────── */
+   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
-function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
+export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   const { user, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
 
   const [loginMethod, setLoginMethod] = useState('email')
@@ -2450,11 +2891,9 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
   const [profileEmail, setProfileEmail] = useState('')
-  const [profileAvatar, setProfileAvatar] = useState(user?.avatar_url || user?.avatar || user?.profile_picture || null)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [profileSuccess, setProfileSuccess] = useState('')
-  const fileInputRef = useRef(null)
 
   useEffect(() => {
     if (user) {
@@ -2462,42 +2901,8 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
       setProfileName(uFullName)
       setProfilePhone(user?.phone || '')
       setProfileEmail(user?.email || '')
-      setProfileAvatar(user?.avatar_url || user?.avatar || user?.profile_picture || null)
     }
   }, [user])
-
-  const handleAvatarChange = async (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    setProfileError('')
-    setProfileSuccess('')
-    try {
-      const formData = new FormData()
-      formData.append("image", file)
-      const res = await apiRequest("/settings/catalog/upload-image/", {
-        method: "POST",
-        body: formData
-      })
-      const uploadedUrl = typeof res?.url === "string" ? res.url : (res?.url?.url || "");
-      if (res.success && uploadedUrl) {
-        setProfileAvatar(uploadedUrl)
-        try {
-          await apiRequest("/auth/profile/", {
-            method: "PATCH",
-            json: { avatar: uploadedUrl, profile_picture: uploadedUrl }
-          })
-        } catch (patchErr) {
-          console.warn("Profile avatar patch warning:", patchErr)
-        }
-        await refreshMe()
-        setProfileSuccess("Profile photo updated successfully!")
-      } else {
-        setProfileError(formatErrorMessage(res, "Failed to upload photo"))
-      }
-    } catch (err) {
-      setProfileError(formatErrorMessage(err, "Error uploading photo"))
-    }
-  }
 
   const handleSaveProfile = async () => {
     setProfileError('')
@@ -2508,28 +2913,23 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     const lastName = nameParts.slice(1).join(' ')
 
     try {
-      const payload = {
-        first_name: firstName,
-        last_name: lastName,
-        phone: profilePhone,
-        email: profileEmail
-      }
-      if (profileAvatar && typeof profileAvatar === "string") {
-        payload.avatar = profileAvatar
-        payload.profile_picture = profileAvatar
-      }
       const res = await apiRequest("/auth/profile/", {
         method: "PATCH",
-        json: payload
+        json: {
+          first_name: firstName,
+          last_name: lastName,
+          phone: profilePhone,
+          email: profileEmail
+        }
       })
-      if (res.success || res.id || res.data || res.email) {
+      if (res.success || res.id) {
         await refreshMe()
         setProfileSuccess("Changes saved successfully!")
       } else {
-        setProfileError(formatErrorMessage(res, "Failed to update profile"))
+        setProfileError(res.message || "Failed to update profile")
       }
     } catch (e) {
-      setProfileError(formatErrorMessage(e, "Failed to update profile"))
+      setProfileError(e.body?.message || "Failed to update profile")
     } finally {
       setIsSavingProfile(false)
     }
@@ -2545,7 +2945,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     }
   }, [activeTab, user])
 
-  // ── Reschedule State ──────────────────────────────────────────────────────
+  // •”••”• Reschedule State •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
   // ── Reschedule State ────────────────────────────────────────────────────────
   const [reschedules, setReschedules] = useState([])
   const [reschedulesLoading, setReschedulesLoading] = useState(false)
@@ -2641,13 +3041,21 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   const fetchAddresses = () => {
     setAddressesLoading(true)
     apiRequest('/auth/customer/addresses/')
-      .then(r => setSavedAddresses(r.data || []))
+      .then(r => {
+        if (r && Array.isArray(r.data)) {
+          setSavedAddresses(r.data)
+        } else if (Array.isArray(r)) {
+          setSavedAddresses(r)
+        } else {
+          setSavedAddresses([])
+        }
+      })
       .catch(() => setSavedAddresses([]))
       .finally(() => setAddressesLoading(false))
   }
 
   useEffect(() => {
-    if (activeTab === 'Saved Addresses' && user) {
+    if (activeTab === 'Saved Addresses') {
       fetchAddresses()
     }
   }, [activeTab, user])
@@ -2822,14 +3230,8 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
         setShowComplaintForm(false); setComplaintBookingId(''); setComplaintCategory('OTHER'); setComplaintDesc('')
         const updated = await apiRequest('/booking/complaints/')
         setComplaints(updated.data || [])
-      } else {
-        const msg = typeof res.message === 'string' ? res.message : (res.message?.detail || res.error || 'Failed to submit complaint.')
-        setComplaintError(msg)
-      }
-    } catch (e) {
-      const msg = typeof e?.body?.message === 'string' ? e.body.message : (e?.body?.detail || e?.message || 'Failed to submit complaint.')
-      setComplaintError(msg)
-    }
+      } else { setComplaintError(res.message || 'Failed to submit') }
+    } catch (e) { setComplaintError(e?.body?.message || 'Failed to submit') }
     finally { setComplaintSubmitting(false) }
   }
 
@@ -2883,15 +3285,149 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     setMockAddresses(mockAddresses.filter(a => a.id !== id))
   }
 
+  const [geoAddressLoading, setGeoAddressLoading] = useState(false)
+
+  const handleDetectLocationForAddress = () => {
+    if (!navigator.geolocation) {
+      setAddrError("Geolocation is not supported by your browser.")
+      return
+    }
+    setGeoAddressLoading(true)
+    setAddrError("")
+    setAddrSuccess("")
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6))
+        const lng = parseFloat(pos.coords.longitude.toFixed(6))
+        const acc = pos.coords.accuracy
+
+        try {
+          let line1 = ""
+          let city = ""
+          let state = ""
+          let pincode = ""
+
+          try {
+            const backendDetect = await apiDetectCustomerLocation(lat, lng, acc)
+            if (backendDetect && backendDetect.success && backendDetect.data) {
+              const d = backendDetect.data
+              const parts = [d.area, d.formatted_address ? d.formatted_address.split(',')[0] : ''].filter(Boolean)
+              line1 = parts.filter((v, i, a) => a.indexOf(v) === i).join(', ')
+              city = d.city
+              state = d.state
+              pincode = d.pincode
+            }
+          } catch (err) {
+            console.warn("Backend detect fallback:", err)
+          }
+
+          if (!line1) {
+            try {
+              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en&zoom=18`)
+              const data = await res.json()
+              if (data && data.address) {
+                const a = data.address
+                const parts = [a.building, a.house_number, a.road, a.suburb, a.neighbourhood, a.residential].filter(Boolean)
+                line1 = parts.filter((v, i, a) => a.indexOf(v) === i).join(", ") || (data.display_name ? data.display_name.split(",")[0] : '')
+                city = a.city || a.town || a.village || a.county || city
+                state = a.state || state
+                pincode = a.postcode || pincode
+              }
+            } catch (e) {
+              console.warn("Reverse geocode warning:", e)
+            }
+          }
+
+          // Hosur Geo-fencing & Pincode Resolution
+          if ((pincode && pincode.startsWith("635")) || (12.55 <= lat && lat <= 12.85 && 77.70 <= lng && lng <= 77.98)) {
+            city = "Hosur"
+            state = "Tamil Nadu"
+            if (!pincode) pincode = "635109"
+          }
+
+          if (!line1) line1 = `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+          if (!city) city = "Hosur"
+          if (!state) state = "Tamil Nadu"
+          if (!pincode) pincode = "635109"
+
+          setAddrLine1(line1)
+          setAddrCity(city)
+          setAddrState(state)
+          setAddrPincode(pincode)
+
+          // Update last_known_location for home page pill
+          await apiUpdateCustomerLastLocation({
+            latitude: lat,
+            longitude: lng,
+            label: line1,
+            detected_at: new Date().toISOString()
+          })
+
+          // Deduplicate: check if home/default address already exists
+          const existing = (savedAddresses || []).find(a => a.label === 'home' || a.is_default)
+          const targetUrl = existing ? `/auth/customer/addresses/${existing.id}/` : '/auth/customer/addresses/'
+          const targetMethod = existing ? 'PATCH' : 'POST'
+
+          try {
+            const saveRes = await apiRequest(targetUrl, {
+              method: targetMethod,
+              json: {
+                label: 'home',
+                address_line1: line1,
+                address_line2: '',
+                city: city,
+                state: state,
+                pincode: pincode,
+                phone_number: user?.phone || '',
+                latitude: lat,
+                longitude: lng,
+                is_default: true
+              }
+            })
+            if (saveRes.success || saveRes.data || saveRes.id) {
+              fetchAddresses()
+              setAddrSuccess(`✓ Real-time GPS location detected (${line1}, ${city}) & saved!`)
+              setShowAddressForm(false)
+            } else {
+              setShowAddressForm(true)
+              setAddrSuccess("Current location detected! Please review and click Save Address.")
+            }
+          } catch (e) {
+            setShowAddressForm(true)
+            setAddrSuccess("Current location detected! Please review and click Save Address.")
+          }
+
+          if (typeof refreshMe === 'function') await refreshMe()
+        } catch (e) {
+          setAddrError("Failed to fetch address details for detected GPS coordinates.")
+        } finally {
+          setGeoAddressLoading(false)
+        }
+      },
+      (err) => {
+        setGeoAddressLoading(false)
+        if (err.code === 1) {
+          setAddrError("Location permission denied. Please allow location access in your browser settings.")
+        } else if (err.code === 2) {
+          setAddrError("Unable to detect high-accuracy GPS position. Please try again.")
+        } else if (err.code === 3) {
+          setAddrError("GPS request timed out. Please try again.")
+        } else {
+          setAddrError("Failed to detect location. Please enter manually.")
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    )
+  }
+
+  const nonDraftBookings = (realBookings || []).filter(b => b.status !== 'draft')
+  const hasNonDraftBookings = nonDraftBookings.length > 0
+
   const tabs = [
     { id: "My Profile", icon: User },
-    { id: "My Bookings", icon: Calendar },
     { id: "Saved Addresses", icon: MapPin },
-    { id: "My Reschedules", icon: RefreshCw },
-    { id: "My Refunds", icon: CreditCard },
-    { id: "My Complaints", icon: MessageSquare },
-    { id: "Payment Methods", icon: Wallet },
-    { id: "Notifications", icon: Bell },
+    { id: "My Bookings", icon: Calendar, badge: nonDraftBookings.length || undefined },
     { id: "Help & Support", icon: LifeBuoy },
   ]
 
@@ -2907,26 +3443,17 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Profile</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 32, paddingBottom: 32, borderBottom: '1px solid #e2e8f0' }}>
-              <div style={{ width: 88, height: 88, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0', overflow: 'hidden' }}>
-                {profileAvatar || user?.avatar_url || user?.avatar || user?.profile_picture ? (
-                  <img src={getFullImageUrl(profileAvatar || user?.avatar_url || user?.avatar || user?.profile_picture)} alt={userFullName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
-                ) : (
-                  <span style={{ fontSize: '1.8rem', fontWeight: 800, color: '#7C3AED' }}>
-                    {userFullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'C'}
-                  </span>
-                )}
+              <div style={{ width: 88, height: 88, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0' }}>
+                <User size={36} color="#94a3b8" />
               </div>
               <div>
                 <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: 4 }}>{userFullName}</div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 12 }}>{userEmail || userPhone}</div>
-                <input type="file" ref={fileInputRef} onChange={handleAvatarChange} accept="image/*" style={{ display: 'none' }} />
-                <button onClick={() => fileInputRef.current?.click()} style={{ padding: '0.5rem 1.25rem', background: 'white', color: '#7C3AED', border: '1.5px solid #7C3AED30', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  📷 Change Photo
-                </button>
+                <button style={{ padding: '0.5rem 1.25rem', background: 'white', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}>Change Photo</button>
               </div>
             </div>
 
-            {profileError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '10px 14px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, marginBottom: 16 }}>⚠️ {typeof profileError === 'string' ? profileError : formatErrorMessage(profileError)}</div>}
+            {profileError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '10px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, marginBottom: 16 }}>{profileError}</div>}
             {profileSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, marginBottom: 16 }}>{profileSuccess}</div>}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -2953,7 +3480,25 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Bookings</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {bookingsLoading ? <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading bookings...</div> : realBookings.length === 0 ? <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>No bookings found.</div> : realBookings.map(b => {
+              {bookingsLoading ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading bookings...</div>
+              ) : realBookings.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
+                  <div style={{ width: 64, height: 64, borderRadius: 16, background: '#f3e8ff', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 4px 12px rgba(124,58,237,0.15)' }}>
+                    <Calendar size={30} />
+                  </div>
+                  <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>No Active Bookings Yet</h4>
+                  <p style={{ margin: '0 auto 20px', fontSize: '0.85rem', color: '#64748b', maxWidth: 360, lineHeight: 1.5 }}>
+                    You haven't placed any service bookings yet. Browse our top home services and book an expert with instant slot confirmation.
+                  </p>
+                  <button
+                    onClick={() => { onClose(); setStep(1); }}
+                    style={{ padding: '12px 24px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.25)' }}
+                  >
+                    + Book a Service Now
+                  </button>
+                </div>
+              ) : realBookings.map(b => {
                 const isRescheduleEligible = ['new_request', 'reviewed', 'confirmed', 'assigned', 'accepted'].includes(b.status)
                 const getRescheduleNotice = (st) => {
                   if (['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(st)) {
@@ -2977,7 +3522,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/â€“/g, ' - ').replace(/—/g, ' - ').replace(/&amp;/g, '&')}</span>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
                           <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: b.status === 'completed' ? '#10B98115' : '#7C3AED15', color: b.status === 'completed' ? '#10B981' : '#7C3AED', border: `1px solid ${b.status === 'completed' ? '#10B98130' : '#7C3AED30'}` }}>{b.status_display || b.status}</span>
                         </div>
                         <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
@@ -3070,12 +3615,53 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                           )}
 
                           <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                            {(b.payment_status === 'paid' || b.payment_status === 'collected') && (
-                              <>
-                                <button onClick={() => window.open(`http://localhost:8000/api/booking/${b.id}/invoice/`, '_blank')} style={{ flex: 1, minWidth: 160, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><FileText size={14} /> Download Invoice</button>
-                                <button onClick={() => alert("Invoice successfully sent to your registered email!")} style={{ flex: 1, minWidth: 160, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Mail size={14} /> Email Invoice</button>
-                              </>
-                            )}
+                            {(b.available_actions || []).map(act => {
+                              if (act === "retry_payment") return (
+                                <button key={act} onClick={async () => {
+                                  try {
+                                    const res = await apiRequest(`/booking/${b.id}/retry-payment/`, {
+                                      method: 'POST',
+                                      body: JSON.stringify({ payment_method: b.payment_method || 'ONLINE' })
+                                    })
+                                    if (res.success) {
+                                      alert("Payment completed successfully!")
+                                      const updated = await apiRequest("/booking/my-bookings/")
+                                      if (updated.data) setBookings(updated.data)
+                                    } else {
+                                      alert(res.message || "Payment retry failed.")
+                                    }
+                                  } catch (e) { alert(e.message || "Retry payment failed.") }
+                                }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <RefreshCw size={14} /> Retry Payment
+                                </button>
+                              )
+                              if (act === "track") return (
+                                <button key={act} onClick={() => { setAssignedTech(b.assigned_employee); onClose(); setStep(0); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: '#3B82F6', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <MapPin size={14} /> Track Professional
+                                </button>
+                              )
+                              if (act === "reschedule") return (
+                                <button key={act} onClick={() => { setActiveTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <Calendar size={14} /> Reschedule
+                                </button>
+                              )
+                              if (act === "view_invoice") return (
+                                <button key={act} onClick={() => window.open(`http://localhost:8000/api/booking/${b.id}/invoice/`, '_blank')} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <FileText size={14} /> Download Invoice
+                                </button>
+                              )
+                              if (act === "refund_status") return (
+                                <button key={act} onClick={() => { setActiveTab("My Refunds"); setSelectedBooking(b); setShowRefundForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <CreditCard size={14} /> Refund Status
+                                </button>
+                              )
+                              if (act === "report_problem") return (
+                                <button key={act} onClick={() => { setActiveTab("My Complaints"); setSelectedBooking(b); setShowComplaintForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <MessageSquare size={14} /> Report Problem
+                                </button>
+                              )
+                              return null
+                            })}
                           </div>
                         </div>
                       </motion.div>
@@ -3176,14 +3762,17 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           setAddrSuccess('')
           try {
             const res = await apiRequest(`/auth/customer/addresses/${addrId}/`, { method: 'DELETE' })
-            if (res.success) {
+            if (!res || res.success || res.status === 204 || res.status === 200) {
               setAddrSuccess('Address deleted successfully.')
-              fetchAddresses()
+              setAddrError('')
             } else {
-              setAddrError(res.message || 'Failed to delete address.')
+              const msg = res?.error?.detail || res?.detail || res?.message || 'Failed to delete address.'
+              setAddrError(msg)
             }
           } catch (e) {
-            setAddrError(e?.body?.message || e?.message || 'Failed to delete address.')
+            setAddrError(e?.body?.detail || e?.message || 'Failed to delete address.')
+          } finally {
+            fetchAddresses()
           }
         }
 
@@ -3207,15 +3796,21 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: 12 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Saved Addresses</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#64748b' }}>Manage your home, office, and preferred service delivery locations.</p>
               </div>
-              <button onClick={() => handleOpenForm(null)}
-                style={{ padding: '10px 20px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(124,58,237,0.25)' }}>
-                <MapPin size={15} /> Add New Address
-              </button>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button type="button" onClick={handleDetectLocationForAddress} disabled={geoAddressLoading}
+                  style={{ padding: '10px 16px', background: '#ede9fe', color: '#6366f1', border: '1.5px solid #c4b5fd', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Compass size={16} /> {geoAddressLoading ? "Detecting..." : "Use Current Location"}
+                </button>
+                <button onClick={() => handleOpenForm(null)}
+                  style={{ padding: '10px 20px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(99,102,241,0.25)' }}>
+                  <MapPin size={15} /> Add New Address
+                </button>
+              </div>
             </div>
 
             {addrSuccess && (
@@ -3232,10 +3827,35 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
             {showAddressForm ? (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                style={{ border: '1.5px solid #7C3AED30', borderRadius: 20, padding: '1.75rem', background: '#faf5ff', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(124,58,237,0.08)' }}>
+                style={{ border: '1.5px solid #6366f130', borderRadius: 20, padding: '1.75rem', background: '#faf5ff', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(99,102,241,0.08)' }}>
                 <div style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: 18, color: '#0f172a' }}>
                   {editingAddress ? 'Edit Address' : 'Add New Address'}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleDetectLocationForAddress}
+                  disabled={geoAddressLoading}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 14,
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    marginBottom: 18,
+                    boxShadow: '0 4px 14px rgba(99,102,241,0.25)'
+                  }}
+                >
+                  <Compass size={18} /> {geoAddressLoading ? "Detecting Location..." : "📍 Autofill with Current Location (GPS)"}
+                </button>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {/* Address Label Pills */}
@@ -3460,41 +4080,42 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
               </div>
             )}
 
-            {/* View Map Modal */}
+            {/* View Map Modal / Draggable Pin Adjustment Modal */}
             {mapAddress && (
-              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                  style={{ background: 'white', borderRadius: 20, width: '90%', maxWidth: 480, padding: '1.5rem', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <h4 style={{ margin: 0, fontWeight: 800, color: '#0f172a' }}>Location Map View</h4>
-                    <button onClick={() => setMapAddress(null)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#64748b' }}>✕</button>
-                  </div>
+              <LocationPickerModal
+                initialLocation={`${mapAddress.address_line1}, ${mapAddress.city}`}
+                initialCoords={mapAddress.latitude && mapAddress.longitude ? { lat: parseFloat(mapAddress.latitude), lng: parseFloat(mapAddress.longitude) } : null}
+                onClose={() => setMapAddress(null)}
+                onConfirm={async (confirmedPayload) => {
+                  setMapAddress(null)
+                  if (!confirmedPayload) return
 
-                  <div style={{ background: '#f1f5f9', borderRadius: 14, height: 180, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, border: '1px solid #cbd5e1', marginBottom: 14 }}>
-                    <MapPin size={36} color="#7C3AED" />
-                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{mapAddress.label_display || mapAddress.label}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                      Coordinates: {mapAddress.latitude || '37.7749'}, {mapAddress.longitude || '-122.4194'}
-                    </div>
-                  </div>
+                  const line1 = confirmedPayload.area ? [confirmedPayload.area, confirmedPayload.formatted_address?.split(',')[0]].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(', ') : (confirmedPayload.formatted_address || mapAddress.address_line1)
+                  const city = confirmedPayload.city || mapAddress.city || "Hosur"
+                  const state = confirmedPayload.state || mapAddress.state || "Tamil Nadu"
+                  const pincode = confirmedPayload.pincode || mapAddress.pincode || "635109"
 
-                  <div style={{ fontSize: '0.85rem', color: '#334155', fontWeight: 600, marginBottom: 16 }}>
-                    <div>{mapAddress.address_line1} {mapAddress.address_line2}</div>
-                    <div style={{ color: '#64748b' }}>{mapAddress.city}, {mapAddress.state} - {mapAddress.pincode}</div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapAddress.address_line1 + ', ' + mapAddress.city)}`, '_blank')}
-                      style={{ flex: 1, padding: '10px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}>
-                      Open in Google Maps
-                    </button>
-                    <button onClick={() => setMapAddress(null)}
-                      style={{ padding: '10px 18px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', color: '#475569' }}>
-                      Close
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
+                  try {
+                    const saveRes = await apiRequest(`/auth/customer/addresses/${mapAddress.id}/`, {
+                      method: 'PATCH',
+                      json: {
+                        address_line1: line1,
+                        city: city,
+                        state: state,
+                        pincode: pincode,
+                        latitude: confirmedPayload.latitude || mapAddress.latitude,
+                        longitude: confirmedPayload.longitude || mapAddress.longitude
+                      }
+                    })
+                    if (saveRes.success || saveRes.data || saveRes.id) {
+                      setAddrSuccess('Address pin location updated!')
+                      fetchAddresses()
+                    }
+                  } catch (e) {
+                    console.error("Failed to update address location:", e)
+                  }
+                }}
+              />
             )}
           </motion.div>
         )
@@ -3514,9 +4135,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 gap: 16,
                 alignItems: 'center'
               }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#10B98115', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <CreditCard size={22} color="#10B981" />
-                </div>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#10B98115', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>ðŸ’µ</div>
                 <div>
                   <h4 style={{ margin: '0 0 4px', color: '#0f172a', fontSize: '1rem', fontWeight: 800 }}>Cash on Service (COD)</h4>
                   <p style={{ margin: 0, color: '#64748b', fontSize: '0.82rem', lineHeight: 1.5 }}>
@@ -3536,9 +4155,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 gap: 16,
                 alignItems: 'center'
               }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#7C3AED15', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Wallet size={22} color="#7C3AED" />
-                </div>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#7C3AED15', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>📱</div>
                 <div>
                   <h4 style={{ margin: '0 0 4px', color: '#0f172a', fontSize: '1rem', fontWeight: 800 }}>UPI Payments</h4>
                   <p style={{ margin: 0, color: '#64748b', fontSize: '0.82rem', lineHeight: 1.5 }}>
@@ -3660,7 +4277,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                         style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: '1.5px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', fontWeight: 700, background: 'white', outline: 'none' }}>
                         {activeBookings.map(b => {
                           const rawTitle = b.issue_title || b.service_category || 'Service Booking'
-                          const cleanTitle = rawTitle.replace(/â€“/g, ' - ').replace(/—/g, ' - ').replace(/&amp;/g, '&')
+                          const cleanTitle = rawTitle.replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')
                           return (
                             <option key={b.id} value={b.id}>
                               {cleanTitle} ({b.request_id || `SR-${b.id}`}) — Current: {b.preferred_date || b.created_at?.split('T')[0]}
@@ -4270,26 +4887,15 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 <div style={{ border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.5rem', background: 'white', marginBottom: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: 2 }}>{selectedComplaint.category_display}</div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b', fontFamily: 'monospace' }}>
-                        Ticket #{selectedComplaint.complaint_number || selectedComplaint.id} {selectedComplaint.booking_request_id ? `• Booking: ${selectedComplaint.booking_request_id}` : ''}
-                      </div>
+                      <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: 4 }}>{selectedComplaint.category_display}</div>
+                      {selectedComplaint.booking_request_id && <div style={{ fontSize: '0.78rem', color: '#64748b', fontFamily: 'monospace' }}>{selectedComplaint.booking_request_id}</div>}
                     </div>
                     {(() => {
-                      const sc = { OPEN: '#F59E0B', IN_PROGRESS: '#3B82F6', UNDER_INVESTIGATION: '#3B82F6', RESOLVED: '#10B981', ESCALATED: '#EF4444', CLOSED: '#94a3b8' }[selectedComplaint.status] || '#64748b'
-                      return <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: sc + '18', color: sc, border: `1px solid ${sc}30` }}>{selectedComplaint.status_display || selectedComplaint.status}</span>
+                      const sc = { OPEN: '#F59E0B', IN_PROGRESS: '#3B82F6', RESOLVED: '#10B981', ESCALATED: '#EF4444', CLOSED: '#94a3b8' }[selectedComplaint.status] || '#64748b'
+                      return <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: sc + '18', color: sc, border: `1px solid ${sc}30` }}>{selectedComplaint.status_display}</span>
                     })()}
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.6, background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #f1f5f9' }}>
-                    <strong style={{ color: '#0f172a', display: 'block', marginBottom: 4 }}>Reported Issue Details:</strong>
-                    {selectedComplaint.description}
-                  </div>
-                  {selectedComplaint.resolution_notes && (
-                    <div style={{ marginTop: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 12, color: '#166534', fontSize: '0.85rem' }}>
-                      <strong style={{ display: 'block', marginBottom: 2 }}>✅ Support Team Resolution:</strong>
-                      {selectedComplaint.resolution_notes}
-                    </div>
-                  )}
+                  <div style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.6 }}>{selectedComplaint.description}</div>
                 </div>
                 <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', marginBottom: 12 }}>Conversation Thread</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
@@ -4301,7 +4907,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     return (
                       <div key={resp.id} style={{ display: 'flex', justifyContent: isCustomer ? 'flex-end' : 'flex-start' }}>
                         <div style={{ maxWidth: '75%', padding: '10px 14px', borderRadius: isCustomer ? '14px 14px 2px 14px' : '14px 14px 14px 2px', background: isCustomer ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#f1f5f9', color: isCustomer ? 'white' : '#0f172a', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.7rem', opacity: 0.75, marginBottom: 4 }}>{isCustomer ? 'You' : resp.persona === 'ADMIN' ? 'ðŸ›¡ï¸ Support Team' : '👷 Employee'}</div>
+                          <div style={{ fontWeight: 700, fontSize: '0.7rem', opacity: 0.75, marginBottom: 4 }}>{isCustomer ? 'You' : resp.persona === 'ADMIN' ? 'ðŸ›¡ï¸ Support Team' : 'ðŸ‘· Employee'}</div>
                           {resp.message}
                           <div style={{ fontSize: '0.65rem', opacity: 0.6, marginTop: 4 }}>{new Date(resp.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</div>
                         </div>
@@ -4331,7 +4937,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   </button>
                 </div>
 
-                {complaintSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, marginBottom: 16 }}>✅ {complaintSuccess}</div>}
+                {complaintSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, marginBottom: 16 }}>•œ… {complaintSuccess}</div>}
 
                 {showComplaintForm && (
                   <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
@@ -4401,13 +5007,13 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                             </div>
                             <div style={{ textAlign: 'right' }}>
                               <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, fontWeight: 800, background: sc + '18', color: sc, border: `1px solid ${sc}30`, display: 'block', marginBottom: 4 }}>{c.status_display}</span>
-                              {c.attachment_count > 0 && <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>📎 {c.attachment_count} file{c.attachment_count > 1 ? 's' : ''}</span>}
+                              {c.attachment_count > 0 && <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>ðŸ“Ž {c.attachment_count} file{c.attachment_count > 1 ? 's' : ''}</span>}
                             </div>
                           </div>
                           <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.description}</div>
                           <div style={{ marginTop: 10, fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <span>{new Date(c.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                            <span style={{ color: '#7C3AED', fontWeight: 700 }}>View Thread →</span>
+                            <span style={{ color: '#7C3AED', fontWeight: 700 }}>View Thread •†’</span>
                           </div>
                         </div>
                       )
@@ -4416,109 +5022,6 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 )}
               </div>
             )}
-          </motion.div>
-        )
-
-      case "Payment Methods":
-        return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Payment Methods</h3>
-            <p style={{ margin: '0 0 1.5rem', color: '#64748b', fontSize: '0.85rem' }}>Manage your saved cards, UPI IDs, and preferred payment options for instant checkout.</p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ padding: '1.2rem', border: '1.5px solid #10B98130', borderRadius: 14, background: '#f0fdf4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 10, background: '#10B98115', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <CreditCard size={22} color="#10B981" />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>Cash on Service (COD)</div>
-                    <div style={{ color: '#059669', fontSize: '0.78rem', fontWeight: 600, marginTop: 2 }}>✓ Active & Preferred</div>
-                  </div>
-                </div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 800, background: '#10B981', color: 'white', padding: '4px 10px', borderRadius: 8 }}>Default</span>
-              </div>
-
-              <div style={{ padding: '1.2rem', border: '1px solid #e2e8f0', borderRadius: 14, background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 10, background: '#7C3AED10', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Shield size={22} color="#7C3AED" />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>UPI & Net Banking</div>
-                    <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: 2 }}>Razorpay / PhonePe / Google Pay</div>
-                  </div>
-                </div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#7C3AED', background: '#7C3AED10', padding: '4px 10px', borderRadius: 8 }}>Verified</span>
-              </div>
-
-              <button onClick={() => alert("Payment method saved successfully!")}
-                style={{ width: '100%', padding: '1rem', background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: 14, color: '#475569', fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8 }}>
-                + Add New Card or UPI ID
-              </button>
-            </div>
-          </motion.div>
-        )
-
-      case "Notifications":
-        return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Notifications</h3>
-            <p style={{ margin: '0 0 1.5rem', color: '#64748b', fontSize: '0.85rem' }}>Recent service alerts, scheduling updates, and support messages.</p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ padding: '1rem 1.25rem', border: '1px solid #e2e8f0', borderRadius: 12, background: 'white', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#7C3AED15', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 800, fontSize: '0.9rem' }}>🔔</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: 2 }}>Technician Assigned</div>
-                  <div style={{ color: '#475569', fontSize: '0.82rem', lineHeight: 1.4 }}>Your technician has been assigned for your upcoming booking.</div>
-                  <div style={{ color: '#94a3b8', fontSize: '0.72rem', marginTop: 4 }}>Just now</div>
-                </div>
-              </div>
-
-              <div style={{ padding: '1rem 1.25rem', border: '1px solid #e2e8f0', borderRadius: 12, background: 'white', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#10B98115', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 800, fontSize: '0.9rem' }}>✅</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: 2 }}>Booking Confirmed</div>
-                  <div style={{ color: '#475569', fontSize: '0.82rem', lineHeight: 1.4 }}>Your service request is confirmed and scheduled for execution.</div>
-                  <div style={{ color: '#94a3b8', fontSize: '0.72rem', marginTop: 4 }}>Today, 10:30 AM</div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )
-
-      case "Help & Support":
-        return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Help & Support</h3>
-            <p style={{ margin: '0 0 1.5rem', color: '#64748b', fontSize: '0.85rem' }}>We're here 24/7 to assist with your bookings and service inquiries.</p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
-              <div style={{ padding: '1.25rem', border: '1px solid #e2e8f0', borderRadius: 14, background: '#faf5ff', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.8rem', marginBottom: 8 }}>📞</div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>Customer Helpline</div>
-                <div style={{ color: '#7C3AED', fontWeight: 800, fontSize: '0.85rem', marginTop: 4 }}>+91 1800-123-4567</div>
-              </div>
-
-              <div style={{ padding: '1.25rem', border: '1px solid #e2e8f0', borderRadius: 14, background: '#f0fdf4', textAlign: 'center' }}>
-                <div style={{ fontSize: '1.8rem', marginBottom: 8 }}>✉️</div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>Email Support</div>
-                <div style={{ color: '#059669', fontWeight: 800, fontSize: '0.85rem', marginTop: 4 }}>support@caltrack.com</div>
-              </div>
-            </div>
-
-            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', marginBottom: 12 }}>Frequently Asked Questions</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <details style={{ padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, background: 'white', fontSize: '0.85rem' }}>
-                <summary style={{ fontWeight: 700, color: '#0f172a', cursor: 'pointer' }}>How do I cancel or reschedule my booking?</summary>
-                <p style={{ color: '#64748b', marginTop: 8, lineHeight: 1.5 }}>Navigate to 'My Reschedules' tab in this portal to submit a new date and time slot request.</p>
-              </details>
-              <details style={{ padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, background: 'white', fontSize: '0.85rem' }}>
-                <summary style={{ fontWeight: 700, color: '#0f172a', cursor: 'pointer' }}>What is the 30-day service warranty?</summary>
-                <p style={{ color: '#64748b', marginTop: 8, lineHeight: 1.5 }}>All completed services are backed by a 30-day quality guarantee. If an issue recurs, file a complaint in 'My Complaints' for a free re-visit.</p>
-              </details>
-            </div>
           </motion.div>
         )
 
@@ -4630,19 +5133,8 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
         {/* Sidebar */}
         <div style={{ width: 280, background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '2.5rem 0', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '0 2rem', marginBottom: '2.5rem', display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #e2e8f0', overflow: 'hidden', flexShrink: 0 }}>
-              {user?.avatar_url || user?.avatar || user?.profile_picture ? (
-                <img
-                  src={getFullImageUrl(user?.avatar_url || user?.avatar || user?.profile_picture)}
-                  alt={userFullName}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-              ) : (
-                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#7C3AED' }}>
-                  {userFullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'C'}
-                </span>
-              )}
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <User size={24} color="#64748b" />
             </div>
             <div>
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{userFullName}</div>
@@ -4656,7 +5148,7 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 key={t.id}
                 onClick={() => onChangeTab(t.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 14, padding: '1rem 2rem', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', cursor: 'pointer',
                   background: activeTab === t.id ? 'white' : 'transparent',
                   borderLeft: `4px solid ${activeTab === t.id ? '#7C3AED' : 'transparent'}`,
                   color: activeTab === t.id ? '#7C3AED' : '#475569',
@@ -4665,7 +5157,14 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   transition: 'all 0.2s'
                 }}
               >
-                <t.icon size={20} color={activeTab === t.id ? '#7C3AED' : '#94a3b8'} /> {t.id}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <t.icon size={20} color={activeTab === t.id ? '#7C3AED' : '#94a3b8'} /> {t.id}
+                </div>
+                {t.badge > 0 && (
+                  <span style={{ background: '#7C3AED', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
+                    {t.badge}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -4702,16 +5201,557 @@ function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   )
 }
 
+/* ─────────────────────────────────────────────────────────────
+   STEP WORKFLOW CHECKOUT (Urban-style Accordion & Slot Booking)
+   ───────────────────────────────────────────────────────────── */
+
+function StepWorkflowCheckout({
+  category,
+  cart,
+  setCart,
+  selectedDate,
+  selectedTime,
+  onDateChange,
+  onTimeChange,
+  formData,
+  onChange,
+  onOpenMap,
+  onSubmit,
+  loading,
+  error,
+  onBack
+}) {
+  const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime)
+  const [avoidCalling, setAvoidCalling] = useState(true)
+  const [couponCode, setCouponCode] = useState("")
+  const [couponApplied, setCouponApplied] = useState(false)
+  const [tip, setTip] = useState(75)
+  const [customTip, setCustomTip] = useState("")
+  const [payMethod, setPayMethod] = useState("online")
+  const [editingPhone, setEditingPhone] = useState(false)
+  const [showSavedAddrModal, setShowSavedAddrModal] = useState(false)
+  const [showAddSearchModal, setShowAddSearchModal] = useState(false)
+  const [showMapModal, setShowMapModal] = useState(false)
+  const [selectedSearchLoc, setSelectedSearchLoc] = useState("")
+
+  const availableDates = useMemo(() => {
+    const dates = []
+    const today = new Date()
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today)
+      d.setDate(today.getDate() + i)
+      const dateStr = d.toISOString().split("T")[0]
+      let label = d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })
+      if (i === 0) label = `Today, ${d.getDate()} ${d.toLocaleDateString("en-US", { month: "short" })}`
+      if (i === 1) label = `Tomorrow, ${d.getDate()} ${d.toLocaleDateString("en-US", { month: "short" })}`
+      dates.push({ dateStr, label, dayName: d.toLocaleDateString("en-US", { weekday: "short" }), dayNum: d.getDate() })
+    }
+    return dates
+  }, [])
+
+  const timeSlots = [
+    "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
+    "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM"
+  ]
+
+  const items = cart && cart.length > 0 ? cart : [{ id: "def-1", name: category?.name || "Service Booking", price: 1198, quantity: 1 }]
+
+  const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const origTotal = Math.round(itemTotal * 1.1)
+  const discount = couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 100
+  const taxFee = 99
+  const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
+  const grandTotal = Math.max(0, itemTotal + taxFee - discount + tipAmount)
+
+  const addItem = (id) => {
+    setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i))
+  }
+  const removeItem = (id) => {
+    setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
+  }
+
+  const isSlotSelected = selectedDate && selectedTime
+
+  return (
+    <div className="w-full max-w-6xl mx-auto px-4 py-6 font-sans text-slate-800">
+      
+      {/* Top Offer Banner */}
+      <div className="mb-6 flex items-center gap-2 bg-emerald-50 border border-emerald-200/60 rounded-xl px-4 py-3 text-emerald-800 text-xs font-bold shadow-xs">
+        <TagIcon size={16} className="text-emerald-600 shrink-0" />
+        <span>Saving ₹{discount} on this order</span>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        {/* LEFT COLUMN: Steps / Workflow Accordion */}
+        <div className="lg:col-span-7 space-y-6">
+          
+          {/* Main Accordion Card */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
+            
+            {/* Step 1: Phone / Contact */}
+            <div className="p-5 flex items-start gap-4">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
+                <MapPin size={18} />
+              </div>
+              <div className="flex-1">
+                <span className="text-xs font-bold text-slate-500 block mb-0.5">Send booking details to</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-extrabold text-slate-900">
+                    +91 {formData.phone || "9150632938"}
+                  </span>
+                  <button onClick={() => setEditingPhone(!editingPhone)} className="text-xs font-bold text-indigo-600 hover:underline">
+                    {editingPhone ? "Save" : "Change"}
+                  </button>
+                </div>
+                {editingPhone && (
+                  <input
+                    type="text"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={onChange}
+                    placeholder="Enter phone number"
+                    className="mt-2 text-xs border border-slate-200 rounded-lg px-3 py-1.5 w-full outline-none focus:border-indigo-500"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Step 2: Address */}
+            <div className="p-5 flex items-start gap-4">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
+                <MapPin size={18} />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-500">Address</span>
+                  <button
+                    onClick={() => setShowSavedAddrModal(true)}
+                    className="border border-slate-200 rounded-lg px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <p className="text-xs font-bold text-slate-800 leading-snug">
+                  {formData.address || "fff, Banaswadi, Bengaluru, Karnataka, India"}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 3: Slot (Time & Date) */}
+            <div className="p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
+                  <Clock size={18} />
+                </div>
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-slate-500 block mb-2">Slot</span>
+                  
+                  {/* Select button or current slot */}
+                  {isSlotSelected && !showSlotPicker ? (
+                    <div className="flex items-center justify-between bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
+                      <div>
+                        <span className="text-xs font-black text-indigo-950 block">
+                          {selectedDate}
+                        </span>
+                        <span className="text-xs font-bold text-indigo-700">
+                          {selectedTime}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setShowSlotPicker(true)}
+                        className="text-xs font-bold text-indigo-600 hover:underline"
+                      >
+                        Change slot
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowSlotPicker(true)}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md shadow-indigo-600/20 active:scale-[0.99]"
+                    >
+                      Select time & date
+                    </button>
+                  )}
+
+                  {/* Inline Slot Picker Panel */}
+                  {showSlotPicker && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
+                      
+                      {/* Date Pills */}
+                      <div>
+                        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
+                          Select Date
+                        </label>
+                        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                          {availableDates.map(item => {
+                            const isSel = selectedDate === item.dateStr
+                            return (
+                              <button
+                                key={item.dateStr}
+                                onClick={() => onDateChange(item.dateStr)}
+                                className={`flex flex-col items-center justify-center min-w-[70px] p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                                  isSel
+                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                    : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300"
+                                }`}
+                              >
+                                <span className="text-[10px] font-bold opacity-80 uppercase">{item.dayName}</span>
+                                <span className="text-sm font-black mt-0.5">{item.dayNum}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Time Slot Grid */}
+                      <div>
+                        <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
+                          Select Time Slot
+                        </label>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {timeSlots.map(t => {
+                            const isSel = selectedTime === t
+                            return (
+                              <button
+                                key={t}
+                                onClick={() => {
+                                  onTimeChange(t)
+                                  if (selectedDate) setShowSlotPicker(false)
+                                }}
+                                className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
+                                  isSel
+                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white"
+                                }`}
+                              >
+                                {t}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {isSlotSelected && (
+                        <div className="pt-2 text-right">
+                          <button
+                            onClick={() => setShowSlotPicker(false)}
+                            className="bg-indigo-600 text-white font-extrabold text-xs px-5 py-2 rounded-xl shadow-xs hover:bg-indigo-700 transition-all"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Step 4: Payment Method */}
+            <div className={`p-5 flex items-start gap-4 ${!isSlotSelected ? "opacity-50" : ""}`}>
+              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
+                <CreditCard size={18} />
+              </div>
+              <div className="flex-1">
+                <span className="text-xs font-bold text-slate-500 block mb-2">Payment Method</span>
+                
+                {isSlotSelected ? (
+                  <div className="space-y-3">
+                    <div
+                      onClick={() => setPayMethod("online")}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                        payMethod === "online"
+                          ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
+                          : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💳</div>
+                        <div>
+                          <span className="text-xs font-black text-slate-900 block">Pay Online</span>
+                          <span className="text-[10px] text-slate-500 font-medium">UPI / Cards / Netbanking</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">RECOMMENDED</span>
+                    </div>
+
+                    <div
+                      onClick={() => setPayMethod("cash")}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                        payMethod === "cash"
+                          ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
+                          : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💵</div>
+                        <div>
+                          <span className="text-xs font-black text-slate-900 block">Pay After Service</span>
+                          <span className="text-[10px] text-slate-500 font-medium">Pay cash or UPI to expert</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">CASH</span>
+                    </div>
+
+                    {error && (
+                      <div className="text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-xl">
+                        {error}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => onSubmit(payMethod)}
+                      disabled={loading}
+                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300"
+                    >
+                      {loading ? "Processing..." : `Confirm Booking · ₹${grandTotal.toLocaleString("en-IN")}`}
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs font-bold text-slate-400">Select slot above to unlock payment</span>
+                )}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Cancellation Policy */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-1">
+            <h4 className="text-xs font-black text-slate-900">Cancellation policy</h4>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Free cancellations if done more than 12 hrs before the service. A fee will be charged otherwise.
+            </p>
+            <button className="text-xs font-extrabold text-indigo-600 hover:underline pt-1">
+              Read full policy
+            </button>
+          </div>
+
+        </div>
+
+        {/* RIGHT COLUMN: Cart Items & Payment Summary */}
+        <div className="lg:col-span-5 space-y-5 lg:sticky lg:top-24">
+          
+          {/* Items Card */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+            <h4 className="text-sm font-black text-slate-900 border-b border-slate-100 pb-2">
+              {category?.name || "Services Added"}
+            </h4>
+
+            <div className="space-y-3">
+              {items.map(item => (
+                <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
+                  <span className="font-bold text-slate-800 flex-1">{item.name}</span>
+                  
+                  {/* Quantity controls */}
+                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2 py-0.5 bg-slate-50 font-bold">
+                    <button onClick={() => removeItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold">-</button>
+                    <span className="text-slate-800 font-black">{item.quantity}</span>
+                    <button onClick={() => addItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold">+</button>
+                  </div>
+
+                  {/* Price */}
+                  <div className="text-right">
+                    <span className="font-black text-slate-900 block">
+                      ₹{(item.price * item.quantity).toLocaleString("en-IN")}
+                    </span>
+                    {origTotal > itemTotal && (
+                      <span className="text-[10px] text-slate-400 line-through block">
+                        ₹{(origTotal * item.quantity).toLocaleString("en-IN")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Checkbox option */}
+            <div className="pt-2 border-t border-slate-100 flex items-start gap-2.5">
+              <input
+                type="checkbox"
+                id="avoidCalling"
+                checked={avoidCalling}
+                onChange={e => setAvoidCalling(e.target.checked)}
+                className="accent-indigo-600 mt-0.5 rounded shrink-0 cursor-pointer"
+              />
+              <label htmlFor="avoidCalling" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                Avoid calling before reaching the location
+              </label>
+            </div>
+          </div>
+
+          {/* Coupons Card */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                %
+              </div>
+              <span className="text-xs font-black text-slate-900">Coupons and offers</span>
+            </div>
+            <button
+              onClick={() => setCouponApplied(!couponApplied)}
+              className="text-xs font-extrabold text-indigo-600 hover:underline"
+            >
+              {couponApplied ? "1 applied ✓" : "9 offers >"}
+            </button>
+          </div>
+
+          {/* Payment Summary */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+            <h4 className="text-sm font-black text-slate-900 border-b border-slate-100 pb-2">
+              Payment summary
+            </h4>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>Item total</span>
+                <div className="text-right">
+                  <span className="line-through text-slate-400 mr-1.5">₹{origTotal.toLocaleString("en-IN")}</span>
+                  <span className="font-bold text-slate-800">₹{itemTotal.toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between text-slate-600">
+                <span>Taxes and Fee</span>
+                <span className="font-bold text-slate-800">₹{taxFee}</span>
+              </div>
+
+              {couponApplied && (
+                <div className="flex justify-between text-indigo-700 font-bold">
+                  <span>Coupon Discount</span>
+                  <span>-₹{discount}</span>
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 pt-2 flex justify-between font-black text-slate-900 text-sm">
+                <span>Total amount</span>
+                <span>₹{grandTotal.toLocaleString("en-IN")}</span>
+              </div>
+
+              <div className="flex justify-between font-black text-indigo-700 text-sm pt-1">
+                <span>Amount to pay</span>
+                <span>₹{grandTotal.toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+
+            {/* Tip Section */}
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <span className="text-xs font-bold text-slate-700 block">
+                Add a tip to thank the Professional
+              </span>
+
+              <div className="grid grid-cols-4 gap-2">
+                {[50, 75, 100].map(amt => {
+                  const isSel = tip === amt
+                  return (
+                    <button
+                      key={amt}
+                      onClick={() => setTip(isSel ? null : amt)}
+                      className={`relative py-2 rounded-xl border text-xs font-bold transition-all ${
+                        isSel
+                          ? "border-indigo-600 bg-indigo-50/60 text-indigo-700"
+                          : "border-slate-200 text-slate-700 hover:border-slate-300"
+                      }`}
+                    >
+                      ₹{amt}
+                      {amt === 75 && (
+                        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-emerald-100 text-emerald-800 text-[8px] font-black px-1.5 py-0.2 rounded-full whitespace-nowrap">
+                          POPULAR
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => setTip(tip === "custom" ? null : "custom")}
+                  className={`py-2 rounded-xl border text-xs font-bold transition-all ${
+                    tip === "custom"
+                      ? "border-indigo-600 bg-indigo-50/60 text-indigo-700"
+                      : "border-slate-200 text-slate-700 hover:border-slate-300"
+                  }`}
+                >
+                  Custom
+                </button>
+              </div>
+
+              {tip === "custom" && (
+                <input
+                  type="number"
+                  placeholder="Enter tip amount"
+                  value={customTip}
+                  onChange={e => setCustomTip(e.target.value)}
+                  className="w-full mt-2 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-500 font-bold"
+                />
+              )}
+
+              <span className="text-[10px] text-slate-400 block text-center pt-1">
+                100% of the tip goes to the professional.
+              </span>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {showSavedAddrModal && (
+        <SavedAddressesModal
+          onClose={() => setShowSavedAddrModal(false)}
+          currentAddress={formData.address}
+          onSelectAddress={(addr) => {
+            onChange({ target: { name: "address", value: addr } })
+          }}
+          onAddNewAddress={() => {
+            setShowSavedAddrModal(false)
+            setShowAddSearchModal(true)
+          }}
+        />
+      )}
+
+      {showAddSearchModal && (
+        <AddAddressSearchModal
+          onClose={() => setShowAddSearchModal(false)}
+          onSelectLocation={(loc) => {
+            setSelectedSearchLoc(loc)
+            setShowAddSearchModal(false)
+            setShowMapModal(true)
+          }}
+          onUseCurrentLocation={() => {
+            setSelectedSearchLoc("")
+            setShowAddSearchModal(false)
+            setShowMapModal(true)
+          }}
+        />
+      )}
+
+      {showMapModal && (
+        <LocationPickerModal
+          initialLocation={selectedSearchLoc || formData.address}
+          onClose={() => setShowMapModal(false)}
+          onConfirm={(loc) => {
+            onChange({ target: { name: "address", value: loc } })
+            setShowMapModal(false)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
 export function BookingPage() {
-  const { user } = useAuth()
   const [searchParams] = useSearchParams()
-  // Arriving with a cart already built (e.g. "Proceed to Checkout" from the
-  // landing page's own package popup) skips straight to the date/time step
-  // instead of asking the user to re-add items here.
   const navigate = useNavigate()
   const routerLocation = useLocation()
   const incomingCart = routerLocation.state?.cart
   const incomingCategory = routerLocation.state?.category
+  // BookingPage is purely a checkout flow — if no cart arrives, go back to landing
+  useEffect(() => {
+    if (!incomingCart?.length && !incomingCategory && !routerLocation.state?.triggerLocPicker) {
+      navigate("/", { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [step, setStep] = useState(() => {
     if (routerLocation.state?.triggerLocPicker) {
       return 1;
@@ -4733,16 +5773,22 @@ export function BookingPage() {
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [showPackageModal, setShowPackageModal] = useState(false)
+  const [showSubCategoryChoiceModal, setShowSubCategoryChoiceModal] = useState(false)
   const [dynamicReviews, setDynamicReviews] = useState([])
 
   const [searchQuery, setSearchQuery] = useState("")
-  const [location, setLocation] = useState("Hosur, Tamil Nadu, India")
+  const [location, setLocation] = useState("Set location")
   const [showLocPicker, setShowLocPicker] = useState(false)
   const [showPostFlow, setShowPostFlow] = useState(false)
   const [assignedTech, setAssignedTech] = useState(null)
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
   const contentRef = useRef()
+
+  // Auth state — customer profile + bookings
+  const { user, refreshMe } = useAuth()
+  const [customerBookings, setCustomerBookings] = useState([])
+  const hasNonDraftBookings = customerBookings.some(b => b.status !== "draft")
 
   useEffect(() => { contentRef.current?.scrollTo({ top: 0, behavior: "smooth" }) }, [step])
 
@@ -4771,18 +5817,16 @@ export function BookingPage() {
       try {
         const catRes = await apiRequest("/catalog/categories/")
         const svcRes = await apiRequest("/catalog/services/")
-        let loadedCats = []
         if (catRes.success) {
-          loadedCats = catRes.data.map((c, i) => ({
+          const cats = catRes.data.map((c, i) => ({
             id: c.id.toString(),
-            slug: c.slug || c.id.toString(),
             name: c.name,
-            desc: c.description || c.desc || ("Expert " + c.name + " service"),
+            desc: c.description || "Expert " + c.name + " service",
             rating: c.rating || "4.8",
-            jobs: c.jobs_count_str || c.jobs || "10K+",
-            image: getFullImageUrl(c.image) || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop"
+            jobs: c.jobs_count_str || "10K+",
+            image: c.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop"
           }))
-          setCategoriesData(loadedCats)
+          setCategoriesData(cats)
         }
         if (svcRes.success) {
           if (svcRes.currency_symbol) {
@@ -4790,38 +5834,21 @@ export function BookingPage() {
           }
           const pkgs = {}
           svcRes.data.forEach(s => {
-            const cid = s.category ? s.category.toString() : ""
-            if (!cid) return
-
-            const catObj = loadedCats.find(c => c.id === cid || c.slug === cid)
-            const cSlug = catObj?.slug || ""
-            const cName = catObj?.name ? catObj.name.toLowerCase() : ""
-
-            const pkgObj = {
+            const cid = s.category.toString()
+            if (!pkgs[cid]) pkgs[cid] = []
+            pkgs[cid].push({
               id: s.id.toString(),
               name: s.name,
               price: parseFloat(s.price),
               priceStr: BOOKING_CURRENCY_SYMBOL + s.price,
-              duration: s.duration || "1-2 Hrs",
-              payment_policy: s.payment_policy || "BOTH",
-              image: getFullImageUrl(s.image) || getFullImageUrl(catObj?.image) || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-              includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : [s.name + " Service", "Professional Inspection", "Service Guarantee"],
+              duration: s.duration || "1 hr",
+              payment_policy: s.payment_policy,
+              image: s.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+              includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
               excludes: Array.isArray(s.excludes) ? s.excludes : [],
               popular: !!s.popular,
-              tag: s.tag || (s.popular ? "Most Booked" : "")
-            }
-
-            if (!pkgs[cid]) pkgs[cid] = []
-            pkgs[cid].push(pkgObj)
-
-            if (cSlug) {
-              if (!pkgs[cSlug]) pkgs[cSlug] = []
-              if (!pkgs[cSlug].some(item => item.id === pkgObj.id)) pkgs[cSlug].push(pkgObj)
-            }
-            if (cName) {
-              if (!pkgs[cName]) pkgs[cName] = []
-              if (!pkgs[cName].some(item => item.id === pkgObj.id)) pkgs[cName].push(pkgObj)
-            }
+              tag: s.tag || ""
+            })
           })
           setPackagesData(pkgs)
         }
@@ -4830,19 +5857,24 @@ export function BookingPage() {
       }
     }
     loadCatalog()
+  }, [])
 
-    // Handle URL search parameters for category/service redirect
-    // (falls back to the static CATEGORIES list so this works even before
-    // the live catalog fetch above resolves, or when it returns nothing)
-    // Skipped when we already arrived with a pre-filled cart (see above).
-    const catParam = searchParams.get('category') || searchParams.get('cat')
-    if (catParam && !incomingCart?.length) {
-      const catsToSearch = categoriesData.length > 0 ? categoriesData : CATEGORIES
-      const foundCat = catsToSearch.find(c => c.id === catParam || c.slug === catParam || c.name.toLowerCase() === catParam.toLowerCase())
-      if (foundCat) {
-        setCategory(foundCat)
-        setShowPackageModal(true)
+  // Requirement 1 of Prompt 3: Resolve location from customer profile (last_known_location), fallback to "Set location"
+  useEffect(() => {
+    const locObj = user?.last_known_location || user?.lastKnownLocation
+    if (locObj) {
+      if (typeof locObj === "string" && locObj.trim()) {
+        setLocation(locObj)
+        return
       }
+      if (locObj.label) {
+        setLocation(locObj.label)
+        return
+      }
+    }
+    if (user?.address) {
+      setLocation(user.address)
+      return
     }
 
     // Fetch initial location
@@ -4878,7 +5910,9 @@ export function BookingPage() {
       setShowLocPicker(true);
       setShowPackageModal(true);
     }
-  }, [])
+    // Fallback if null or manual entry skipped
+    setLocation("Set location")
+  }, [user])
 
   useEffect(() => {
     let query = "";
@@ -4932,7 +5966,7 @@ export function BookingPage() {
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
     data.append("total_amount", cart.reduce((a, c) => a + (c.price * c.quantity), 0))
-    // Serialize cart_data as JSON string — backend will parse it robustly
+    // Serialize cart_data as JSON string •” backend will parse it robustly
     data.append("cart_data", JSON.stringify(cart.map(c => ({
       id: c.id, name: c.name, price: c.price, quantity: c.quantity,
       categoryName: c.categoryName || category?.name || ""
@@ -4959,7 +5993,7 @@ export function BookingPage() {
       } else setError(res?.message || "Something went wrong. Please try again.")
     } catch (err) {
       if (err?.body?.errors) {
-        const msgs = Object.entries(err.body.errors).map(([f, m]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`).join(" · ")
+        const msgs = Object.entries(err.body.errors).map(([f, m]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`).join(" Â· ")
         setError(msgs || err.body.message)
       } else setError(err?.body?.message || err?.body?.detail || "Connection error. Try again.")
     } finally { setLoading(false) }
@@ -4967,11 +6001,13 @@ export function BookingPage() {
 
 
   const resetAll = () => {
-    setStep(1); setCategory(null); setCart([]); setSelDate(""); setSelTime("")
+    setCategory(null); setCart([]); setSelDate(""); setSelTime("")
     setFormData({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "" })
     setPhotoFile(null); setPhotoPreview(null); setSuccessData(null); setError(null)
     setShowPostFlow(false); setAssignedTech(null)
     sessionStorage.removeItem(OTP_SESSION_KEY)
+    // No StepHome anymore — go back to landing page
+    navigate("/", { replace: true })
   }
 
   return (
@@ -5015,88 +6051,7 @@ export function BookingPage() {
         )}
       </AnimatePresence>
 
-      {/* Sticky Nav */}
-      <header className="uc-nav">
-        <div className="uc-nav-left">
-          <CalTrackLogo size="sm" showTagline={false} theme="light" />
-        </div>
 
-        <div className="uc-nav-right-icons">
-          <div className="uc-location-selector" onClick={() => setShowLocPicker(true)}>
-            <MapPin size={15} color="#64748b" />
-            <span className="uc-loc-text">{location.split(',')[0]}</span>
-            <ChevronDown size={14} color="#64748b" />
-          </div>
-          <div className="uc-nav-search">
-            <Search size={15} color="#94a3b8" />
-            <input type="text" placeholder="Search for 'AC service'" value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setStep(1); }} />
-          </div>
-          {/* Cart Dropdown */}
-          <div className="uc-cart-icon"
-            onMouseEnter={() => setShowCartMenu(true)}
-            onMouseLeave={() => setShowCartMenu(false)}
-            onClick={() => step > 1 && setStep(6)}>
-            <ShoppingCart size={20} color="#1e293b" />
-            {(cart.length > 0 || step > 1) && <span className="uc-cart-badge">{cart.reduce((a, c) => a + c.quantity, 0) || 1}</span>}
-
-            {showCartMenu && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem', zIndex: 1000, boxShadow: '0 10px 40px rgba(0,0,0,0.12)', width: 280, marginTop: '10px', cursor: 'default' }}>
-                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <ShoppingCart size={16} /> Cart {cart.length > 0 ? `(${cart.reduce((a, c) => a + c.quantity, 0)} Items)` : "(Empty)"}
-                </div>
-                <div style={{ height: 1, background: '#e2e8f0', margin: '0.5rem 0' }} />
-
-                {cart.length > 0 ? (
-                  <>
-                    {cart.map((c, idx) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '0.8rem 0', fontSize: '0.8rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                          <CheckCircle2 size={14} color="#10B981" style={{ marginTop: 2 }} />
-                          <div>
-                            <div style={{ fontWeight: 700, color: '#1e293b' }}>{c.quantity}x {c.name}</div>
-                            <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: 2 }}>{c.categoryName}</div>
-                          </div>
-                        </div>
-                        <div style={{ fontWeight: 800, color: '#1e293b' }}>{BOOKING_CURRENCY_SYMBOL}{c.price * c.quantity}</div>
-                      </div>
-                    ))}
-
-                    <div style={{ height: 1, background: '#e2e8f0', margin: '0.5rem 0' }} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 800, color: '#1e293b', margin: '0.8rem 0' }}>
-                      <span>Total Items : {cart.reduce((a, c) => a + c.quantity, 0)}</span>
-                      <span>Total Price : {BOOKING_CURRENCY_SYMBOL}{cart.reduce((a, c) => a + (c.price * c.quantity), 0)}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
-                      <button onClick={() => setStep(6)} style={{ width: '100%', padding: '0.6rem', background: '#f1f5f9', color: '#0f172a', fontWeight: 700, borderRadius: 8, border: 'none', cursor: 'pointer' }}>View Cart</button>
-                      <button onClick={() => setStep(6)} style={{ width: '100%', padding: '0.6rem', background: '#7C3AED', color: 'white', fontWeight: 700, borderRadius: 8, border: 'none', cursor: 'pointer' }}>Proceed to Booking</button>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ padding: '2rem 0', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>Your cart is empty</div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Profile Icon (Opens Account Portal directly) */}
-          <div className="uc-profile-icon" onClick={() => {
-            setShowAccountPortal(true);
-            setActiveAccountTab("My Profile");
-          }} style={{ overflow: 'hidden', borderRadius: '50%', width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {user?.avatar_url || user?.avatar || user?.profile_picture ? (
-              <img
-                src={getFullImageUrl(user?.avatar_url || user?.avatar || user?.profile_picture)}
-                alt={user?.firstName || 'User'}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            ) : (
-              <User size={20} color="#1e293b" />
-            )}
-          </div>
-        </div>
-      </header>
 
       {/* Account Portal Modal */}
       <AnimatePresence>
@@ -5109,12 +6064,80 @@ export function BookingPage() {
         )}
       </AnimatePresence>
 
+      {/* Login flow removed from BookingPage — login is handled on LandingPage */}
 
-      {step > 1 && step <= 6 && (
-        <div className="uc-nav-summary">
-          <SummaryBar category={category} cart={cart} date={selDate} time={selTime} step={step} />
+      {/* Urban Style Top Navigation Header */}
+      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-2xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          
+          {/* Brand Logo & Urban Location Selector */}
+          <div className="flex items-center gap-3 sm:gap-6">
+            <div
+              className="flex items-center gap-2 select-none cursor-pointer"
+              onClick={() => { setStep(1); setCategory(null); }}
+            >
+              <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-600/20">
+                <Home className="w-5 h-5" strokeWidth={2.5} />
+              </div>
+              <span className="text-lg font-black tracking-tight text-slate-900 hidden sm:inline">CalServices</span>
+            </div>
+
+            <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
+            {/* Location Selector Pill */}
+            <button
+              onClick={() => setShowLocPicker(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[280px] truncate"
+            >
+              <MapPin size={15} className="text-indigo-600 shrink-0" />
+              <span className="truncate">{location || "Select Location"}</span>
+              <ChevronDown size={14} className="text-slate-400 shrink-0 ml-auto" />
+            </button>
+          </div>
+
+          {/* Right Controls: Cart & Profile Button */}
+          <div className="flex items-center gap-3">
+            {cart?.length > 0 && (
+              <button
+                onClick={() => setStep(3)}
+                className="relative p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 text-slate-700 hover:text-indigo-600 transition-all cursor-pointer"
+                title="View Cart"
+              >
+                <ShoppingCart size={18} />
+                <span className="absolute -top-1.5 -right-1.5 bg-indigo-600 text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                  {cart.length}
+                </span>
+              </button>
+            )}
+
+            {/* Urban Profile Icon Button */}
+            <button
+              onClick={() => {
+                if (user) {
+                  setActiveAccountTab(hasNonDraftBookings ? "My Bookings" : "My Profile")
+                  setShowAccountPortal(true)
+                } else {
+                  // Login is on LandingPage — redirect there
+                  navigate("/")
+                }
+              }}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/80 border border-indigo-100 text-indigo-950 font-black text-xs transition-all shadow-2xs cursor-pointer active:scale-95"
+            >
+              <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-[10px] shrink-0">
+                <User size={13} />
+              </div>
+              <span className="hidden sm:inline font-extrabold">
+                {user?.firstName || user?.username || "Login / Sign Up"}
+              </span>
+              <ChevronDown size={13} className="text-indigo-500 hidden sm:inline" />
+            </button>
+          </div>
+
         </div>
-      )}
+      </header>
+
+
+
 
 
 
@@ -5136,43 +6159,14 @@ export function BookingPage() {
             </motion.div>
           )}
 
-          {step === 1 && (
-            <motion.div key="step1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <StepHome searchQuery={searchQuery} setSearchQuery={setSearchQuery} onSelect={cat => { setCategory(cat); setShowPackageModal(true) }} categories={categoriesData} dynamicReviews={dynamicReviews} />
-            </motion.div>
-          )}
-
-          {/* step 2 was here */}
-
-          {step === 3 && (
-            <motion.div key="step3" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
-              <div className="uc-step-container">
-                <StepSchedule
-                  category={category}
-                  selectedDate={selDate}
-                  selectedTime={selTime}
-                  onDateChange={setSelDate}
-                  onTimeChange={setSelTime}
-                  onNext={() => setStep(4)}
-                  onBack={() => {
-                    if (category?.id || category?.slug) {
-                      navigate(`/home?category=${category.slug || category.id}`, { state: { cart } });
-                    } else {
-                      setStep(1);
-                      setShowPackageModal(true);
-                    }
-                  }}
-                />
-              </div>
-            </motion.div>
-          )}
+          {/* Step 1 (StepHome) removed — service discovery lives on LandingPage */}
 
           {step === 4 && (
             <motion.div key="step4" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
               <div className="uc-step-container">
                 <StepLogin
                   category={category}
-                  onBack={() => setStep(3)}
+                  onBack={() => { setShowPackageModal(true); }}
                   onVerified={data => {
                     setFormData(p => ({
                       ...p,
@@ -5187,43 +6181,24 @@ export function BookingPage() {
             </motion.div>
           )}
 
-          {step === 5 && (
-            <motion.div key="step5" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
-              <div className="uc-step-container">
-                <StepDetails
-                  category={category}
-                  cart={cart}
-                  formData={formData}
-                  onChange={handleChange}
-                  photoFile={photoFile}
-                  onPhotoChange={handlePhoto}
-                  photoPreview={photoPreview}
-                  onNext={() => setStep(6)}
-                  onBack={() => setStep(4)}
-                  globalLocation={location}
-                  onOpenMap={() => setShowLocPicker(true)}
-                />
-              </div>
-            </motion.div>
-          )}
-
-          {step === 6 && (
-            <motion.div key="step6" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
-              <div className="uc-step-container">
-                <StepConfirm
-                  category={category}
-                  pkg={cart[0] || { name: "Multiple Items", priceStr: BOOKING_CURRENCY_SYMBOL + cart.reduce((a, c) => a + (c.price * c.quantity), 0) }}
-                  cart={cart}
-                  date={selDate}
-                  time={selTime}
-                  formData={formData}
-                  photoPreview={photoPreview}
-                  onBack={() => setStep(5)}
-                  onSubmit={handleSubmit}
-                  loading={loading}
-                  error={error}
-                />
-              </div>
+          {step >= 3 && step <= 6 && (
+            <motion.div key="workflowCheckout" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+              <StepWorkflowCheckout
+                category={category}
+                cart={cart}
+                setCart={setCart}
+                selectedDate={selDate}
+                selectedTime={selTime}
+                onDateChange={setSelDate}
+                onTimeChange={setSelTime}
+                formData={formData}
+                onChange={handleChange}
+                onOpenMap={() => setShowLocPicker(true)}
+                onSubmit={handleSubmit}
+                loading={loading}
+                error={error}
+                onBack={() => navigate("/", { replace: true })}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -5231,11 +6206,107 @@ export function BookingPage() {
 
       {/* Footer */}
       <footer className="uc-footer">
-        <Shield size={12} /> SSL Encrypted &nbsp;·&nbsp;
-        <Star size={12} style={{ fill: "#F59E0B", color: "#F59E0B" }} /> 4.8★ Rated &nbsp;·&nbsp;
-        <CheckCircle2 size={12} /> 1M+ Bookings &nbsp;·&nbsp;
+        <Shield size={12} /> SSL Encrypted &nbsp;Â·&nbsp;
+        <Star size={12} style={{ fill: "#F59E0B", color: "#F59E0B" }} /> 4.8•˜… Rated &nbsp;Â·&nbsp;
+        <CheckCircle2 size={12} /> 1M+ Bookings &nbsp;Â·&nbsp;
         <Award size={12} /> 30-Day Guarantee
       </footer>
+
+      {/* Electrician, Plumbing & Carpentry Choice Modal */}
+      <AnimatePresence>
+        {showSubCategoryChoiceModal && (
+          <div
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setShowSubCategoryChoiceModal(false)}
+          >
+            <motion.div
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowSubCategoryChoiceModal(false)}
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-black text-slate-900">
+                  Electrician, Plumbing &amp; Carpentry
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 font-medium">
+                  Choose a service type to view related services
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
+                {/* Electrician */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSubCategoryChoiceModal(false);
+                    const safeCats = categoriesData.length > 0 ? categoriesData : CATEGORIES;
+                    const targetCat = safeCats.find(c => c.id === "electrical" || c.id === "1") || { id: "electrical", name: "Electrical", desc: "Wiring, panels & lighting" };
+                    setCategory(targetCat);
+                    setShowPackageModal(true);
+                  }}
+                  className="group flex flex-col items-center justify-between p-4 rounded-2xl transition-all text-center cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 hover:shadow-md"
+                >
+                  <div className="w-20 h-20 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center p-3 group-hover:scale-105 transition-transform">
+                    <Zap className="w-10 h-10 text-amber-500" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-3 group-hover:text-emerald-700">
+                    Electrician
+                  </span>
+                </button>
+
+                {/* Plumber */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSubCategoryChoiceModal(false);
+                    const safeCats = categoriesData.length > 0 ? categoriesData : CATEGORIES;
+                    const targetCat = safeCats.find(c => c.id === "plumbing" || c.id === "2") || { id: "plumbing", name: "Plumbing", desc: "Leaks, pipes & fixtures" };
+                    setCategory(targetCat);
+                    setShowPackageModal(true);
+                  }}
+                  className="group flex flex-col items-center justify-between p-4 rounded-2xl transition-all text-center cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 hover:shadow-md"
+                >
+                  <div className="w-20 h-20 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center p-3 group-hover:scale-105 transition-transform">
+                    <Droplets className="w-10 h-10 text-blue-500" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-3 group-hover:text-emerald-700">
+                    Plumber
+                  </span>
+                </button>
+
+                {/* Carpentry */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSubCategoryChoiceModal(false);
+                    const safeCats = categoriesData.length > 0 ? categoriesData : CATEGORIES;
+                    const targetCat = safeCats.find(c => c.id === "carpentry" || c.id === "3") || { id: "carpentry", name: "Carpentry", desc: "Furniture & wood repairs" };
+                    setCategory(targetCat);
+                    setShowPackageModal(true);
+                  }}
+                  className="group flex flex-col items-center justify-between p-4 rounded-2xl transition-all text-center cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 hover:shadow-md"
+                >
+                  <div className="w-20 h-20 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center p-3 group-hover:scale-105 transition-transform">
+                    <Hammer className="w-10 h-10 text-orange-500" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-3 group-hover:text-emerald-700">
+                    Carpentry
+                  </span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Package Selection Modal Overlay */}
       <AnimatePresence>
@@ -5245,7 +6316,7 @@ export function BookingPage() {
               category={category}
               cart={cart}
               setCart={setCart}
-              onClose={() => navigate("/home")}
+              onClose={() => setShowPackageModal(false)}
               onCheckout={() => { setShowPackageModal(false); setStep(3); }}
               onGetEstimate={() => {
                 setShowLocPicker(true);
@@ -5256,7 +6327,7 @@ export function BookingPage() {
               category={category}
               cart={cart}
               setCart={setCart}
-              onClose={() => navigate("/home")}
+              onClose={() => setShowPackageModal(false)}
               onCheckout={() => { setShowPackageModal(false); setStep(3); }}
               onGetEstimate={() => {
                 setShowLocPicker(true);
@@ -5270,7 +6341,27 @@ export function BookingPage() {
               cart={cart}
               setCart={setCart}
               packagesData={packagesData}
-              onClose={() => navigate("/home")}
+              onClose={() => {
+                const currentCatId = (category?.id || category?.slug || "").toLowerCase();
+                setShowPackageModal(false);
+                if (["electrical", "plumbing", "carpentry", "elec", "plum", "carp"].some(k => currentCatId.includes(k))) {
+                  setShowSubCategoryChoiceModal(true);
+                } else {
+                  setStep(1);
+                  setTimeout(() => {
+                    const targetCard = document.getElementById(`cat-card-${currentCatId}`) ||
+                                       document.querySelector(`[data-cat-id="${currentCatId}"]`) ||
+                                       document.querySelector('.uc-cat-grid');
+                    if (targetCard) {
+                      targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      targetCard.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-2', 'transition-all');
+                      setTimeout(() => {
+                        targetCard.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-2');
+                      }, 2200);
+                    }
+                  }, 120);
+                }
+              }}
               onCheckout={() => { setShowPackageModal(false); setStep(3); }}
             />
           )
@@ -5279,6 +6370,228 @@ export function BookingPage() {
     </div>
   )
 }
+
+const INDIVIDUAL_SERVICES = {
+  hvac: [
+    { id: "ind-hvac-1", name: "AC Inspection & Diagnosis", price: 299, priceStr: "₹299", duration: "45 mins", categoryType: "Repair", includes: ["Complete 21-point checkup", "Cooling & gas pressure check", "Detailed estimate report"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=600&q=80&fit=crop" },
+    { id: "ind-hvac-2", name: "AC Gas Leakage Fix & Refill", price: 1499, priceStr: "₹1,499", duration: "1.5 hrs", categoryType: "Repair", includes: ["Nitrogen leak testing", "Copper pipe brazing fix", "Full Freon gas recharge"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=600&q=80&fit=crop" },
+    { id: "ind-hvac-3", name: "AC Split Wall Installation", price: 1299, priceStr: "₹1,299", duration: "2 hrs", categoryType: "Install", includes: ["Indoor & outdoor unit mounting", "Copper pipe vacuuming", "Performance testing"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=600&q=80&fit=crop" },
+    { id: "ind-hvac-4", name: "AC Uninstallation Service", price: 699, priceStr: "₹699", duration: "1 hr", categoryType: "Install", includes: ["Safe gas pump down", "Dismantling indoor & outdoor units", "Packing copper pipes"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop" },
+  ],
+  electrical: [
+    { id: "ind-elec-1", name: "Switch & Socket Installation", price: 149, priceStr: "₹149", duration: "30 mins", categoryType: "Install", includes: ["Replacement or new socket fitting", "Safety testing after install", "30-day service warranty"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=600&q=80&fit=crop" },
+    { id: "ind-elec-2", name: "Ceiling Fan Repair / Fitting", price: 249, priceStr: "₹249", duration: "45 mins", categoryType: "Repair", includes: ["Regulator & capacitor fix", "Noise & speed troubleshooting", "Blade alignment & mounting"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=600&q=80&fit=crop" },
+    { id: "ind-elec-3", name: "MCB Breaker Replacement", price: 399, priceStr: "₹399", duration: "45 mins", categoryType: "Repair", includes: ["Tripping & overload diagnosis", "Single/Double pole MCB fix", "Distribution board testing"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=600&q=80&fit=crop" },
+    { id: "ind-elec-4", name: "Complete Room Wiring Check", price: 699, priceStr: "₹699", duration: "1.5 hrs", categoryType: "Repair", includes: ["Earthing & voltage check", "Heavy appliance load testing", "Short circuit safety report"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop" },
+  ],
+  plumbing: [
+    { id: "ind-plum-1", name: "Tap & Faucet Repair", price: 149, priceStr: "₹149", duration: "30 mins", categoryType: "Repair", includes: ["Washer & spindle replacement", "Leakage & drip fix", "Water flow optimization"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=600&q=80&fit=crop" },
+    { id: "ind-plum-2", name: "Sink & Drain Unclogging", price: 349, priceStr: "₹349", duration: "45 mins", categoryType: "Repair", includes: ["Waste pipe cleaning", "Clog removal using spring wire", "Water flow check"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=600&q=80&fit=crop" },
+    { id: "ind-plum-3", name: "Flush Tank & Toilet Fix", price: 499, priceStr: "₹499", duration: "1 hr", categoryType: "Repair", includes: ["Syphon kit & ball valve fix", "Flush tank leak repair", "Sanitary seal check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop" },
+    { id: "ind-plum-4", name: "Geyser Water Heater Install", price: 799, priceStr: "₹799", duration: "1.5 hrs", categoryType: "Install", includes: ["Wall mounting & inlet/outlet pipes", "Thermostat & element safety test", "Demo & leak check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&q=80&fit=crop" },
+  ],
+  cleaning: [
+    { id: "ind-clean-1", name: "Bathroom Deep Cleaning", price: 499, priceStr: "₹499", duration: "1.5 hrs", categoryType: "Repair", includes: ["Hard water stain removal", "Tile & grout scrubbing", "Sanitization of toilet & sink"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&q=80&fit=crop" },
+    { id: "ind-clean-2", name: "Kitchen Deep Cleaning", price: 999, priceStr: "₹999", duration: "2 hrs", categoryType: "Repair", includes: ["Chimney exterior degreasing", "Countertop & tile scrubbing", "Cabinet exterior wipe"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=600&q=80&fit=crop" },
+    { id: "ind-clean-3", name: "Sofa Vacuuming & Polish", price: 799, priceStr: "₹799", duration: "1.5 hrs", categoryType: "Repair", includes: ["Fabric shampooing & extraction", "Dust mite & stain removal", "Fabric freshener spray"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop" },
+    { id: "ind-clean-4", name: "Balcony & Window Wash", price: 399, priceStr: "₹399", duration: "1 hr", categoryType: "Install", includes: ["Glass panel streak-free clean", "Grille & ledge wiping", "Floor scrubbing"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop" },
+  ],
+};
+
+export function ServiceDetailSideDrawer({ item, category, cart, setCart, onClose }) {
+  if (!item) return null;
+
+  const getCartCount = (itemId) => {
+    const found = cart.find(c => c.id === itemId);
+    return found ? found.quantity : 0;
+  };
+
+  const addToCart = (pkg) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === pkg.id);
+      if (existing) {
+        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
+      }
+      return [...prev, { ...pkg, quantity: 1, categoryName: category?.name || "Service" }];
+    });
+  };
+
+  const removeFromCart = (itemId) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === itemId);
+      if (!existing) return prev;
+      if (existing.quantity === 1) {
+        return prev.filter(c => c.id !== itemId);
+      }
+      return prev.map(c => c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c);
+    });
+  };
+
+  return (
+    <motion.div
+      className="absolute inset-0 z-50 bg-white rounded-3xl overflow-hidden flex flex-col shadow-2xl"
+      initial={{ opacity: 0, x: -30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -30 }}
+      transition={{ type: "spring", damping: 28, stiffness: 350 }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Top Header Navigation */}
+      <div className="bg-slate-900 text-white p-3 sm:p-4 flex items-center justify-between shrink-0 shadow-md">
+        <button
+          onClick={onClose}
+          className="flex items-center gap-2 text-xs font-black text-white hover:text-amber-300 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl transition-all cursor-pointer border border-white/10"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to All Services</span>
+        </button>
+        <div className="text-xs font-extrabold text-slate-300 uppercase tracking-wider hidden sm:block">
+          {category?.name || "Service Details"}
+        </div>
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Main Hero Header */}
+      <div className="relative h-44 bg-slate-950 shrink-0">
+        <img
+          src={item.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80&fit=crop"}
+          alt={item.name}
+          className="w-full h-full object-cover opacity-75"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent flex flex-col justify-end p-5">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="bg-indigo-600 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              {category?.name || "Service Details"}
+            </span>
+            <div className="flex items-center gap-1 bg-amber-500/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-amber-300 text-xs font-bold border border-amber-400/30">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span>4.8</span>
+              <span className="text-slate-300 text-[10px] font-medium ml-0.5">(113K reviews)</span>
+            </div>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-black text-white leading-tight">{item.name}</h3>
+          <p className="text-sm text-slate-200 mt-1 font-semibold">
+            Starts at <span className="font-extrabold text-amber-300 text-base">{item.priceStr || ("₹" + item.price)}</span> • {item.duration || "1 hr"}
+          </p>
+        </div>
+      </div>
+
+      {/* Scrollable Drawer Content */}
+      <div className="p-5 overflow-y-auto space-y-5 flex-1 text-slate-800 bg-white">
+        <div>
+          <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <span className="text-base">🛠️</span>
+            <span>How Our Technician Works</span>
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
+              <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                <span>🔍</span> Step 1: Diagnosis
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">Uniformed expert performs 21-point safety & operational checkup.</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
+              <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                <span>🛠️</span> Step 2: Professional Repair
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">Uses specialized tools & genuine company-backed spare parts.</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
+              <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                <span>🧹</span> Step 3: Cleanup & Test
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">Cleans up work area completely & tests appliance performance.</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5">
+              <div className="font-extrabold text-slate-900 mb-1 flex items-center gap-1.5">
+                <span>🛡️</span> Step 4: Digital Bill & Warranty
+              </div>
+              <p className="text-slate-600 text-[11px] leading-relaxed">Issues digital invoice with 30-day free revisit cover guarantee.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+            <div className="font-black text-xs text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <span className="text-indigo-600 font-extrabold">✓</span>
+              <span>Included Services</span>
+            </div>
+            <ul className="space-y-1.5 text-xs text-slate-700 font-medium">
+              {(item.includes || ["Diagnosis & Labour", "30-day warranty"]).map(inc => (
+                <li key={inc} className="flex items-start gap-1.5">
+                  <span className="text-indigo-600 font-bold text-sm leading-none">✓</span>
+                  <span>{inc}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="bg-rose-50/70 border border-rose-200/80 rounded-2xl p-4">
+            <div className="font-black text-xs text-rose-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <span className="text-rose-600 font-extrabold">✕</span>
+              <span>Excluded Services</span>
+            </div>
+            <ul className="space-y-1.5 text-xs text-slate-700 font-medium">
+              <li className="flex items-start gap-1.5">
+                <span className="text-rose-500 font-bold text-sm leading-none">✕</span>
+                <span>Spare parts cost (charged as per standard rate card)</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-between gap-3 shadow-md">
+          <div className="space-y-0.5">
+            <div className="font-extrabold text-sm flex items-center gap-1.5">
+              <span>🛡️</span>
+              <span>30-Day Re-service Guarantee Included</span>
+            </div>
+            <p className="text-xs text-slate-300">Free revisit if any issue reoccurs within 30 days of service.</p>
+          </div>
+          <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0">
+            100% Covered
+          </span>
+        </div>
+      </div>
+
+      <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+        <div>
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Service Price</div>
+          <div className="text-lg font-black text-slate-900">{item.priceStr || ("₹" + item.price)}</div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+          >
+            Close
+          </button>
+          {getCartCount(item.id) > 0 ? (
+            <div className="flex items-center gap-2.5 bg-slate-900 text-white font-extrabold text-xs px-4 py-2 rounded-xl shadow-md">
+              <button className="w-6 h-6 rounded-lg bg-slate-700 hover:bg-slate-800 flex items-center justify-center font-black" onClick={() => removeFromCart(item.id)}>-</button>
+              <span>{getCartCount(item.id)} in Cart</span>
+              <button className="w-6 h-6 rounded-lg bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center font-black" onClick={() => addToCart(item)}>+</button>
+            </div>
+          ) : (
+            <button
+              className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-6 py-2.5 rounded-xl shadow-md uppercase tracking-wider active:scale-95 cursor-pointer flex items-center gap-1.5"
+              onClick={() => addToCart(item)}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              <span>Add Service</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 
 export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate }) {
   const [searchQuery, setSearchQuery] = useState("")
@@ -8155,7 +9468,77 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 }
 
 export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, isFullPage = false }) {
-  const [activeSubTab, setActiveSubTab] = useState("Furnished Apartment");
+  const rawCatKey = (category?.id || category?.slug || "cleaning").toLowerCase();
+  let normalizedKey = "cleaning";
+  if (["hvac", "ac", "ac_appliance", "appliance_repair", "appliance"].some(k => rawCatKey.includes(k))) normalizedKey = "hvac";
+  else if (["electrical", "electricity", "elec"].some(k => rawCatKey.includes(k))) normalizedKey = "electrical";
+  else if (["plumbing", "plumber", "plum"].some(k => rawCatKey.includes(k))) normalizedKey = "plumbing";
+  else if (["carpentry", "carpenter", "carp"].some(k => rawCatKey.includes(k))) normalizedKey = "carpentry";
+  else if (["painting", "painter", "paint"].some(k => rawCatKey.includes(k))) normalizedKey = "painting";
+  else if (["pest", "pest_control"].some(k => rawCatKey.includes(k))) normalizedKey = "pest_control";
+  else if (["goods", "transport", "mini_truck", "truck"].some(k => rawCatKey.includes(k))) normalizedKey = "goods_transport";
+
+  const CATEGORY_SUBCATEGORIES = {
+    hvac: [
+      { name: "AC Service & Repair", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+      { name: "AC Installation", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+      { name: "Washing Machine", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Refrigerator & Fridge", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Microwave & Purifier", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    ],
+    electrical: [
+      { name: "Switches & Sockets", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+      { name: "Fan & Lighting", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+      { name: "MCB & Wiring", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "Inverter & Heavy Appliance", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+    ],
+    plumbing: [
+      { name: "Taps & Mixers", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+      { name: "Drainage & Clog", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Toilet & Flush Tank", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Water Heater & Tank", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+    ],
+    carpentry: [
+      { name: "Lock & Handle", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Furniture Repair", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Doors & Windows", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Drill & Hanging", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" }
+    ],
+    painting: [
+      { name: "Full Home Painting", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Wall Waterproofing", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Door & Wood Polish", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    ],
+    pest_control: [
+      { name: "Termite Control", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Cockroach & Ant Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Bed Bug Treatment", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    ],
+    goods_transport: [
+      { name: "House Shifting", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
+      { name: "Single Item Transport", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+    ],
+    cleaning: [
+      { name: "Furnished Apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop" },
+      { name: "Unfurnished Apartment", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
+      { name: "Furnished Villa", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
+      { name: "Unfurnished Villa", image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop" },
+      { name: "Book by Room", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
+      { name: "Mini Services", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    ]
+  };
+
+  const subCategories = CATEGORY_SUBCATEGORIES[normalizedKey] || CATEGORY_SUBCATEGORIES.cleaning;
+
+  const [activeSubTab, setActiveSubTab] = useState(subCategories[0]?.name || "Furnished Apartment");
+
+  // Keep activeSubTab in sync if normalizedKey changes
+  useEffect(() => {
+    if (subCategories && subCategories.length > 0) {
+      setActiveSubTab(subCategories[0].name);
+    }
+  }, [normalizedKey]);
+
   const [bhkSelections, setBhkSelections] = useState({
     essential: 3,
     premium: 3,
@@ -8166,7 +9549,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [searchQuery, setSearchQuery] = useState("");
 
   const getBhkPrice = (tabName, planId, bhk) => {
-    const bhkIdx = bhk - 1; // 0-indexed for 1 BHK to 5 BHK
+    const bhkIdx = bhk - 1;
     if (tabName === "Furnished Apartment") {
       if (planId === "essential") return [1899, 2499, 2999, 3409, 3999][bhkIdx];
       if (planId === "premium") return [2199, 2799, 3299, 3759, 4299][bhkIdx];
@@ -8226,33 +9609,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const couponDiscount = isCouponApplied ? Math.round(subtotal * 0.1) : 0;
   const vipSavings = isVipJoined ? Math.round(subtotal * 0.15) : 0;
   const totalAmount = Math.max(0, subtotal + (isVipJoined ? 299 : 0) - couponDiscount - vipSavings);
-
-  const subCategories = [
-    {
-      name: "Furnished Apartment",
-      image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop"
-    },
-    {
-      name: "Unfurnished Apartment",
-      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop"
-    },
-    {
-      name: "Furnished Villa",
-      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop"
-    },
-    {
-      name: "Unfurnished Villa",
-      image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop"
-    },
-    {
-      name: "Book by Room",
-      image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop"
-    },
-    {
-      name: "Mini Services",
-      image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop"
-    }
-  ];
 
   const apartmentVillaPlans = [
     {
@@ -8365,114 +9721,226 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     }
   ];
 
-  const isApartmentVilla = ["Furnished Apartment", "Unfurnished Apartment", "Furnished Villa", "Unfurnished Villa"].includes(activeSubTab);
+  // Service items catalog for non-cleaning categories
+  const OTHER_SERVICES = {
+    hvac: {
+      "AC Service & Repair": [
+        { id: "hvac-serv-1", name: "Power Jet AC Foam Service", price: 599, duration: "45 mins", badge: "Value Choice", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Deep jet spray foam wash of indoor & outdoor coils with 2-stage filtration wash.", includes: ["Indoor unit jet foam wash", "Outdoor unit high pressure spray", "Gas & cooling performance check", "30-day service warranty"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-serv-2", name: "AC Gas Leakage Fix & Refill", price: 1499, duration: "1.5 hrs", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Nitrogen pressure leak detection, copper pipe brazing, and 100% full Freon/R32 gas refill.", includes: ["Nitrogen leak testing", "Copper brazing fix", "Vacuuming & full gas recharge", "60-day gas warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
+        { id: "hvac-serv-3", name: "AC Water Leakage & Drain Unclog", price: 399, duration: "45 mins", badge: "Quick Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Clear drain pipe clog, unblock condensation tray, flush mold debris & seal tray crack.", includes: ["Drain line vacuuming", "Anti-fungal tray flush", "Water leak prevention seal"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-serv-4", name: "AC Noise & Fan Vibration Fix", price: 449, duration: "45 mins", badge: "Troubleshooting", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix squeaking/rattling blower noise, fan blade balancing, motor bushing replacement.", includes: ["Blower wheel vibration fix", "Motor bearing lubrication", "Panel tightness check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-serv-5", name: "AC PCB Circuit Board Repair", price: 999, duration: "1 hr", badge: "Expert PCB", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Fix non-turning on AC, error codes on display, remote sensor failure, or PCB relay replacement.", includes: ["PCB diagnostic test", "Capacitor & relay replace", "60-day PCB warranty"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "AC Installation": [
+        { id: "hvac-inst-1", name: "Split AC Wall Mounting", price: 1299, duration: "2 hrs", badge: "Recommended", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional wall drilling, bracket fitting, outdoor unit alignment, and copper pipe connection.", includes: ["Indoor & outdoor mounting", "Copper pipe vacuuming", "Safety voltage test"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+        { id: "hvac-inst-2", name: "Window AC Installation", price: 899, duration: "1.5 hrs", badge: "Standard", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Window frame mounting, foam sealant insulation, and vibration pad fitting.", includes: ["Window frame bracket fit", "Gap sealing", "Demo & cooling check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-inst-3", name: "AC Uninstallation", price: 699, duration: "1 hr", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe gas pump-down into compressor, dismounting indoor/outdoor units, and copper pipe sealing.", includes: ["Gas pump down", "Units dismounting", "Copper pipe packaging"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" }
+      ],
+      "Washing Machine": [
+        { id: "hvac-wash-1", name: "Automatic Washing Machine Service", price: 499, duration: "1 hr", badge: "Best Value", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Descaling drum clean, filter debris removal, belt tension check, and drain pump flush.", includes: ["Drum descaling wash", "Lint & coin filter clean", "Belt & motor test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-wash-2", name: "Washing Machine Motor & Spin Repair", price: 699, duration: "1.5 hrs", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix drum noise, spin cycle failure, drain pump blockage, or motor capacitor issues.", includes: ["Motor & belt diagnosis", "Drain pump clearing", "30-day warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Refrigerator & Fridge": [
+        { id: "hvac-ref-1", name: "Fridge Cooling & Gas Check", price: 299, duration: "45 mins", badge: "Inspection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Compressor relay test, thermostat check, door gasket seal inspection, and gas pressure reading.", includes: ["21-point fridge inspection", "Thermostat test", "Detailed quote"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "hvac-ref-2", name: "Fridge Gas Charge & Leak Repair", price: 1299, duration: "1.5 hrs", badge: "Comprehensive", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Cooling coil leak solder, capillary tube flush, filter dryer replacement, and gas recharge.", includes: ["Leak repair & soldering", "Filter replacement", "100% Gas charge"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "Microwave & Purifier": [
+        { id: "hvac-micro-1", name: "Microwave Magnetron Repair", price: 499, duration: "45 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix non-heating issues, spark in cavity, touch keypad failure, or turntable motor replacement.", includes: ["Magnetron & diode check", "High voltage safety test", "Door lock repair"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "hvac-micro-2", name: "RO Water Purifier Servicing", price: 399, duration: "45 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Filter sediment wash, carbon filter change check, TDS level adjustment, and pump leak fix.", includes: ["Sediment & carbon check", "TDS calibration", "Leakage seal fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      ]
+    },
+    electrical: {
+      "Switches & Sockets": [
+        { id: "elec-sw-1", name: "Switch / Socket Replacement", price: 149, duration: "30 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacement or new fitting of modular switch, 6A/16A socket, or regulator.", includes: ["Old socket removal & new fit", "Earth voltage verification", "30-day warranty"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+        { id: "elec-sw-2", name: "Heavy Appliance Socket (16A/25A)", price: 249, duration: "45 mins", badge: "Heavy Load", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High-grade 16A power socket installation for AC, Geyser, Washing Machine, or Oven.", includes: ["Heavy wire stripping & terminal clamp", "MCB safety check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "elec-sw-3", name: "Bedside Switchboard / 3-Pin Socket Fix", price: 199, duration: "30 mins", badge: "Daily Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fix loose contact socket, burnt switch plate, or add new extension point.", includes: ["Internal wire tightening", "Insulation sleeve fit", "Voltage load check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" }
+      ],
+      "Fan & Lighting": [
+        { id: "elec-fan-1", name: "Ceiling Fan Repair / Fitting", price: 249, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Ceiling fan installation, downrod assembly, canopy alignment & safety wire hook mounting.", includes: ["New fan mounting & downrod fit", "Safety wire hook installation", "Speed & balance test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+        { id: "elec-fan-2", name: "Fan Regulator / Speed Switch Replacement", price: 149, duration: "30 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replace burnt or non-working step regulator knob to restore 5-speed fan control.", includes: ["Modular regulator replace", "Terminal insulation check", "5-speed current test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+        { id: "elec-fan-3", name: "Fan Noise, Wobble & Bearing Repair", price: 199, duration: "45 mins", badge: "Troubleshooting", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix squeaking/humming fan noise, bearing lubrication, blade angle adjustment & wobble clamp.", includes: ["Bearing greasing/lubrication", "Blade pitch alignment", "Noise & wobble elimination"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+        { id: "elec-fan-4", name: "Fan Slow Speed / Capacitor Change", price: 299, duration: "45 mins", badge: "Essential", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix slow rotating fan caused by degraded capacitor or coil resistance.", includes: ["Heavy capacitor replacement", "Winding resistance test", "High speed rotation verification"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "elec-fan-5", name: "Exhaust Fan Installation / Repair", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Kitchen or bathroom exhaust fan wall mounting, shutter flap adjustment, and motor wiring.", includes: ["Exhaust fan wall fit", "Vibration pad insertion", "Air flow test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "elec-fan-6", name: "LED Spot Light / Panel Light Fitting", price: 149, duration: "30 mins", badge: "Lighting", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "False ceiling LED panel cut-out fitting, driver replacement, or tube light mounting.", includes: ["LED driver connection", "Spring clip flush fit", "Illumination check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "elec-fan-7", name: "Decorative Chandelier & Hanging Lamp", price: 499, duration: "1 hr", badge: "Heavy Decor", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Heavy ceiling fastener anchor drilling, chandelier wire assembly, and glass shade assembly.", includes: ["Ceiling anchor bolt fitting", "Wire harness connection", "Weight load check"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" }
+      ],
+      "MCB & Wiring": [
+        { id: "elec-mcb-1", name: "MCB Fuse Breaker Replacement", price: 399, duration: "45 mins", badge: "Safety Essential", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Single/Double pole MCB replacement to stop frequent tripping & electrical overload.", includes: ["Tripping diagnosis", "Single/Double Pole MCB fit", "Distribution board check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "elec-mcb-2", name: "Full Room Safety Wiring Check", price: 699, duration: "1.5 hrs", badge: "Comprehensive", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Complete earthing verification, phase leakage test, and heavy load cabling report.", includes: ["Neutral & Earth leakage test", "Short circuit safety scan", "Digital safety report"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" }
+      ],
+      "Inverter & Heavy Appliance": [
+        { id: "elec-inv-1", name: "Inverter & Battery Setup", price: 499, duration: "1 hr", badge: "Heavy Power", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Inverter wall connection, battery terminal grease, bypass switch setup & load division.", includes: ["Heavy terminal wiring", "Distilled water top-up check", "Automatic switchover test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ]
+    },
+    plumbing: {
+      "Taps & Mixers": [
+        { id: "plum-tap-1", name: "Tap & Faucet Repair / Fit", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or install new sink/basin tap.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "plum-tap-2", name: "Wall Mixer / Diverter Repair", price: 399, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Hot & cold water mixer valve replacement, shower diverter repair, and thread sealing.", includes: ["Internal cartridge fix", "Teflon tape seal", "Flow pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Drainage & Clog": [
+        { id: "plum-drain-1", name: "Sink & Drain Pipe Unclogging", price: 349, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High-flex spring wire cleaning to clear food debris, grease, and hair clogs in waste pipes.", includes: ["Spring wire clog removal", "Waste pipe trap cleaning", "Full flow test"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" }
+      ],
+      "Toilet & Flush Tank": [
+        { id: "plum-toilet-1", name: "Flush Tank Syphon & Valve Repair", price: 499, duration: "1 hr", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix continuous tank water leakage, syphon kit change, ball valve replacement, or flush button fix.", includes: ["Syphon kit replacement", "Internal float valve fix", "Sanitary seal check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Water Heater & Tank": [
+        { id: "plum-geyser-1", name: "Geyser Water Heater Installation", price: 799, duration: "1.5 hrs", badge: "Heavy Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Wall fastener drilling, inlet/outlet braided pipe connection, safety valve fitting.", includes: ["Heavy wall fastener mounting", "Braided pipe connection", "Heating & leak test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ]
+    },
+    carpentry: {
+      "Lock & Handle": [
+        { id: "carp-lock-1", name: "Main Door Lock / Handle Installation", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Mortise lock fitting, cylindrical lock replace, latch alignment, key smooth turn check.", includes: ["Lock slot chisel & fit", "Latch strike plate alignment", "Key smooth test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Furniture Repair": [
+        { id: "carp-furn-1", name: "Bed & Wardrobe Assembly / Repair", price: 399, duration: "1 hr", badge: "Best Value", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Tighten loose joints, replace broken wooden slats, wardrobe door realignment, or new flatpack assembly.", includes: ["Joint tightening & glueing", "Leveling check", "30-day warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Doors & Windows": [
+        { id: "carp-door-1", name: "Cabinet Soft-Close Hinge Fix", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hydraulic soft-close hinge replacement, magnetic catch fitting, drawer channel smooth slide fix.", includes: ["Hinge replacement", "Door gap alignment", "Magnetic catch fit"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      ],
+      "Drill & Hanging": [
+        { id: "carp-drill-1", name: "Wall Shelf / TV Bracket Mounting", price: 249, duration: "30 mins", badge: "Quick Drill", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Laser level drilling, rawl plug anchor insertion, heavy concealed bracket shelf fitting.", includes: ["Laser leveling check", "Concealed bracket fitting", "Weight test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" }
+      ]
+    },
+    painting: {
+      "Full Home Painting": [
+        { id: "paint-home-1", name: "Single Wall Feature Accent Paint", price: 1999, duration: "3 hrs", badge: "Design Choice", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Surface putty repair, 2 coats premium royal emulsion paint, geometric or texture accent finish.", includes: ["Surface putty & sanding", "2 coats premium emulsion", "Floor masking sheet protection"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Wall Waterproofing": [
+        { id: "paint-water-1", name: "Wall Dampness & Seepage Treatment", price: 2999, duration: "4 hrs", badge: "Protection", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Laser dampness diagnosis, anti-fungal chemical scraper, waterproof barrier coat application.", includes: ["Dampness diagnosis scan", "Chemical barrier coating", "1-year warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Door & Wood Polish": [
+        { id: "paint-wood-1", name: "Door PU Enamel & Polish", price: 1499, duration: "2 hrs", badge: "Restoration", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High-grade wood sanding, PU lacquer spray polish or enamel gloss paint coat.", includes: ["Wood surface sanding", "2 coats PU polish/enamel", "Hardware masking"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      ]
+    },
+    pest_control: {
+      "Termite Control": [
+        { id: "pest-term-1", name: "Termite Drill & Injection Guard", price: 2499, duration: "2 hrs", badge: "5-Yr Protection", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Precision drilling along wall bases, chemical pressure injection, and color-matched hole sealing.", includes: ["Wall base chemical injection", "Wood furniture chemical spray", "5-year warranty certificate"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Cockroach & Ant Control": [
+        { id: "pest-roach-1", name: "Herbal Gel & Odorless Spray", price: 799, duration: "45 mins", badge: "Odorless & Safe", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Herbal bait gel dot application in kitchen cabinets, odorless spray for drains & skirting boards.", includes: ["Kitchen cabinet gel baiting", "Bathroom drain spray", "90-day protection"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Bed Bug Treatment": [
+        { id: "pest-bug-1", name: "2-Stage Bed Bug Steam & Chemical", price: 1499, duration: "1.5 hrs", badge: "Double Stage", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "High-temperature steam extraction of mattresses & sofas followed by residual chemical spray.", includes: ["Mattress heat steam treatment", "Residual chemical spray", "2nd visit included"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      ]
+    },
+    goods_transport: {
+      "House Shifting": [
+        { id: "shift-house-1", name: "Local House Shifting (1-2 BHK)", price: 3499, duration: "4 hrs", badge: "Full Service", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Dedicated mini truck, 2 trained helpers, bubble wrap for fragile items, loading & unloading.", includes: ["Mini truck & 2 helpers", "Bubble wrap for electronics", "Unloading & placement"], image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" }
+      ],
+      "Single Item Transport": [
+        { id: "shift-item-1", name: "Single Large Appliance / Furniture Pickup", price: 799, duration: "1.5 hrs", badge: "Express Pickup", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Door-to-door transportation of single Sofa, Fridge, Washing Machine, or Bed.", includes: ["Express pickup truck", "Helper included", "Door delivery"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ]
+    }
+  };
+
+  const isApartmentVilla = normalizedKey === "cleaning" && ["Furnished Apartment", "Unfurnished Apartment", "Furnished Villa", "Unfurnished Villa"].includes(activeSubTab);
+  const currentOtherPlans = (OTHER_SERVICES[normalizedKey] && OTHER_SERVICES[normalizedKey][activeSubTab]) || [];
 
   const getBhkTitle = (tab, planName, bhk) => {
     return `${tab} - ${planName} (${bhk} BHK)`;
   };
 
   const wrapperClass = isFullPage
-    ? "w-full text-slate-700 bg-white"
-    : "fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm";
+    ? "w-full text-slate-700 bg-white min-h-screen"
+    : "fixed inset-0 z-[9999] bg-white overflow-y-auto text-slate-700 w-full min-h-screen flex flex-col";
 
   const containerClass = isFullPage
-    ? "bg-white relative flex flex-col text-slate-700 w-full"
-    : "bg-white rounded-3xl max-w-5xl w-full shadow-2xl border border-slate-100 relative max-h-[92vh] flex flex-col overflow-hidden text-slate-700";
+    ? "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4"
+    : "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto min-h-screen px-4 sm:px-6 lg:px-8 py-4";
 
-  const mainAreaClass = isFullPage
-    ? "flex flex-col lg:flex-row flex-1"
-    : "flex flex-col lg:flex-row flex-1 overflow-hidden";
+  const mainAreaClass = "flex flex-col lg:flex-row flex-1 gap-8 mt-4";
 
-  const leftColumnClass = isFullPage
-    ? "flex-1 space-y-5 lg:pr-6"
-    : "flex-1 p-6 overflow-y-auto space-y-5 scrollbar-thin";
+  const leftColumnClass = "flex-1 space-y-5 lg:pr-4";
 
-  const rightColumnClass = isFullPage
-    ? "w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between lg:sticky lg:top-20 h-fit space-y-4"
-    : "w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between overflow-y-auto max-h-[45vh] lg:max-h-none scrollbar-thin";
+  const rightColumnClass = "w-full lg:w-[380px] bg-slate-50 border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between lg:sticky lg:top-24 h-fit space-y-5 shadow-sm shrink-0";
 
   const contentMarkup = (
     <motion.div
       className={containerClass}
-      initial={isFullPage ? false : { opacity: 0, y: 35, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 25, scale: 0.97 }}
-      transition={{ type: "spring", damping: 25, stiffness: 320 }}
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 10 }}
+      transition={{ duration: 0.25 }}
       onClick={e => e.stopPropagation()}
     >
-      {/* Close Button (only in modal mode) */}
-      {!isFullPage && (
-        <button
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors z-10"
-          onClick={onClose}
-        >
-          <X size={18} />
-        </button>
-      )}
-
-      {/* Modal Header + Subcategory Tabs — sticky on scroll */}
-      <div className={`${isFullPage ? "sticky top-16 z-20 bg-white pb-2 shadow-sm" : ""}`}>
-        <div className={`p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white ${isFullPage ? "px-0" : ""}`}>
-          <div>
-            {isFullPage && (
-              <button
-                onClick={onClose}
-                className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-3 text-xs transition-colors"
-              >
-                <ChevronLeft size={16} /> Back to Services
-              </button>
-            )}
-            <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+      {/* Modal / Cover Header + Subcategory Tabs — sticky on scroll */}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md pb-2 border-b border-slate-100">
+        <div className="py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (typeof onClose === 'function') onClose();
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-extrabold text-xs transition-all cursor-pointer border border-slate-200/80 shadow-xs active:scale-95"
+            >
+              <ChevronLeft size={16} /> Back to Services
+            </button>
+            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2">
               {category.name}
             </h2>
           </div>
-          {/* Inner Search box */}
-          <div className="relative w-full sm:w-64">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={14} />
-            </span>
-            <input
-              type="text"
-              placeholder="Search packages..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all bg-slate-50/50"
-            />
+
+          {/* Inner Search box & Close */}
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative w-full sm:w-72">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Search size={15} />
+              </span>
+              <input
+                type="text"
+                placeholder="Search services..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all bg-slate-50/50"
+              />
+            </div>
+            {!isFullPage && (
+              <button
+                className="w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                onClick={onClose}
+              >
+                <X size={18} />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Subservice Flex Selector — inside sticky container */}
-        <div className={`flex flex-wrap gap-5 pb-3 pt-2 border-b border-slate-100 justify-start ${isFullPage ? "px-0" : "px-6"}`}>
-            {subCategories.map(tab => {
-              const isSelected = activeSubTab === tab.name;
-              return (
-                <button
-                  key={tab.name}
-                  onClick={() => {
-                    setActiveSubTab(tab.name);
-                    setSearchQuery("");
+        {/* Subservice Flex Selector */}
+        <div className="flex overflow-x-auto gap-6 pb-3 pt-2 justify-start scrollbar-none">
+          {subCategories.map(tab => {
+            const isSelected = activeSubTab === tab.name;
+            return (
+              <button
+                key={tab.name}
+                onClick={() => {
+                  setActiveSubTab(tab.name);
+                  setSearchQuery("");
+                }}
+                className="flex flex-col items-center justify-center p-1.5 transition-all cursor-pointer text-center bg-transparent w-[80px] shrink-0 group"
+              >
+                <img
+                  src={tab.image}
+                  alt={tab.name}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
                   }}
-                  className="flex flex-col items-center justify-center p-1.5 transition-all cursor-pointer text-center bg-transparent w-[76px] shrink-0"
-                >
-                  <img
-                    src={tab.image}
-                    alt={tab.name}
-                    className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
-                      isSelected
-                        ? "scale-[1.05] shadow-md"
-                        : "opacity-80 hover:opacity-100"
-                    }`}
-                  />
-                  <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                    isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
-                  }`}>
-                    {tab.name}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                  className={`w-14 h-14 object-cover rounded-2xl mb-1.5 transition-all duration-200 ${
+                    isSelected
+                      ? "scale-[1.08] shadow-md border-2 border-slate-800"
+                      : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                  }`}
+                />
+                <span className={`text-[11px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                  isSelected ? "text-slate-900 font-black" : "text-slate-600 font-bold"
+                }`}>
+                  {tab.name}
+                </span>
+              </button>
+            );
+          })}
         </div>
+      </div>
       {/* End of sticky header+tabs */}
 
       {/* Main Content Area */}
@@ -8482,15 +9950,15 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
           {/* Title for Active Category */}
           <div className="pt-2">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
-              <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
+              <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
               {activeSubTab} Packages
             </h3>
           </div>
 
           {/* List of package cards */}
           <div className="space-y-4">
-            {/* Apartment/Villa Dynamic cards */}
+            {/* Apartment/Villa Dynamic cards (for Cleaning) */}
             {isApartmentVilla &&
               apartmentVillaPlans
                 .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -8526,7 +9994,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                               <button
                                 key={b}
                                 onClick={() => setBhkSelections(prev => ({ ...prev, [p.id]: b }))}
-                                className={`text-xs px-3 py-1 rounded-full border transition-all ${
+                                className={`text-xs px-3 py-1 rounded-full border transition-all cursor-pointer ${
                                   currentBhk === b
                                     ? "bg-emerald-600 border-emerald-600 text-white font-bold"
                                     : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
@@ -8540,7 +10008,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
                         {/* Price & Duration */}
                         <div className="flex items-center gap-3 text-xs pt-1">
-                          <span className="text-sm font-extrabold text-slate-900">₹{price.toLocaleString("en-IN")}</span>
+                          <span className="text-base font-black text-slate-900">₹{price.toLocaleString("en-IN")}</span>
                           <span className="text-slate-300">•</span>
                           <span className="text-slate-500 font-semibold">{duration}</span>
                         </div>
@@ -8557,19 +10025,19 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       </div>
 
                       {/* Right side image & add button */}
-                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
-                        <div className="relative w-28 h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
                           <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                             {count > 0 ? (
                               <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
-                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
                                 <span>{count}</span>
-                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => addItemToCart(cartId, cartName, price, duration)}>+</button>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, cartName, price, duration)}>+</button>
                               </div>
                             ) : (
                               <button
-                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1"
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
                                 onClick={() => addItemToCart(cartId, cartName, price, duration)}
                               >
                                 <ShoppingCart size={11} className="shrink-0" />
@@ -8583,8 +10051,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   );
                 })}
 
-            {/* Book by room list */}
-            {activeSubTab === "Book by Room" &&
+            {/* Book by room list (for Cleaning) */}
+            {normalizedKey === "cleaning" && activeSubTab === "Book by Room" &&
               bookByRoomPlans
                 .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
                 .map(p => {
@@ -8601,7 +10069,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
 
                         <div className="flex items-center gap-3 text-xs">
-                          <span className="text-sm font-extrabold text-slate-900">₹{p.price}</span>
+                          <span className="text-base font-black text-slate-900">₹{p.price}</span>
                           <span className="text-slate-300">•</span>
                           <span className="text-slate-500 font-semibold">{p.duration}</span>
                         </div>
@@ -8616,19 +10084,19 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </ul>
                       </div>
 
-                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
-                        <div className="relative w-28 h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
                           <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                             {count > 0 ? (
                               <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
-                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
                                 <span>{count}</span>
-                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
                               </div>
                             ) : (
                               <button
-                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1"
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
                                 onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}
                               >
                                 <ShoppingCart size={11} className="shrink-0" />
@@ -8642,8 +10110,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   );
                 })}
 
-            {/* Mini services list */}
-            {activeSubTab === "Mini Services" &&
+            {/* Mini services list (for Cleaning) */}
+            {normalizedKey === "cleaning" && activeSubTab === "Mini Services" &&
               miniServicesPlans
                 .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
                 .map(p => {
@@ -8660,7 +10128,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
 
                         <div className="flex items-center gap-3 text-xs">
-                          <span className="text-sm font-extrabold text-slate-900">₹{p.price}</span>
+                          <span className="text-base font-black text-slate-900">₹{p.price}</span>
                           <span className="text-slate-300">•</span>
                           <span className="text-slate-500 font-semibold">{p.duration}</span>
                         </div>
@@ -8675,19 +10143,99 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </ul>
                       </div>
 
-                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
-                        <div className="relative w-28 h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
                           <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                             {count > 0 ? (
                               <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
-                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
                                 <span>{count}</span>
-                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
                               </div>
                             ) : (
                               <button
-                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1"
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
+                                onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}
+                              >
+                                <ShoppingCart size={11} className="shrink-0" />
+                                <span>Add</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+            {/* Standard non-cleaning Home Services cards (HVAC, Electrical, Plumbing, Carpentry, Painting, Pest Control, Transport) */}
+            {normalizedKey !== "cleaning" &&
+              currentOtherPlans
+                .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map(p => {
+                  const cartId = `serv-${normalizedKey}-${p.id}`;
+                  const count = getCartItemCount(cartId);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                    >
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                          {p.badge && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${p.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
+                              {p.badge}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+
+                        {/* Price & Duration */}
+                        <div className="flex items-center gap-3 text-xs pt-1">
+                          <span className="text-base font-black text-slate-900">₹{p.price.toLocaleString("en-IN")}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-slate-500 font-semibold">{p.duration}</span>
+                        </div>
+
+                        {/* Includes checklist */}
+                        {p.includes && p.includes.length > 0 && (
+                          <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
+                            {p.includes.map(inc => (
+                              <li key={inc} className="flex items-start gap-2">
+                                <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                <span>{inc}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {/* Right side image & floating ADD button */}
+                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                          <img
+                            src={p.image}
+                            alt={p.name}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
+                            {count > 0 ? (
+                              <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                <span>{count}</span>
+                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
+                              </div>
+                            ) : (
+                              <button
+                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
                                 onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}
                               >
                                 <ShoppingCart size={11} className="shrink-0" />
@@ -8703,7 +10251,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           </div>
         </div>
 
-        {/* Right Column: Checkout, VIP banner & Promos */}
+        {/* Right Column: Checkout, VIP banner & Order Summary */}
         <div className={rightColumnClass}>
           <div className="space-y-4">
             {/* Order Summary box */}
@@ -8714,7 +10262,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               </div>
 
               {cart.length > 0 ? (
-                <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
                   {cart.map(item => (
                     <div key={item.id} className="flex justify-between items-start text-xs gap-2">
                       <div className="flex-1">
@@ -8724,21 +10272,21 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       <div className="text-right flex items-center gap-2">
                         <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
                         <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
-                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600">-</button>
+                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600 cursor-pointer">-</button>
                           <span>{item.quantity}</span>
-                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-600">+</button>
+                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-600 cursor-pointer">+</button>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-6 text-slate-400 text-xs">
-                  No cleaning services added. Select from the packages on the left.
+                <div className="text-center py-8 text-slate-400 text-xs">
+                  No services added. Select from the packages on the left.
                 </div>
               )}
 
-              <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
+              <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
                 {cart.length > 0 && (
                   <>
                     <div className="flex justify-between text-slate-500">
@@ -8765,7 +10313,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     )}
                   </>
                 )}
-                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2">
+                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2.5">
                   <span>Total Amount</span>
                   <span>₹{totalAmount.toLocaleString("en-IN")}</span>
                 </div>
@@ -8774,11 +10322,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           </div>
 
           {/* Bottom Checkout Action */}
-          <div className="pt-4 mt-4 border-t border-slate-200/60">
+          <div className="pt-2">
             <button
               disabled={cart.length === 0}
               onClick={onCheckout}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all"
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all cursor-pointer"
             >
               Proceed to Schedule
             </button>
@@ -8787,10 +10335,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       </div>
     </motion.div>
   );
-
-  if (isFullPage) {
-    return <div className={wrapperClass}>{contentMarkup}</div>;
-  }
 
   return (
     <div className={wrapperClass} onClick={onClose}>
@@ -8799,892 +10343,1094 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   );
 }
 
-/* ─── Kitchen Cleaning Modal ──────────────────────────────────────────────── */
-const KITCHEN_SUB_TABS = [
-  {
-    id: "packages",
-    name: "Full Kitchen Packages",
-    image: "/mockups/kitchen_top_new.png",
-  },
-  {
-    id: "appliance",
-    name: "Single Appliance & Specific Area Cleaning",
-    image: "/mockups/appliance_cleaning_hero.png",
-  },
-  {
-    id: "addons",
-    name: "Quick Extra Services (Mini Add-ons)",
-    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=500&q=80&fit=crop",
-  }
-];
-
-const FULL_KITCHEN_PACKAGES = [
-  {
-    id: "occ-basic",
-    name: "Occupied Kitchen Cleaning (Basic)",
-    price: 999,
-    duration: "2 hrs",
-    image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop",
-    includes: [
-      "Removes grease and grime",
-      "Cleans counters, stove, sink",
-      "Cleans cabinet exteriors"
-    ]
-  },
-  {
-    id: "occ-deep",
-    name: "Occupied Kitchen Cleaning ( Deep Clean)",
-    price: 1499,
-    duration: "3 hrs",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-    includes: [
-      "Removes stubborn grease buildup",
-      "Deep cleans kitchen surfaces",
-      "Cleans cabinets inside and outside"
-    ]
-  },
-  {
-    id: "occ-eco",
-    name: "Occupied Kitchen Cleaning (Eco-Safe)",
-    price: 1999,
-    duration: "3.5 hrs",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
-    includes: [
-      "Uses chemical-free cleaning methods",
-      "Removes grease with steam",
-      "Safe for kids and pets"
-    ]
-  },
-  {
-    id: "emp-basic",
-    name: "Empty Kitchen Cleaning (Basic)",
-    price: 899,
-    duration: "1.5 hrs",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-    includes: [
-      "Removes grease and grime",
-      "Cleans counters, stove, sink",
-      "Ideal for empty kitchens"
-    ]
-  },
-  {
-    id: "emp-steam",
-    name: "Empty Kitchen Cleaning (Steam Deep Clean)",
-    price: 1299,
-    duration: "2 hrs",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-    includes: [
-      "Removes heavy grease buildup",
-      "Uses powerful steam cleaning",
-      "Cleans empty cabinet exteriors"
-    ]
-  }
-];
-
-const APPLIANCE_SERVICES = [
-  {
-    id: "fridge-cleaning",
-    name: "Fridge Cleaning",
-    price: 399,
-    duration: "45 mins",
-    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
-    includes: [
-      "Takes out all food items and places them back neatly after cleaning.",
-      "Washes shelves, trays, and interior walls to remove spills, stains, and bad smells."
-    ]
-  },
-  {
-    id: "chimney-cleaning",
-    name: "Chimney Cleaning",
-    price: 499,
-    duration: "45 mins",
-    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
-    includes: [
-      "Deep cleans filters and mesh to remove thick oil buildup and restore suction.",
-      "Wipes down the outer body of the chimney."
-    ]
-  },
-  {
-    id: "utility-area",
-    name: "Utility Area Cleaning",
-    price: 299,
-    duration: "30 mins",
-    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
-    includes: [
-      "Complete washing of utility space floors, windows, and appliance exteriors."
-    ]
-  },
-  {
-    id: "microwave-cleaning",
-    name: "Microwave Cleaning",
-    price: 199,
-    duration: "15 mins",
-    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
-    includes: [
-      "Cleans inside walls to remove food splatters, oil stains, and odors.",
-      "Wipes down the outer glass and body."
-    ]
-  },
-  {
-    id: "gas-stove-cleaning",
-    name: "Gas Stove Cleaning",
-    price: 99,
-    duration: "20 mins",
-    image: "https://images.unsplash.com/photo-1556909172-54557c7e4fb7?w=300&q=80&fit=crop",
-    includes: [
-      "Scrubs burners, knobs, and stove surfaces to remove burnt food and sticky grease."
-    ]
-  },
-  {
-    id: "tiles-slab-cleaning",
-    name: "Kitchen Tiles & Slab Cleaning",
-    price: 399,
-    duration: "45 mins",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-    includes: [
-      "Removes oil spots from wall tiles and deep cleans grout lines and countertops."
-    ]
-  },
-  {
-    id: "cabinet-trolley-cleaning",
-    name: "Cabinet & Trolley Cleaning",
-    price: 499,
-    duration: "1 hr",
-    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
-    includes: [
-      "Removes items, cleans inside drawers and shelves, and places items back neatly.",
-      "Removes oily fingerprint stains from cabinet doors."
-    ]
-  },
-  {
-    id: "oven-cleaning",
-    name: "Oven, Toaster & Grill Cleaning",
-    price: 249,
-    duration: "30 mins",
-    image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop",
-    includes: [
-      "Cleans interior crumbs, food spills, and outer grease buildup."
-    ]
-  }
-];
-
-const QUICK_EXTRA_SERVICES = [
-  {
-    id: "fan-cleaning",
-    name: "Ceiling Fan Cleaning",
-    price: 99,
-    duration: "15 mins",
-    image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop",
-    includes: ["Dust and grease removal from fan blades."]
-  },
-  {
-    id: "utensil-rearrangement",
-    name: "Utensil Rearrangement",
-    price: 199,
-    duration: "30 mins",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
-    includes: ["Safely taking out utensils, cleaning shelves, and putting them back."]
-  },
-  {
-    id: "sink-cleaning",
-    name: "Sink & Under-Sink Cleaning",
-    price: 149,
-    duration: "20 mins",
-    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
-    includes: ["Stain and odor removal for sinks and drainage areas."]
-  },
-  {
-    id: "dining-table",
-    name: "Dining Table Cleaning",
-    price: 99,
-    duration: "15 mins",
-    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
-    includes: ["Wiping down table surfaces and chairs."]
-  },
-  {
-    id: "kitchen-window",
-    name: "Kitchen Window Cleaning",
-    price: 149,
-    duration: "20 mins",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-    includes: ["Scrubbing glass panes and window tracks."]
-  },
-  {
-    id: "balcony-cleaning",
-    name: "Balcony Cleaning",
-    price: 299,
-    duration: "45 mins",
-    image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop",
-    includes: ["Floor and railing washing for small or large balconies."]
-  },
-  {
-    id: "window-cleaning",
-    name: "Window Cleaning",
-    price: 249,
-    duration: "40 mins",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-    includes: ["Deep glass cleaning for small or large home windows."]
-  }
-];
-
-export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
-  const [activeTab, setActiveTab] = useState("packages");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
-
-  const addItemToCart = (id, name, price, duration) => {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === id);
-      if (existing) return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { id, name, price, duration, quantity: 1 }];
-    });
-  };
-
-  const removeItemFromCart = (id) => {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === id);
-      if (!existing) return prev;
-      if (existing.quantity === 1) return prev.filter(i => i.id !== id);
-      return prev.map(i => i.id === id ? { ...i, quantity: i.quantity - 1 } : i);
-    });
-  };
-
-  const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
-
-  const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
-
-  const getActiveServices = () => {
-    let list = [];
-    if (activeTab === "packages") list = FULL_KITCHEN_PACKAGES;
-    else if (activeTab === "appliance") list = APPLIANCE_SERVICES;
-    else if (activeTab === "addons") list = QUICK_EXTRA_SERVICES;
-    
-    if (!searchQuery) return list;
-    return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  };
-
-  const activeServices = getActiveServices();
-
-  return (
-    <div className="w-full text-slate-700 bg-white">
-      {/* Sticky Header + Tabs */}
-      <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
-        <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
-          <div>
-            <button
-              onClick={onClose}
-              className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-2 text-xs transition-colors"
-            >
-              <ChevronLeft size={16} /> Back to Services
-            </button>
-            <h2 className="text-xl font-black text-slate-900">Kitchen Cleaning</h2>
-          </div>
-          <div className="relative w-full sm:w-64">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={14} />
-            </span>
-            <input
-              type="text"
-              placeholder="Search services..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all bg-slate-50/50"
-            />
-          </div>
-        </div>
-
-        {/* Sub-tabs */}
-        <div className="flex gap-5 pb-3 pt-2 border-b border-slate-100 justify-start">
-          {KITCHEN_SUB_TABS.map(tab => {
-            const isSelected = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
-                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[90px] shrink-0"
-              >
-                <img
-                  src={tab.image}
-                  alt={tab.name}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
-                    isSelected ? "scale-[1.05] shadow-md" : "opacity-80 hover:opacity-100"
-                  }`}
-                />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                  isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
-                }`}>
-                  {tab.name}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex flex-col lg:flex-row flex-1 pt-4">
-
-        {/* Left Column */}
-        <div className="flex-1 space-y-5 lg:pr-6">
-
-          {/* Section title */}
-          <div className="pt-1">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
-              <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
-              {activeTab === "packages" ? "Full Kitchen Packages" : activeTab === "appliance" ? "Single Appliance & Specific Area Cleaning" : "Quick Extra Services (Mini Add-ons)"}
-            </h3>
-          </div>
-
-          <div className="space-y-0 divide-y divide-slate-100">
-            {activeServices.map((service, idx) => {
-              const count = getCount(service.id);
-              const isFirst = idx === 0 && !searchQuery;
-              return (
-                <div key={service.id} className="py-5 px-4 sm:px-5">
-                  {/* First item image hero */}
-                  {isFirst && (
-                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4">
-                      <img
-                        src={activeTab === "packages" ? "/mockups/kitchen_top_new.png" : activeTab === "appliance" ? "/mockups/appliance_cleaning_hero.png" : service.image}
-                        alt={service.name}
-                        className="w-full h-full object-cover object-top"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1">
-                      <h4 className="text-sm font-black text-slate-900 mb-1">{service.name}</h4>
-
-                      <p className="text-xs font-bold text-slate-800">
-                        {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
-                        <span className="text-slate-400 font-normal ml-2">• {service.duration}</span>
-                      </p>
-                      <div className="mt-3 space-y-1">
-                        {service.includes.map((item, i) => (
-                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                            <span className="text-slate-400 mt-0.5">•</span>
-                            <span>{item}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <button 
-                        onClick={() => setSelectedServiceDetails(service)}
-                        className="text-xs font-semibold text-blue-600 mt-2 hover:underline"
-                      >
-                        View details
-                      </button>
-                      {service.options && (
-                        <p className="text-[11px] text-slate-400 mt-1">{service.options}</p>
-                      )}
-                    </div>
-
-                    {/* Image + add button */}
-                    <div className="relative shrink-0 w-28 pb-3 flex flex-col items-center">
-                      <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
-                        <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 z-10">
-                        {count > 0 ? (
-                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
-                            <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
-                            <span>{count}</span>
-                            <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-emerald-900">+</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)}
-                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
-                          >
-                            Add
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Right Column: Order Summary */}
-        <div className="w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between lg:sticky lg:top-32 h-fit space-y-4 mt-6 lg:mt-0 rounded-2xl">
-          <div className="space-y-4">
-            <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
-              <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
-                <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
-                <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
-              </div>
-
-              {cart.length > 0 ? (
-                <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
-                  {cart.map(item => (
-                    <div key={item.id} className="flex justify-between items-start text-xs gap-2">
-                      <div className="flex-1">
-                        <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">{item.duration}</span>
-                      </div>
-                      <div className="text-right flex items-center gap-2">
-                        <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
-                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
-                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600">-</button>
-                          <span>{item.quantity}</span>
-                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-600">+</button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-slate-400 text-xs">
-                  No services added. Select from the left.
-                </div>
-              )}
-
-              <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
-                {cart.length > 0 && (
-                  <div className="flex justify-between text-slate-500">
-                    <span>Items Subtotal</span>
-                    <span>₹{subtotal.toLocaleString("en-IN")}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2">
-                  <span>Total Amount</span>
-                  <span>₹{subtotal.toLocaleString("en-IN")}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-4 mt-4 border-t border-slate-200/60">
-            <button
-              disabled={cart.length === 0}
-              onClick={onCheckout}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all"
-            >
-              Proceed to Schedule
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {selectedServiceDetails && (
-        <div className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans">
-            {/* Close button */}
-            <button 
-              onClick={() => setSelectedServiceDetails(null)} 
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors"
-            >
-              <X size={16} />
-            </button>
-
-            {/* Header: split hero image + promo card */}
-            <div className="flex h-36 border-b border-slate-100 shrink-0">
-              <div className="w-[60%] h-full bg-slate-100">
-                <img 
-                  src={selectedServiceDetails.image} 
-                  alt={selectedServiceDetails.name} 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-[40%] bg-amber-50/70 p-4 flex flex-col justify-center text-left border-l border-amber-100/50">
-                <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-0.5">FLAT 10% OFF</span>
-                <span className="text-[10px] text-slate-600 font-bold leading-tight mb-2">For New Users</span>
-                <span className="text-[9px] font-bold text-slate-500 bg-white border border-amber-200 rounded px-1.5 py-0.5 w-fit uppercase tracking-tight">CODE: NEWCLEAN10</span>
-              </div>
-            </div>
-
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
-              {/* Title, rating and add wrap */}
-              <div className="border-b border-slate-100 pb-5">
-                <h3 className="text-base font-extrabold text-slate-900 mb-1">{selectedServiceDetails.name}</h3>
-                
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
-                  <Star className="text-[#7C3AED] fill-[#7C3AED]" size={12} />
-                  <span className="text-slate-800">4.82</span>
-                  <span className="text-slate-400 font-normal underline">(4.5M reviews)</span>
-                </div>
-
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Price</div>
-                    <div className="text-base font-black text-slate-900 mt-0.5">
-                      ₹{selectedServiceDetails.price}
-                      <span className="text-slate-400 text-xs font-normal ml-2">• {selectedServiceDetails.duration}</span>
-                    </div>
-                  </div>
-
-                  {/* Add button inside details modal */}
-                  <div className="w-24">
-                    {getCount(selectedServiceDetails.id) > 0 ? (
-                      <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
-                        <button onClick={() => removeItemFromCart(selectedServiceDetails.id)} className="hover:text-emerald-900">-</button>
-                        <span>{getCount(selectedServiceDetails.id)}</span>
-                        <button onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)} className="hover:text-emerald-900">+</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
-                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider"
-                      >
-                        Add
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Service includes */}
-              <div className="space-y-2.5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Includes</h4>
-                <div className="space-y-2">
-                  {selectedServiceDetails.includes ? (
-                    selectedServiceDetails.includes.map((item, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                        <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                        <span className="leading-relaxed">{item}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-xs text-slate-500">Includes complete surface scrubbing and dusting.</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Service does not include */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Does Not Include</h4>
-                <div className="space-y-2">
-                  {(selectedServiceDetails.id === "occ-basic" ? [
-                    "Cabinet interior cleaning, utensil removal, or restocking",
-                    "Deep chimney filter degreasing or appliance interior cleaning",
-                    "Chimney motor repair, plumbing fixes, or hardware work"
-                  ] : [
-                    "Chimney motor servicing or internal repair",
-                    "Utensil washing or cabinet reorganization unless opted",
-                    "Plumbing, electrical or masonry repairs"
-                  ]).map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tools & Products We Use */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
-                <div className="space-y-2">
-                  {[
-                    "Food-safe surface degreasers & antibacterial sprays",
-                    "Non-abrasive scrubbing pads & microfiber towels",
-                    "High-reach dusting brushes for exhaust fans & windows"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* What You Need to Keep Ready */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
-                <div className="space-y-2">
-                  {[
-                    "Continuous water supply during the 2-hour service duration",
-                    "Working power socket near the kitchen area"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Our Service Guarantees */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Our Service Guarantees</h4>
-                <div className="space-y-2">
-                  {[
-                    "7-day re-clean assurance if you are not completely satisfied",
-                    "100% background-verified & trained cleaning professionals",
-                    "In-house damage protection coverage"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Customer Reviews */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
-                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-800">Ananya S.</span>
-                    <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#7C3AED]">
-                      <Star className="fill-[#7C3AED] text-[#7C3AED]" size={12} />
-                      <span>5.0</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed italic">
-                    "Great service for regular maintenance! They cleaned all the grease off my stove and backsplash tiles quickly."
-                  </p>
-                </div>
-              </div>
-
-              {/* Frequently Asked Questions */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
-                <div className="space-y-2">
-                  {[
-                    "Will the cleaners move utensils from inside the cabinets?",
-                    "Do I need to provide any cleaning solutions or cloths?",
-                    "Can I add appliance cleaning along with this package?"
-                  ].map((q, idx) => (
-                    <div key={idx} className="border border-slate-100 rounded-xl p-3 flex justify-between items-center text-xs text-slate-700 bg-white shadow-sm font-semibold">
-                      <span>{q}</span>
-                      <span className="text-slate-400 text-base font-bold">+</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Sticky Footer with teal proceed button */}
-            <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Occupied Kitchen Clean</div>
-              <button
-                onClick={() => {
-                  if (getCount(selectedServiceDetails.id) === 0) {
-                    addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration);
-                  }
-                  setSelectedServiceDetails(null);
-                }}
-                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider"
-              >
-                Proceed
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
-  if (category?.id === "cleaning" || category?.slug === "cleaning") {
-    return (
-      <CustomCleaningPackageModal
-        category={category}
-        cart={cart}
-        setCart={setCart}
-        onClose={onClose}
-        onCheckout={onCheckout}
-      />
-    );
-  }
-
-  const [activeTab, setActiveTab] = useState(0)
-  const [activeFilter, setActiveFilter] = useState("All")
-  const rawList = (packagesData && (packagesData[category?.id] || packagesData[category?.slug] || packagesData[category?.name?.toLowerCase()])) || PACKAGES[category?.id] || PACKAGES[category?.slug] || []
-  const packages = rawList.map(p => ({ ...p, priceStr: BOOKING_CURRENCY_SYMBOL + p.price }))
-  const relatedServices = packages.slice(0, 4);
-
-  const filteredPackages = packages.filter(p => {
-    if (activeFilter === "All") return true;
-    if (activeFilter === "Premium") return p.price >= 1000;
-    if (activeFilter === "Standard") return p.price < 1000;
-    return true;
-  });
-
-  const getCartCount = (pkgId) => {
-    const item = cart.find(c => c.id === pkgId);
-    return item ? item.quantity : 0;
-  }
-
-  const addToCart = (pkg) => {
-    setCart(prev => {
-      const existing = prev.find(c => c.id === pkg.id);
-      if (existing) {
-        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
-      }
-      return [...prev, { ...pkg, quantity: 1, categoryName: category.name }];
-    });
-  }
-
-  const removeFromCart = (pkgId) => {
-    setCart(prev => {
-      const existing = prev.find(c => c.id === pkgId);
-      if (existing.quantity === 1) {
-        return prev.filter(c => c.id !== pkgId);
-      }
-      return prev.map(c => c.id === pkgId ? { ...c, quantity: c.quantity - 1 } : c);
-    });
-  }
-
-  const renderCard = (p, i) => (
-    <motion.div
-      key={p.id}
-      className="uc-pkg-modal-card-uc"
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: i * 0.1 }}
-    >
-      <div className="uc-pkg-modal-card-uc-info">
-        <h3 className="uc-pkg-uc-title">{p.name}</h3>
-        <div className="uc-pkg-uc-rating">
-          <Star size={12} style={{ fill: "#7C3AED", color: "#7C3AED", marginRight: 4 }} />
-          <span style={{ fontWeight: 700 }}>4.8</span> <span style={{ color: "#94a3b8", textDecoration: "underline" }}>(113K reviews)</span>
-        </div>
-        <div className="uc-pkg-uc-price">
-          Starts at {p.priceStr} <span className="uc-pkg-uc-dot">•</span> {p.duration}
-        </div>
-        <ul className="uc-pkg-uc-includes">
-          {p.includes.map(inc => <li key={inc}>{inc}</li>)}
-        </ul>
-        <div className="uc-pkg-uc-view-details">View details</div>
-      </div>
-      <div className="uc-pkg-modal-card-uc-imgbox">
-        <img
-          src={p.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"}
-          alt={p.name}
-          className="uc-pkg-uc-img"
-          onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"; }}
-        />
-        <div className="uc-pkg-uc-add-wrap" onClick={(e) => e.stopPropagation()}>
-          {getCartCount(p.id) > 0 ? (
-            <div className="uc-swiggy-qty">
-              <button onClick={() => removeFromCart(p.id)}>-</button>
-              <span>{getCartCount(p.id)}</span>
-              <button onClick={() => addToCart(p)}>+</button>
-            </div>
-          ) : (
-            <button className="uc-btn-add-swiggy" onClick={() => addToCart(p)}>
-              <ShoppingCart size={13} style={{ display: 'inline-block', verticalAlign: 'middle' }} /> Add
-            </button>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-
-  return (
-    <div className="uc-modal-overlay" onClick={onClose}>
-      <motion.div
-        className="uc-pkg-modal"
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        onClick={e => e.stopPropagation()}
-      >
-        <button className="uc-pkg-modal-close" onClick={onClose}><X size={20} /></button>
-
-        <div className="uc-pkg-modal-header">
-          <div className="uc-pkg-modal-hero">
-            <img src={category.image} alt={category.name} />
-            <div className="uc-pkg-modal-hero-overlay">
-              <h2>{category.name}</h2>
-              <p>{category.desc}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="uc-pkg-modal-split" style={{ display: 'flex', flexDirection: 'row', gap: 0 }}>
-          {/* Left Sidebar: Individual Services */}
-          <div className="uc-pkg-sidebar" style={{ width: '35%', borderRight: '1px solid #e2e8f0', paddingRight: '1.5rem', overflowY: 'auto' }}>
-            <h3 className="uc-pkg-sidebar-title" style={{ fontSize: '1.1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 900 }}>Individual Services</h3>
-            <div className="uc-pkg-related-list" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {relatedServices.map((s, idx) => (
-                <div key={s.id || idx} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-                  <img
-                    src={s.image || s.img || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=100&q=80&fit=crop"}
-                    alt={s.name}
-                    style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }}
-                    onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=100&q=80&fit=crop"; }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1e293b', lineHeight: 1.2, marginBottom: '0.2rem' }}>{s.name}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.5rem' }}>{s.priceStr || (BOOKING_CURRENCY_SYMBOL + '499')} • {s.duration || '1 hr'}</div>
-
-                    {getCartCount(s.id) > 0 ? (
-                      <div className="uc-swiggy-qty" style={{ width: 80, height: 28, fontSize: '0.8rem' }}>
-                        <button style={{ padding: '0 0.5rem' }} onClick={() => removeFromCart(s.id)}>-</button>
-                        <span>{getCartCount(s.id)}</span>
-                        <button style={{ padding: '0 0.5rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>+</button>
-                      </div>
-                    ) : (
-                      <button className="uc-btn-add-swiggy" style={{ padding: '0.3rem 1rem', fontSize: '0.75rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>
-                        <ShoppingCart size={12} style={{ display: 'inline-block', verticalAlign: 'middle' }} /> ADD
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right Content: Packages */}
-          <div className="uc-pkg-content" style={{ width: '65%', paddingLeft: '1.5rem', overflowY: 'auto' }}>
-            <h3 className="uc-pkg-content-title" style={{ fontSize: '1.4rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 900 }}>Packages & Bundles</h3>
-
-            <div className="uc-pkg-filter-row">
-              {["All", "Standard", "Premium"].map(f => (
-                <button
-                  key={f}
-                  className={`uc-pkg-filter-pill ${activeFilter === f ? "active" : ""}`}
-                  onClick={() => setActiveFilter(f)}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-
-            <div className="uc-pkg-modal-list">
-              {filteredPackages.map((p, i) => renderCard(p, i))}
-            </div>
-          </div>
-        </div>
-
-        {cart.length > 0 && (
-          <motion.div
-            className="uc-pkg-modal-cart-bar"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="uc-cart-bar-left">
-              <span className="uc-cart-bar-items">{cart.reduce((a, c) => a + c.quantity, 0)} items</span>
-              <span className="uc-cart-bar-price">{BOOKING_CURRENCY_SYMBOL}{cart.reduce((a, c) => a + (c.price * c.quantity), 0)}</span>
-            </div>
-            <button className="uc-cart-bar-btn" onClick={onCheckout}>
-              Proceed to Checkout <ChevronRight size={16} />
-            </button>
-          </motion.div>
-        )}
-      </motion.div>
-    </div>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
-   STYLES
-   ───────────────────────────────────────────────────────────────────────── */
-
 export function BkStyles() {
   return (
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+
+      @keyframes bk-spin { to { transform:rotate(360deg); } }
+      .spin-icon { animation: bk-spin 0.8s linear infinite; display:inline-block; }
+
+      /* •”••”• Root •”••”• */
+      .uc-root {
+        min-height: 100vh;
+        background: #ffffff;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        color: #1e293b;
+        display: flex;
+        flex-direction: column;
+        overflow-x: hidden;
+      }
+
+      /* •”••”• Nav •”••”• */
+      .uc-nav {
+        position: sticky; top:0; z-index:100;
+        background: rgba(255,255,255,0.97);
+        backdrop-filter: blur(16px);
+        border-bottom: 1px solid #e2e8f0;
+        padding: 0.65rem 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+      .uc-nav-left { display:flex; align-items:center; gap:2rem; }
+      .uc-nav-links { display:none; }
+      @media (min-width: 900px) {
+        .uc-nav-links { display:flex; gap:1.5rem; font-size:0.85rem; font-weight:700; color:#475569; }
+        .uc-nav-links span { cursor:pointer; }
+        .uc-nav-links span:hover { color:#1e293b; }
+      }
+      .uc-nav-center {
+        display:flex; flex:1; gap:1rem; justify-content:flex-end; margin-right: 1.5rem;
+      }
+      .uc-location-selector { display:none; position: relative; }
+      @media (min-width: 600px) {
+        .uc-location-selector {
+          display:flex; align-items:center; gap:0.4rem;
+          background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px;
+          padding:0.4rem 0.75rem; cursor:pointer;
+          max-width:200px; position:relative;
+        }
+      }
+      .uc-loc-text { font-size:0.75rem; font-weight:600; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .uc-feature-carousel {
+        position: relative;
+        width: 100%;
+        height: 520px;
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+      }
+      .uc-feature-slide {
+        position: absolute;
+        inset: 0;
+      }
+      .uc-feature-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .uc-feature-overlay {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        padding: 5rem 2rem 2rem;
+        background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+        color: white;
+      }
+      .uc-feature-text h3 {
+        font-family: 'Outfit', sans-serif;
+        font-size: 2rem;
+        margin: 0 0 0.5rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .uc-feature-text p {
+        font-size: 1.05rem;
+        margin: 0;
+        opacity: 0.9;
+      }
+
+      /* •”••”• Nav Search Bar •”••”• */
+      .uc-nav-search {
+        display: flex; align-items: center; gap: 0.5rem;
+        background: #f8fafc; border: 1.5px solid #e2e8f0;
+        border-radius: 10px; padding: 0.42rem 0.85rem;
+        width: 260px; transition: border-color 0.2s, box-shadow 0.2s;
+        flex-shrink: 0;
+      }
+      .uc-nav-search:focus-within {
+        border-color: #7C3AED40; box-shadow: 0 0 0 3px #7C3AED12;
+      }
+      .uc-nav-search input {
+        border: none; background: transparent; outline: none;
+        font-size: 0.8rem; width: 100%; color: #1e293b;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+      .uc-nav-search input::placeholder { color: #94a3b8; }
+      .uc-nav-right-icons { display:flex; align-items:center; gap:1.25rem; height:100%; }
+      .uc-cart-icon, .uc-profile-icon {
+        position:relative; cursor:pointer;
+        display:flex; align-items:center; justify-content:center;
+        width:36px; height:36px;
+        border-radius: 8px;
+        transition: background 0.15s;
+      }
+      .uc-cart-icon:hover, .uc-profile-icon:hover { background: #f1f5f9; }
+      .uc-cart-badge {
+        position:absolute; top:-4px; right:-6px;
+        background:#ef4444; color:white; font-size:0.6rem; font-weight:800;
+        width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+        line-height:1;
+      }
+      .uc-nav-summary {
+        background: rgba(255,255,255,0.95); border-bottom: 1px solid #e2e8f0;
+        padding: 0.5rem 1.5rem; position: sticky; top: 60px; z-index: 99;
+      }
+
+      /* •”••”• Progress •”••”• */
+      .uc-progress-wrap {
+        background: white;
+        border-bottom: 1px solid #f1f5f9;
+        padding: 0.5rem 1.5rem 0.6rem;
+      }
+      .uc-stepbar-scroll {
+        overflow-x: auto;
+        scrollbar-width: none;
+        margin-top: 0.5rem;
+      }
+      .uc-stepbar-scroll::-webkit-scrollbar { display:none; }
+      .uc-stepbar {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        min-width: max-content;
+        max-width: 680px;
+        margin: 0 auto;
+      }
+      .uc-sb-step {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        opacity: 0.4;
+        transition: opacity 0.3s;
+      }
+      .uc-sb-step.uc-sb-done, .uc-sb-step.uc-sb-active { opacity:1; }
+      .uc-sb-dot {
+        width: 22px; height:22px;
+        border-radius: 50%;
+        background: #e2e8f0;
+        color: #64748b;
+        font-size: 0.65rem;
+        font-weight: 800;
+        display: flex; align-items:center; justify-content:center;
+        transition: all 0.3s;
+      }
+      .uc-sb-done .uc-sb-dot { background:#7C3AED; color:white; }
+      .uc-sb-active .uc-sb-dot { background:#7C3AED; color:white; box-shadow:0 0 0 3px #7C3AED30; }
+      .uc-sb-label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: #64748b;
+        white-space: nowrap;
+      }
+      .uc-sb-active .uc-sb-label { color:#7C3AED; }
+      .uc-sb-done .uc-sb-label  { color:#7C3AED; }
+      .uc-sb-line {
+        flex: 1; height:2px;
+        background: #e2e8f0;
+        margin: 0 0.4rem;
+        min-width: 20px;
+        transition: background 0.4s;
+      }
+      .uc-sb-line-done { background: #7C3AED; }
+
+      /* •”••”• Main •”••”• */
+      .uc-main {
+        flex: 1;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #e2e8f0 transparent;
+        background: #f8fafc;
+      }
+      .uc-step-container {
+        max-width: 550px;
+        margin: 2.5rem auto;
+        padding: 2.5rem 2.25rem 3.5rem;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 24px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.04);
+      }
+
+      .uc-home-wrapper {
+        display: flex;
+        flex-direction: column;
+      }
+      .uc-home-right { display: none; }
+      @media (min-width: 768px) {
+        .uc-home-wrapper {
+          flex-direction: row;
+          width: 100%;
+          margin: 0;
+          align-items: stretch;
+          gap: 3rem;
+          padding-right: 2rem;
+        }
+        .uc-home-left { flex: 1.2; min-width: 0; }
+        .uc-home-right {
+          display: block;
+          flex: 0.8;
+          padding-top: 4rem;
+        }
+      }
+      .uc-hc-img-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        position: sticky;
+        top: 100px;
+      }
+      .uc-hc-img {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      }
+      .uc-hc-img-large {
+        grid-column: span 2;
+        height: 240px;
+      }
+      .uc-hc-badge {
+        position: absolute;
+        top: -15px; left: -15px;
+        background: white;
+        padding: 0.5rem 1rem;
+        border-radius: 99px;
+        font-weight: 800;
+        font-size: 0.8rem;
+        color: #1e293b;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+        z-index: 10;
+        border: 1px solid #f1f5f9;
+      }
+
+      /* •”••”• HERO •”••”• */
+      .uc-hero {
+        background: transparent;
+        position: relative;
+        overflow: hidden;
+        padding: 4rem 1.5rem 3.5rem;
+      }
+      .uc-hero::before { display: none; }
+      .uc-hero-inner {
+        position: relative;
+        max-width: 100%;
+        margin: 0;
+        text-align: left;
+        z-index: 1;
+      }
+      .uc-hero-tag {
+        display:inline-block;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 1rem;
+      }
+      .uc-hero-h1 {
+        font-family: 'Outfit', sans-serif;
+        font-size: clamp(2rem, 5vw, 3.2rem);
+        font-weight: 900;
+        color: #0f172a;
+        line-height: 1.15;
+        margin: 0 0 1rem;
+        letter-spacing: -0.02em;
+      }
+      .uc-hero-rotate {
+        display: inline-block;
+        color: #7C3AED;
+      }
+      .uc-hero-sub {
+        color: #64748b;
+        font-size: 0.95rem;
+        font-weight: 500;
+        margin-bottom: 2rem;
+      }
+
+      /* •”••”• Search •”••”• */
+      .uc-search-bar {
+        position: relative;
+        max-width: 560px;
+        margin: 0 0 1.5rem;
+      }
+      .uc-search-icon {
+        position:absolute; left:1.1rem; top:50%;
+        transform:translateY(-50%);
+        color: #94a3b8;
+        pointer-events:none;
+      }
+      .uc-search-input {
+        width:100%; box-sizing:border-box;
+        background: #f8fafc;
+        border: none;
+        border-radius: 16px;
+        padding: 1rem 3rem 1rem 3.2rem;
+        font-size: 0.95rem;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        color: #1e293b;
+        outline: none;
+        box-shadow: none;
+      }
+      .uc-search-clear {
+        position:absolute; right:1rem; top:50%;
+        transform:translateY(-50%);
+        background:none; border:none; cursor:pointer;
+        color:#94a3b8; display:flex; align-items:center;
+      }
+      .uc-trust-row {
+        display:flex; align-items:center; justify-content:flex-start;
+        flex-wrap:wrap; gap:0.5rem 1.25rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #475569;
+      }
+      .uc-trust-row span {
+        display:flex; align-items:center; gap:0.3rem;
+      }
+
+      /* •”••”• Category Grid •”••”• */
+      .uc-section {
+        width: 100%;
+        padding: 2.5rem 1.5rem;
+      }
+      .uc-section-header { margin-bottom: 1.5rem; }
+      .uc-section-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.6rem;
+        font-weight: 900;
+        color: #1e293b;
+        margin: 0 0 0.3rem;
+        letter-spacing: -0.02em;
+      }
+      .uc-section-sub {
+        font-size: 0.88rem;
+        color: #64748b;
+        font-weight: 500;
+        margin: 0 0 1rem;
+      }
+      .uc-cat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 1.25rem;
+      }
+      .uc-cat-card {
+        display: flex;
+        flex-direction: column;
+        background: white;
+        border: 1px solid #f1f5f9;
+        border-radius: 16px;
+        padding: 0;
+        cursor: pointer;
+        text-align: left;
+        font-family: inherit;
+        transition: transform 0.2s, box-shadow 0.2s;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        overflow: hidden;
+      }
+      .uc-cat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+        border-color: #e2e8f0;
+      }
+      .uc-cat-img-wrap {
+        position: relative;
+        width: 100%;
+        height: 130px;
+        overflow: hidden;
+      }
+      .uc-cat-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .uc-cat-overlay {
+        position: absolute; inset: 0;
+        background: rgba(0,0,0,0.4);
+        display: flex; align-items: center; justify-content: center;
+        opacity: 0; transition: opacity 0.25s;
+      }
+      .uc-cat-card:hover .uc-cat-overlay {
+        opacity: 1;
+      }
+      .uc-cat-btn {
+        background: white; color: #1e293b;
+        font-weight: 700; font-size: 0.85rem;
+        padding: 0.6rem 1.4rem; border-radius: 99px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        transform: translateY(15px); transition: transform 0.25s;
+      }
+      .uc-cat-card:hover .uc-cat-btn {
+        transform: translateY(0);
+      }
+      .uc-cat-body { padding: 1.25rem; width: 100%; box-sizing: border-box; }
+      .uc-cat-name { font-size:0.92rem; font-weight:800; color:#1e293b; margin-bottom:0.2rem; }
+      .uc-cat-desc { font-size:0.72rem; color:#64748b; margin-bottom:0.35rem; }
+      .uc-cat-meta { display:flex; align-items:center; gap:0.75rem; }
+      .uc-cat-jobs { font-size:0.65rem; color:#94a3b8; font-weight:600; }
+      .uc-cat-arrow { color:#cbd5e1; flex-shrink:0; }
+      .uc-cat-card:hover .uc-cat-arrow { color:#7C3AED; }
+
+      /* •”••”• How It Works •”••”• */
+      .uc-how {
+        background: linear-gradient(135deg, #faf5ff, #f0fdf4);
+        padding: 3rem 1.5rem;
+      }
+      .uc-how-grid {
+        display:grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px,1fr));
+        gap:1.5rem;
+        max-width:900px;
+        margin:1.5rem auto 0;
+      }
+      .uc-how-card {
+        background:white;
+        border-radius:24px;
+        padding:2.5rem 1.5rem;
+        text-align:center;
+        box-shadow:0 10px 40px rgba(0,0,0,0.04);
+        position:relative;
+        transition: transform 0.2s;
+      }
+      .uc-how-card:hover { transform: translateY(-4px); }
+      .uc-how-number {
+        position:absolute; top:-16px; left:50%; transform:translateX(-50%);
+        width:32px; height:32px; border-radius:50%;
+        background:#1e293b;
+        color:white; font-size:0.9rem; font-weight:900;
+        display:flex; align-items:center; justify-content:center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      }
+      .uc-how-icon-wrapper {
+        width: 64px; height: 64px;
+        margin: 0 auto 1.25rem;
+        border-radius: 16px;
+        background: #f8fafc;
+        display: flex; align-items: center; justify-content: center;
+        color: #7C3AED;
+      }
+      .uc-how-title { font-size:1.1rem; font-weight:800; color:#1e293b; margin-bottom:0.5rem; }
+      .uc-how-desc  { font-size:0.85rem; color:#64748b; line-height:1.6; }
+
+      /* •”••”• Reviews •”••”• */
+      .uc-reviews-section {
+        padding: 3rem 1.5rem;
+        max-width:1200px;
+        margin:0 auto;
+      }
+      .uc-reviews-grid {
+        display:grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px,1fr));
+        gap:1.5rem;
+        margin-top:1.5rem;
+      }
+      .uc-review-card {
+        background:white;
+        border:1px solid #f1f5f9;
+        border-radius:20px;
+        padding:1.5rem;
+        box-shadow:0 10px 30px rgba(0,0,0,0.03);
+        position: relative;
+      }
+      .uc-review-top {
+        display:flex; align-items:center; gap:1rem; margin-bottom:1rem;
+      }
+      .uc-review-avatar-img {
+        width: 48px; height: 48px; border-radius: 50%;
+        object-fit: cover;
+      }
+      .uc-review-name { font-weight: 800; color: #1e293b; font-size: 0.95rem; }
+      .uc-review-ago { font-size: 0.75rem; color: #94a3b8; margin-top: 0.1rem; }
+      .uc-review-text { font-size:0.85rem; color:#475569; line-height:1.6; font-style: italic; }
+
+      /* •”••”• Step Pages •”••”• */
+      .uc-step-page {
+        display:flex;
+        flex-direction:column;
+        gap:0;
+      }
+      .uc-step-back {
+        display:inline-flex; align-items:center; gap:0.35rem;
+        font-size:0.8rem; font-weight:700; color:#64748b;
+        cursor:pointer; margin-bottom:1.25rem;
+        transition:color 0.15s;
+        width:fit-content;
+      }
+      .uc-step-back:hover { color:#7C3AED; }
+      .uc-step-hero-bar {
+        display:flex; align-items:center; gap:1rem;
+        border-radius:16px; padding:1.25rem;
+        margin-bottom:1.5rem;
+        color:white;
+      }
+      .uc-step-hero-name { font-size:1.1rem; font-weight:800; color:white; margin-bottom:0.25rem; }
+      .uc-step-h2 {
+        font-family:'Outfit',sans-serif;
+        font-size:1.5rem; font-weight:900;
+        color:#1e293b; margin:0 0 0.3rem;
+        letter-spacing:-0.02em;
+      }
+      .uc-step-sub { font-size:0.82rem; color:#64748b; margin:0 0 1.5rem; font-weight:500; }
+
+      /* •”••”• Package Cards •”••”• */
+      .uc-pkg-grid {
+        display:grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px,1fr));
+        gap:1rem;
+        margin-bottom:1.5rem;
+      }
+      .uc-pkg-card {
+        background:white;
+        border:2px solid #e2e8f0;
+        border-radius:18px;
+        padding:1.25rem;
+        cursor:pointer;
+        position:relative;
+        transition:all 0.2s ease;
+        box-shadow:0 2px 8px rgba(0,0,0,0.04);
+      }
+      .uc-pkg-card:hover { border-color:#7C3AED; box-shadow:0 8px 24px rgba(124,58,237,0.12); }
+      .uc-pkg-card--sel {
+        border-color:#7C3AED;
+        background:#faf5ff;
+        box-shadow:0 8px 28px rgba(124,58,237,0.18);
+      }
+      .uc-pkg-card--pop { border-color:#7C3AED; }
+      .uc-pkg-tag {
+        position:absolute; top:-1px; left:50%; transform:translateX(-50%);
+        color:white; font-size:0.65rem; font-weight:800;
+        padding:3px 12px; border-radius:0 0 10px 10px;
+        white-space:nowrap; letter-spacing:0.03em;
+      }
+      .uc-pkg-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.75rem; margin-top:0.25rem; }
+      .uc-pkg-name { font-size:0.95rem; font-weight:800; color:#1e293b; margin-bottom:0.25rem; }
+      .uc-pkg-dur  { display:flex; align-items:center; gap:0.3rem; font-size:0.68rem; color:#94a3b8; font-weight:600; }
+      .uc-pkg-price-col { text-align:right; }
+      .uc-pkg-price { font-family:'Outfit',sans-serif; font-size:1.4rem; font-weight:900; color:#7C3AED; line-height:1; }
+      .uc-pkg-price-note { font-size:0.62rem; color:#94a3b8; font-weight:600; }
+      .uc-pkg-divider { height:1px; background:#f1f5f9; margin:0.75rem 0; }
+      .uc-pkg-list { display:flex; flex-direction:column; gap:0.4rem; }
+      .uc-pkg-item { display:flex; align-items:flex-start; gap:0.4rem; font-size:0.75rem; font-weight:600; }
+      .uc-pkg-yes { color:#059669; }
+      .uc-pkg-no  { color:#94a3b8; text-decoration:line-through; }
+      .uc-pkg-radio {
+        width:20px; height:20px; border-radius:50%;
+        border:2px solid #e2e8f0;
+        display:flex; align-items:center; justify-content:center;
+        margin-top:0.75rem; margin-left:auto;
+        transition:border-color 0.2s;
+      }
+      .uc-pkg-radio--sel { border-color:#7C3AED; background:#7C3AED; }
+      .uc-pkg-radio-dot { width:8px; height:8px; border-radius:50%; background:white; }
+
+      /* •”••”• Schedule •”••”• */
+      .uc-date-section, .uc-time-section { margin-bottom:1.5rem; }
+      .uc-subsection-label {
+        display:flex; align-items:center; gap:0.4rem;
+        font-size:0.78rem; font-weight:800; color:#475569;
+        text-transform:uppercase; letter-spacing:0.04em;
+        margin-bottom:0.75rem;
+      }
+      .uc-date-scroll {
+        display:flex; gap:0.5rem; overflow-x:auto;
+        scrollbar-width:none; padding-bottom:0.25rem;
+      }
+      .uc-date-scroll::-webkit-scrollbar { display:none; }
+      .uc-date-pill {
+        display:flex; flex-direction:column; align-items:center;
+        min-width:62px; padding:0.6rem 0.5rem;
+        border:2px solid #e2e8f0; border-radius:14px;
+        background:white; cursor:pointer;
+        font-family:inherit; position:relative;
+        transition:all 0.15s ease;
+        gap:0.15rem;
+      }
+      .uc-date-pill:hover { border-color:#7C3AED; }
+      .uc-date-pill--sel { border-color:#7C3AED; background:#7C3AED; }
+      .uc-date-today-tag {
+        position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+        background:#10B981; color:white; font-size:0.55rem;
+        font-weight:800; padding:1px 6px; border-radius:99px; white-space:nowrap;
+      }
+      .uc-date-day { font-size:0.65rem; font-weight:700; color:#94a3b8; }
+      .uc-date-pill--sel .uc-date-day { color:rgba(255,255,255,0.8); }
+      .uc-date-num { font-family:'Outfit',sans-serif; font-size:1.2rem; font-weight:900; color:#1e293b; line-height:1; }
+      .uc-date-pill--sel .uc-date-num { color:white; }
+      .uc-date-mon { font-size:0.6rem; font-weight:700; color:#94a3b8; text-transform:uppercase; }
+      .uc-date-pill--sel .uc-date-mon { color:rgba(255,255,255,0.7); }
+      .uc-time-group { margin-bottom:1rem; }
+      .uc-time-period-label { font-size:0.72rem; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.5rem; }
+      .uc-time-slots { display:flex; flex-wrap:wrap; gap:0.4rem; }
+      .uc-time-slot {
+        padding:0.45rem 0.85rem;
+        border:1.5px solid #e2e8f0;
+        border-radius:10px;
+        background:white;
+        font-size:0.78rem;
+        font-weight:600;
+        color:#475569;
+        cursor:pointer;
+        font-family:inherit;
+        transition:all 0.15s;
+      }
+      .uc-time-slot:hover { border-color:#7C3AED; color:#7C3AED; }
+      .uc-time-slot--sel { background:#7C3AED; border-color:#7C3AED; color:white; font-weight:700; }
+
+      /* •”••”• Login •”••”• */
+      .uc-login-page { padding-top:0.5rem; }
+      .uc-login-center { text-align:center; margin-bottom:1.5rem; }
+      .uc-login-shield {
+        width:72px; height:72px; border-radius:20px;
+        background:#7C3AED15;
+        display:flex; align-items:center; justify-content:center;
+        margin:0 auto 1rem;
+      }
+      .uc-login-trust-row {
+        display:flex; align-items:center; justify-content:center; flex-wrap:wrap;
+        gap:0.4rem 0.85rem; margin-bottom:1.5rem;
+        font-size:0.68rem; font-weight:700; color:#64748b;
+      }
+      .uc-login-trust-row span {
+        display:flex; align-items:center; gap:0.25rem;
+        background:#f8fafc; border:1px solid #e2e8f0;
+        border-radius:99px; padding:3px 8px;
+      }
+      .uc-otp-row { display:flex; gap:0.75rem; justify-content:center; margin:1.5rem 0; }
+      .uc-otp-box {
+        width: 72px; height: 80px;
+        border: 2px solid #e2e8f0;
+        border-radius: 16px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 2.2rem; font-weight: 900;
+        text-align: center; color: #1e293b;
+        outline: none;
+        background: #f8fafc;
+        transition: all 0.2s;
+        caret-color: #7C3AED;
+      }
+      .uc-otp-box:focus { border-color: #7C3AED; background: white; box-shadow: 0 0 0 4px #7C3AED15; }
+      .uc-otp-filled { border-color: #7C3AED; background: #faf5ff; color: #7C3AED; }
+      .uc-resend { text-align:center; margin-top:1rem; }
+      .uc-dev-banner {
+        display:flex; align-items:center; justify-content:center; gap:0.4rem;
+        background:#fffbeb; border:1px solid #fde68a;
+        border-radius:10px; padding:0.5rem 0.85rem;
+        font-size:0.78rem; font-weight:600; color:#92400e;
+        margin-bottom:0.75rem;
+      }
+      .uc-login-success {
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        padding:3rem 1rem; gap:0.75rem; text-align:center;
+      }
+      .uc-success-check {
+        width:90px; height:90px; border-radius:50%;
+        background:linear-gradient(135deg,#10B981,#059669);
+        display:flex; align-items:center; justify-content:center;
+        margin-bottom:0.5rem;
+      }
+      .uc-success-title { font-family:'Outfit',sans-serif; font-size:1.6rem; font-weight:900; color:#1e293b; }
+      .uc-success-sub   { font-size:0.88rem; color:#64748b; font-weight:600; }
+
+      /* •”••”• Form •”••”• */
+      .uc-form { display:flex; flex-direction:column; gap:1rem; margin-bottom:1.5rem; }
+      .uc-field-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+      @media(max-width:560px) { .uc-field-row { grid-template-columns:1fr; } }
+      .uc-field { display:flex; flex-direction:column; gap:0.35rem; }
+      .uc-label { font-size:0.75rem; font-weight:700; color:#475569; }
+      .uc-input-wrap { position:relative; }
+      .uc-field-icon {
+        position:absolute; left:0.9rem; top:50%;
+        transform:translateY(-50%);
+        color:#94a3b8; pointer-events:none;
+      }
+      .uc-input {
+        width:100%; box-sizing:border-box;
+        background:#f1f5f9;
+        border:1.5px solid transparent;
+        border-radius:12px;
+        padding:0.85rem 1rem 0.85rem 2.75rem;
+        font-size:0.9rem;
+        font-weight:600;
+        font-family:'Plus Jakarta Sans',sans-serif;
+        color:#1e293b;
+        outline:none;
+        transition:all 0.2s;
+      }
+      .uc-input:focus { border-color:#7C3AED; background:white; box-shadow:0 0 0 4px #7C3AED15; }
+      .uc-textarea {
+        width:100%; box-sizing:border-box;
+        background:#f1f5f9;
+        border:1.5px solid transparent;
+        border-radius:12px;
+        padding:0.85rem 1rem;
+        font-size:0.9rem;
+        font-weight:600;
+        font-family:'Plus Jakarta Sans',sans-serif;
+        color:#1e293b;
+        outline:none;
+        resize:vertical;
+        transition:all 0.2s;
+      }
+      .uc-textarea:focus { border-color:#7C3AED; background:white; box-shadow:0 0 0 4px #7C3AED15; }
+
+      .uc-photo-zone {
+        border:2px dashed #e2e8f0;
+        border-radius:14px;
+        padding:1.5rem;
+        cursor:pointer;
+        text-align:center;
+        display:flex; flex-direction:column; align-items:center; gap:0.5rem;
+        transition:border-color 0.2s;
+        background:#fafbfc;
+      }
+      .uc-photo-zone:hover { border-color:#7C3AED; }
+      .uc-photo-text { font-size:0.82rem; font-weight:600; color:#475569; }
+      .uc-photo-hint { font-size:0.7rem; color:#94a3b8; }
+      .uc-photo-preview { position:relative; width:100%; }
+      .uc-photo-preview img { width:100%; height:160px; object-fit:cover; border-radius:10px; }
+      .uc-photo-change {
+        display:flex; align-items:center; gap:0.35rem;
+        margin-top:0.5rem; font-size:0.75rem; font-weight:700; color:#7C3AED; cursor:pointer;
+        justify-content:center;
+      }
+
+      /* •”••”• Confirm •”••”• */
+      .uc-confirm-layout {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:1.25rem;
+        align-items:start;
+      }
+      @media(max-width:640px) { .uc-confirm-layout { grid-template-columns:1fr; } }
+      .uc-summary-card { background:white; border:1px solid #e2e8f0; border-radius:18px; overflow:hidden; }
+      .uc-summary-hero {
+        display:flex; align-items:center; gap:1rem;
+        padding:1.1rem;
+      }
+      .uc-summary-body { padding:1rem; display:flex; flex-direction:column; gap:0.5rem; }
+      .uc-summary-row {
+        display:flex; align-items:flex-start; gap:0.5rem;
+        font-size:0.78rem; font-weight:600; color:#475569;
+      }
+      .uc-price-box { border-top:1px solid #f1f5f9; padding:1rem; }
+      .uc-price-row { display:flex; justify-content:space-between; font-size:0.78rem; font-weight:600; color:#64748b; margin-bottom:0.4rem; }
+      .uc-price-free {}
+      .uc-price-total {
+        display:flex; justify-content:space-between;
+        font-size:1rem; font-weight:900; color:#1e293b;
+        border-top:1px solid #e2e8f0; padding-top:0.5rem; margin-top:0.25rem;
+      }
+      .uc-confirm-includes { display:flex; flex-direction:column; gap:0.6rem; }
+      .uc-includes-title { font-size:0.78rem; font-weight:800; color:#475569; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25rem; }
+      .uc-includes-row { display:flex; align-items:flex-start; gap:0.4rem; font-size:0.8rem; color:#475569; font-weight:600; }
+      .uc-guarantee-box {
+        display:flex; align-items:flex-start; gap:0.75rem;
+        background:#faf5ff; border:1px solid #DDD6FE;
+        border-radius:12px; padding:0.85rem;
+        margin:0.5rem 0;
+      }
+      .uc-agree {
+        display:flex; align-items:flex-start; gap:0.5rem;
+        font-size:0.75rem; color:#64748b; cursor:pointer; line-height:1.5;
+      }
+      .uc-error {
+        display:flex; align-items:center; gap:0.4rem;
+        background:#fef2f2; border:1px solid #fecaca;
+        border-radius:10px; padding:0.6rem 0.85rem;
+        font-size:0.78rem; color:#dc2626; font-weight:600;
+        margin:0.5rem 0;
+      }
+
+      /* •”••”• Success Page •”••”• */
+      .uc-success-page {
+        max-width:520px;
+        margin:3rem auto;
+        text-align:center;
+        padding:1rem;
+        display:flex; flex-direction:column; align-items:center; gap:1rem;
+      }
+      .uc-success-circle {
+        width:100px; height:100px; border-radius:50%;
+        background:linear-gradient(135deg,#10B981,#059669);
+        display:flex; align-items:center; justify-content:center;
+        box-shadow:0 16px 40px rgba(16,185,129,0.35);
+      }
+      .uc-success-h2 {
+        font-family:'Outfit',sans-serif;
+        font-size:1.75rem; font-weight:900; color:#1e293b; margin:0;
+      }
+      .uc-success-desc { font-size:0.88rem; color:#64748b; max-width:340px; }
+      .uc-success-ref {
+        background:white; border:1px solid #e2e8f0;
+        border-radius:16px; padding:1.25rem 2rem;
+        box-shadow:0 4px 16px rgba(0,0,0,0.06);
+      }
+      .uc-success-timeline {
+        display:flex; flex-direction:column; gap:0; width:100%;
+        background:white; border:1px solid #e2e8f0;
+        border-radius:16px; overflow:hidden;
+        box-shadow:0 2px 8px rgba(0,0,0,0.04);
+      }
+      .uc-tl-item {
+        display:flex; align-items:center; gap:0.75rem;
+        padding:0.75rem 1.25rem;
+        border-bottom:1px solid #f8fafc;
+        font-size:0.82rem; font-weight:600; color:#94a3b8;
+      }
+      .uc-tl-item:last-child { border-bottom:none; }
+      .uc-tl-done { color:#1e293b; }
+      .uc-tl-icon { font-size:1rem; width:24px; text-align:center; }
+      .uc-tl-label { flex:1; }
+
+      /* •”••”• Buttons •”••”• */
+      .uc-btn-primary {
+        display:inline-flex; align-items:center; justify-content:center; gap:0.45rem;
+        background:linear-gradient(135deg,#7C3AED,#6d28d9);
+        color:white; border:none; border-radius:14px;
+        padding:0.85rem 1.75rem;
+        font-size:0.9rem; font-weight:800;
+        font-family:'Plus Jakarta Sans',sans-serif;
+        cursor:pointer; transition:all 0.2s ease;
+        box-shadow:0 4px 16px rgba(124,58,237,0.3);
+        letter-spacing:-0.01em;
+      }
+      .uc-btn-primary:hover:not(:disabled) {
+        transform:translateY(-2px);
+        box-shadow:0 8px 28px rgba(124,58,237,0.4);
+        filter:brightness(1.08);
+      }
+      .uc-btn-primary:active { transform:translateY(0); }
+      .uc-btn-primary:disabled { opacity:0.5; cursor:not-allowed; transform:none; box-shadow:none; }
+      .uc-btn-full { width:100%; }
+
+      .uc-btn-outline {
+        display:inline-flex; align-items:center; gap:0.4rem;
+        background:white; color:#7C3AED;
+        border:2px solid #7C3AED;
+        border-radius:14px; padding:0.75rem 1.5rem;
+        font-size:0.88rem; font-weight:700;
+        font-family:inherit; cursor:pointer;
+        transition:all 0.2s ease;
+      }
+      .uc-btn-outline:hover { background:#faf5ff; }
+
+      .uc-link {
+        background:none; border:none;
+        color:#7C3AED; font-weight:700; font-size:inherit;
+        font-family:inherit; cursor:pointer; text-decoration:underline;
+        padding:0;
+      }
+
+      .uc-step-footer { padding-top:0.5rem; }
+
+      /* •”••”• Footer •”••”• */
+      .uc-footer {
+        background:white; border-top:1px solid #e2e8f0;
+        padding:0.75rem 1.5rem;
+        display:flex; align-items:center; justify-content:center;
+        gap:0.4rem; flex-wrap:wrap;
+        font-size:0.72rem; font-weight:600; color:#94a3b8;
+      }
+      /* •”••”• Package Modal •”••”• */
+      .uc-modal-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(15, 23, 42, 0.4);
+        backdrop-filter: blur(4px);
+        z-index: 9999;
+        display: flex; align-items: center; justify-content: center;
+        padding: 1.5rem;
+      }
+      .uc-pkg-modal {
+        background: white;
+        border-radius: 24px;
+        width: 100%; max-width: 980px;
+        height: 88vh;
+        max-height: 88vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+      }
+      .uc-pkg-modal-close {
+        position: absolute; top: 1rem; right: 1rem;
+        background: rgba(255,255,255,0.9); border: none;
+        width: 36px; height: 36px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; z-index: 10; color: #1e293b;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      }
+      .uc-pkg-modal-hero {
+        position: relative; width: 100%; height: 180px; shrink: 0; flex-shrink: 0;
+        border-radius: 24px 24px 0 0; overflow: hidden;
+      }
+      .uc-pkg-modal-hero img {
+        width: 100%; height: 100%; object-fit: cover;
+      }
+      .uc-pkg-modal-hero-overlay {
+        position: absolute; inset: 0;
+        background: linear-gradient(to top, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.2) 100%);
+        display: flex; flex-direction: column; justify-content: flex-end;
+        padding: 1.5rem 2rem; color: white;
+      }
+      .uc-pkg-modal-hero-overlay h2 { font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; margin: 0; }
+      .uc-pkg-modal-hero-overlay p { margin: 0.2rem 0 0; color: rgba(255,255,255,0.85); font-weight: 500; font-size: 0.95rem; }
+      .uc-pkg-modal-split {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        flex-direction: row;
+        background: #f8fafc;
+      }
+      .uc-pkg-sidebar {
+        width: 300px;
+        background: white;
+        border-right: 1px solid #e2e8f0;
+        padding: 2rem;
+      }
+      .uc-pkg-sidebar-title {
+        font-size: 1.15rem; font-weight: 800; color: #1e293b; margin: 0 0 1.2rem;
+      }
+      .uc-pkg-related-list {
+        list-style: none; padding: 0; margin: 0;
+        display: flex; flex-direction: column; gap: 0.75rem;
+      }
+      .uc-pkg-sidebar-card {
+        display: flex; align-items: center; gap: 12px;
+        font-size: 0.85rem; font-weight: 700; color: #475569;
+        cursor: pointer; padding: 0.5rem; border-radius: 12px;
+        transition: all 0.2s ease;
+        border: 1px solid transparent;
+      }
+      .uc-pkg-sidebar-img {
+        width: 40px; height: 40px; border-radius: 8px; object-fit: cover;
+      }
+      .uc-pkg-sidebar-card:hover {
+        background: white; border-color: #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+      }
+      .uc-pkg-sidebar-card.uc-pkg-sidebar-active {
+        background: #ede9fe; color: #7C3AED; border-color: #ddd6fe; box-shadow: 0 4px 12px rgba(124,58,237,0.1);
+      }
+      
+      .uc-pkg-filter-row {
+        display: flex; gap: 0.5rem; margin-bottom: 1.5rem; overflow-x: auto; padding-bottom: 4px;
+      }
+      .uc-pkg-filter-pill {
+        background: white; border: 1px solid #e2e8f0; color: #475569;
+        padding: 0.4rem 1rem; border-radius: 99px; font-size: 0.8rem; font-weight: 700;
+        cursor: pointer; transition: all 0.2s; white-space: nowrap;
+      }
+      .uc-pkg-filter-pill:hover { background: #f8fafc; border-color: #cbd5e1; }
+      .uc-pkg-filter-pill.active { background: #1e293b; color: white; border-color: #1e293b; }
+
+      .uc-pkg-content {
+        flex: 1;
+        padding: 2rem;
+      }
+      .uc-pkg-content-title {
+        font-size: 1.25rem; font-weight: 800; color: #1e293b; margin: 0 0 1.5rem;
+      }
+      .uc-pkg-modal-list {
+        display: flex; flex-direction: column; gap: 1rem;
+      }
+      .uc-pkg-modal-card-h {
+        background: white; border-radius: 16px;
+        padding: 1.5rem; position: relative;
+        border: 1px solid #e2e8f0;
+        cursor: pointer; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+        display: flex; flex-direction: row; align-items: center; justify-content: space-between;
+        gap: 1.5rem;
+      }
+      .uc-pkg-modal-card-h:hover {
+        transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.06); border-color: #7C3AED;
+      }
+      .uc-pkg-modal-card-left { flex: 1; }
+      .uc-pkg-modal-tags { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+      .uc-pkg-badge {
+        font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 6px;
+        color: white; text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      .popular-badge { background: linear-gradient(135deg, #f59e0b, #d97706); }
+      .value-badge { background: linear-gradient(135deg, #10b981, #059669); }
+      
+      .uc-pkg-modal-card-left h4 { margin: 0 0 0.4rem; font-size: 1.25rem; font-weight: 800; color: #1e293b; }
+      .uc-pkg-modal-price-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem; }
+      .uc-pkg-modal-price { font-size: 1.4rem; font-weight: 900; color: #7C3AED; }
+      .uc-pkg-modal-dur { font-size: 0.85rem; font-weight: 600; color: #64748b; display: flex; align-items: center; gap: 4px; }
+      
+      .uc-pkg-modal-inc-list { display: flex; flex-direction: column; gap: 0.4rem; }
+      .uc-pkg-inc { font-size: 0.85rem; color: #475569; display: flex; align-items: flex-start; gap: 6px; line-height: 1.4; }
+      .uc-pkg-inc svg { color: #10B981; flex-shrink: 0; margin-top: 2px; }
+      
+      .uc-pkg-modal-card-right { flex-shrink: 0; }
+      .uc-btn-add { padding: 0.6rem 1.5rem; border-radius: 99px; }
+
+      @media (max-width: 768px) {
+        .uc-pkg-modal-split { flex-direction: column; }
+        .uc-pkg-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #e2e8f0; }
+        .uc-pkg-modal-card-h { flex-direction: column; align-items: flex-start; }
+        .uc-pkg-modal-card-right { width: 100%; }
+        .uc-btn-add { width: 100%; }
+      }
+      
+      .uc-pkg-modal-card-uc {
+        display: flex; justify-content: space-between; align-items: flex-start;
+        padding: 1.5rem 0; border-bottom: 1px dashed #e2e8f0; gap: 1rem;
+      }
+      .uc-pkg-modal-card-uc:last-child { border-bottom: none; }
+      
+      .uc-uc-section-title {
+        font-size: 1.5rem; font-weight: 900; color: #1e293b;
+        margin-bottom: 1rem;
+      }
+
+      .uc-pkg-modal-card-uc-info { flex: 1; padding-right: 1rem; }
+      .uc-pkg-uc-title { font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-bottom: 0.2rem; }
+      .uc-pkg-uc-rating { display: flex; align-items: center; font-size: 0.75rem; margin-bottom: 0.5rem; }
+      .uc-pkg-uc-price { font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 1rem; }
+      .uc-pkg-uc-dot { margin: 0 4px; color: #94a3b8; }
+      .uc-pkg-uc-includes { margin: 0; padding-left: 1.2rem; margin-bottom: 1rem; color: #475569; font-size: 0.85rem; line-height: 1.5; }
+      .uc-pkg-uc-includes li { margin-bottom: 0.25rem; }
+      .uc-pkg-uc-view-details { color: #7C3AED; font-weight: 800; font-size: 0.85rem; cursor: pointer; }
+      
+      .uc-pkg-modal-card-uc-imgbox {
+        position: relative; width: 120px; display: flex; flex-direction: column; align-items: center;
+      }
+      .uc-pkg-uc-img { width: 120px; height: 120px; border-radius: 12px; object-fit: cover; }
+      .uc-pkg-uc-add-wrap {
+        position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 8px;
+        background: white;
+      }
+      
+      .uc-btn-add-swiggy {
+        background: white; border: 1px solid #e2e8f0; color: #7C3AED;
+        font-weight: 800; padding: 0.4rem 1.8rem; border-radius: 8px;
+        cursor: pointer; transition: all 0.2s; 
+        text-transform: uppercase; font-size: 0.85rem;
+      }
+      .uc-btn-add-swiggy:hover { background: #f8fafc; border-color: #cbd5e1; }
+      
+      .uc-swiggy-qty {
+        display: flex; align-items: center; justify-content: space-between;
+        background: white; border: 1px solid #7C3AED; color: #7C3AED;
+        font-weight: 800; border-radius: 8px; overflow: hidden; width: 90px;
+      }
+      .uc-swiggy-qty button {
+        background: transparent; border: none; color: #7C3AED; padding: 0.4rem 0.8rem;
+        cursor: pointer; font-weight: 800; transition: background 0.2s;
+      }
+      .uc-swiggy-qty button:hover { background: #f3e8ff; }
+      
+      .uc-pkg-modal-cart-bar {
+        position: sticky; bottom: 0; left: 0; right: 0;
+        background: white; border-top: 1px solid #e2e8f0;
+        padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center;
+        box-shadow: 0 -10px 30px rgba(0,0,0,0.05); z-index: 10;
+        border-radius: 0 0 24px 24px;
+      }
+      .uc-cart-bar-left { display: flex; flex-direction: column; }
+      .uc-cart-bar-items { font-size: 0.8rem; font-weight: 700; color: #64748b; }
+      .uc-cart-bar-price { font-size: 1.25rem; font-weight: 900; color: #1e293b; }
+      
+      .uc-cart-bar-btn {
+        background: #7C3AED; color: white; border: none;
+        padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 800;
+        cursor: pointer; display: flex; align-items: center; gap: 8px;
+        transition: background 0.2s;
+      }
+      .uc-cart-bar-btn:hover { background: #6D28D9; }
 
       /* ── Premium Modal Styles for Painting & Masonry ── */
       .uc-paint-overlay {
@@ -12004,5 +13750,900 @@ export function BkStyles() {
       .uc-cart-bar-btn:hover { background: #6D28D9; }
 
     `}</style>
+  )
+}
+
+
+const KITCHEN_SUB_TABS = [
+  {
+    id: "packages",
+    name: "Full Kitchen Packages",
+    image: "/mockups/kitchen_top_new.png",
+  },
+  {
+    id: "appliance",
+    name: "Single Appliance & Specific Area Cleaning",
+    image: "/mockups/appliance_cleaning_hero.png",
+  },
+  {
+    id: "addons",
+    name: "Quick Extra Services (Mini Add-ons)",
+    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=500&q=80&fit=crop",
+  }
+];
+
+const FULL_KITCHEN_PACKAGES = [
+  {
+    id: "occ-basic",
+    name: "Occupied Kitchen Cleaning (Basic)",
+    price: 999,
+    duration: "2 hrs",
+    image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop",
+    includes: [
+      "Removes grease and grime",
+      "Cleans counters, stove, sink",
+      "Cleans cabinet exteriors"
+    ]
+  },
+  {
+    id: "occ-deep",
+    name: "Occupied Kitchen Cleaning ( Deep Clean)",
+    price: 1499,
+    duration: "3 hrs",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Removes stubborn grease buildup",
+      "Deep cleans kitchen surfaces",
+      "Cleans cabinets inside and outside"
+    ]
+  },
+  {
+    id: "occ-eco",
+    name: "Occupied Kitchen Cleaning (Eco-Safe)",
+    price: 1999,
+    duration: "3.5 hrs",
+    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+    includes: [
+      "Uses chemical-free cleaning methods",
+      "Removes grease with steam",
+      "Safe for kids and pets"
+    ]
+  },
+  {
+    id: "emp-basic",
+    name: "Empty Kitchen Cleaning (Basic)",
+    price: 899,
+    duration: "1.5 hrs",
+    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+    includes: [
+      "Removes grease and grime",
+      "Cleans counters, stove, sink",
+      "Ideal for empty kitchens"
+    ]
+  },
+  {
+    id: "emp-steam",
+    name: "Empty Kitchen Cleaning (Steam Deep Clean)",
+    price: 1299,
+    duration: "2 hrs",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Removes heavy grease buildup",
+      "Uses powerful steam cleaning",
+      "Cleans empty cabinet exteriors"
+    ]
+  }
+];
+
+const APPLIANCE_SERVICES = [
+  {
+    id: "chimney-clean",
+    name: "Chimney Deep Cleaning",
+    price: 999,
+    duration: "1.5 hrs",
+    image: "/mockups/appliance_cleaning_hero.png",
+    includes: ["Filter cleaning", "Baffle plate degreasing", "Outer body wipe"]
+  },
+  {
+    id: "fridge-clean",
+    name: "Refrigerator Deep Cleaning",
+    price: 799,
+    duration: "1 hr",
+    image: "/mockups/appliance_cleaning_hero.png",
+    includes: ["Shelves cleaning", "Inner walls disinfection", "Outer body wipe"]
+  },
+  {
+    id: "microwave-clean",
+    name: "Microwave Oven Cleaning",
+    price: 399,
+    duration: "45 mins",
+    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
+    includes: [
+      "Takes out all food items and places them back neatly after cleaning.",
+      "Washes shelves, trays, and interior walls to remove spills, stains, and bad smells."
+    ]
+  },
+  {
+    id: "chimney-cleaning",
+    name: "Chimney Cleaning",
+    price: 499,
+    duration: "45 mins",
+    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
+    includes: [
+      "Deep cleans filters and mesh to remove thick oil buildup and restore suction.",
+      "Wipes down the outer body of the chimney."
+    ]
+  },
+  {
+    id: "utility-area",
+    name: "Utility Area Cleaning",
+    price: 299,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
+    includes: [
+      "Complete washing of utility space floors, windows, and appliance exteriors."
+    ]
+  },
+  {
+    id: "microwave-cleaning",
+    name: "Microwave Cleaning",
+    price: 199,
+    duration: "15 mins",
+    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
+    includes: [
+      "Cleans inside walls to remove food splatters, oil stains, and odors.",
+      "Wipes down the outer glass and body."
+    ]
+  },
+  {
+    id: "gas-stove-cleaning",
+    name: "Gas Stove Cleaning",
+    price: 99,
+    duration: "20 mins",
+    image: "https://images.unsplash.com/photo-1556909172-54557c7e4fb7?w=300&q=80&fit=crop",
+    includes: [
+      "Scrubs burners, knobs, and stove surfaces to remove burnt food and sticky grease."
+    ]
+  },
+  {
+    id: "tiles-slab-cleaning",
+    name: "Kitchen Tiles & Slab Cleaning",
+    price: 399,
+    duration: "45 mins",
+    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+    includes: [
+      "Removes oil spots from wall tiles and deep cleans grout lines and countertops."
+    ]
+  },
+  {
+    id: "cabinet-trolley-cleaning",
+    name: "Cabinet & Trolley Cleaning",
+    price: 499,
+    duration: "1 hr",
+    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    includes: [
+      "Removes items, cleans inside drawers and shelves, and places items back neatly.",
+      "Removes oily fingerprint stains from cabinet doors."
+    ]
+  },
+  {
+    id: "oven-cleaning",
+    name: "Oven, Toaster & Grill Cleaning",
+    price: 249,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop",
+    includes: [
+      "Cleans interior crumbs, food spills, and outer grease buildup."
+    ]
+  }
+];
+
+const QUICK_EXTRA_SERVICES = [
+  {
+    id: "fan-cleaning",
+    name: "Ceiling Fan Cleaning",
+    price: 99,
+    duration: "15 mins",
+    image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop",
+    includes: ["Dust and grease removal from fan blades."]
+  },
+  {
+    id: "utensil-rearrangement",
+    name: "Utensil Rearrangement",
+    price: 199,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+    includes: ["Safely taking out utensils, cleaning shelves, and putting them back."]
+  },
+  {
+    id: "sink-cleaning",
+    name: "Sink & Under-Sink Cleaning",
+    price: 149,
+    duration: "20 mins",
+    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
+    includes: ["Stain and odor removal for sinks and drainage areas."]
+  },
+  {
+    id: "dining-table",
+    name: "Dining Table Cleaning",
+    price: 99,
+    duration: "15 mins",
+    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    includes: ["Wiping down table surfaces and chairs."]
+  },
+  {
+    id: "kitchen-window",
+    name: "Kitchen Window Cleaning",
+    price: 149,
+    duration: "20 mins",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: ["Scrubbing glass panes and window tracks."]
+  },
+  {
+    id: "balcony-cleaning",
+    name: "Balcony Cleaning",
+    price: 299,
+    duration: "45 mins",
+    image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop",
+    includes: ["Floor and railing washing for small or large balconies."]
+  },
+  {
+    id: "window-cleaning",
+    name: "Window Cleaning",
+    price: 249,
+    duration: "40 mins",
+    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+    includes: ["Deep glass cleaning for small or large home windows."]
+  }
+];
+
+export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
+  const [activeTab, setActiveTab] = useState("packages");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
+
+  const addItemToCart = (id, name, price, duration) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id);
+      if (existing) return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
+      return [...prev, { id, name, price, duration, quantity: 1 }];
+    });
+  };
+
+  const removeItemFromCart = (id) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id);
+      if (!existing) return prev;
+      if (existing.quantity === 1) return prev.filter(i => i.id !== id);
+      return prev.map(i => i.id === id ? { ...i, quantity: i.quantity - 1 } : i);
+    });
+  };
+
+  const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
+
+  const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+
+  const getActiveServices = () => {
+    let list = [];
+    if (activeTab === "packages") list = FULL_KITCHEN_PACKAGES;
+    else if (activeTab === "appliance") list = APPLIANCE_SERVICES;
+    else if (activeTab === "addons") list = QUICK_EXTRA_SERVICES;
+    
+    if (!searchQuery) return list;
+    return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  };
+
+  const activeServices = getActiveServices();
+
+  return (
+    <div className="w-full text-slate-700 bg-white">
+      {/* Sticky Header + Tabs */}
+      <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
+        <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
+          <div>
+            <button
+              onClick={onClose}
+              className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-2 text-xs transition-colors"
+            >
+              <ChevronLeft size={16} /> Back to Services
+            </button>
+            <h2 className="text-xl font-black text-slate-900">Kitchen Cleaning</h2>
+          </div>
+          <div className="relative w-full sm:w-64">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search size={14} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search services..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all bg-slate-50/50"
+            />
+          </div>
+        </div>
+
+        {/* Sub-tabs */}
+        <div className="flex gap-5 pb-3 pt-2 border-b border-slate-100 justify-start">
+          {KITCHEN_SUB_TABS.map(tab => {
+            const isSelected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
+                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[90px] shrink-0"
+              >
+                <img
+                  src={tab.image}
+                  alt={tab.name}
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
+                    isSelected ? "scale-[1.05] shadow-md" : "opacity-80 hover:opacity-100"
+                  }`}
+                />
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
+                  isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
+                }`}>
+                  {tab.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex flex-col lg:flex-row flex-1 pt-4">
+
+        {/* Left Column */}
+        <div className="flex-1 space-y-5 lg:pr-6">
+
+          {/* Section title */}
+          <div className="pt-1">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+              <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
+              {activeTab === "packages" ? "Full Kitchen Packages" : activeTab === "appliance" ? "Single Appliance & Specific Area Cleaning" : "Quick Extra Services (Mini Add-ons)"}
+            </h3>
+          </div>
+
+          <div className="space-y-0 divide-y divide-slate-100">
+            {activeServices.map((service, idx) => {
+              const count = getCount(service.id);
+              const isFirst = idx === 0 && !searchQuery;
+              return (
+                <div key={service.id} className="py-5 px-4 sm:px-5">
+                  {/* First item image hero */}
+                  {isFirst && (
+                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4">
+                      <img
+                        src={activeTab === "packages" ? "/mockups/kitchen_top_new.png" : activeTab === "appliance" ? "/mockups/appliance_cleaning_hero.png" : service.image}
+                        alt={service.name}
+                        className="w-full h-full object-cover object-top"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-black text-slate-900 mb-1">{service.name}</h4>
+
+                      <p className="text-xs font-bold text-slate-800">
+                        {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
+                        <span className="text-slate-400 font-normal ml-2">• {service.duration}</span>
+                      </p>
+                      <div className="mt-3 space-y-1">
+                        {service.includes.map((item, i) => (
+                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                            <span className="text-slate-400 mt-0.5">•</span>
+                            <span>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button 
+                        onClick={() => setSelectedServiceDetails(service)}
+                        className="text-xs font-semibold text-blue-600 mt-2 hover:underline"
+                      >
+                        View details
+                      </button>
+                      {service.options && (
+                        <p className="text-[11px] text-slate-400 mt-1">{service.options}</p>
+                      )}
+                    </div>
+
+                    {/* Image + add button */}
+                    <div className="relative shrink-0 w-28 pb-3 flex flex-col items-center">
+                      <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
+                        <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 z-10">
+                        {count > 0 ? (
+                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                            <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
+                            <span>{count}</span>
+                            <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-emerald-900">+</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)}
+                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
+                          >
+                            Add
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right Column: Order Summary */}
+        <div className="w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between lg:sticky lg:top-32 h-fit space-y-4 mt-6 lg:mt-0 rounded-2xl">
+          <div className="space-y-4">
+            <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
+                <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
+                <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
+              </div>
+
+              {cart.length > 0 ? (
+                <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                  {cart.map(item => (
+                    <div key={item.id} className="flex justify-between items-start text-xs gap-2">
+                      <div className="flex-1">
+                        <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">{item.duration}</span>
+                      </div>
+                      <div className="text-right flex items-center gap-2">
+                        <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
+                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
+                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600">-</button>
+                          <span>{item.quantity}</span>
+                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-600">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-slate-400 text-xs">
+                  No services added. Select from the left.
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
+                {cart.length > 0 && (
+                  <div className="flex justify-between text-slate-500">
+                    <span>Items Subtotal</span>
+                    <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2">
+                  <span>Total Amount</span>
+                  <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 mt-4 border-t border-slate-200/60">
+            <button
+              disabled={cart.length === 0}
+              onClick={onCheckout}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all"
+            >
+              Proceed to Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {selectedServiceDetails && (
+        <div className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans">
+            {/* Close button */}
+            <button 
+              onClick={() => setSelectedServiceDetails(null)} 
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Header: split hero image + promo card */}
+            <div className="flex h-36 border-b border-slate-100 shrink-0">
+              <div className="w-[60%] h-full bg-slate-100">
+                <img 
+                  src={selectedServiceDetails.image} 
+                  alt={selectedServiceDetails.name} 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="w-[40%] bg-amber-50/70 p-4 flex flex-col justify-center text-left border-l border-amber-100/50">
+                <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-0.5">FLAT 10% OFF</span>
+                <span className="text-[10px] text-slate-600 font-bold leading-tight mb-2">For New Users</span>
+                <span className="text-[9px] font-bold text-slate-500 bg-white border border-amber-200 rounded px-1.5 py-0.5 w-fit uppercase tracking-tight">CODE: NEWCLEAN10</span>
+              </div>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
+              {/* Title, rating and add wrap */}
+              <div className="border-b border-slate-100 pb-5">
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">{selectedServiceDetails.name}</h3>
+                
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
+                  <Star className="text-[#7C3AED] fill-[#7C3AED]" size={12} />
+                  <span className="text-slate-800">4.82</span>
+                  <span className="text-slate-400 font-normal underline">(4.5M reviews)</span>
+                </div>
+
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
+                  <div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Price</div>
+                    <div className="text-base font-black text-slate-900 mt-0.5">
+                      ₹{selectedServiceDetails.price}
+                      <span className="text-slate-400 text-xs font-normal ml-2">• {selectedServiceDetails.duration}</span>
+                    </div>
+                  </div>
+
+                  {/* Add button inside details modal */}
+                  <div className="w-24">
+                    {getCount(selectedServiceDetails.id) > 0 ? (
+                      <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
+                        <button onClick={() => removeItemFromCart(selectedServiceDetails.id)} className="hover:text-emerald-900">-</button>
+                        <span>{getCount(selectedServiceDetails.id)}</span>
+                        <button onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)} className="hover:text-emerald-900">+</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
+                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider"
+                      >
+                        Add
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Service includes */}
+              <div className="space-y-2.5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Includes</h4>
+                <div className="space-y-2">
+                  {selectedServiceDetails.includes ? (
+                    selectedServiceDetails.includes.map((item, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                        <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
+                        <span className="leading-relaxed">{item}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-slate-500">Includes complete surface scrubbing and dusting.</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Service does not include */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Does Not Include</h4>
+                <div className="space-y-2">
+                  {(selectedServiceDetails.id === "occ-basic" ? [
+                    "Cabinet interior cleaning, utensil removal, or restocking",
+                    "Deep chimney filter degreasing or appliance interior cleaning",
+                    "Chimney motor repair, plumbing fixes, or hardware work"
+                  ] : [
+                    "Chimney motor servicing or internal repair",
+                    "Utensil washing or cabinet reorganization unless opted",
+                    "Plumbing, electrical or masonry repairs"
+                  ]).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tools & Products We Use */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
+                <div className="space-y-2">
+                  {[
+                    "Food-safe surface degreasers & antibacterial sprays",
+                    "Non-abrasive scrubbing pads & microfiber towels",
+                    "High-reach dusting brushes for exhaust fans & windows"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* What You Need to Keep Ready */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
+                <div className="space-y-2">
+                  {[
+                    "Continuous water supply during the 2-hour service duration",
+                    "Working power socket near the kitchen area"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Our Service Guarantees */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Our Service Guarantees</h4>
+                <div className="space-y-2">
+                  {[
+                    "7-day re-clean assurance if you are not completely satisfied",
+                    "100% background-verified & trained cleaning professionals",
+                    "In-house damage protection coverage"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Customer Reviews */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800">Ananya S.</span>
+                    <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#7C3AED]">
+                      <Star className="fill-[#7C3AED] text-[#7C3AED]" size={12} />
+                      <span>5.0</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed italic">
+                    "Great service for regular maintenance! They cleaned all the grease off my stove and backsplash tiles quickly."
+                  </p>
+                </div>
+              </div>
+
+              {/* Frequently Asked Questions */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
+                <div className="space-y-2">
+                  {[
+                    "Will the cleaners move utensils from inside the cabinets?",
+                    "Do I need to provide any cleaning solutions or cloths?",
+                    "Can I add appliance cleaning along with this package?"
+                  ].map((q, idx) => (
+                    <div key={idx} className="border border-slate-100 rounded-xl p-3 flex justify-between items-center text-xs text-slate-700 bg-white shadow-sm font-semibold">
+                      <span>{q}</span>
+                      <span className="text-slate-400 text-base font-bold">+</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sticky Footer with teal proceed button */}
+            <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Occupied Kitchen Clean</div>
+              <button
+                onClick={() => {
+                  if (getCount(selectedServiceDetails.id) === 0) {
+                    addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration);
+                  }
+                  setSelectedServiceDetails(null);
+                }}
+                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider"
+              >
+                Proceed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
+  if (category?.id === "cleaning" || category?.slug === "cleaning") {
+    return (
+      <CustomCleaningPackageModal
+        category={category}
+        cart={cart}
+        setCart={setCart}
+        onClose={onClose}
+        onCheckout={onCheckout}
+      />
+    );
+  }
+
+  const [activeTab, setActiveTab] = useState(0)
+  const [activeFilter, setActiveFilter] = useState("All")
+  const rawList = (packagesData && (packagesData[category?.id] || packagesData[category?.slug] || packagesData[category?.name?.toLowerCase()])) || PACKAGES[category?.id] || PACKAGES[category?.slug] || []
+  const packages = rawList.map(p => ({ ...p, priceStr: BOOKING_CURRENCY_SYMBOL + p.price }))
+  const relatedServices = packages.slice(0, 4);
+
+  const filteredPackages = packages.filter(p => {
+    if (activeFilter === "All") return true;
+    if (activeFilter === "Premium") return p.price >= 1000;
+    if (activeFilter === "Standard") return p.price < 1000;
+    return true;
+  });
+
+  const getCartCount = (pkgId) => {
+    const item = cart.find(c => c.id === pkgId);
+    return item ? item.quantity : 0;
+  }
+
+  const addToCart = (pkg) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === pkg.id);
+      if (existing) {
+        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
+      }
+      return [...prev, { ...pkg, quantity: 1, categoryName: category.name }];
+    });
+  }
+
+  const removeFromCart = (pkgId) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === pkgId);
+      if (existing.quantity === 1) {
+        return prev.filter(c => c.id !== pkgId);
+      }
+      return prev.map(c => c.id === pkgId ? { ...c, quantity: c.quantity - 1 } : c);
+    });
+  }
+
+  const renderCard = (p, i) => (
+    <motion.div
+      key={p.id}
+      className="uc-pkg-modal-card-uc"
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: i * 0.1 }}
+    >
+      <div className="uc-pkg-modal-card-uc-info">
+        <h3 className="uc-pkg-uc-title">{p.name}</h3>
+        <div className="uc-pkg-uc-rating">
+          <Star size={12} style={{ fill: "#7C3AED", color: "#7C3AED", marginRight: 4 }} />
+          <span style={{ fontWeight: 700 }}>4.8</span> <span style={{ color: "#94a3b8", textDecoration: "underline" }}>(113K reviews)</span>
+        </div>
+        <div className="uc-pkg-uc-price">
+          Starts at {p.priceStr} <span className="uc-pkg-uc-dot">•</span> {p.duration}
+        </div>
+        <ul className="uc-pkg-uc-includes">
+          {p.includes.map(inc => <li key={inc}>{inc}</li>)}
+        </ul>
+        <div className="uc-pkg-uc-view-details">View details</div>
+      </div>
+      <div className="uc-pkg-modal-card-uc-imgbox">
+        <img
+          src={p.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"}
+          alt={p.name}
+          className="uc-pkg-uc-img"
+          onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"; }}
+        />
+        <div className="uc-pkg-uc-add-wrap" onClick={(e) => e.stopPropagation()}>
+          {getCartCount(p.id) > 0 ? (
+            <div className="uc-swiggy-qty">
+              <button onClick={() => removeFromCart(p.id)}>-</button>
+              <span>{getCartCount(p.id)}</span>
+              <button onClick={() => addToCart(p)}>+</button>
+            </div>
+          ) : (
+            <button className="uc-btn-add-swiggy" onClick={() => addToCart(p)}>
+              <ShoppingCart size={13} style={{ display: 'inline-block', verticalAlign: 'middle' }} /> Add
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  return (
+    <div className="uc-modal-overlay" onClick={onClose}>
+      <motion.div
+        className="uc-pkg-modal"
+        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.95 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <button className="uc-pkg-modal-close" onClick={onClose}><X size={20} /></button>
+
+        <div className="uc-pkg-modal-header">
+          <div className="uc-pkg-modal-hero">
+            <img src={category.image} alt={category.name} />
+            <div className="uc-pkg-modal-hero-overlay">
+              <h2>{category.name}</h2>
+              <p>{category.desc}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="uc-pkg-modal-split" style={{ display: 'flex', flexDirection: 'row', gap: 0 }}>
+          {/* Left Sidebar: Individual Services */}
+          <div className="uc-pkg-sidebar" style={{ width: '35%', borderRight: '1px solid #e2e8f0', paddingRight: '1.5rem', overflowY: 'auto' }}>
+            <h3 className="uc-pkg-sidebar-title" style={{ fontSize: '1.1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 900 }}>Individual Services</h3>
+            <div className="uc-pkg-related-list" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {relatedServices.map((s, idx) => (
+                <div key={s.id || idx} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                  <img
+                    src={s.image || s.img || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=100&q=80&fit=crop"}
+                    alt={s.name}
+                    style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }}
+                    onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=100&q=80&fit=crop"; }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1e293b', lineHeight: 1.2, marginBottom: '0.2rem' }}>{s.name}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.5rem' }}>{s.priceStr || (BOOKING_CURRENCY_SYMBOL + '499')} • {s.duration || '1 hr'}</div>
+
+                    {getCartCount(s.id) > 0 ? (
+                      <div className="uc-swiggy-qty" style={{ width: 80, height: 28, fontSize: '0.8rem' }}>
+                        <button style={{ padding: '0 0.5rem' }} onClick={() => removeFromCart(s.id)}>-</button>
+                        <span>{getCartCount(s.id)}</span>
+                        <button style={{ padding: '0 0.5rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>+</button>
+                      </div>
+                    ) : (
+                      <button className="uc-btn-add-swiggy" style={{ padding: '0.3rem 1rem', fontSize: '0.75rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>
+                        <ShoppingCart size={12} style={{ display: 'inline-block', verticalAlign: 'middle' }} /> ADD
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Content: Packages */}
+          <div className="uc-pkg-content" style={{ width: '65%', paddingLeft: '1.5rem', overflowY: 'auto' }}>
+            <h3 className="uc-pkg-content-title" style={{ fontSize: '1.4rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 900 }}>Packages & Bundles</h3>
+
+            <div className="uc-pkg-filter-row">
+              {["All", "Standard", "Premium"].map(f => (
+                <button
+                  key={f}
+                  className={`uc-pkg-filter-pill ${activeFilter === f ? "active" : ""}`}
+                  onClick={() => setActiveFilter(f)}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            <div className="uc-pkg-modal-list">
+              {filteredPackages.map((p, i) => renderCard(p, i))}
+            </div>
+          </div>
+        </div>
+
+        {cart.length > 0 && (
+          <motion.div
+            className="uc-pkg-modal-cart-bar"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="uc-cart-bar-left">
+              <span className="uc-cart-bar-items">{cart.reduce((a, c) => a + c.quantity, 0)} items</span>
+              <span className="uc-cart-bar-price">{BOOKING_CURRENCY_SYMBOL}{cart.reduce((a, c) => a + (c.price * c.quantity), 0)}</span>
+            </div>
+            <button className="uc-cart-bar-btn" onClick={onCheckout}>
+              Proceed to Checkout <ChevronRight size={16} />
+            </button>
+          </motion.div>
+        )}
+      </motion.div>
+    </div>
   )
 }

@@ -7,12 +7,16 @@ import {
   ShieldCheck, BadgeCheck, Clock, Award, Headphones,
   Star, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight,
   Smartphone, Phone, Mail, X, ArrowRight,
-  ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet,
+  ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User,
 } from "lucide-react"
 import { routes } from "../routes.js"
-import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
+import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
+import { useAuth } from "../../state/auth/useAuth.js"
+import { apiUpdateCustomerLastLocation } from "../../api/authService.js"
+import { AnimatePresence } from "framer-motion"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -141,6 +145,27 @@ function PackersMoversGraphic({ className = "w-16 h-16" }) {
   )
 }
 
+function ElectricianGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      <rect x="25" y="20" width="50" height="52" rx="6" fill="#1e293b" />
+      <rect x="28" y="23" width="44" height="46" rx="4" fill="#334155" />
+      <rect x="33" y="28" width="10" height="18" rx="2" fill="#e2e8f0" />
+      <rect x="36" y="30" width="4" height="8" rx="1" fill="#ef4444" />
+      <rect x="45" y="28" width="10" height="18" rx="2" fill="#e2e8f0" />
+      <rect x="48" y="34" width="4" height="8" rx="1" fill="#10b981" />
+      <rect x="57" y="28" width="10" height="18" rx="2" fill="#e2e8f0" />
+      <rect x="60" y="30" width="4" height="8" rx="1" fill="#ef4444" />
+      <path d="M38 46V62C38 65 42 67 46 67H60" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
+      <path d="M50 46V58C50 62 54 64 58 64H65" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" />
+      <path d="M62 46V54C62 58 65 60 70 60" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="72" cy="28" r="11" fill="#f59e0b" />
+      <path d="M73 20L67 29H72L71 36L77 27H72L73 20Z" fill="#ffffff" />
+    </svg>
+  )
+}
+
 function FullHouseCleaningGraphic({ className = "w-12 h-12" }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -155,28 +180,36 @@ function FullHouseCleaningGraphic({ className = "w-12 h-12" }) {
         </linearGradient>
       </defs>
       <ellipse cx="50" cy="84" rx="42" ry="5.5" fill="#cbd5e1" opacity="0.7" />
-      {/* House Body */}
       <rect x="20" y="40" width="60" height="38" rx="6" fill="url(#houseWall)" />
-      {/* Roof */}
       <path d="M14 40L50 12L86 40H14Z" fill="url(#houseRoof)" />
-      {/* Chimney */}
       <rect x="68" y="18" width="8" height="15" rx="1" fill="#d97706" />
       <path d="M66 18H78" stroke="#b45309" strokeWidth="1.5" />
-      {/* Door */}
       <rect x="42" y="52" width="16" height="26" rx="2" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1" />
       <circle cx="46" cy="65" r="1.75" fill="#f59e0b" />
-      {/* Windows */}
       <rect x="28" y="48" width="10" height="10" rx="1.5" fill="#93c5fd" />
       <line x1="33" y1="48" x2="33" y2="58" stroke="#1d4ed8" strokeWidth="1" />
       <line x1="28" y1="53" x2="38" y2="53" stroke="#1d4ed8" strokeWidth="1" />
-      
       <rect x="62" y="48" width="10" height="10" rx="1.5" fill="#93c5fd" />
       <line x1="67" y1="48" x2="67" y2="58" stroke="#1d4ed8" strokeWidth="1" />
       <line x1="62" y1="53" x2="72" y2="53" stroke="#1d4ed8" strokeWidth="1" />
-      
-      {/* Sparkles */}
       <path d="M12 24L14 27L17 24L14 21L12 24Z" fill="#fbbf24" />
       <path d="M84 20L85.5 22.5L88 20L85.5 17.5L84 20Z" fill="#fbbf24" />
+    </svg>
+  )
+}
+
+function PlumberGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      <path d="M22 36H55C62 36 67 41 67 48V72" stroke="#94a3b8" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M22 36H55C62 36 67 41 67 48V72" stroke="#cbd5e1" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="42" y="28" width="10" height="16" rx="2" fill="#d97706" />
+      <circle cx="47" cy="22" r="8" fill="#f59e0b" />
+      <circle cx="47" cy="22" r="4" fill="#b45309" />
+      <rect x="62" y="58" width="10" height="6" rx="1" fill="#64748b" />
+      <path d="M67 74C67 74 72 80 72 83C72 85.8 69.8 88 67 88C64.2 88 62 85.8 62 83C62 80 67 74 67 74Z" fill="#3b82f6" />
+      <path d="M52 64C52 64 55 68 55 70C55 71.7 53.7 73 52 73C50.3 73 49 71.7 49 70C49 68 52 64 52 64Z" fill="#60a5fa" />
     </svg>
   )
 }
@@ -185,22 +218,33 @@ function KitchenCleaningGraphic({ className = "w-12 h-12" }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="50" cy="84" rx="42" ry="5.5" fill="#cbd5e1" opacity="0.7" />
-      {/* Gas stove burner area */}
       <rect x="22" y="56" width="56" height="20" rx="3" fill="#334155" />
       <rect x="20" y="52" width="60" height="4" rx="1.5" fill="#475569" />
-      {/* Flame */}
       <path d="M36 52C36 46 40 44 40 52" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round" />
-      {/* Red Cooking Pot on burner */}
       <rect x="28" y="34" width="24" height="18" rx="2" fill="#ef4444" />
-      <rect x="26" y="32" width="28" height="3" rx="1" fill="#475569" /> {/* lid */}
-      <rect x="36" y="28" width="8" height="4" rx="1" fill="#475569" /> {/* lid handle */}
-      <path d="M28 40H24V44H28" fill="#475569" /> {/* left handle */}
-      <path d="M52 40H56V44H52" fill="#475569" /> {/* right handle */}
-      {/* Spray bottle (Blue) next to it */}
+      <rect x="26" y="32" width="28" height="3" rx="1" fill="#475569" />
+      <rect x="36" y="28" width="8" height="4" rx="1" fill="#475569" />
+      <path d="M28 40H24V44H28" fill="#475569" />
+      <path d="M52 40H56V44H52" fill="#475569" />
       <rect x="58" y="38" width="10" height="14" rx="1.5" fill="#2563eb" />
       <path d="M63 38V32L59 35" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" />
-      {/* Sparkles */}
       <path d="M72 26L74 29L77 26L74 23L72 26Z" fill="#fbbf24" />
+    </svg>
+  )
+}
+
+function CarpentryGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      <rect x="18" y="56" width="64" height="16" rx="4" fill="#d97706" />
+      <rect x="18" y="56" width="64" height="4" rx="2" fill="#f59e0b" />
+      <line x1="26" y1="64" x2="52" y2="64" stroke="#b45309" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="58" y1="64" x2="74" y2="64" stroke="#b45309" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M22 28L42 50H26L22 28Z" fill="#94a3b8" />
+      <path d="M20 22C18 22 16 24 16 26V32C16 34 18 36 20 36H24L22 22H20Z" fill="#ef4444" />
+      <path d="M55 42L76 21L82 27L61 48L55 42Z" fill="#d97706" />
+      <rect x="54" y="38" width="16" height="10" rx="2" fill="#475569" transform="rotate(-45 54 38)" />
     </svg>
   )
 }
@@ -209,21 +253,33 @@ function BedroomCleaningGraphic({ className = "w-12 h-12" }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="50" cy="84" rx="42" ry="5.5" fill="#cbd5e1" opacity="0.7" />
-      {/* Bed Headboard */}
       <rect x="18" y="24" width="64" height="44" rx="4" fill="#d97706" />
       <rect x="20" y="26" width="60" height="12" rx="2" fill="#b45309" />
-      {/* Mattress */}
       <rect x="24" y="44" width="52" height="24" rx="2.5" fill="#e2e8f0" />
-      {/* Blue sheet / duvet cover */}
       <rect x="22" y="52" width="56" height="16" rx="2" fill="#2563eb" />
-      {/* Yellow blanket folded back */}
       <path d="M46 44H74V68H46V44Z" fill="#fbbf24" />
-      {/* Two white pillows */}
       <rect x="28" y="35" width="18" height="10" rx="2" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1" />
       <rect x="54" y="35" width="18" height="10" rx="2" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1" />
-      {/* Wooden bed feet */}
       <line x1="26" y1="68" x2="26" y2="76" stroke="#b45309" strokeWidth="4" strokeLinecap="round" />
       <line x1="74" y1="68" x2="74" y2="76" stroke="#b45309" strokeWidth="4" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function AcGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      <rect x="18" y="24" width="64" height="28" rx="5" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="2" />
+      <rect x="22" y="28" width="56" height="4" rx="2" fill="#94a3b8" />
+      <circle cx="74" cy="42" r="2.5" fill="#10b981" />
+      <rect x="24" y="44" width="16" height="2" fill="#cbd5e1" />
+      <rect x="22" y="46" width="56" height="3" fill="#e2e8f0" />
+      <path d="M30 56C30 56 35 64 35 70" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+      <path d="M50 56C50 56 55 65 55 72" stroke="#0284c7" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+      <path d="M70 56C70 56 75 64 75 70" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+      <circle cx="80" cy="24" r="8" fill="#38bdf8" />
+      <path d="M80 19V29M75 24H85M76.5 20.5L83.5 27.5M83.5 20.5L76.5 27.5" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   )
 }
@@ -242,23 +298,31 @@ function SofaCleaningGraphic({ className = "w-12 h-12" }) {
         </linearGradient>
       </defs>
       <ellipse cx="50" cy="84" rx="42" ry="5.5" fill="#cbd5e1" opacity="0.7" />
-      {/* Main Sofa Backrest */}
       <rect x="18" y="38" width="64" height="28" rx="6" fill="url(#sofaBody)" />
-      {/* Seat Base */}
       <rect x="16" y="50" width="68" height="18" rx="4" fill="url(#sofaCush)" />
-      {/* Left armrest */}
       <rect x="14" y="44" width="11" height="22" rx="3" fill="#3b82f6" />
-      {/* Right armrest */}
       <rect x="75" y="44" width="11" height="22" rx="3" fill="#1d4ed8" />
-      {/* Wood legs */}
       <line x1="20" y1="68" x2="17" y2="76" stroke="#d97706" strokeWidth="3" strokeLinecap="round" />
       <line x1="80" y1="68" x2="83" y2="76" stroke="#d97706" strokeWidth="3" strokeLinecap="round" />
-      {/* Vacuum cleaner cleaning nozzle */}
       <path d="M52 24C52 24 64 34 50 44" stroke="#f59e0b" strokeWidth="3.5" strokeLinecap="round" />
       <path d="M45 40L49 50L39 45L45 40Z" fill="#fbbf24" />
-      {/* Sparkles */}
       <path d="M28 26L30 29L33 26L30 23L28 26Z" fill="#fbbf24" />
       <path d="M72 26L73.5 28.5L75.5 26L73.5 23.5L72 26Z" fill="#fbbf24" />
+    </svg>
+  )
+}
+
+function FridgeGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      <rect x="28" y="16" width="44" height="58" rx="6" fill="#3b82f6" />
+      <rect x="30" y="18" width="40" height="22" rx="4" fill="#60a5fa" />
+      <rect x="30" y="43" width="40" height="29" rx="4" fill="#2563eb" />
+      <rect x="34" y="32" width="3" height="6" rx="1.5" fill="#ffffff" />
+      <rect x="34" y="47" width="3" height="12" rx="1.5" fill="#ffffff" />
+      <rect x="52" y="48" width="12" height="12" rx="2" fill="#1e40af" />
+      <rect x="56" y="50" width="4" height="4" rx="1" fill="#93c5fd" />
     </svg>
   )
 }
@@ -267,23 +331,37 @@ function BathroomCleaningGraphic({ className = "w-12 h-12" }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="50" cy="84" rx="42" ry="5.5" fill="#cbd5e1" opacity="0.7" />
-      {/* Bathroom Mirror */}
       <circle cx="34" cy="30" r="14" fill="#93c5fd" stroke="#cbd5e1" strokeWidth="1.5" />
-      <path d="M26 24L38 36" stroke="#ffffff" strokeWidth="2" opacity="0.6" strokeLinecap="round" /> {/* reflection */}
-      {/* Wash Basin / Sink Cabinet */}
+      <path d="M26 24L38 36" stroke="#ffffff" strokeWidth="2" opacity="0.6" strokeLinecap="round" />
       <rect x="20" y="50" width="28" height="24" rx="2" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1" />
       <rect x="18" y="46" width="32" height="4" rx="1" fill="#cbd5e1" />
-      <path d="M34 46V40H38" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" /> {/* tap */}
-      {/* Toilet Bowl on the right side */}
+      <path d="M34 46V40H38" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" />
       <path d="M56 42H78V54C78 60 72 66 65 66C58 66 56 60 56 54V42Z" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
       <rect x="58" y="26" width="16" height="16" rx="2" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1" />
-      <circle cx="70" cy="30" r="1.5" fill="#94a3b8" /> {/* flusher button */}
-      <ellipse cx="67" cy="42" rx="10" ry="3.5" fill="#2563eb" /> {/* seat cover */}
-      <path d="M60 66L62 76H72L74 66H60Z" fill="#cbd5e1" /> {/* toilet base */}
-      {/* Soap Bubbles */}
+      <circle cx="70" cy="30" r="1.5" fill="#94a3b8" />
+      <ellipse cx="67" cy="42" rx="10" ry="3.5" fill="#2563eb" />
+      <path d="M60 66L62 76H72L74 66H60Z" fill="#cbd5e1" />
       <circle cx="16" cy="42" r="3" fill="#e0f2fe" opacity="0.8" />
       <circle cx="48" cy="42" r="2" fill="#e0f2fe" opacity="0.8" />
       <circle cx="82" cy="34" r="3.5" fill="#e0f2fe" opacity="0.8" />
+    </svg>
+  )
+}
+
+function WashingMachineGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      <rect x="25" y="18" width="50" height="56" rx="6" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="2" />
+      <rect x="28" y="22" width="44" height="10" rx="2" fill="#e2e8f0" />
+      <circle cx="34" cy="27" r="3" fill="#64748b" />
+      <circle cx="42" cy="27" r="1.5" fill="#10b981" />
+      <circle cx="47" cy="27" r="1.5" fill="#3b82f6" />
+      <rect x="56" y="25" width="12" height="4" rx="1" fill="#334155" />
+      <circle cx="50" cy="50" r="17" fill="#475569" />
+      <circle cx="50" cy="50" r="13" fill="#38bdf8" />
+      <circle cx="50" cy="50" r="9" fill="#0284c7" />
+      <path d="M44 48C46 44 54 44 56 50C54 54 46 54 44 48Z" fill="#ffffff" opacity="0.6" />
     </svg>
   )
 }
@@ -292,24 +370,36 @@ function WeeklyCleaningGraphic({ className = "w-12 h-12" }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="50" cy="84" rx="42" ry="5.5" fill="#cbd5e1" opacity="0.7" />
-      {/* Calendar page card */}
       <rect x="22" y="16" width="56" height="56" rx="6" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
-      <rect x="22" y="16" width="56" height="14" rx="3" fill="#2563eb" /> {/* Blue header */}
-      {/* Binding spiral rings */}
+      <rect x="22" y="16" width="56" height="14" rx="3" fill="#2563eb" />
       <circle cx="32" cy="16" r="2" fill="#475569" />
       <circle cx="42" cy="16" r="2" fill="#475569" />
       <circle cx="52" cy="16" r="2" fill="#475569" />
       <circle cx="68" cy="16" r="2" fill="#475569" />
-      {/* Grid checkmark items */}
       <line x1="38" y1="38" x2="68" y2="38" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" />
       <line x1="38" y1="48" x2="68" y2="48" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" />
       <line x1="38" y1="58" x2="68" y2="58" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" />
       <path d="M29 38L32 41L36 35" stroke="#f97316" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M29 48L32 51L36 45" stroke="#f97316" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M29 58L32 61L36 55" stroke="#f97316" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Clock icon in bottom corner to represent "weekly schedule/frequency" */}
       <circle cx="70" cy="56" r="10" fill="#fbbf24" stroke="#d97706" strokeWidth="1" />
       <path d="M70 51V56H74" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function TvGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      <rect x="15" y="20" width="70" height="46" rx="4" fill="#1e293b" />
+      <rect x="18" y="23" width="64" height="40" rx="2" fill="#0f172a" />
+      <path d="M18 45L36 32L54 44L72 28L82 35V63H18V45Z" fill="#3b82f6" opacity="0.8" />
+      <path d="M18 50L32 40L48 52L64 38L82 48V63H18V50Z" fill="#60a5fa" opacity="0.9" />
+      <circle cx="70" cy="30" r="5" fill="#fef08a" opacity="0.9" />
+      <path d="M40 66L36 76H64L60 66H40Z" fill="#475569" />
+      <rect x="30" y="76" width="40" height="4" rx="2" fill="#334155" />
+      <circle cx="50" cy="64.5" r="1.5" fill="#10b981" />
     </svg>
   )
 }
@@ -318,7 +408,6 @@ function CockroachControlGraphic({ className = "w-12 h-12" }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="50" cy="84" rx="42" ry="5.5" fill="#cbd5e1" opacity="0.7" />
-      {/* Cockroach (Brown gradient) */}
       <defs>
         <linearGradient id="cockroachBody" x1="0" y1="0" x2="0" y2="100">
           <stop offset="0%" stopColor="#a16207" />
@@ -326,22 +415,38 @@ function CockroachControlGraphic({ className = "w-12 h-12" }) {
         </linearGradient>
       </defs>
       <g transform="translate(0, -4)">
-        {/* Antennae */}
         <path d="M47 28C43 20 38 18 32 18" stroke="#451a03" strokeWidth="2" strokeLinecap="round" />
         <path d="M53 28C57 20 62 18 68 18" stroke="#451a03" strokeWidth="2" strokeLinecap="round" />
-        {/* Legs */}
         <path d="M40 40L28 35M40 48L25 48M40 56L28 62" stroke="#451a03" strokeWidth="2" strokeLinecap="round" />
         <path d="M60 40L72 35M60 48L75 48M60 56L72 62" stroke="#451a03" strokeWidth="2" strokeLinecap="round" />
-        {/* Head */}
         <circle cx="50" cy="30" r="5" fill="#451a03" />
-        {/* Thorax & Abdomen */}
         <ellipse cx="50" cy="48" rx="10" ry="16" fill="url(#cockroachBody)" stroke="#451a03" strokeWidth="1" />
-        {/* Wing split line */}
         <line x1="50" y1="38" x2="50" y2="64" stroke="#451a03" strokeWidth="1.5" />
       </g>
-      {/* Red cancel sign over bug */}
       <circle cx="50" cy="44" r="26" stroke="#ef4444" strokeWidth="6.5" />
       <line x1="32" y1="26" x2="68" y2="62" stroke="#ef4444" strokeWidth="6.5" />
+    </svg>
+  )
+}
+
+function MicrowaveGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      <rect x="18" y="24" width="64" height="48" rx="6" fill="#334155" />
+      <rect x="21" y="27" width="40" height="42" rx="4" fill="#1e293b" />
+      <rect x="24" y="30" width="34" height="36" rx="3" fill="#475569" />
+      <rect x="26" y="32" width="30" height="32" rx="2" fill="#0f172a" opacity="0.8" />
+      <circle cx="41" cy="48" r="8" fill="#f59e0b" opacity="0.4" />
+      <rect x="55" y="34" width="3" height="28" rx="1.5" fill="#cbd5e1" />
+      <rect x="63" y="27" width="16" height="42" rx="3" fill="#1e293b" />
+      <rect x="65" y="30" width="12" height="7" rx="1.5" fill="#0284c7" />
+      <text x="71" y="35.5" fontSize="4.5" fontWeight="bold" fill="#ffffff" textAnchor="middle" fontFamily="monospace">1:30</text>
+      <circle cx="68" cy="42" r="2" fill="#94a3b8" />
+      <circle cx="74" cy="42" r="2" fill="#94a3b8" />
+      <circle cx="68" cy="48" r="2" fill="#94a3b8" />
+      <circle cx="74" cy="48" r="2" fill="#94a3b8" />
+      <rect x="66" y="54" width="10" height="10" rx="2" fill="#10b981" />
     </svg>
   )
 }
@@ -540,23 +645,45 @@ function LocationDropdown({ className = "" }) {
 }
 
 export function LandingPage() {
+  const { user, refreshMe } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState("")
   const [testimonialIdx, setTestimonialIdx] = useState(0)
   const location = useLocation()
   const [modalCart, setModalCart] = useState(location.state?.cart || [])
-  const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(false)
+  const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
+  const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
+  const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
   const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(location.state?.openHomePestModal || false)
+  const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
+  const [showAccountPortal, setShowAccountPortal] = useState(false)
+  const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
+  const [showLocationPickerModal, setShowLocationPickerModal] = useState(false)
+  const [activeLocationLabel, setActiveLocationLabel] = useState(null)
 
   useEffect(() => {
-    if (location.state?.openHomePestModal) {
-      setIsHomePestModalOpen(true)
-    }
+    if (location.state?.openHomePestModal) setIsHomePestModalOpen(true)
+    if (location.state?.openAcModal) setIsAcModalOpen(true)
+    if (location.state?.openElecModal) setIsElecModalOpen(true)
+    if (location.state?.openGoodsModal) setIsGoodsModalOpen(true)
   }, [location.state])
 
+  const handleCloseCategory = () => {
+    const rawCatKey = (activeCategory?.id || activeCategory?.slug || activeCategoryId || "").toLowerCase()
+    if (["hvac", "ac", "appliance"].some(k => rawCatKey.includes(k))) {
+      navigate("/home", { state: { openAcModal: true } })
+    } else if (["electrical", "plumbing", "carpentry", "elec"].some(k => rawCatKey.includes(k))) {
+      navigate("/home", { state: { openElecModal: true } })
+    } else if (["goods", "transport"].some(k => rawCatKey.includes(k))) {
+      navigate("/home", { state: { openGoodsModal: true } })
+    } else {
+      navigate("/home", { state: { openHomePestModal: true } })
+    }
+  }
+
   const goToBooking = () => navigate(routes.booking)
-  const goToLogin = () => navigate(routes.login)
+  const goToLogin = () => setShowCustomerEntryModal(true)
   const goToCategoryServices = (serviceCategoryId) => {
     navigate(serviceCategoryId ? `${routes.booking_services}?category=${serviceCategoryId}` : routes.booking_services)
   }
@@ -573,10 +700,12 @@ export function LandingPage() {
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
         setIsGoodsModalOpen(false)
+        setIsElecModalOpen(false)
+        setIsAcModalOpen(false)
         setIsHomePestModalOpen(false)
       }
     }
-    if (isGoodsModalOpen || isHomePestModalOpen) {
+    if (isGoodsModalOpen || isElecModalOpen || isAcModalOpen || isHomePestModalOpen) {
       window.addEventListener("keydown", handleKeyDown)
       document.body.style.overflow = "hidden"
     } else {
@@ -586,9 +715,9 @@ export function LandingPage() {
       window.removeEventListener("keydown", handleKeyDown)
       document.body.style.overflow = ""
     }
-  }, [isGoodsModalOpen, isHomePestModalOpen])
+  }, [isGoodsModalOpen, isElecModalOpen, isAcModalOpen, isHomePestModalOpen])
 
-  if (activeCategoryId === "cleaning" || activeCategoryId === "kitchen_cleaning" || activeCategoryId === "sofa_cleaning" || activeCategoryId === "bathroom_cleaning") {
+  if (activeCategoryId && activeCategoryId !== "painting" && activeCategoryId !== "mason") {
     return (
       <>
       <div className="min-h-screen bg-[#F7FAF9] text-slate-800 flex flex-col" style={{ animation: "fadeUp 0.4s ease both" }}>
@@ -604,14 +733,34 @@ export function LandingPage() {
               <a href="#about" className="hover:text-slate-900" onClick={() => navigate("/home")}>About Us</a>
             </nav>
             <div className="flex items-center gap-3">
-              <button onClick={goToBooking} className="btn btnPrimary bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-full transition-colors">
+              {user ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveAccountTab("My Profile")
+                    setShowAccountPortal(true)
+                  }}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-950 font-black text-xs transition-all shadow-2xs cursor-pointer"
+                >
+                  <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-[10px] shrink-0">
+                    <User size={13} />
+                  </div>
+                  <span className="hidden sm:inline font-extrabold">
+                    Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={goToLogin}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition-all shadow-sm cursor-pointer"
+                >
+                  <User size={14} />
+                  <span>Login / Sign Up</span>
+                </button>
+              )}
+              <button onClick={goToBooking} className="btn btnPrimary bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-full transition-colors cursor-pointer">
                 Book Service
-              </button>
-              <button onClick={goToLogin} className="hidden sm:inline-flex border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors">
-                Login
-              </button>
-              <button onClick={() => navigate(routes.activation_journey)} className="hidden sm:inline-flex border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors">
-                Sign Up
               </button>
             </div>
           </div>
@@ -624,7 +773,7 @@ export function LandingPage() {
               category={activeCategory}
               cart={modalCart}
               setCart={setModalCart}
-              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
+              onClose={handleCloseCategory}
               onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
             />
           )}
@@ -652,7 +801,7 @@ export function LandingPage() {
               cart={modalCart}
               setCart={setModalCart}
               isFullPage={true}
-              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
+              onClose={handleCloseCategory}
               onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
             />
           )}
@@ -725,25 +874,61 @@ export function LandingPage() {
             <a href="#about" className="hover:text-slate-900 transition-colors">About Us</a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-8">
+            {/* Location Selector (Urban Company Style) */}
             <button
-              onClick={goToBooking}
-              className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-5 py-2 rounded-full transition-colors shadow-sm"
+              type="button"
+              onClick={() => setShowLocationPickerModal(true)}
+              className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              title="Location"
             >
-              Book Service
+              <MapPin className="w-5 h-5 text-slate-700 stroke-[1.75] shrink-0 group-hover:text-slate-900 transition-colors" />
+              <span className="truncate max-w-[180px] font-semibold text-slate-800">
+                {(() => {
+                  if (activeLocationLabel) return activeLocationLabel
+                  const locObj = user?.last_known_location || user?.lastKnownLocation
+                  if (locObj) {
+                    if (typeof locObj === "string" && locObj.trim()) return locObj
+                    if (locObj.label) return locObj.label
+                  }
+                  if (user?.address) return user.address
+                  return "Set location"
+                })()}
+              </span>
+              <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
             </button>
-            <button
-              onClick={goToLogin}
-              className="hidden sm:inline-flex border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors"
-            >
-              Login
-            </button>
-            <button
-              onClick={() => navigate(routes.activation_journey)}
-              className="hidden sm:inline-flex border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm font-semibold px-4 py-2 rounded-full transition-colors"
-            >
-              Sign Up
-            </button>
+
+            {/* User Profile / Login (Urban Company Style) */}
+            {user ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveAccountTab("My Profile")
+                  setShowAccountPortal(true)
+                }}
+                className="flex items-center gap-2.5 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                  <User className="w-4 h-4 stroke-[1.75]" />
+                </div>
+                <span className="font-semibold text-slate-800">
+                  Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
+                </span>
+                <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={goToLogin}
+                className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                  <User className="w-4 h-4 stroke-[1.75]" />
+                </div>
+                <span className="font-semibold text-slate-800">Login / Sign Up</span>
+                <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -829,6 +1014,10 @@ export function LandingPage() {
               onClick={() => {
                 if (label === "Goods & Transports") {
                   setIsGoodsModalOpen(true)
+                } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
+                  setIsElecModalOpen(true)
+                } else if (label.includes("AC") || label.includes("Appliance")) {
+                  setIsAcModalOpen(true)
                 } else if (label === "Home Services & Pest Control") {
                   setIsHomePestModalOpen(true)
                 } else {
@@ -1089,6 +1278,240 @@ export function LandingPage() {
           document.body
         )}
 
+      {/* ── Electrician, Plumbing & Carpentry Sub-Category Modal Popup ── */}
+      {isElecModalOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="elec-modal-title"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsElecModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setIsElecModalOpen(false)}
+                aria-label="Close popup"
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Modal Title */}
+              <div className="text-center mb-6">
+                <h3
+                  id="elec-modal-title"
+                  className="text-lg sm:text-xl font-extrabold text-slate-900"
+                >
+                  Electrician, Plumbing &amp; Carpentry
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Choose a service type to view related services
+                </p>
+              </div>
+
+              {/* Items Grid for Electrician, Plumbing & Carpentry (3 options) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 items-stretch">
+                {/* Option 1: Electrician */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsElecModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    goToCategoryServices("electrical")
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <ElectricianGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                    Electrician
+                  </span>
+                </button>
+
+                {/* Option 2: Plumber */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsElecModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    goToCategoryServices("plumbing")
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <PlumberGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                    Plumber
+                  </span>
+                </button>
+
+                {/* Option 3: Carpentry */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsElecModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    goToCategoryServices("carpentry")
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <CarpentryGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                    Carpentry
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ── AC & Appliance Sub-Category Modal Popup ── */}
+      {isAcModalOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ac-modal-title"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsAcModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setIsAcModalOpen(false)}
+                aria-label="Close popup"
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Modal Title */}
+              <div className="text-center mb-6">
+                <h3
+                  id="ac-modal-title"
+                  className="text-lg sm:text-xl font-extrabold text-slate-900"
+                >
+                  AC &amp; Appliance Repair
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Choose an appliance type to view related services
+                </p>
+              </div>
+
+              {/* Items Grid for AC & Appliance Repair (5 options) */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 items-stretch">
+                {/* Option 1: AC Service */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAcModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    goToCategoryServices("hvac")
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <AcGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                    Air Conditioner
+                  </span>
+                </button>
+
+                {/* Option 2: Refrigerator */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAcModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    goToCategoryServices("appliance_repair")
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <FridgeGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                    Refrigerator
+                  </span>
+                </button>
+
+                {/* Option 3: Washing Machine */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAcModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    goToCategoryServices("appliance_repair")
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <WashingMachineGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                    Washing Machine
+                  </span>
+                </button>
+
+                {/* Option 4: TV & Home Theatre */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAcModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    goToCategoryServices("appliance_repair")
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <TvGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                    TV &amp; Display
+                  </span>
+                </button>
+
+                {/* Option 5: Microwave Oven */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAcModalOpen(false)
+                    document.body.style.overflow = "unset"
+                    goToCategoryServices("appliance_repair")
+                  }}
+                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                >
+                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <MicrowaveGraphic className="w-full h-full" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                    Microwave Oven
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
       {/* ── Trust strip ────────────────────────────────────── */}
       <section className="max-w-7xl mx-auto px-6">
         <div className="bg-slate-50 border border-slate-200 rounded-3xl grid sm:grid-cols-2 lg:grid-cols-5 gap-6 p-8">
@@ -1340,6 +1763,49 @@ export function LandingPage() {
           onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
         />
       )
+    )}
+
+    <CustomerEntryFlowModal
+      isOpen={showCustomerEntryModal}
+      onClose={() => setShowCustomerEntryModal(false)}
+      onComplete={() => {
+        setShowCustomerEntryModal(false)
+        if (typeof refreshMe === "function") refreshMe()
+      }}
+    />
+
+    <AnimatePresence>
+      {showAccountPortal && (
+        <CustomerAccountModal
+          activeTab={activeAccountTab}
+          onChangeTab={setActiveAccountTab}
+          onClose={() => setShowAccountPortal(false)}
+        />
+      )}
+    </AnimatePresence>
+
+    {showLocationPickerModal && (
+      <AddAddressSearchModal
+        onClose={() => setShowLocationPickerModal(false)}
+        onSelectLocation={async (locStr) => {
+          setShowLocationPickerModal(false)
+          if (locStr) {
+            setActiveLocationLabel(locStr)
+            if (user) {
+              try {
+                await apiUpdateCustomerLastLocation({
+                  label: locStr,
+                  detected_at: new Date().toISOString()
+                })
+              } catch (e) {}
+              if (typeof refreshMe === "function") refreshMe()
+            }
+          }
+        }}
+        onUseCurrentLocation={() => {
+          setShowLocationPickerModal(false)
+        }}
+      />
     )}
     </>
   )

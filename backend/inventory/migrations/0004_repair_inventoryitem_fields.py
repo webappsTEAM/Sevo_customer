@@ -12,25 +12,4 @@ class Migration(migrations.Migration):
         ("inventory", "0003_inventorytransfer_org"),
     ]
 
-    operations = [
-        migrations.AddField(
-            model_name="inventoryitem",
-            name="reserved_quantity",
-            field=models.PositiveIntegerField(default=0),
-        ),
-        migrations.AddField(
-            model_name="inventoryitem",
-            name="reorder_quantity",
-            field=models.PositiveIntegerField(default=10),
-        ),
-        migrations.AddField(
-            model_name="inventoryitem",
-            name="pending_purchase_quantity",
-            field=models.PositiveIntegerField(default=0),
-        ),
-        migrations.AddField(
-            model_name="inventoryitem",
-            name="expected_delivery_date",
-            field=models.DateField(blank=True, null=True),
-        ),
-    ]
+    operations = []

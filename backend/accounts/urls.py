@@ -15,10 +15,12 @@ from .views import (
 from .customer_auth import (
     CustomerEmailOTPRequestView, CustomerEmailOTPVerifyView,
     CustomerPhoneOTPRequestView, CustomerPhoneOTPVerifyView,
-    CustomerGoogleLoginView
+    CustomerGoogleLoginView,
+    CustomerOTPRequestAPIView, CustomerOTPVerifyAPIView,
+    CustomerProfileCompleteAPIView
 )
 from .views import (
-    CustomerProfileView, CustomerProfileUpdateView,
+    CustomerProfileView, CustomerProfileUpdateView, CustomerLocationDetectView,
     CustomerAddressListCreateView, CustomerAddressDetailView,
     CustomerAddressSetDefaultView, CustomerAddressServiceabilityView,
     CustomerAddressMarkUsedView,
@@ -56,11 +58,15 @@ urlpatterns = [
     path("customer/email/verify-otp/", CustomerEmailOTPVerifyView.as_view(), name="customer-email-otp-verify"),
     path("customer/phone/request-otp/", CustomerPhoneOTPRequestView.as_view(), name="customer-phone-otp-request"),
     path("customer/phone/verify-otp/", CustomerPhoneOTPVerifyView.as_view(), name="customer-phone-otp-verify"),
+    path("customer/otp/request/",       CustomerOTPRequestAPIView.as_view(),     name="customer-otp-request"),
+    path("customer/otp/verify/",        CustomerOTPVerifyAPIView.as_view(),      name="customer-otp-verify"),
+    path("customer/profile/complete/", CustomerProfileCompleteAPIView.as_view(), name="customer-profile-complete"),
     path("customer/google/", CustomerGoogleLoginView.as_view(), name="customer-google-login"),
 
     # ── Customer Profile & Saved Addresses ────────────────────────────────────
     path("customer/profile/",                         CustomerProfileView.as_view(),          name="customer-profile"),
     path("customer/profile/update/",                  CustomerProfileUpdateView.as_view(),     name="customer-profile-update"),
+    path("customer/location/detect/",                 CustomerLocationDetectView.as_view(),   name="customer-location-detect"),
     path("customer/addresses/",                       CustomerAddressListCreateView.as_view(), name="customer-addresses"),
     path("customer/addresses/<int:pk>/",               CustomerAddressDetailView.as_view(),    name="customer-address-detail"),
     path("customer/addresses/<int:pk>/set-default/",   CustomerAddressSetDefaultView.as_view(),name="customer-address-set-default"),

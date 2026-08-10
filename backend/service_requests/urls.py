@@ -5,6 +5,7 @@ from .views import (
     # Public
     BookingCreateView,
     CustomerMyBookingsView,
+    CustomerBookingRetryPaymentView,
     FeedbackTokenView,
     PublicFeedbackListView,
     CatalogCategoryListView,
@@ -120,6 +121,7 @@ urlpatterns = [
     path("catalog/services/",                CatalogServiceListView.as_view(),  name="catalog-services"),
     path("booking/",                         BookingCreateView.as_view(),    name="sr-booking"),
     path("booking/my-bookings/",             CustomerMyBookingsView.as_view(), name="sr-my-bookings"),
+    path("booking/<int:pk>/retry-payment/",  CustomerBookingRetryPaymentView.as_view(), name="sr-retry-payment"),
     path("booking/<int:pk>/invoice/",        InvoiceDownloadView.as_view(),  name="sr-invoice"),
     path("feedback/<uuid:token>/",           FeedbackTokenView.as_view(),    name="sr-feedback-token"),
     path("public/feedback/",                 PublicFeedbackListView.as_view(), name="sr-public-feedback"),

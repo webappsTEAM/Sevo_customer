@@ -187,6 +187,11 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     base_amount            = serializers.SerializerMethodField()
     total_amount           = serializers.SerializerMethodField()
     latest_reschedule      = serializers.SerializerMethodField()
+    available_actions      = serializers.SerializerMethodField()
+
+    def get_available_actions(self, obj):
+        from .services import get_customer_available_actions
+        return get_customer_available_actions(obj)
 
     def get_latest_reschedule(self, obj):
         rr = getattr(obj, "reschedule_requests", None)
@@ -222,7 +227,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             "payment_method", "payment_method_display",
             "payment_status", "payment_status_display",
             "total_amount", "base_amount", "extension_amount", "transaction_id", "invoice_id",
-            "assigned_employee", "start_otp", "task_status", "is_otp_verified", "active_extension", "latest_reschedule", "created_at", "updated_at",
+            "assigned_employee", "start_otp", "task_status", "is_otp_verified", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
         )
 
     def get_start_otp(self, obj):
@@ -401,6 +406,11 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     extension_amount       = serializers.SerializerMethodField()
     base_amount            = serializers.SerializerMethodField()
     total_amount           = serializers.SerializerMethodField()
+    available_actions      = serializers.SerializerMethodField()
+
+    def get_available_actions(self, obj):
+        from .services import get_customer_available_actions
+        return get_customer_available_actions(obj)
 
     def get_latest_reschedule(self, obj):
         rr = getattr(obj, "reschedule_requests", None)
@@ -438,7 +448,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "transaction_id", "payment_gateway",
             "payment_collected_by", "payment_collected_at", "invoice_id",
             "photo_url", "status", "status_display", "priority", "priority_display",
-            "assigned_employee", "start_otp", "task_status", "is_otp_verified", "active_extension", "latest_reschedule", "allowed_transitions",
+            "assigned_employee", "start_otp", "task_status", "is_otp_verified", "active_extension", "latest_reschedule", "allowed_transitions", "available_actions",
             "has_feedback", "feedback_token", "feedback",
             "created_at", "updated_at",
         )

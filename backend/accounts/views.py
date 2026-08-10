@@ -9,6 +9,7 @@ from companies.models import Company
 from settings_hub.models import TeamInvite
 
 from rest_framework import permissions, serializers, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -2402,14 +2403,72 @@ class CustomerProfileUpdateView(APIView):
     parser_classes = [FormParser, MultiPartParser, JSONParserClass]
 
     def patch(self, request):
-        allowed = {"first_name", "last_name", "phone", "avatar"}
+        allowed = {"first_name", "last_name", "phone", "email", "avatar", "last_known_location"}
         payload = {k: v for k, v in request.data.items() if k in allowed}
 
         try:
             data = customer_services.update_customer_profile(request.user, payload)
             return _cs(data, message="Profile updated.")
         except Exception as exc:
-            return _ce(str(exc))
+            return _ce(str(exc), 400)
+
+
+class CustomerLocationDetectView(APIView):
+    """
+    POST /api/customer/location/detect/ or /api/auth/customer/location/detect/
+    Stateless customer-persona location detection via reverse geocoding.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        latitude = request.data.get("latitude")
+        longitude = request.data.get("longitude")
+        accuracy = request.data.get("accuracy")
+
+        if latitude is None or longitude is None:
+            return Response({
+                "success": False,
+                "data": None,
+                "error": "Invalid latitude or longitude coordinates.",
+                "meta": {}
+            }, status=400)
+
+        try:
+            result = customer_services.detect_customer_location(latitude, longitude, accuracy)
+        except ValidationError as ve:
+            detail = getattr(ve, "detail", "Invalid latitude or longitude coordinates.")
+            if isinstance(detail, dict) and "detail" in detail:
+                detail = detail["detail"]
+            elif isinstance(detail, list) and detail:
+                detail = detail[0]
+            return Response({
+                "success": False,
+                "data": None,
+                "error": str(detail),
+                "meta": {}
+            }, status=400)
+        except Exception:
+            return Response({
+                "success": False,
+                "data": None,
+                "error": "Unable to fetch your location. Please try again.",
+                "meta": {}
+            }, status=200)
+
+        if not result:
+            return Response({
+                "success": False,
+                "data": None,
+                "error": "Unable to fetch your location. Please try again.",
+                "meta": {}
+            }, status=200)
+
+        return Response({
+            "success": True,
+            "data": result,
+            "error": None,
+            "meta": {}
+        }, status=200)
 
 
 class CustomerAddressListCreateView(APIView):
@@ -2429,6 +2488,14 @@ class CustomerAddressListCreateView(APIView):
             if not request.data.get(field):
                 return _ce(f"'{field}' is required.", 400)
 
+        def _clean_coord(val):
+            if val is None or val == "":
+                return None
+            try:
+                return round(float(val), 6)
+            except (ValueError, TypeError):
+                return None
+
         data = {
             "label":         request.data.get("label", "home"),
             "address_line1": request.data.get("address_line1", ""),
@@ -2437,8 +2504,8 @@ class CustomerAddressListCreateView(APIView):
             "state":         request.data.get("state", ""),
             "pincode":       request.data.get("pincode", ""),
             "phone_number":  request.data.get("phone_number", ""),
-            "latitude":      request.data.get("latitude") or None,
-            "longitude":     request.data.get("longitude") or None,
+            "latitude":      _clean_coord(request.data.get("latitude")),
+            "longitude":     _clean_coord(request.data.get("longitude")),
             "is_default":    request.data.get("is_default", False),
         }
 
@@ -2447,7 +2514,7 @@ class CustomerAddressListCreateView(APIView):
             return _cs(_serialize_address(addr), message="Address saved.", status_code=201)
         except Exception as exc:
             detail = getattr(exc, "detail", str(exc))
-            return _ce(str(detail))
+            return _ce(str(detail), 400)
 
 
 class CustomerAddressDetailView(APIView):
