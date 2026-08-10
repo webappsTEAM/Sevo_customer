@@ -3868,7 +3868,31 @@ export function LandingPage() {
 
     <BkStyles />
     {activeCategory && (
-      (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
+      (activeCategory.id === "kitchen_cleaning" || activeCategory.slug === "kitchen_cleaning" || String(activeCategory.id) === "kitchen_cleaning" || activeCategory.name?.toLowerCase()?.includes("kitchen")) ? (
+        <KitchenCleaningModal
+          category={activeCategory}
+          cart={modalCart}
+          setCart={setModalCart}
+          onClose={() => navigate("/home")}
+          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+        />
+      ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
+        <SofaCleaningModal
+          category={activeCategory}
+          cart={modalCart}
+          setCart={setModalCart}
+          onClose={() => navigate("/home")}
+          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+        />
+      ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
+        <BathroomCleaningModal
+          category={activeCategory}
+          cart={modalCart}
+          setCart={setModalCart}
+          onClose={() => navigate("/home")}
+          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+        />
+      ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
         <PaintingPackageModal
           category={activeCategory}
           cart={modalCart}
