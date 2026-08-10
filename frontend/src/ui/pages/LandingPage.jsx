@@ -560,8 +560,6 @@ const HOME_SERVICES_SUB = [
   { name: "Sofa Cleaning", graphic: SofaCleaningGraphic, categoryId: "sofa_cleaning" },
   { name: "Bathroom Cleaning", graphic: BathroomCleaningGraphic, categoryId: "bathroom_cleaning" },
   { name: "Full House Cleaning", graphic: FullHouseCleaningGraphic, categoryId: "cleaning" },
-  { name: "Living & Bedroom Cleaning", graphic: BedroomCleaningGraphic, categoryId: "cleaning" },
-  { name: "Weekly Cleaning", graphic: WeeklyCleaningGraphic, categoryId: "cleaning" },
 ]
 
 const PEST_CONTROL_SUB = [
