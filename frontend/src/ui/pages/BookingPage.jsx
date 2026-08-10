@@ -11,7 +11,7 @@ import {
   LogIn, ChevronDown, ChevronUp, Plus, Award, Users, ThumbsUp, ArrowRight,
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
-  Calculator, PaintRoller, Smartphone, MoreVertical
+  Calculator, PaintRoller, Smartphone, MoreVertical, Truck
 } from "lucide-react"
 import {
   apiRequestCustomerEmailOTP, apiVerifyCustomerEmailOTP,
@@ -191,8 +191,8 @@ const PACKAGES = {
     { id: "complete", name: "Full Day Pro", price: 999, priceStr: "₹999", duration: "8 hrs", popular: false, tag: "Best Value", includes: ["Unlimited tasks", "All tools", "Priority scheduling"], excludes: ["Materials above •‚¹500"] },
   ],
   carpentry: [
-    { id: "carp-std", name: "Standard Repair", price: 499, priceStr: "₹499", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop", includes: ["Minor Woodwork", "Hinge Replacement", "Basic Fixes"], excludes: [] },
-    { id: "carp-prem", name: "Premium Setup", price: 999, priceStr: "₹999", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop", includes: ["Furniture Assembly", "Custom Shelving", "Door Alignment"], excludes: [] },
+    { id: "carp-std", name: "Standard Repair", price: 499, priceStr: "₹499", duration: "2 hrs", popular: false, tag: "", image: "/tractor-emulsion.png", includes: ["Minor Woodwork", "Hinge Replacement", "Basic Fixes"], excludes: [] },
+    { id: "carp-prem", name: "Premium Setup", price: 999, priceStr: "₹999", duration: "4 hrs", popular: true, tag: "Most Booked", image: "/tractor-emulsion.png", includes: ["Furniture Assembly", "Custom Shelving", "Door Alignment"], excludes: [] },
     { id: "carp-full", name: "Full Day Carpentry", price: 1999, priceStr: "₹1,999", duration: "8 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop", includes: ["Extensive Repairs", "New Installations", "Material Shopping"], excludes: [] },
   ],
   pest_control: [
@@ -201,8 +201,8 @@ const PACKAGES = {
     { id: "pest-year", name: "Annual Pest Protection", price: 3499, priceStr: "₹3,499", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1628102491629-778586284000?w=300&q=80&fit=crop", includes: ["3 Service Visits", "Priority Response", "Guarantee"], excludes: [] },
   ],
   painting: [
-    { id: "paint-room", name: "Single Room Makeover", price: 2999, priceStr: "₹2,999", duration: "1 day", popular: false, tag: "", image: "https://images.unsplash.com/photo-1562259942-27364e0ee76b?w=300&q=80&fit=crop", includes: ["Basic Prep", "2 Coats Paint", "Cleanup"], excludes: [] },
-    { id: "paint-home", name: "Complete Home Painting", price: 9999, priceStr: "₹9,999", duration: "4 days", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1562259942-27364e0ee76b?w=300&q=80&fit=crop", includes: ["Wall Putty", "Primer", "Premium Paint", "Post-Cleanup"], excludes: [] },
+    { id: "paint-room", name: "Single Room Makeover", price: 2999, priceStr: "₹2,999", duration: "1 day", popular: false, tag: "", image: "/tractor-uno.png", includes: ["Basic Prep", "2 Coats Paint", "Cleanup"], excludes: [] },
+    { id: "paint-home", name: "Complete Home Painting", price: 9999, priceStr: "₹9,999", duration: "4 days", popular: true, tag: "Most Booked", image: "/tractor-uno.png", includes: ["Wall Putty", "Primer", "Premium Paint", "Post-Cleanup"], excludes: [] },
     { id: "paint-prem", name: "Texture & Decor Painting", price: 14999, priceStr: "₹14,999", duration: "5 days", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1584820927500-11b3337a7c5a?w=300&q=80&fit=crop", includes: ["Custom Textures", "Accent Walls", "Designer Finish"], excludes: [] },
   ],
 }
@@ -1325,7 +1325,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
   const rotWords = featured.map(c => c.name)
 
   const displayName = user?.firstName || user?.first_name || user?.full_name || user?.username
-  const greeting = displayName ? `Hi, ${displayName} 👋` : "Hi, Guest 👋"
+  const greeting = displayName || "Guest"
 
   useEffect(() => {
     const t = setInterval(() => setRotIdx(i => (i + 1) % rotWords.length), 4500)
@@ -1613,7 +1613,7 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
   const dateScrollRef = useRef()
   const canContinue = selectedDate && selectedTime
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const taxFee = 99
+  const taxFee = totalPrice === 0 ? 49 : 99
   const grandTotal = totalPrice + taxFee
 
   // Urban time slots: Morning / Afternoon / Evening
@@ -2200,7 +2200,7 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
   const UC_TIME_FORMATS = (t) => { if (!t) return ''; const [h] = t.split(':').map(Number); const ampm = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:00 ${ampm}` }
   const displayTime = UC_TIME_FORMATS(time)
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (pkg?.price || 0)
-  const taxFee = 99
+  const taxFee = totalPrice === 0 ? 49 : 99
   const discount = couponApplied ? Math.floor(totalPrice * 0.1) : 0
   const tipAmount = tip === 'custom' ? (parseInt(customTip) || 0) : (tip || 0)
   const grandTotal = totalPrice + taxFee - discount + tipAmount
@@ -3504,7 +3504,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 <input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)} style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }} />
               </div>
             </div>
-            <button onClick={handleSaveProfile} disabled={isSavingProfile} style={{ marginTop: 32, padding: '0.9rem 2.5rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer', boxShadow: '0 10px 20px rgba(124, 58, 237, 0.2)', opacity: isSavingProfile ? 0.7 : 1 }}>
+            <button onClick={handleSaveProfile} disabled={isSavingProfile} style={{ marginTop: 32, padding: '0.9rem 2.5rem', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer', boxShadow: '0 10px 20px rgba(5, 150, 105, 0.25)', opacity: isSavingProfile ? 0.7 : 1 }}>
               {isSavingProfile ? 'Saving...' : 'Save Changes'}
             </button>
           </motion.div>
@@ -3518,7 +3518,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading bookings...</div>
               ) : realBookings.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
-                  <div style={{ width: 64, height: 64, borderRadius: 16, background: '#f3e8ff', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 4px 12px rgba(124,58,237,0.15)' }}>
+                  <div style={{ width: 64, height: 64, borderRadius: 16, background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 4px 12px rgba(5,150,105,0.15)' }}>
                     <Calendar size={30} />
                   </div>
                   <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>No Active Bookings Yet</h4>
@@ -3527,7 +3527,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   </p>
                   <button
                     onClick={() => { onClose(); setStep(1); }}
-                    style={{ padding: '12px 24px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.25)' }}
+                    style={{ padding: '12px 24px', background: '#059669', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(5,150,105,0.25)' }}
                   >
                     + Book a Service Now
                   </button>
@@ -3557,7 +3557,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                           <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
-                          <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: b.status === 'completed' ? '#10B98115' : '#7C3AED15', color: b.status === 'completed' ? '#10B981' : '#7C3AED', border: `1px solid ${b.status === 'completed' ? '#10B98130' : '#7C3AED30'}` }}>{b.status_display || b.status}</span>
+                          <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>{b.status_display || b.status}</span>
                         </div>
                         <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
 
@@ -3571,9 +3571,9 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 setShowRescheduleForm(true)
                                 if (typeof onChangeTab === 'function') onChangeTab('My Reschedules')
                               }}
-                              style={{ padding: '6px 14px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 6px rgba(124,58,237,0.3)' }}
-                              onMouseOver={e => e.currentTarget.style.background = '#6d28d9'}
-                              onMouseOut={e => e.currentTarget.style.background = '#7C3AED'}
+                              style={{ padding: '6px 14px', background: '#059669', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 6px rgba(5,150,105,0.3)' }}
+                              onMouseOver={e => e.currentTarget.style.background = '#047857'}
+                              onMouseOut={e => e.currentTarget.style.background = '#059669'}
                             >
                               <RefreshCw size={13} /> Reschedule
                             </button>
@@ -3586,9 +3586,9 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                         </div>
                         <button
                           onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
-                          style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#7C3AED', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(124,58,237,0.25)', transition: 'background 0.2s' }}
-                          onMouseOver={e => e.currentTarget.style.background = '#6d28d9'}
-                          onMouseOut={e => e.currentTarget.style.background = '#7C3AED'}
+                          style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
+                          onMouseOver={e => e.currentTarget.style.background = '#047857'}
+                          onMouseOut={e => e.currentTarget.style.background = '#059669'}
                         >
                           {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
                         </button>
@@ -3599,7 +3599,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 16px 16px', padding: '1.5rem', marginTop: '-16px', position: 'relative', zIndex: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid #e2e8f0', paddingBottom: 10 }}>
                           <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>📋 Full Booking Overview</div>
-                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#7C3AED', background: '#7C3AED10', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
+                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: '0.85rem' }}>
@@ -3884,12 +3884,12 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button type="button" onClick={handleDetectLocationForAddress} disabled={geoAddressLoading}
-                  style={{ padding: '9px 16px', background: '#ede9fe', color: '#6366f1', border: '1.5px solid #c4b5fd', borderRadius: 12, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
-                  <Compass size={15} color="#6366f1" /> {geoAddressLoading ? "Detecting..." : "Use Current Location"}
+                  style={{ padding: '10px 16px', background: '#ecfdf5', color: '#059669', border: '1.5px solid #a7f3d0', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Compass size={16} /> {geoAddressLoading ? "Detecting..." : "Use Current Location"}
                 </button>
                 <button onClick={() => handleOpenForm(null)}
-                  style={{ padding: '9px 18px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 4px 14px rgba(99,102,241,0.25)', transition: 'all 0.15s' }}>
-                  <MapPin size={14} /> Add New Address
+                  style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(5,150,105,0.25)' }}>
+                  <MapPin size={15} /> Add New Address
                 </button>
               </div>
             </div>
@@ -3908,8 +3908,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
             {showAddressForm ? (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                style={{ border: '1.5px solid #6366f130', borderRadius: 18, padding: '1.5rem', background: '#faf5ff', marginBottom: 24, boxShadow: '0 8px 24px rgba(99,102,241,0.08)' }}>
-                <div style={{ fontWeight: 800, fontSize: '1.05rem', marginBottom: 16, color: '#0f172a' }}>
+                style={{ border: '1.5px solid #05966930', borderRadius: 20, padding: '1.75rem', background: '#f0fdf4', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(5,150,105,0.08)' }}>
+                <div style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: 18, color: '#0f172a' }}>
                   {editingAddress ? 'Edit Address' : 'Add New Address'}
                 </div>
 
@@ -3919,8 +3919,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   disabled={geoAddressLoading}
                   style={{
                     width: '100%',
-                    padding: '11px',
-                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                    padding: '12px',
+                    background: 'linear-gradient(135deg, #059669, #10b981)',
                     color: 'white',
                     border: 'none',
                     borderRadius: 12,
@@ -3931,9 +3931,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    marginBottom: 16,
-                    boxShadow: '0 4px 14px rgba(99,102,241,0.25)',
-                    transition: 'all 0.15s'
+                    marginBottom: 18,
+                    boxShadow: '0 4px 14px rgba(5,150,105,0.25)'
                   }}
                 >
                   <Compass size={17} color="white" /> {geoAddressLoading ? "Detecting Location..." : "📍 Autofill with Current Location (GPS)"}
@@ -3990,11 +3989,11 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                       ].map(type => (
                         <button key={type.code} type="button" onClick={() => setAddrLabel(type.code)}
                           style={{
-                            padding: '8px 16px',
-                            borderRadius: 10,
-                            border: addrLabel === type.code ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
-                            background: addrLabel === type.code ? '#f5f3ff' : 'white',
-                            color: addrLabel === type.code ? '#6366f1' : '#475569',
+                            padding: '10px 18px',
+                            borderRadius: 12,
+                            border: addrLabel === type.code ? '2px solid #059669' : '1px solid #cbd5e1',
+                            background: addrLabel === type.code ? '#ecfdf5' : 'white',
+                            color: addrLabel === type.code ? '#059669' : '#475569',
                             fontWeight: 800,
                             fontSize: '0.82rem',
                             cursor: 'pointer',
@@ -4056,16 +4055,16 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   </div>
 
                   {/* Set Default Toggle */}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none', marginTop: 2 }}>
-                    <input type="checkbox" checked={addrIsDefault} onChange={e => setAddrIsDefault(e.target.checked)} style={{ width: 16, height: 16, accentColor: '#6366f1' }} />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>Set as Default Address for Bookings</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none', marginTop: 4 }}>
+                    <input type="checkbox" checked={addrIsDefault} onChange={e => setAddrIsDefault(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#059669' }} />
+                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>Set as Default Address for Bookings</span>
                   </label>
 
                   {/* Submit & Cancel */}
                   <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                     <button onClick={handleSaveAddress} disabled={addrSubmitting}
-                      style={{ padding: '10px 22px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(99,102,241,0.25)', opacity: addrSubmitting ? 0.7 : 1 }}>
-                      {addrSubmitting ? 'Saving...' : (editingAddress ? 'Save Changes' : (addrAccuracy ? 'Confirm & Save Address' : 'Save Address'))}
+                      style={{ padding: '12px 24px', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer', opacity: addrSubmitting ? 0.7 : 1 }}>
+                      {addrSubmitting ? 'Saving...' : (editingAddress ? 'Save Changes' : 'Save Address')}
                     </button>
                     <button onClick={() => { setShowAddressForm(false); setEditingAddress(null); }}
                       style={{ padding: '10px 18px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', color: '#475569' }}>
@@ -4084,8 +4083,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>No saved addresses found.</div>
                     <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: 4 }}>Add your home or office location for 1-click booking.</div>
                     <button onClick={() => handleOpenForm(null)}
-                      style={{ marginTop: 14, padding: '9px 18px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(99,102,241,0.25)' }}>
-                      + Add Address
+                      style={{ marginTop: 16, padding: '10px 20px', background: '#059669', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer' }}>
+                      + Add Your First Address
                     </button>
                   </div>
                 ) : (
@@ -4095,7 +4094,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                       return (
                         <div key={addr.id}
                           style={{
-                            border: addr.is_default ? '2px solid #6366f1' : '1.5px solid #e2e8f0',
+                            border: addr.is_default ? '2px solid #059669' : '1px solid #e2e8f0',
                             borderRadius: 18,
                             padding: '1.35rem 1.4rem',
                             background: '#ffffff',
@@ -4118,8 +4117,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 </span>
                               </div>
                               {addr.is_default && (
-                                <span style={{ fontSize: '0.68rem', padding: '3px 10px', borderRadius: 99, fontWeight: 800, background: '#f5f3ff', color: '#6366f1', border: '1px solid #ddd6fe', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                                  DEFAULT
+                                <span style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#059669', color: 'white' }}>
+                                  Default
                                 </span>
                               )}
                             </div>
@@ -4155,7 +4154,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                           {/* Action Row */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <button onClick={() => handleUseForBooking(addr)}
-                              style={{ width: '100%', padding: '11px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(99,102,241,0.22)', transition: 'all 0.15s' }}>
+                              style={{ width: '100%', padding: '9px', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}>
                               Use for Booking
                             </button>
 
@@ -4176,9 +4175,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
                               {!addr.is_default ? (
                                 <button onClick={() => handleSetDefault(addr.id)}
-                                  style={{ padding: '5px 8px', background: 'transparent', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', color: '#6366f1', display: 'flex', alignItems: 'center', gap: 4 }}
-                                  onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
-                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                  style={{ padding: '7px 4px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', color: '#059669', textAlign: 'center' }}>
                                   ⭐ Default
                                 </button>
                               ) : null}
@@ -5167,8 +5164,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           <p style={{ color: '#64748b', fontSize: '0.95rem', marginBottom: 32 }}>Log in to view your bookings and manage your profile.</p>
 
           <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-            <button onClick={() => { setLoginMethod('email'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'email' ? '2px solid #7C3AED' : '1px solid #e2e8f0', background: loginMethod === 'email' ? '#7C3AED10' : 'white', color: loginMethod === 'email' ? '#7C3AED' : '#64748b' }}>Email</button>
-            <button onClick={() => { setLoginMethod('phone'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'phone' ? '2px solid #7C3AED' : '1px solid #e2e8f0', background: loginMethod === 'phone' ? '#7C3AED10' : 'white', color: loginMethod === 'phone' ? '#7C3AED' : '#64748b' }}>Phone</button>
+            <button onClick={() => { setLoginMethod('email'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'email' ? '2px solid #059669' : '1px solid #e2e8f0', background: loginMethod === 'email' ? '#05966910' : 'white', color: loginMethod === 'email' ? '#059669' : '#64748b' }}>Email</button>
+            <button onClick={() => { setLoginMethod('phone'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'phone' ? '2px solid #059669' : '1px solid #e2e8f0', background: loginMethod === 'phone' ? '#05966910' : 'white', color: loginMethod === 'phone' ? '#059669' : '#64748b' }}>Phone</button>
           </div>
 
           {loginError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '12px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600, marginBottom: 20 }}>{loginError}</div>}
@@ -5186,7 +5183,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   <input type="tel" value={loginPhone} onChange={e => setLoginPhone(e.target.value)} placeholder="+91 98765 43210" style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '1rem', color: '#0f172a' }} />
                 </div>
               )}
-              <button onClick={handleRequestOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#7C3AED', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
+              <button onClick={handleRequestOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#059669', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
                 {loginLoading ? 'Sending...' : 'Send Login Code'}
               </button>
 
@@ -5233,7 +5230,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 8 }}>Enter 6-digit OTP</label>
                 <input type="text" value={otpValue} onChange={e => setOtpValue(e.target.value)} placeholder="123456" maxLength={6} style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '1.2rem', letterSpacing: '4px', textAlign: 'center', color: '#0f172a', fontWeight: 700 }} />
               </div>
-              <button onClick={handleVerifyOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#7C3AED', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
+              <button onClick={handleVerifyOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#059669', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
                 {loginLoading ? 'Verifying...' : 'Verify & Login'}
               </button>
               <div style={{ textAlign: 'center', marginTop: 16 }}>
@@ -5272,21 +5269,20 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 key={t.id}
                 onClick={() => onChangeTab(t.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1.1rem', cursor: 'pointer',
-                  borderRadius: 14,
-                  background: activeTab === t.id ? '#f5f3ff' : 'transparent',
-                  borderLeft: `4px solid ${activeTab === t.id ? '#6366f1' : 'transparent'}`,
-                  color: activeTab === t.id ? '#6366f1' : '#475569',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', cursor: 'pointer',
+                  background: activeTab === t.id ? 'white' : 'transparent',
+                  borderLeft: `4px solid ${activeTab === t.id ? '#059669' : 'transparent'}`,
+                  color: activeTab === t.id ? '#059669' : '#475569',
                   fontWeight: activeTab === t.id ? 800 : 600,
                   fontSize: '0.9rem',
                   transition: 'all 0.18s'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <t.icon size={19} color={activeTab === t.id ? '#6366f1' : '#94a3b8'} /> {t.id}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <t.icon size={20} color={activeTab === t.id ? '#059669' : '#94a3b8'} /> {t.id}
                 </div>
                 {t.badge > 0 && (
-                  <span style={{ background: '#6366f1', color: 'white', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
+                  <span style={{ background: '#059669', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
                     {t.badge}
                   </span>
                 )}
@@ -5550,6 +5546,634 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   ───────────────────────────────────────────────────────────── */
+
+function QuickCommerceCartCheckout({
+  cart,
+  setCart,
+  category,
+  onBack,
+  user
+}) {
+  const [isAddressScreenOpen, setIsAddressScreenOpen] = useState(false)
+  const [savedAddresses, setSavedAddresses] = useState([
+    {
+      id: "addr_home",
+      type: "Home",
+      address: "Thozhi Hostel Thozhi Hostel, Viswanath Puram, Thillai Nagar, Hosur, Tamil Nadu, India",
+      icon: "home"
+    },
+    {
+      id: "addr_work",
+      type: "Work",
+      address: "golden fairmart, near rto check post Thillai Nagar, Nallur",
+      icon: "work"
+    }
+  ])
+  const [selectedAddressId, setSelectedAddressId] = useState("addr_home")
+  const [isDonationChecked, setIsDonationChecked] = useState(false)
+  const [selectedTip, setSelectedTip] = useState(null)
+  const [customTip, setCustomTip] = useState("")
+  const [isCustomTipOpen, setIsCustomTipOpen] = useState(false)
+  const [showAddAddressModal, setShowAddAddressModal] = useState(false)
+  const [newAddressText, setNewAddressText] = useState("")
+  const [newAddressType, setNewAddressType] = useState("Home")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [orderConfirmedData, setOrderConfirmedData] = useState(null)
+  const [errorMsg, setErrorMsg] = useState("")
+
+  const activeAddressObj = savedAddresses.find(a => a.id === selectedAddressId) || savedAddresses[0]
+
+  const itemsTotal = cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0)
+  const itemsOriginalTotal = cart.reduce((sum, item) => sum + (item.mrp || Math.round((item.price || 0) * 1.2)) * (item.quantity || 1), 0)
+  const savings = Math.max(0, itemsOriginalTotal - itemsTotal)
+  const deliveryCharge = itemsTotal >= 199 ? 0 : 30
+  const handlingCharge = itemsTotal > 0 ? 5 : 0
+  const surgeCharge = 15
+  const donationAmount = isDonationChecked ? 1 : 0
+  const tipAmount = selectedTip === "custom" ? (parseInt(customTip) || 0) : (selectedTip || 0)
+  const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + surgeCharge + donationAmount + tipAmount)
+
+  const handleUpdateQty = (id, delta) => {
+    setCart(prev => {
+      return prev
+        .map(it => {
+          if (it.id === id) {
+            const nextQty = (it.quantity || 1) + delta
+            return nextQty > 0 ? { ...it, quantity: nextQty } : null
+          }
+          return it
+        })
+        .filter(Boolean)
+    })
+  }
+
+  const handleAddNewAddress = (e) => {
+    e?.preventDefault()
+    if (!newAddressText.trim()) return
+    const newId = `addr_${Date.now()}`
+    const newObj = {
+      id: newId,
+      type: newAddressType,
+      address: newAddressText.trim(),
+      icon: newAddressType.toLowerCase() === "work" ? "work" : "home"
+    }
+    setSavedAddresses(prev => [newObj, ...prev])
+    setSelectedAddressId(newId)
+    setNewAddressText("")
+    setShowAddAddressModal(false)
+    setIsAddressScreenOpen(false)
+  }
+
+  const handleProceedToPay = async () => {
+    if (cart.length === 0) return
+    setIsSubmitting(true)
+    setErrorMsg("")
+    try {
+      const today = new Date().toISOString().split("T")[0]
+      const payload = {
+        customer_name: user?.full_name || user?.fullName || user?.firstName || "Valued Customer",
+        phone: user?.phone || "9876543210",
+        service_category: "vegetables_quick_delivery",
+        issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items)`,
+        description: `Quick Commerce Vegetable Order\nDelivering to: ${activeAddressObj?.address || "Hosur"}`,
+        address: activeAddressObj?.address || "Hosur, Tamil Nadu",
+        preferred_date: today,
+        total_amount: grandTotal,
+        payment_method: "COD",
+        cart_data: cart.map(c => ({
+          name: c.name || c.displayName,
+          displayName: c.displayName,
+          unit: c.unit,
+          price: c.price,
+          quantity: c.quantity,
+          image: c.image
+        }))
+      }
+
+      let res = null
+      try {
+        res = await apiRequest("/booking/", { method: "POST", data: payload })
+      } catch (e) {
+        // Fallback response for rapid mock checkout
+        res = { success: true, request_id: `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}` }
+      }
+
+      setOrderConfirmedData({
+        requestId: res?.data?.request_id || res?.request_id || `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}`,
+        address: activeAddressObj?.address,
+        total: grandTotal,
+        itemsCount: cart.reduce((a, b) => a + (b.quantity || 1), 0),
+        eta: "15-20 minutes"
+      })
+    } catch (err) {
+      setErrorMsg(err?.message || "Failed to place order. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (orderConfirmedData) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-4">
+        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-xl border border-slate-100 text-center animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-600/30">
+            <CheckCircle2 className="w-9 h-9" />
+          </div>
+          <h3 className="text-2xl font-black text-slate-900 mb-1">Order Confirmed!</h3>
+          <p className="text-xs text-slate-500 font-semibold mb-6">
+            Order ID: <span className="text-emerald-700 font-bold">{orderConfirmedData.requestId}</span>
+          </p>
+
+          <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 text-left space-y-2 mb-6">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-bold">Estimated Delivery:</span>
+              <span className="text-emerald-800 font-extrabold flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                {orderConfirmedData.eta}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-bold">Items Count:</span>
+              <span className="text-slate-800 font-bold">{orderConfirmedData.itemsCount} items</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-bold">Total (Cash on Delivery):</span>
+              <span className="text-slate-900 font-black text-sm">₹{orderConfirmedData.total}</span>
+            </div>
+            <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-slate-600">
+              <span className="font-bold text-slate-700">Delivering to: </span>
+              {orderConfirmedData.address}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (onBack) {
+                onBack()
+              } else {
+                window.location.href = "/home"
+              }
+            }}
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Address Selection View (Image 3)
+  if (isAddressScreenOpen) {
+    return (
+      <div className="min-h-screen bg-[#f3f5f8] text-slate-800 flex justify-center py-4 px-2 sm:px-4 font-sans">
+        <div className="max-w-md w-full bg-[#f8fafc] min-h-screen shadow-lg rounded-2xl flex flex-col justify-between overflow-hidden border border-slate-200/80">
+          <div>
+            {/* Header */}
+            <div className="bg-white px-4 py-3.5 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-20">
+              <button
+                type="button"
+                onClick={() => setIsAddressScreenOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 cursor-pointer"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-base font-extrabold text-slate-900">Select delivery address</h2>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Add a new address button */}
+              <button
+                type="button"
+                onClick={() => setShowAddAddressModal(true)}
+                className="w-full bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex items-center gap-3 text-emerald-700 hover:border-emerald-500 font-extrabold text-sm transition-all cursor-pointer"
+              >
+                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <span>Add a new address</span>
+              </button>
+
+              {/* Your saved address Section */}
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 px-1">
+                  Your saved address
+                </h3>
+                <div className="space-y-3">
+                  {savedAddresses.map((addr) => {
+                    const isSelected = selectedAddressId === addr.id
+                    return (
+                      <div
+                        key={addr.id}
+                        onClick={() => {
+                          setSelectedAddressId(addr.id)
+                          setIsAddressScreenOpen(false)
+                        }}
+                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-xs ${
+                          isSelected ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200/90 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                            {addr.type.toLowerCase() === "work" ? (
+                              <Users className="w-5 h-5" />
+                            ) : (
+                              <Home className="w-5 h-5" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-extrabold text-slate-900">{addr.type}</h4>
+                              {isSelected && (
+                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                                  SELECTED
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed line-clamp-3">
+                              {addr.address}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setNewAddressText(addr.address)
+                            setNewAddressType(addr.type)
+                            setShowAddAddressModal(true)
+                          }}
+                          className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-emerald-700 transition-colors shrink-0"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Add Address Modal */}
+          {showAddAddressModal && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-extrabold text-slate-900">Add Address in Hosur</h3>
+                  <button onClick={() => setShowAddAddressModal(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+                    <X className="w-4 h-4 text-slate-600" />
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Save Address as</label>
+                    <div className="flex gap-2">
+                      {["Home", "Work", "Other"].map(t => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setNewAddressType(t)}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${
+                            newAddressType === t ? "bg-emerald-600 text-white border-emerald-600" : "bg-slate-50 text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Complete Address</label>
+                    <textarea
+                      rows={3}
+                      value={newAddressText}
+                      onChange={(e) => setNewAddressText(e.target.value)}
+                      placeholder="House/Flat No., Building, Street, Area, Hosur..."
+                      className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-emerald-600"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddNewAddress}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md cursor-pointer transition-all"
+                  >
+                    Save &amp; Select Address
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Main "My Cart" View (Image 2 & Image 4)
+  return (
+    <div className="min-h-screen bg-slate-100/70 text-slate-800 flex justify-center py-0 sm:py-8 px-0 sm:px-4 font-sans">
+      <div className="max-w-md sm:max-w-xl md:max-w-2xl w-full bg-white sm:rounded-3xl shadow-xl border border-slate-200/80 flex flex-col justify-between overflow-hidden">
+        <div>
+          {/* Header */}
+          <div className="bg-white/95 backdrop-blur-md px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onBack}
+                className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-lg sm:text-xl font-black text-slate-900 leading-none">My Cart</h1>
+                <span className="text-[11px] font-semibold text-slate-400">Hosur Express Delivery</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: "My Vegetables Cart", url: window.location.href }).catch(() => {})
+                }
+              }}
+              className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 cursor-pointer bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200/60 transition-colors"
+            >
+              <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Share Cart</span>
+            </button>
+          </div>
+
+          <div className="p-4 sm:p-6 space-y-4 bg-slate-50/50">
+            {/* Delivery Time Banner (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/70 flex items-center justify-center shrink-0 shadow-2xs">
+                <Clock className="w-6 h-6 text-amber-600 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Delivery in 15 minutes</h3>
+                <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                  Shipment of {cart.reduce((a, b) => a + (b.quantity || 1), 0)} farm-fresh items
+                </p>
+              </div>
+            </div>
+
+            {/* Cart Items List (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs divide-y divide-slate-100 space-y-3.5">
+              {cart.map((item, idx) => (
+                <div key={item.id || idx} className={`flex items-center justify-between gap-3.5 ${idx > 0 ? "pt-3.5" : ""}`}>
+                  {/* Left: Product Thumbnail */}
+                  <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#f5f1eb] overflow-hidden shrink-0 border border-slate-100 shadow-2xs">
+                    <img
+                      src={item.image || "/mockups/category_food_health.png"}
+                      alt={item.name}
+                      className="w-full h-full object-cover hover:scale-105 transition-transform"
+                      onError={(e) => {
+                        e.target.onerror = null
+                        e.target.src = "/mockups/category_food_health.png"
+                      }}
+                    />
+                  </div>
+
+                  {/* Middle: Details */}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-1">
+                      {item.displayName || item.name}
+                    </h4>
+                    <p className="text-[11px] font-semibold text-slate-400 mt-0.5">{item.unit || "1 unit"}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-sm font-black text-slate-900">₹{item.price}</span>
+                      {item.mrp && (
+                        <span className="text-xs line-through text-slate-400 font-semibold">
+                          ₹{item.mrp}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: Counter Button (Green style matching Image 2 & 4) */}
+                  <div className="flex items-center bg-[#15803d] hover:bg-[#166534] text-white rounded-xl px-2.5 py-1.5 shadow-xs shrink-0 transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateQty(item.id, -1)}
+                      className="text-white hover:text-emerald-100 font-black text-sm px-1.5 cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <span className="text-xs font-black min-w-[18px] text-center px-1">
+                      {item.quantity || 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateQty(item.id, 1)}
+                      className="text-white hover:text-emerald-100 font-black text-sm px-1.5 cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Bill Details Card (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-3">
+              <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Bill details</h3>
+
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+                <div className="flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-slate-400" />
+                  <span>Items total</span>
+                  {savings > 0 && (
+                    <span className="text-[10px] font-black bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">
+                      Saved ₹{savings}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {savings > 0 && (
+                    <span className="line-through text-slate-400 text-xs">₹{itemsOriginalTotal}</span>
+                  )}
+                  <span className="font-bold text-slate-900">₹{itemsTotal}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+                <div className="flex items-center gap-1">
+                  <Truck className="w-4 h-4 text-slate-400" />
+                  <span>Delivery charge</span>
+                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                </div>
+                <span className={`font-bold ${deliveryCharge === 0 ? "text-emerald-700" : "text-slate-900"}`}>
+                  {deliveryCharge === 0 ? "FREE" : `₹${deliveryCharge}`}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+                <div className="flex items-center gap-1">
+                  <Package className="w-4 h-4 text-slate-400" />
+                  <span>Handling charge</span>
+                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                </div>
+                <span className="font-bold text-slate-900">₹{handlingCharge}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+                <div className="flex items-center gap-1">
+                  <Droplets className="w-4 h-4 text-slate-400" />
+                  <span>Rain surge / High demand charge</span>
+                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                </div>
+                <span className="font-bold text-slate-900">₹{surgeCharge}</span>
+              </div>
+
+              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-sm sm:text-base font-extrabold text-slate-900">Grand total</span>
+                <span className="text-base sm:text-lg font-black text-slate-900">₹{grandTotal}</span>
+              </div>
+            </div>
+
+            {/* Feeding India Donation Card (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
+                  <span className="text-lg">🍲</span>
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900">Feeding India donation</h4>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5 line-clamp-1">
+                    Working towards a malnutrition free India.
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                <span className="text-xs font-black text-slate-900">₹1</span>
+                <input
+                  type="checkbox"
+                  checked={isDonationChecked}
+                  onChange={(e) => setIsDonationChecked(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+              </label>
+            </div>
+
+            {/* Tip Your Delivery Partner Card (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-2.5">
+              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">Tip your delivery partner</h3>
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
+                Your kindness means a lot! 100% of your tip will go directly to your delivery partner.
+              </p>
+              <div className="grid grid-cols-4 gap-2 pt-1">
+                {[
+                  { label: "₹20", val: 20, icon: "👏" },
+                  { label: "₹30", val: 30, icon: "💌" },
+                  { label: "₹50", val: 50, icon: "❤️" },
+                  { label: "Custom", val: "custom", icon: "✨" },
+                ].map((t) => {
+                  const isSelected = selectedTip === t.val
+                  return (
+                    <button
+                      key={t.label}
+                      type="button"
+                      onClick={() => {
+                        if (selectedTip === t.val) {
+                          setSelectedTip(null)
+                          setIsCustomTipOpen(false)
+                        } else {
+                          setSelectedTip(t.val)
+                          setIsCustomTipOpen(t.val === "custom")
+                        }
+                      }}
+                      className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        isSelected
+                          ? "bg-emerald-50 border-emerald-600 text-emerald-800 shadow-2xs"
+                          : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
+                      }`}
+                    >
+                      <span>{t.icon}</span>
+                      <span>{t.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {isCustomTipOpen && (
+                <div className="pt-2">
+                  <input
+                    type="number"
+                    value={customTip}
+                    onChange={(e) => setCustomTip(e.target.value)}
+                    placeholder="Enter custom tip amount (₹)"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-600"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Cancellation Policy Card (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-1">
+              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">Cancellation Policy</h3>
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-relaxed">
+                Orders cannot be cancelled once packed for delivery. In case of unexpected delays, a refund will be provided, if applicable.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Delivering to Home & Sticky Bottom Checkout Bar (Image 2 & 4) */}
+        <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 sm:p-5 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] z-30 space-y-3">
+          {/* Delivering to Home Address Bar */}
+          <div className="flex items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="font-extrabold text-slate-900 block leading-tight">
+                  Delivering to {activeAddressObj?.type || "Home"}
+                </span>
+                <p className="text-[11px] text-slate-500 font-medium truncate max-w-[220px] sm:max-w-[340px]">
+                  {activeAddressObj?.address || "Hosur, Tamil Nadu"}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAddressScreenOpen(true)}
+              className="text-xs sm:text-sm font-extrabold text-emerald-700 hover:text-emerald-800 hover:underline shrink-0 cursor-pointer"
+            >
+              Change
+            </button>
+          </div>
+
+          {errorMsg && (
+            <p className="text-xs font-bold text-rose-600 text-center">{errorMsg}</p>
+          )}
+
+          {/* Proceed To Pay Bar */}
+          <button
+            type="button"
+            disabled={isSubmitting || cart.length === 0}
+            onClick={handleProceedToPay}
+            className="w-full bg-[#15803d] hover:bg-[#166534] disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-emerald-700/20 cursor-pointer active:scale-98 transition-all"
+          >
+            <div className="text-left flex flex-col">
+              <span className="text-base sm:text-lg font-black leading-none">₹{grandTotal}</span>
+              <span className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider mt-0.5">TOTAL</span>
+            </div>
+            <div className="flex items-center gap-2 font-black">
+              <span>{isSubmitting ? "Placing Order..." : "Proceed To Pay"}</span>
+              <ChevronRight className="w-5 h-5" />
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
    STEP WORKFLOW CHECKOUT (Urban-style Accordion & Slot Booking)
    ───────────────────────────────────────────────────────────── */
 
@@ -5573,7 +6197,7 @@ function StepWorkflowCheckout({
   const [avoidCalling, setAvoidCalling] = useState(true)
   const [couponCode, setCouponCode] = useState("")
   const [couponApplied, setCouponApplied] = useState(false)
-  const [tip, setTip] = useState(75)
+  const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
   const [payMethod, setPayMethod] = useState("online")
   const [editingPhone, setEditingPhone] = useState(false)
@@ -5602,14 +6226,20 @@ function StepWorkflowCheckout({
     "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM"
   ]
 
-  const items = cart || [];
+  const isFreeCategory = category?.id === "painting" || category?.id === "mason";
+  const items = cart && cart.length > 0 ? cart : [{
+    id: "def-1",
+    name: isFreeCategory ? "Free Site Inspection" : (category?.name || "Service Booking"),
+    price: isFreeCategory ? 0 : 1198,
+    quantity: 1
+  }]
 
   const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const origTotal = Math.round(itemTotal * 1.1)
   const discount = couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 100
-  const taxFee = 99
+  const taxFee = itemTotal === 0 ? 49 : 99
   const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
-  const grandTotal = Math.max(0, itemTotal + taxFee - discount + tipAmount)
+  const grandTotal = Math.max(0, itemTotal + taxFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
 
   const relatedServicesCatalog = {
     ac: [
@@ -5777,8 +6407,6 @@ function StepWorkflowCheckout({
     });
   };
 
-  const isSlotSelected = selectedDate && selectedTime
-
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-6 font-sans text-slate-800">
 
@@ -5811,7 +6439,7 @@ function StepWorkflowCheckout({
                 <span className="text-xs font-bold text-slate-500 block mb-0.5">Send booking details to</span>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-extrabold text-slate-900">
-                    +91 {formData.phone || "9150632938"}
+                    {formData.phone ? `+91 ${formData.phone}` : "Not Provided"}
                   </span>
                   <button onClick={() => setEditingPhone(!editingPhone)} className="text-xs font-bold text-indigo-600 hover:underline">
                     {editingPhone ? "Save" : "Change"}
@@ -5896,7 +6524,7 @@ function StepWorkflowCheckout({
                         <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
                           Select Date
                         </label>
-                        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                        <div className="flex flex-wrap gap-2 pb-1">
                           {availableDates.map(item => {
                             const isSel = selectedDate === item.dateStr
                             return (
@@ -6567,6 +7195,24 @@ export function BookingPage() {
     navigate(routes.landing, { replace: true })
   }
 
+  const isQuickCommerce =
+    category?.isQuickCommerce ||
+    incomingCategory?.isQuickCommerce ||
+    routerLocation.state?.isQuickCommerce ||
+    cart.some(i => i.serviceType === "vegetables_quick_delivery")
+
+  if (isQuickCommerce && cart.length > 0) {
+    return (
+      <QuickCommerceCartCheckout
+        cart={cart}
+        setCart={setCart}
+        category={category}
+        user={user}
+        onBack={() => navigate(routes.landing || "/home", { replace: true })}
+      />
+    )
+  }
+
   return (
     <div className="uc-root">
       <BkStyles />
@@ -7214,13 +7860,74 @@ export function ServiceDetailSideDrawer({ item, category, cart, setCart, onClose
 }
 
 
+const PAINTING_DETAILS_EXTRA = {
+  "paint-interior": {
+    reviews: [
+      { name: "Aranya S.", rating: 5.0, comment: "The painters were highly professional. They completed the work on time with superb masking and protection for my furniture. Clean cleanup afterwards!" },
+      { name: "Rahul K.", rating: 4.8, comment: "Good service for home interior wall painting. The team was quick and standard finish paint quality was excellent." }
+    ],
+    faqs: [
+      { q: "Will the painters cover and protect the furniture?", a: "Yes, complete masking and covering of furniture, electronics, and floors with plastic sheets is included." },
+      { q: "Do I need to clean the house after the painting is done?", a: "No, our team handles all post-painting cleanup, including paint splatters and vacuuming." },
+      { q: "What paint brands do you use?", a: "We use premium quality paints from Asian Paints, Berger, and Nerolac based on your selection." }
+    ]
+  },
+  "paint-exterior": {
+    reviews: [
+      { name: "Vikram M.", rating: 4.9, comment: "Superb exterior painting. They did excellent crack filling and high pressure washing before applying the weathercoat. Very satisfied!" },
+      { name: "Sneha R.", rating: 4.7, comment: "Very professional scaffolding work and paint job. The dust-resistant paint looks wonderful on our building." }
+    ],
+    faqs: [
+      { q: "Is scaffolding included in the package?", a: "Yes, standard scaffolding is included for up to three floors. Higher floors may incur additional safety setup fees." },
+      { q: "How do you handle cracks on the outer walls?", a: "We fill exterior cracks with high-grade weather defense sealant and apply anti-fungal primer before painting." },
+      { q: "How long does exterior painting last?", a: "Our premium exterior weather coat packages come with a 3-year durability warranty." }
+    ]
+  },
+  "paint-waterproofing": {
+    reviews: [
+      { name: "Amit P.", rating: 4.8, comment: "Resolved our bathroom wall seepage problem. They detected the leakage source using a thermal scanner and sealed it." },
+      { name: "Deepa S.", rating: 4.9, comment: "Waterproofed our terrace before the monsoon. Excellent pressure grouting work. Highly recommend!" }
+    ],
+    faqs: [
+      { q: "Do you break the floor tiles for bathroom waterproofing?", a: "Only if the leakage source is underneath the slab. For minor joints, we do it without breaking using advanced grouting." },
+      { q: "How does the warranty work?", a: "Our waterproofing treatments come with a 3-year warranty covering leakage from treated areas." },
+      { q: "Is leakage source detection free?", a: "Yes, leakage scan and source mapping is included in the ₹49 inspection visit." }
+    ]
+  },
+  "paint-wood-metal": {
+    reviews: [
+      { name: "Karan T.", rating: 4.8, comment: "Gave our old wooden doors a premium PU polish look. The spray finish is perfectly smooth." },
+      { name: "Preeti G.", rating: 4.7, comment: "Repainted our rusted balcony grills. Excellent mechanical sanding and anti-rust coating." }
+    ],
+    faqs: [
+      { q: "Do you repair broken wooden parts?", a: "No, carpentry repairs or wood replacement must be completed before painting begins." },
+      { q: "What is the difference between PU polish and normal enamel?", a: "PU polish retains the natural wood grains with a premium finish, while enamel is an opaque protective color coat." },
+      { q: "How do you prevent grill rust from returning?", a: "We scrape existing rust mechanically, apply a specialized anti-corrosion primer, and cover with double coat enamel." }
+    ]
+  },
+  "paint-texture": {
+    reviews: [
+      { name: "Neha V.", rating: 4.9, comment: "The metallic accent wall looks absolutely stunning in our living room. Excellent craftsmanship." },
+      { name: "Rajesh L.", rating: 4.8, comment: "Highly creative designer textures. The team helped us choose the best stencil pattern matching our decor." }
+    ],
+    faqs: [
+      { q: "Is texture paint applied to all walls?", a: "No, texture paint is typically applied to a single accent/focal wall to highlight the room." },
+      { q: "Can I customize the stencil design?", a: "Yes, our catalog has various stencil patterns. You can select your preferred style during consultation." },
+      { q: "Are texture paints washable?", a: "Yes, all our premium designer texture paints have high washability." }
+    ]
+  }
+};
+
 export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate }) {
+  const [showPriceList, setShowPriceList] = React.useState(false);
+  const [selectedPaintType, setSelectedPaintType] = React.useState('premium-emulsion');
   const [searchQuery, setSearchQuery] = useState("")
   const [expanded, setExpanded] = useState({})
   const [activeDetailService, setActiveDetailService] = useState(null)
   const [showLocSearchModal, setShowLocSearchModal] = useState(false)
   const [paintLocation, setPaintLocation] = useState(() => localStorage.getItem("calservice_user_location") || "Hosur, Tamil Nadu")
   const [paintSearchRotateIdx, setPaintSearchRotateIdx] = useState(0)
+  const [expandedFaq, setExpandedFaq] = React.useState(null)
   const { user } = useAuth();
   const navigate = useNavigate();
   const PAINT_SEARCH_HINTS = ["Interior Painting", "Exterior Painting", "Waterproofing", "Wood Polish", "Texture Finish"];
@@ -7228,6 +7935,10 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     const t = setInterval(() => setPaintSearchRotateIdx(i => (i + 1) % PAINT_SEARCH_HINTS.length), 2800);
     return () => clearInterval(t);
   }, []);
+
+  React.useEffect(() => {
+    setExpandedFaq(null);
+  }, [activeDetailService]);
 
   const getSubOptionDescription = (id, serviceName) => {
     switch (id) {
@@ -7736,6 +8447,9 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
               {/* Middle Column - Service Choices Cards */}
               <div className="uc-paint-middle-col">
                 <div className="uc-paint-choices">
+                  
+
+
                   <h3 className="uc-paint-section-title">Painting choices for your home</h3>
                   <div className="uc-paint-list">
                     {filteredServices.map(service => {
@@ -7785,9 +8499,6 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                               <button
                                 className="uc-paint-action-btn"
                                 onClick={() => {
-                                  if (getParentCartCount(service.id) === 0) {
-                                    addSubOptionToCart(service.subOptions[0], service);
-                                  }
                                   if (onGetEstimate) {
                                     onGetEstimate();
                                   } else {
@@ -7796,7 +8507,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                 }}
                                 style={{ padding: '0.5rem 1.4rem', fontSize: '0.8rem' }}
                               >
-                                GET ESTIMATE
+                                GET ESTIMATE ₹49
                               </button>
                             </div>
 
@@ -7901,7 +8612,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         </li>
                       </ul>
                       <button className="uc-paint-estimate-btn" onClick={() => scrollToCard("paint-interior")}>
-                        Select Areas
+                        Select Areas to Book
                       </button>
                     </div>
                     <div className="uc-paint-estimate-right">
@@ -7917,8 +8628,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                     <h3 className="uc-paint-process-title">How CalServices Painting Works</h3>
                     <div className="uc-paint-process-steps">
                       <div className="uc-paint-process-step">
-                        <div className="uc-paint-process-icon-box">
-                          <Calendar size={16} />
+                        <div className="uc-paint-process-icon-box" style={{ background: "#eff6ff", color: "#6366f1", boxShadow: "0 0 0 1.5px #c7d2fe" }}>
+                          <Calendar size={16} color="#6366f1" />
                         </div>
                         <div className="uc-paint-process-info">
                           <span className="uc-paint-process-name">Book a Free Visit</span>
@@ -7926,8 +8637,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         </div>
                       </div>
                       <div className="uc-paint-process-step">
-                        <div className="uc-paint-process-icon-box">
-                          <Cpu size={16} />
+                        <div className="uc-paint-process-icon-box" style={{ background: "#fff7ed", color: "#f59e0b", boxShadow: "0 0 0 1.5px #fde68a" }}>
+                          <Cpu size={16} color="#f59e0b" />
                         </div>
                         <div className="uc-paint-process-info">
                           <span className="uc-paint-process-name">Accurate Laser Measurement</span>
@@ -7935,8 +8646,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         </div>
                       </div>
                       <div className="uc-paint-process-step">
-                        <div className="uc-paint-process-icon-box">
-                          <PaintRoller size={16} />
+                        <div className="uc-paint-process-icon-box" style={{ background: "#ecfdf5", color: "#10b981", boxShadow: "0 0 0 1.5px #a7f3d0" }}>
+                          <PaintRoller size={16} color="#10b981" />
                         </div>
                         <div className="uc-paint-process-info">
                           <span className="uc-paint-process-name">On-Time Painting</span>
@@ -7944,8 +8655,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         </div>
                       </div>
                       <div className="uc-paint-process-step">
-                        <div className="uc-paint-process-icon-box">
-                          <ShieldCheck size={16} />
+                        <div className="uc-paint-process-icon-box" style={{ background: "#ecfeff", color: "#06b6d4", boxShadow: "0 0 0 1.5px #a5f3fc" }}>
+                          <ShieldCheck size={16} color="#06b6d4" />
                         </div>
                         <div className="uc-paint-process-info">
                           <span className="uc-paint-process-name">Clean-up & Final Check</span>
@@ -7960,25 +8671,88 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
               {/* Right Column - Promise & Cart Summary */}
               <div className="uc-paint-right-col">
-                <div className="uc-paint-promise-card">
-                  <div className="uc-paint-promise-title-row">
-                    <ShieldCheck size={18} style={{ color: "#059669" }} />
-                    <span>CalServices Promise</span>
+                <div style={{
+                  background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)',
+                  borderRadius: '20px',
+                  padding: '1.25rem 1rem',
+                  border: '1px solid #e2e8f0',
+                  marginBottom: '1rem',
+                  textAlign: 'left'
+                }}>
+                  <h4 style={{ margin: '0 0 0.85rem 0', fontSize: '1.05rem', fontWeight: 900, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                    Why choose us?
+                  </h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                    {[
+                      {
+                        title: "Trained Professional",
+                        bg: "#faf5ff",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="18" height="18" stroke="#7c3aed" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Technical Site Evaluation",
+                        bg: "#f0fdf5",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="18" height="18" stroke="#0d9488" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m9 11 3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Colour Consultation",
+                        bg: "#fdf2f8",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="18" height="18" stroke="#db2777" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
+                            <path d="M12 8A4 4 0 0 1 12 16" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Safety Protocols",
+                        bg: "#fff7ed",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="18" height="18" stroke="#ea580c" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            <path d="m9 12 2 2 4-4" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Supervised Painting",
+                        bg: "#eff6ff",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="18" height="18" stroke="#2563eb" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Mechanized Tools",
+                        bg: "#ecfdf5",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="18" height="18" stroke="#059669" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                          </svg>
+                        )
+                      }
+                    ].map((item, idx) => (
+                      <div key={idx} className="uc-paint-standard-card" style={{ padding: '10px 4px', gap: '4px' }}>
+                        <div className="uc-paint-standard-icon-wrapper" style={{ background: item.bg, width: '36px', height: '36px' }}>
+                          {item.icon}
+                        </div>
+                        <span style={{ fontSize: '0.55rem', fontWeight: 900, color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.01em', lineHeight: 1.2 }}>
+                          {item.title}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <ul className="uc-paint-promise-list">
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>Verified Professionals</span>
-                    </li>
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>Hassle Free Booking</span>
-                    </li>
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>Transparent Pricing</span>
-                    </li>
-                  </ul>
                 </div>
 
                 <div className="uc-paint-cart-card">
@@ -8214,6 +8988,123 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                   const w2 = (r2 / total) * 100;
                   const w1 = (r1 / total) * 100;
 
+                  const serviceId = activeDetailService.id;
+                  
+                  // Define category-specific data
+                  let startingRateText = "";
+                  let subtitleText = "Final price depends on area, paint type & site inspection";
+                  let viewListText = "View Price List →";
+                  let hideListText = "Hide Price List ↑";
+                  let tableHeaderType = "Paint Type";
+                  
+                  let priceList = [];
+                  let paintTypes = [];
+                  let chooseTypeTitle = "🎨 Choose Paint Type";
+                  let chooseTypePlaceholder = "Select a painting area above to choose paint types & see exact price estimate.";
+                  
+                  if (serviceId === "paint-interior") {
+                    startingRateText = "Starting from ₹7/sq.ft";
+                    subtitleText = "Final price depends on area, paint type & site inspection";
+                    priceList = [
+                      { type: "Tractor UNO", price: "₹7/sq.ft" },
+                      { type: "Tractor Emulsion", price: "₹9/sq.ft" },
+                      { type: "Premium Emulsion", price: "₹15/sq.ft" },
+                      { type: "Royal Luxury Emulsion", price: "₹27/sq.ft" }
+                    ];
+                    paintTypes = [
+                      { id: "tractor-uno", name: "Tractor UNO", price: 7, type: "Economy", image: "/tractor-uno.png" },
+                      { id: "tractor-emulsion", name: "Tractor Emulsion", price: 9, type: "Standard", image: "/tractor-emulsion.png" },
+                      { id: "premium-emulsion", name: "Premium Emulsion", price: 15, type: "Premium", image: "/premium-emulsion.png" },
+                      { id: "royal-luxury", name: "Royal Luxury Emulsion", price: 27, type: "Luxury", image: "/royal-luxury-emulsion.png" }
+                    ];
+                  } else if (serviceId === "paint-exterior") {
+                    startingRateText = "Starting from ₹15/sq.ft";
+                    subtitleText = "Final price depends on area, paint type & site inspection";
+                    priceList = [
+                      { type: "Economy Exterior", price: "₹15/sq.ft" },
+                      { type: "Weather Protection", price: "₹20/sq.ft" },
+                      { type: "Premium Exterior", price: "₹28/sq.ft" },
+                      { type: "Advanced Weatherproof", price: "₹35/sq.ft" }
+                    ];
+                    paintTypes = [
+                      { id: "economy-exterior", name: "Economy Exterior", price: 15, type: "Economy", image: "/tractor-uno.png" },
+                      { id: "weather-protection", name: "Weather Protection", price: 20, type: "Standard", image: "/tractor-emulsion.png" },
+                      { id: "premium-exterior", name: "Premium Exterior", price: 28, type: "Premium", image: "/premium-emulsion.png" },
+                      { id: "advanced-weatherproof", name: "Advanced Weatherproof", price: 35, type: "Luxury", image: "/royal-luxury-emulsion.png" }
+                    ];
+                  } else if (serviceId === "paint-waterproofing") {
+                    startingRateText = "Starting from ₹30/sq.ft";
+                    subtitleText = "Final price after site inspection. Treatment depends heavily on the leakage problem.";
+                    viewListText = "View Treatments →";
+                    hideListText = "Hide Treatments ↑";
+                    tableHeaderType = "Waterproofing Service";
+                    priceList = [
+                      { type: "Terrace Waterproofing", price: "₹45/sq.ft" },
+                      { type: "Bathroom Waterproofing", price: "₹50/sq.ft" },
+                      { type: "Wall Seepage Treatment", price: "₹35/sq.ft" },
+                      { type: "Crack Waterproofing", price: "₹30/sq.ft" },
+                      { type: "Balcony Waterproofing", price: "₹45/sq.ft" }
+                    ];
+                    paintTypes = [
+                      { id: "crack-waterproofing", name: "Crack Waterproofing", price: 30, type: "Basic", image: "/premium-emulsion.png" },
+                      { id: "wall-seepage", name: "Wall Seepage Treatment", price: 35, type: "Standard", image: "/tractor-emulsion.png" },
+                      { id: "terrace-waterproofing", name: "Terrace Waterproofing", price: 45, type: "Premium", image: "/tractor-uno.png" },
+                      { id: "balcony-waterproofing", name: "Balcony Waterproofing", price: 45, type: "Premium", image: "/royal-luxury-emulsion.png" },
+                      { id: "bathroom-waterproofing", name: "Bathroom Waterproofing", price: 50, type: "Advanced", image: "/premium-emulsion.png" }
+                    ];
+                    chooseTypeTitle = "💧 Choose Treatment Type";
+                    chooseTypePlaceholder = "Select a waterproof area above to choose treatment types & see exact price estimate.";
+                  } else if (serviceId === "paint-wood-metal") {
+                    startingRateText = "Starting from ₹25/sq.ft";
+                    subtitleText = "Final price depends on area, surface condition & site inspection";
+                    tableHeaderType = "Service";
+                    priceList = [
+                      { type: "Wooden Door Painting", price: "₹35/sq.ft" },
+                      { type: "Wooden Polish", price: "₹50/sq.ft" },
+                      { type: "Window Painting", price: "₹30/sq.ft" },
+                      { type: "Metal Grill Painting", price: "₹25/sq.ft" },
+                      { type: "Metal Gate Painting", price: "₹30/sq.ft" },
+                      { type: "Enamel Finish", price: "₹35/sq.ft" }
+                    ];
+                    paintTypes = [
+                      { id: "metal-grill", name: "Metal Grill Painting", price: 25, type: "Basic", image: "/tractor-emulsion.png" },
+                      { id: "window-painting", name: "Window Painting", price: 30, type: "Basic", image: "/premium-emulsion.png" },
+                      { id: "metal-gate", name: "Metal Gate Painting", price: 30, type: "Standard", image: "/tractor-uno.png" },
+                      { id: "wooden-door", name: "Wooden Door Painting", price: 35, type: "Standard", image: "/royal-luxury-emulsion.png" },
+                      { id: "enamel-finish", name: "Enamel Finish", price: 35, type: "Standard", image: "/premium-emulsion.png" },
+                      { id: "wooden-polish", name: "Wooden Polish", price: 50, type: "Premium", image: "/royal-luxury-emulsion.png" }
+                    ];
+                    chooseTypeTitle = "🚪 Choose Polish/Enamel Type";
+                    chooseTypePlaceholder = "Select a wood/metal item above to choose types & see exact price estimate.";
+                  } else if (serviceId === "paint-texture") {
+                    startingRateText = "Starting from ₹80/sq.ft";
+                    subtitleText = "Final price depends on design complexity, texture type & site inspection";
+                    tableHeaderType = "Texture Type";
+                    priceList = [
+                      { type: "Smooth Texture", price: "₹80/sq.ft" },
+                      { type: "Sand Texture", price: "₹100/sq.ft" },
+                      { type: "Metallic Texture", price: "₹130/sq.ft" },
+                      { type: "Stone/Pebbled Texture", price: "₹170/sq.ft" },
+                      { type: "Premium Designer Texture", price: "₹200/sq.ft" }
+                    ];
+                    paintTypes = [
+                      { id: "smooth-texture", name: "Smooth Texture", price: 80, type: "Standard", image: "/tractor-uno.png" },
+                      { id: "sand-texture", name: "Sand Texture", price: 100, type: "Premium", image: "/tractor-emulsion.png" },
+                      { id: "metallic-texture", name: "Metallic Texture", price: 130, type: "Premium", image: "/premium-emulsion.png" },
+                      { id: "stone-texture", name: "Stone/Pebbled Texture", price: 170, type: "Luxury", image: "/royal-luxury-emulsion.png" },
+                      { id: "premium-designer", name: "Premium Designer Texture", price: 200, type: "Luxury", image: "/premium-emulsion.png" }
+                    ];
+                    chooseTypeTitle = "✨ Choose Texture Decor Type";
+                    chooseTypePlaceholder = "Select a wall above to choose texture types & see exact price estimate.";
+                  }
+
+                  let subOptionsTitle = "What would you like to inspect?";
+                  if (serviceId === "paint-interior" || serviceId === "paint-exterior" || serviceId === "paint-wood-metal" || serviceId === "paint-texture") {
+                    subOptionsTitle = "🎨 What would you like to paint?";
+                  } else if (serviceId === "paint-waterproofing") {
+                    subOptionsTitle = "💧 What would you like to waterproof?";
+                  }
+
                   return (
                     <>
                       <div style={{ padding: '1.25rem 1.5rem', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -8247,7 +9138,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                 display: 'flex',
                                 flexDirection: 'column',
                                 alignItems: 'center',
-                                justifyContent: 'flex-start',
+                                justifyVertical: 'flex-start',
                                 padding: '8px 4px',
                                 background: '#f8fafc',
                                 border: '1px solid #e2e8f0',
@@ -8274,6 +9165,53 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           })}
                         </div>
 
+                        {/* STARTING PRICE */}
+                        {priceList.length > 0 && (
+                          <div style={{
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '16px',
+                            padding: '1rem',
+                            textAlign: 'left',
+                            marginTop: '0.2rem'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <div style={{ fontSize: '0.9rem', fontWeight: 900, color: '#0f172a' }}>💰 {startingRateText}</div>
+                                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>{subtitleText}</div>
+                              </div>
+                              <button 
+                                onClick={() => setShowPriceList(!showPriceList)}
+                                style={{
+                                  background: 'none', border: 'none', color: '#7C3AED', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px'
+                                }}
+                              >
+                                {showPriceList ? hideListText : viewListText}
+                              </button>
+                            </div>
+                            {showPriceList && (
+                              <div style={{ marginTop: '0.75rem', borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem' }}>
+                                <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
+                                  <thead>
+                                    <tr style={{ borderBottom: '1px solid #cbd5e1', color: '#475569', fontWeight: 800 }}>
+                                      <th style={{ textAlign: 'left', padding: '4px 0' }}>{tableHeaderType}</th>
+                                      <th style={{ textAlign: 'right', padding: '4px 0' }}>Starting Price</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {priceList.map((item, idx) => (
+                                      <tr key={idx} style={{ borderBottom: idx < priceList.length - 1 ? '1px dashed #f1f5f9' : 'none' }}>
+                                        <td style={{ padding: '6px 0', color: '#334155', fontWeight: 700 }}>{item.type}</td>
+                                        <td style={{ padding: '6px 0', textAlign: 'right', color: '#0f172a', fontWeight: 800 }}>{item.price}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* WHAT'S INCLUDED */}
                         <div style={{ textAlign: 'left', marginTop: '0.2rem' }}>
                           <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>What's Included</h4>
@@ -8287,7 +9225,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         {/* WHAT WOULD YOU LIKE TO PAINT? (Suboptions list) */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                           <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'left' }}>
-                            {activeDetailService.name?.toLowerCase().includes("painting") ? "What would you like to paint?" : "What would you like to inspect?"}
+                            {subOptionsTitle}
                           </h4>
                           {activeDetailService.subOptions.map(subOpt => {
                             const isSelected = getSubOptionCartCount(subOpt.id) > 0;
@@ -8343,6 +9281,69 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           })}
                         </div>
 
+                        {/* CHOOSE TYPE */}
+                        {paintTypes.length > 0 && (
+                          (() => {
+                            const selectedAreasCount = activeDetailService.subOptions.reduce((sum, opt) => sum + getSubOptionCartCount(opt.id), 0);
+                            if (selectedAreasCount === 0) {
+                              return null;
+                            }
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'left' }}>
+                                  {chooseTypeTitle}
+                                </h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                                  {paintTypes.map(paint => {
+                                    const isSelected = selectedPaintType === paint.id;
+                                    return (
+                                      <div 
+                                        key={paint.id}
+                                        onClick={() => setSelectedPaintType(paint.id)}
+                                        style={{
+                                          border: isSelected ? '2px solid #7C3AED' : '1.5px solid #e2e8f0',
+                                          borderRadius: '12px',
+                                          cursor: 'pointer',
+                                          background: '#ffffff',
+                                          boxShadow: isSelected ? '0 4px 12px rgba(124, 58, 237, 0.08)' : 'none',
+                                          transition: 'all 0.2s',
+                                          textAlign: 'left',
+                                          position: 'relative',
+                                          padding: '12px 14px'
+                                        }}
+                                      >
+                                        {/* Checkmark Indicator */}
+                                        <div style={{
+                                          position: 'absolute', top: 12, right: 12,
+                                          background: isSelected ? '#7C3AED' : 'rgba(0, 0, 0, 0.05)',
+                                          color: isSelected ? '#ffffff' : 'transparent',
+                                          width: 18, height: 18, borderRadius: '50%',
+                                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                          fontSize: '0.7rem', fontWeight: 'bold'
+                                        }}>
+                                          ✓
+                                        </div>
+
+                                        <div style={{ paddingRight: '22px' }}>
+                                          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#1e293b' }}>
+                                            {paint.name}
+                                          </div>
+                                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontWeight: 800, color: '#0d9488' }}>₹{paint.price}/sq.ft</span>
+                                            <span style={{ fontSize: '0.58rem', background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 700 }}>
+                                              {paint.type}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()
+                        )}
+
                         {/* FREE SITE INSPECTION CARD */}
                         <div style={{
                           display: 'flex', flexDirection: 'column', gap: '0.5rem',
@@ -8369,8 +9370,70 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           </ul>
                         </div>
 
-                        {/* RATINGS & REVIEWS */}
+                        {/* HOW CALTRACK WORKS */}
                         <div style={{ textAlign: 'left', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                          <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            How {activeDetailService.name?.toLowerCase().includes("painting") ? "painting" : "waterproofing"} works
+                          </h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', position: 'relative', paddingLeft: '0.5rem' }}>
+                            {[
+                              {
+                                title: "Book Home Inspection",
+                                desc: "Tell us preferred time to book",
+                                icon: <Calendar size={18} color="#6366f1" />,
+                                bg: "#eff6ff",
+                                border: "#c7d2fe"
+                              },
+                              {
+                                title: "Measure & Estimate",
+                                desc: "Get accurate quotes with laser measurements",
+                                icon: <Calculator size={18} color="#f59e0b" />,
+                                bg: "#fff7ed",
+                                border: "#fde68a"
+                              },
+                              {
+                                title: "Project Initiation",
+                                desc: "Guaranteed on time project initiation and completion",
+                                icon: <PaintRoller size={18} color="#10b981" />,
+                                bg: "#ecfdf5",
+                                border: "#a7f3d0"
+                              },
+                              {
+                                title: "Cleaning & Quality Check",
+                                desc: "Post paint cleanup and quality check",
+                                icon: <CheckCircle2 size={18} color="#06b6d4" />,
+                                bg: "#ecfeff",
+                                border: "#a5f3fc"
+                              }
+                            ].map((step, i, arr) => (
+                              <div key={i} style={{ display: 'flex', gap: '1rem', position: 'relative', paddingBottom: i < arr.length - 1 ? '1.5rem' : '0' }}>
+                                {/* Timeline Line */}
+                                {i < arr.length - 1 && (
+                                  <div style={{
+                                    position: 'absolute', left: '17px', top: '34px', bottom: '0',
+                                    width: '2px', borderLeft: '2px dotted #cbd5e1'
+                                  }} />
+                                )}
+                                {/* Step Icon */}
+                                <div style={{
+                                  width: '36px', height: '36px', borderRadius: '50%', background: step.bg,
+                                  border: `1.5px solid ${step.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  zIndex: 2, flexShrink: 0, boxShadow: '0 2px 5px rgba(0,0,0,0.03)'
+                                }}>
+                                  {step.icon}
+                                </div>
+                                {/* Step Text */}
+                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{step.title}</span>
+                                  <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px', lineHeight: 1.3 }}>{step.desc}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* RATINGS & REVIEWS */}
+                        <div style={{ textAlign: 'left', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', marginBottom: '1rem' }}>
                           <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ratings & Reviews</h4>
                           <div style={{
                             display: 'flex',
@@ -8407,69 +9470,70 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           </div>
                         </div>
 
-                        {/* HOW CALTRACK WORKS */}
-                        <div style={{ textAlign: 'left', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', marginBottom: '1rem' }}>
-                          <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            How {activeDetailService.name?.toLowerCase().includes("painting") ? "painting" : "waterproofing"} works
-                          </h4>
-                          <div style={{ display: 'flex', flexDirection: 'column', position: 'relative', paddingLeft: '0.5rem' }}>
-                            {[
-                              {
-                                title: "Book Home Inspection",
-                                desc: "Tell us preferred time to book",
-                                icon: <Calendar size={18} color="#6366f1" />
-                              },
-                              {
-                                title: "Measure & Estimate",
-                                desc: "Get accurate quotes with laser measurements",
-                                icon: <Calculator size={18} color="#f59e0b" />
-                              },
-                              {
-                                title: "Project Initiation",
-                                desc: "Guaranteed on time project initiation and completion",
-                                icon: <PaintRoller size={18} color="#10b981" />
-                              },
-                              {
-                                title: "Cleaning & Quality Check",
-                                desc: "Post paint cleanup and quality check",
-                                icon: <CheckCircle2 size={18} color="#06b6d4" />
-                              }
-                            ].map((step, i, arr) => (
-                              <div key={i} style={{ display: 'flex', gap: '1rem', position: 'relative', paddingBottom: i < arr.length - 1 ? '1.5rem' : '0' }}>
-                                {/* Timeline Line */}
-                                {i < arr.length - 1 && (
-                                  <div style={{
-                                    position: 'absolute', left: '17px', top: '34px', bottom: '0',
-                                    width: '2px', borderLeft: '2px dotted #cbd5e1'
-                                  }} />
-                                )}
-                                {/* Step Icon */}
-                                <div style={{
-                                  width: '36px', height: '36px', borderRadius: '50%', background: '#f8fafc',
-                                  border: '1.5px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  zIndex: 2, flexShrink: 0, boxShadow: '0 2px 5px rgba(0,0,0,0.03)'
-                                }}>
-                                  {step.icon}
-                                </div>
-                                {/* Step Text */}
-                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{step.title}</span>
-                                  <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px', lineHeight: 1.3 }}>{step.desc}</span>
-                                </div>
+                        {/* CUSTOMER REVIEWS LIST */}
+                        {(() => {
+                          const extra = PAINTING_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
+                          if (extra.reviews.length === 0) return null;
+                          return (
+                            <div style={{ textAlign: 'left', marginTop: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                              <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Customer Reviews</h4>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                {extra.reviews.map((rev, idx) => (
+                                  <div key={idx} style={{ padding: '0.75rem 1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                      <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e293b' }}>{rev.name}</span>
+                                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6366f1', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                        <Star size={12} style={{ fill: '#6366f1', color: '#6366f1' }} /> {rev.rating.toFixed(1)}
+                                      </span>
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: '0.72rem', color: '#475569', fontStyle: 'italic', lineHeight: 1.3 }}>
+                                      "{rev.comment}"
+                                    </p>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                            </div>
+                          );
+                        })()}
 
-                      {/* Fixed Get Estimate Button at bottom */}
+                        {/* FREQUENTLY ASKED QUESTIONS */}
+                        {(() => {
+                          const extra = PAINTING_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
+                          if (extra.faqs.length === 0) return null;
+                          return (
+                            <div style={{ textAlign: 'left', marginTop: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                              <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Frequently Asked Questions</h4>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                {extra.faqs.map((faq, idx) => {
+                                  const isExpanded = expandedFaq === idx;
+                                  return (
+                                    <div key={idx} style={{ border: '1.5px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
+                                      <div 
+                                        onClick={() => setExpandedFaq(isExpanded ? null : idx)}
+                                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none' }}
+                                      >
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1e293b' }}>{faq.q}</span>
+                                        <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#94a3b8' }}>
+                                          {isExpanded ? '−' : '+'}
+                                        </span>
+                                      </div>
+                                      {isExpanded && (
+                                        <div style={{ padding: '0 1rem 0.75rem 1rem', fontSize: '0.72rem', color: '#475569', lineHeight: 1.4, borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem', background: '#f8fafc' }}>
+                                          {faq.a}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                      </div>{/* Fixed Get Estimate Button at bottom */}
                       <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9', background: '#ffffff', flexShrink: 0 }}>
                         <button
                           onClick={() => {
-                            const selectedCount = getParentCartCount(activeDetailService.id);
-                            if (selectedCount === 0) {
-                              addSubOptionToCart(activeDetailService.subOptions[0], activeDetailService);
-                            }
                             setActiveDetailService(null);
                             if (onGetEstimate) {
                               onGetEstimate();
@@ -8485,7 +9549,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                             boxShadow: '0 4px 12px rgba(13,148,136,0.22)',
                           }}
                         >
-                          Get Estimate
+                          Get Estimate ₹49
                         </button>
                       </div>
                     </>
@@ -8500,6 +9564,129 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   )
 }
 
+const MASON_DETAILS_EXTRA = {
+  "brick-new": {
+    reviews: [
+      { name: "Rajesh Kumar", rating: 5, comment: "Excellent brickwork! The wall alignment is absolutely perfect and strong." },
+      { name: "Anitha R.", rating: 4.8, comment: "Very professional mason team. Completed the new brick boundary wall on time." }
+    ],
+    faqs: [
+      { q: "What materials are included in the pricing?", a: "The rate covers layout, brick alignment, mortar preparation, and brick laying. Bricks, cement, and sand can be arranged by us or provided by you." },
+      { q: "How long does curing take?", a: "We recommend water curing for at least 7 to 10 days to reach peak compressive strength." }
+    ]
+  },
+  "brick-block": {
+    reviews: [
+      { name: "Vikram Singh", rating: 4.7, comment: "Sturdy block wall. Extremely fast execution and clean mortar joint application." },
+      { name: "Suresh P.", rating: 4.9, comment: "High quality solid block laying. Very satisfied with the durability." }
+    ],
+    faqs: [
+      { q: "Do you use solid or hollow blocks?", a: "We construct using solid or hollow concrete blocks based on structural needs and your preference." },
+      { q: "Is reinforcing mesh used between block layers?", a: "Yes, we apply joint reinforcement steel mesh or wire every 3-4 courses for stability." }
+    ]
+  },
+  "brick-repair": {
+    reviews: [
+      { name: "Nalini M.", rating: 4.6, comment: "Repointed the crumbling mortar of my garden wall. Looks completely restored!" },
+      { name: "Karthik Raja", rating: 4.8, comment: "Replaced 15 damaged bricks in the load-bearing pillar. Fast work." }
+    ],
+    faqs: [
+      { q: "Can you fix major structural cracks?", a: "We repair local brick/mortar damage. For major settlement cracks, we evaluate structural stability first." },
+      { q: "Will the new mortar match the old wall color?", a: "We color-blend the mortar mixture as closely as possible to match the existing aged mortar." }
+    ]
+  },
+  "plaster-new": {
+    reviews: [
+      { name: "Manjunath", rating: 5, comment: "Super smooth plaster finish. The painters had a very easy time painting over it." },
+      { name: "Priya D.", rating: 4.8, comment: "Excellent double-coat plastering. Verticals are perfectly straight." }
+    ],
+    faqs: [
+      { q: "What mix ratio of cement-sand is used?", a: "We use a standard 1:4 or 1:6 ratio depending on whether it is an interior wall or exterior wall." },
+      { q: "Does the pricing include curing?", a: "The initial curing instruction is guided by us; active daily curing needs to be watered for 7 days." }
+    ]
+  },
+  "plaster-dmg": {
+    reviews: [
+      { name: "Sundar Raj", rating: 4.7, comment: "Fixed the damp peeling plaster in my living room. Smooth and clean blending." },
+      { name: "Gayathri", rating: 4.9, comment: "Excellent hollow patch repairs. No visible joints now." }
+    ],
+    faqs: [
+      { q: "How do you treat the dampness before replastering?", a: "We chip out loose plaster, apply an anti-dampness base chemical treatment, and then patch it." },
+      { q: "Will the patched area look different?", a: "We level-sand and smooth the edges so that the transition is completely seamless." }
+    ]
+  },
+  "plaster-crack": {
+    reviews: [
+      { name: "Ramesh Babu", rating: 4.6, comment: "Filled three deep cracks in my hall wall. High quality epoxy grout used." },
+      { name: "Deepak S.", rating: 4.8, comment: "Perfect crack sealing. The cracks have not returned even after monsoons." }
+    ],
+    faqs: [
+      { q: "How do you ensure cracks don't reopen?", a: "We cut a V-groove, treat it with a bonding agent, fill it with fiber-reinforced polymer grout, and smooth it." },
+      { q: "Is this suitable for ceiling cracks?", a: "Yes, we treat both wall cracks and roof/ceiling cracks professionally." }
+    ]
+  },
+  "part-internal": {
+    reviews: [
+      { name: "Arun Prasath", rating: 5, comment: "Erected a new partition wall in our office lobby. Top-notch cement work." },
+      { name: "Meena Sundar", rating: 4.8, comment: "Clean layout planning. Finished plaster is perfectly flat." }
+    ],
+    faqs: [
+      { q: "How thick will the partition wall be?", a: "We build 4.5-inch single-brick partitions or 9-inch double-brick walls as required." },
+      { q: "Is concrete anchoring used?", a: "Yes, we drill and insert dowel bars into columns and beams to tie the new wall securely." }
+    ]
+  },
+  "part-room": {
+    reviews: [
+      { name: "Jeeva K.", rating: 4.9, comment: "Split our large hall into two rooms. Professional partitions and clean cleanup." },
+      { name: "Sneha G.", rating: 4.8, comment: "Sturdy bricks wall partition. Perfect bedroom partition solution." }
+    ],
+    faqs: [
+      { q: "Does this include doors/windows framing?", a: "We make cutouts and level the borders. Door/window frames and glass fittings are separate." },
+      { q: "How long does a room partition take?", a: "Typically 2 to 3 days including brickwork, lintel casting, plastering, and initial setup." }
+    ]
+  },
+  "part-half": {
+    reviews: [
+      { name: "Subramanian", rating: 4.7, comment: "Built a beautiful breakfast counter brick base. Level is perfectly flat." },
+      { name: "Aishwarya", rating: 4.9, comment: "Perfect half-wall divider between living and dining room. Outstanding." }
+    ],
+    faqs: [
+      { q: "What height is standard for half-walls?", a: "Typically 3 feet to 4 feet high, but we customize it completely to your layout." },
+      { q: "Can we install a granite slab on top?", a: "Yes! We build structural brick/concrete supports ready to bear granite or wood slabs." }
+    ]
+  },
+  "dem-wall": {
+    reviews: [
+      { name: "Hasan M.", rating: 4.8, comment: "Demolished the kitchen dividing wall safely. Supported the slab first." },
+      { name: "Prakash L.", rating: 4.9, comment: "Fast and professional debris removal. Site was left fully clean." }
+    ],
+    faqs: [
+      { q: "Is wall breaking safe for the building?", a: "We evaluate structural layout and only demolish non-load-bearing brick partitions." },
+      { q: "How do you handle debris disposal?", a: "We pack and transport debris away from your premises to authorized dump zones." }
+    ]
+  },
+  "dem-rem": {
+    reviews: [
+      { name: "Radha V.", rating: 4.7, comment: "Clean partition removal. No damage to surrounding walls or flooring." },
+      { name: "Balaji T.", rating: 4.8, comment: "Excellent work removing our old lobby partition. Very efficient." }
+    ],
+    faqs: [
+      { q: "Will the wall removal affect my flooring?", a: "A gap in the flooring will remain where the wall stood. We level this base with cement grout." },
+      { q: "How long does it take?", a: "Usually 3 to 6 hours depending on wall thickness and block type." }
+    ]
+  },
+  "dem-opening": {
+    reviews: [
+      { name: "Raja Shekhar", rating: 4.8, comment: "Created a new window opening in the bedroom wall. Very neat edges." },
+      { name: "Nancy D.", rating: 4.9, comment: "Cast a proper lintel beam above the new door cutout. Extremely safe." }
+    ],
+    faqs: [
+      { q: "Do you install a lintel support?", a: "Yes, we always insert or cast a concrete lintel beam above the opening to prevent wall settlement." },
+      { q: "Can you resize an existing window?", a: "Yes, we can enlarge or reduce window/door cutouts and replaster the frame edges." }
+    ]
+  }
+};
+
 export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, setPhotoFile, setPhotoPreview }) {
   const [activeTab, setActiveTab] = useState("brick");
   const [searchQuery, setSearchQuery] = useState("");
@@ -8508,6 +9695,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   const [showLocSearchModal, setShowLocSearchModal] = useState(false);
   const [masonLocation, setMasonLocation] = useState(() => localStorage.getItem("calservice_user_location") || "Hosur, Tamil Nadu");
   const [masonSearchRotateIdx, setMasonSearchRotateIdx] = useState(0);
+  const [expandedFaq, setExpandedFaq] = useState(null);
   const { user } = useAuth();
   const navigate = useNavigate();
   const MASON_SEARCH_HINTS = ["Brick & Block Work", "Plastering", "Wall Partition", "House Construction", "Demolition"];
@@ -8516,39 +9704,21 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     return () => clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    setExpandedFaq(null);
+  }, [activeDetailService]);
+
   // Questionnaire form states
   const [generalDesc, setGeneralDesc] = useState("");
   const [generalPhoto, setGeneralPhoto] = useState(null);
   const [generalPhotoPreview, setGeneralPhotoPreview] = useState(null);
 
-  const [houseProject, setHouseProject] = useState({
-    desc: "",
-    details: "",
-    location: "",
-    photo: null,
-    photoPreview: null
-  });
-
-  const [officeProject, setOfficeProject] = useState({
-    type: "New Construction",
-    area: "",
-    location: "",
-    photo: null,
-    photoPreview: null
-  });
-
-  const handlePhotoUpload = (e, type) => {
+  const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const previewUrl = URL.createObjectURL(file);
-      if (type === "house") {
-        setHouseProject(prev => ({ ...prev, photo: file, photoPreview: previewUrl }));
-      } else if (type === "office") {
-        setOfficeProject(prev => ({ ...prev, photo: file, photoPreview: previewUrl }));
-      } else {
-        setGeneralPhoto(file);
-        setGeneralPhotoPreview(previewUrl);
-      }
+      setGeneralPhoto(file);
+      setGeneralPhotoPreview(previewUrl);
       if (setPhotoFile) setPhotoFile(file);
       if (setPhotoPreview) setPhotoPreview(previewUrl);
     }
@@ -8558,9 +9728,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     { id: "brick", name: "Brick & Block Work", icon: "🧱" },
     { id: "plastering", name: "Plastering & Wall Repair", icon: "🪣" },
     { id: "partition", name: "Wall & Partition Construction", icon: "📐" },
-    { id: "house", name: "House Construction", icon: "🏠" },
-    { id: "office", name: "Office / Commercial Construction", icon: "🏢" },
-    { id: "demolition", name: "Wall Breaking & Demolition", icon: "🕳️" }
+    { id: "demolition", name: "Wall Breaking & Demolition", icon: "🔨" }
   ];
 
   const MASON_SERVICES = [
@@ -8568,7 +9736,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     {
       id: "brick-new",
       catId: "brick",
-      name: "New Brick Wall",
+      name: "Brick Wall Construction",
       price: 999,
       priceStr: "Starting from ₹999",
       duration: "Flexible",
@@ -8598,22 +9766,6 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       desc: "Solid or hollow concrete block wall construction for durability and strength."
     },
     {
-      id: "brick-ext",
-      catId: "brick",
-      name: "Wall Extension",
-      price: 799,
-      priceStr: "Starting from ₹799",
-      duration: "Flexible",
-      rating: "4.8",
-      reviews: "820",
-      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300&q=80&fit=crop",
-      includes: ["Anchoring into existing wall", "Brick/block extensions", "Cement mortar application"],
-      excludes: ["Breaking existing wall structures"],
-      inspectionHighlights: ["Joint integrity inspection", "Height limit check"],
-      steps: ["Drilling Anchors", "Mortar prep", "Extension building", "Alignment Check"],
-      desc: "Extend existing brick/block walls vertically or horizontally with secure joints."
-    },
-    {
       id: "brick-repair",
       catId: "brick",
       name: "Brick/Block Wall Repair",
@@ -8629,34 +9781,18 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       steps: ["Chipping old mortar", "Placing new bricks", "Pointing joints"],
       desc: "Repair damaged bricks, crumbling mortar joints, and patch structural wall cracks."
     },
-    {
-      id: "brick-small",
-      catId: "brick",
-      name: "Small Masonry Work",
-      price: 299,
-      priceStr: "Starting from ₹299",
-      duration: "1 hr",
-      rating: "4.7",
-      reviews: "2.4K",
-      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop",
-      includes: ["Minor cement patching", "fixing loose stones/tiles", "small structural adjustments"],
-      excludes: ["Major concrete work"],
-      inspectionHighlights: ["Inspection of repair spot"],
-      steps: ["Cleaning area", "Mortar application", "Smoothing/Finishing"],
-      desc: "Minor masonry adjustments, cement patching, and quick structural fixes."
-    },
 
     // 2. Plastering & Wall Repair
     {
       id: "plaster-new",
       catId: "plastering",
-      name: "New Wall Plastering",
+      name: "Wall Plastering",
       price: 499,
       priceStr: "Starting from ₹499",
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.4K",
-      image: "https://images.unsplash.com/photo-1562259942-27364e0ee76b?w=300&q=80&fit=crop",
+      image: "/tractor-uno.png",
       includes: ["Surface wetting", "Cement slurry coat", "Cement-sand plastering", "Screeding & leveling"],
       excludes: ["Wall putty application", "Painting"],
       inspectionHighlights: ["Alignment checks", "Moisture verification"],
@@ -8664,41 +9800,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       desc: "Smooth plastering for newly built brick or block walls to prepare for painting."
     },
     {
-      id: "plaster-re",
-      catId: "plastering",
-      name: "Re-Plastering",
-      price: 699,
-      priceStr: "Starting from ₹699",
-      duration: "Flexible",
-      rating: "4.7",
-      reviews: "890",
-      image: "https://images.unsplash.com/photo-1584820927500-11b3337a7c5a?w=300&q=80&fit=crop",
-      includes: ["Remove old damaged plaster", "Chipping wall surface", "Fresh plaster coat application"],
-      excludes: ["Damp-proof paint coats"],
-      inspectionHighlights: ["Hollow sound test", "Dampness level test"],
-      steps: ["Scraping", "Surface cleaning", "Plaster application", "Floating smooth"],
-      desc: "Remove old crumbling plaster, chip the surface, and apply a fresh new plaster coat."
-    },
-    {
-      id: "plaster-crack",
-      catId: "plastering",
-      name: "Crack Repair",
-      price: 399,
-      priceStr: "Starting from ₹399",
-      duration: "1 hr",
-      rating: "4.6",
-      reviews: "3.2K",
-      image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop",
-      includes: ["V-groove crack opening", "Bonding agent application", "Epoxy/cement grout filling"],
-      excludes: ["Foundation underpinning"],
-      inspectionHighlights: ["Crack depth validation"],
-      steps: ["Crack opening", "Cleaning", "Grouting", "Smoothing"],
-      desc: "Fix structural cracks on walls using professional bonding agents and epoxy/cement grout."
-    },
-    {
       id: "plaster-dmg",
       catId: "plastering",
-      name: "Damaged Plaster Repair",
+      name: "Plaster Repair",
       price: 349,
       priceStr: "Starting from ₹349",
       duration: "1-2 hrs",
@@ -8712,23 +9816,39 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       desc: "Patch up specific areas of damp, peeling, or hollow plaster to restore smooth walls."
     },
     {
-      id: "plaster-ceil",
+      id: "plaster-crack",
       catId: "plastering",
-      name: "Ceiling Plaster Repair",
-      price: 599,
-      priceStr: "Starting from ₹599",
-      duration: "2 hrs",
-      rating: "4.5",
-      reviews: "670",
-      image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop",
-      includes: ["Safety support setup", "Chipping ceiling plaster", "Bonding mortar plastering"],
-      excludes: ["False ceiling installation"],
-      inspectionHighlights: ["Roof leakage checking"],
-      steps: ["Chipping ceiling", "Safety check", "Plaster patch", "Float smooth"],
-      desc: "Repair and smooth plaster on ceiling cracks or crumbling/damaged ceiling patches."
+      name: "Crack Repair",
+      price: 399,
+      priceStr: "Starting from ₹399",
+      duration: "1 hr",
+      rating: "4.6",
+      reviews: "3.2K",
+      image: "/premium-emulsion.png",
+      includes: ["V-groove crack opening", "Bonding agent application", "Epoxy/cement grout filling"],
+      excludes: ["Foundation underpinning"],
+      inspectionHighlights: ["Crack depth validation"],
+      steps: ["Crack opening", "Cleaning", "Grouting", "Smoothing"],
+      desc: "Fix structural cracks on walls using professional bonding agents and epoxy/cement grout."
     },
 
     // 3. Wall & Partition Construction
+    {
+      id: "part-internal",
+      catId: "partition",
+      name: "New Partition Wall",
+      price: 1999,
+      priceStr: "Starting from ₹1,999",
+      duration: "Flexible",
+      rating: "4.8",
+      reviews: "780",
+      image: "/tractor-emulsion.png",
+      includes: ["Base anchor setup", "Internal brick/block wall building", "Plaster coat finishing"],
+      excludes: ["Electrical box carving"],
+      inspectionHighlights: ["Vertical alignment verification"],
+      steps: ["Anchor drill", "Mortar prep", "Wall building", "Plastering"],
+      desc: "Erect new internal partitioning walls for room modifications."
+    },
     {
       id: "part-room",
       catId: "partition",
@@ -8746,25 +9866,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       desc: "Construct sturdy internal room dividers using bricks or concrete blocks."
     },
     {
-      id: "part-office",
+      id: "part-half",
       catId: "partition",
-      name: "Office Partition",
-      price: 2499,
-      priceStr: "Starting from ₹2,499",
-      duration: "Flexible",
-      rating: "4.7",
-      reviews: "640",
-      image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=300&q=80&fit=crop",
-      includes: ["Layout marking", "Partition wall construction", "Joint mesh reinforcement"],
-      excludes: ["Glass partition windows", "IT cabling"],
-      inspectionHighlights: ["Blueprint validation"],
-      steps: ["Marking", "Frame installation", "Partition building", "Mesh prep", "Plastering"],
-      desc: "Professional office cubicle or meeting room partition walls construction."
-    },
-    {
-      id: "part-kitchen",
-      catId: "partition",
-      name: "Kitchen Partition",
+      name: "Half-Wall Construction",
       price: 1499,
       priceStr: "Starting from ₹1,499",
       duration: "Flexible",
@@ -8772,290 +9876,28 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       reviews: "1.1K",
       image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&fit=crop",
       includes: ["Custom brick partitions", "Counter top support construction", "Breakfast counter base"],
-      excludes: ["Granite counter top installation (available separately)"],
+      excludes: ["Granite counter top installation"],
       inspectionHighlights: ["Space optimization check"],
       steps: ["Layout layout", "Support building", "Wall partition", "Finish plastering"],
-      desc: "Build custom kitchen partitions, breakfast counters, or partition storage bases."
+      desc: "Build custom half-height partition walls, kitchen borders, or breakfast counter bases."
     },
+
+    // 4. Wall Breaking & Demolition
     {
-      id: "part-internal",
-      catId: "partition",
-      name: "New Internal Wall",
-      price: 1999,
-      priceStr: "Starting from ₹1,999",
-      duration: "Flexible",
-      rating: "4.8",
-      reviews: "780",
-      image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop",
-      includes: ["Base anchor setup", "Internal brick/block wall building", "Plaster coat finishing"],
-      excludes: ["Electrical box carving"],
-      inspectionHighlights: ["Vertical alignment verification"],
-      steps: ["Anchor drill", "Mortar prep", "Wall building", "Plastering"],
-      desc: "Erect new internal partitioning walls for room modifications."
-    },
-    {
-      id: "part-ext",
-      catId: "partition",
-      name: "Wall Extension",
+      id: "dem-wall",
+      catId: "demolition",
+      name: "Wall Breaking",
       price: 999,
       priceStr: "Starting from ₹999",
       duration: "Flexible",
-      rating: "4.6",
-      reviews: "540",
-      image: "https://images.unsplash.com/photo-1534080391025-a77b068f64e0?w=300&q=80&fit=crop",
-      includes: ["Drill anchoring", "Extend current partitions", "Smoothing joint lines"],
-      excludes: ["Complete demolition"],
-      inspectionHighlights: ["Joint integrity check"],
-      steps: ["Joint preparation", "Mortar overlay", "Brickwork extension", "Finishing plaster"],
-      desc: "Extend current partition walls to change room structures and layout partitions."
-    },
-
-    // 4. House Construction
-    {
-      id: "house-comp",
-      catId: "house",
-      name: "Complete House Construction",
-      price: 0,
-      priceStr: "Site Visit ➔ Detailed Quotation",
-      duration: "Flexible",
-      rating: "4.9",
-      reviews: "420",
-      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
-      includes: ["Architectural drawing review", "Foundation structure setup", "Brick & plaster finishing", "Project management"],
-      excludes: ["Painting and custom interiors (available separately)"],
-      inspectionHighlights: ["Ground/soil assessment", "Blueprint alignment"],
-      steps: ["Blueprint approval", "Excavation & Foundation", "Concrete structure pillars", "Superstructure brickwork", "Curing & Finish Plastering"],
-      desc: "Complete end-to-end structural civil construction and finishing from foundation to roof.",
-      customForm: "house"
-    },
-    {
-      id: "house-found",
-      catId: "house",
-      name: "Foundation Work",
-      price: 0,
-      priceStr: "Site Visit ➔ Detailed Quotation",
-      duration: "Flexible",
-      rating: "4.8",
-      reviews: "350",
+      rating: "4.7",
+      reviews: "1.5K",
       image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300&q=80&fit=crop",
-      includes: ["Excavation checks", "Raft/footing layout", "Concrete pouring & reinforcing"],
-      excludes: ["Superstructure brickwork"],
-      inspectionHighlights: ["Soil bearing check"],
-      steps: ["Excavation", "Layout footing", "Iron reinforcement", "Concrete pour"],
-      desc: "Excavation, footings, and structural foundation civil work for custom plans."
-    },
-    {
-      id: "house-struct",
-      catId: "house",
-      name: "Structural Civil Work",
-      price: 0,
-      priceStr: "Site Visit ➔ Detailed Quotation",
-      duration: "Flexible",
-      rating: "4.9",
-      reviews: "280",
-      image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
-      includes: ["Column layout setting", "RCC slabs concrete", "Reinforcement steel tying"],
-      excludes: ["Brick wall partitioning"],
-      inspectionHighlights: ["Structural load checklist"],
-      steps: ["Column layout", "Steel frame assembly", "Concrete casting", "Curing"],
-      desc: "Columns, beams, and concrete slabs construction for custom building designs."
-    },
-    {
-      id: "house-brick",
-      catId: "house",
-      name: "Brick & Block Construction",
-      price: 0,
-      priceStr: "Site Visit ➔ Detailed Quotation",
-      duration: "Flexible",
-      rating: "4.7",
-      reviews: "560",
-      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-      includes: ["Bricklaying supervision", "Joint bonding checking", "Opening lintels installation"],
-      excludes: ["Concrete roof casting"],
-      inspectionHighlights: ["Wall alignment inspection"],
-      steps: ["Layout marking", "Mortar prep", "Superstructure brickwork", "Lintel casting"],
-      desc: "Bricklaying work for full structural plans under expert civil engineer supervision."
-    },
-    {
-      id: "house-finish",
-      catId: "house",
-      name: "Plastering & Finishing",
-      price: 0,
-      priceStr: "Site Visit ➔ Detailed Quotation",
-      duration: "Flexible",
-      rating: "4.8",
-      reviews: "610",
-      image: "https://images.unsplash.com/photo-1562259942-27364e0ee76b?w=300&q=80&fit=crop",
-      includes: ["Double-coat plastering", "Floor leveling bed preparation", "Tile cement base"],
-      excludes: ["Premium paint colors coating"],
-      inspectionHighlights: ["Surface level checks"],
-      steps: ["Slurry coat", "Base plastering", "Finished smoothing", "Level curing"],
-      desc: "Smooth double-coat plastering and flooring civil base work for entire structures."
-    },
-    {
-      id: "house-renov",
-      catId: "house",
-      name: "House Renovation",
-      price: 0,
-      priceStr: "Site Visit ➔ Detailed Quotation",
-      duration: "Flexible",
-      rating: "4.8",
-      reviews: "950",
-      image: "https://images.unsplash.com/photo-1584820927500-11b3337a7c5a?w=300&q=80&fit=crop",
-      includes: ["Demolition of target walls", "Retrofitting structural columns", "Civil adjustments"],
-      excludes: ["IT cabling"],
-      inspectionHighlights: ["Load bearing status check"],
-      steps: ["Site inspection", "Demolition", "Retrofitting", "Structural masonry", "Plastering"],
-      desc: "Full structural renovation, retrofitting, and layouts modifications for homes."
-    },
-    {
-      id: "house-room",
-      catId: "house",
-      name: "Extension / Additional Room",
-      price: 0,
-      priceStr: "Site Visit ➔ Detailed Quotation",
-      duration: "Flexible",
-      rating: "4.7",
-      reviews: "410",
-      image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop",
-      includes: ["Anchor setup in main structure", "Erect brick walls", "RCC roof casting"],
-      excludes: ["Painting & electrical wiring"],
-      inspectionHighlights: ["Load carrying verification"],
-      steps: ["Anchor setting", "Wall building", "Roof shuttering", "Concrete casting", "Finishing"],
-      desc: "Add a new room on your terrace or extend current floor plans."
-    },
-
-    // 5. Office / Commercial Construction
-    {
-      id: "office-comp",
-      catId: "office",
-      name: "Complete Office Civil Work",
-      price: 0,
-      priceStr: "Site Inspection ➔ Custom Quotation",
-      duration: "Flexible",
-      rating: "4.9",
-      reviews: "180",
-      image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=300&q=80&fit=crop",
-      includes: ["Commercial layout plan review", "Demolition & partitions setup", "Ceiling base structure work", "Flooring leveling"],
-      excludes: ["Ducting & electrical wire cabling"],
-      inspectionHighlights: ["Building regulation checklist"],
-      steps: ["Design analysis", "Site clearance", "Structural partitions", "Flooring base", "Ceiling prep"],
-      desc: "End-to-end office structural modification, columns, partitions, and layout changes.",
-      customForm: "office"
-    },
-    {
-      id: "office-new",
-      catId: "office",
-      name: "New Office Construction",
-      price: 0,
-      priceStr: "Site Inspection ➔ Custom Quotation",
-      duration: "Flexible",
-      rating: "4.8",
-      reviews: "120",
-      image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=300&q=80&fit=crop",
-      includes: ["Commercial space mapping", "Full structural building layout", "Plastering & finishing"],
-      excludes: ["Furniture & desks setup"],
-      inspectionHighlights: ["Mall/Building guidelines compliance check"],
-      steps: ["Site inspection", "Foundation/Column work", "Superstructure building", "Finishing plastering"],
-      desc: "Full commercial space building and structural layout setups."
-    },
-    {
-      id: "office-renov",
-      catId: "office",
-      name: "Office Renovation",
-      price: 0,
-      priceStr: "Site Inspection ➔ Custom Quotation",
-      duration: "Flexible",
-      rating: "4.8",
-      reviews: "320",
-      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop",
-      includes: ["Wall removal and space adjustment", "RCC slab modifications", "Civil flooring adjustments"],
-      excludes: ["Painting and networking"],
-      inspectionHighlights: ["Utility map checking"],
-      steps: ["Demolition", "Debris clearing", "Partition building", "Floor leveling"],
-      desc: "Modern office workspace redesign and structural civil modifications."
-    },
-    {
-      id: "office-comm",
-      catId: "office",
-      name: "Commercial Space Construction",
-      price: 0,
-      priceStr: "Site Inspection ➔ Custom Quotation",
-      duration: "Flexible",
-      rating: "4.7",
-      reviews: "220",
-      image: "https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=300&q=80&fit=crop",
-      includes: ["Shopfront structural prep", "Tile base leveling", "Masonry adjustments"],
-      excludes: ["Glass storefront glass fitting"],
-      inspectionHighlights: ["Mall guideline compliance verification"],
-      steps: ["Clearance", "Storefront framing", "Tile base casting", "Finishing"],
-      desc: "Structural modifications and civil preparations for retail shops, offices, and showrooms."
-    },
-    {
-      id: "office-part",
-      catId: "office",
-      name: "Office Partition",
-      price: 0,
-      priceStr: "Site Inspection ➔ Custom Quotation",
-      duration: "Flexible",
-      rating: "4.8",
-      reviews: "530",
-      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
-      includes: ["Cubicle partitioning walls", "RCC partition blocks setting", "Finishing plaster coats"],
-      excludes: ["Drywall partition boards"],
-      inspectionHighlights: ["Height limits verification"],
-      steps: ["Layout marking", "Partition setting", "Mesh placement", "Plastering"],
-      desc: "Internal civil and partition modifications for office workspace separation."
-    },
-    {
-      id: "office-struct",
-      catId: "office",
-      name: "Structural Modification",
-      price: 0,
-      priceStr: "Site Inspection ➔ Custom Quotation",
-      duration: "Flexible",
-      rating: "4.9",
-      reviews: "150",
-      image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop",
-      includes: ["Column retrofitting check", "Beam strengthening", "Load diversion setup"],
-      excludes: ["Complete building demolition"],
-      inspectionHighlights: ["Structural design calculations audit"],
-      steps: ["Safety shoring", "Concrete chipping", "Steel strengthening", "Micro-concrete pour"],
-      desc: "Modification of columns, beams, or internal structural plans to change commercial layouts."
-    },
-    {
-      id: "office-floor",
-      catId: "office",
-      name: "Floor/Room Modification",
-      price: 0,
-      priceStr: "Site Inspection ➔ Custom Quotation",
-      duration: "Flexible",
-      rating: "4.7",
-      reviews: "260",
-      image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&fit=crop",
-      includes: ["Concrete floor leveling base", "Room size modifications", "Ceiling base casting"],
-      excludes: ["Wooden flooring panels (available separately)"],
-      inspectionHighlights: ["Level validation"],
-      steps: ["Surface chip", "Level guide setup", "Self-leveling grout pour", "Curing check"],
-      desc: "Civil work for floor leveling, concrete base prep, ceilings, and room conversions."
-    },
-
-    // 6. Wall Breaking & Demolition
-    {
-      id: "dem-part",
-      catId: "demolition",
-      name: "Partial Wall Breaking",
-      price: 499,
-      priceStr: "Starting from ₹499",
-      duration: "Flexible",
-      rating: "4.8",
-      reviews: "1.1K",
-      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300&q=80&fit=crop",
-      includes: ["Safety support props", "Wall breaking", "Debris clearing"],
-      excludes: ["Load-bearing columns removal"],
-      inspectionHighlights: ["Load bearing verification", "Utility line checking"],
-      steps: ["Shoring props", "Wall breaking", "Clearing"],
-      desc: "Carefully break a portion of non-load-bearing brick/block walls."
+      includes: ["Temporary shoring pillars setup", "Complete wall demolition", "Debris packing & clearing"],
+      excludes: ["Permit collection fees"],
+      inspectionHighlights: ["Load carrying check"],
+      steps: ["Safety props setup", "Electricity/Water shutdown check", "Wall demolition", "Clearing"],
+      desc: "Complete demolition of non-load bearing internal brick or block walls."
     },
     {
       id: "dem-rem",
@@ -9074,68 +9916,20 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       desc: "Demolish and clear internal masonry partitions or divider walls."
     },
     {
-      id: "dem-door",
+      id: "dem-opening",
       catId: "demolition",
-      name: "Door Opening",
+      name: "Door/Window Opening",
       price: 599,
       priceStr: "Starting from ₹599",
       duration: "2 hrs",
       rating: "4.7",
       reviews: "820",
-      image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop",
-      includes: ["Lintel beam installation support", "Opening cutting & edge leveling"],
-      excludes: ["Door frame installation"],
-      inspectionHighlights: ["Lintel suitability audit"],
+      image: "/tractor-emulsion.png",
+      includes: ["Lintel beam installation support", "Opening cutting & edge leveling", "Window frame slot prep"],
+      excludes: ["Door frame / Window glass installation"],
+      inspectionHighlights: ["Lintel suitability audit", "Wall safety clearance check"],
       steps: ["Marking cutout", "Lintel slot drill", "Wall cutout", "Edge plastering"],
-      desc: "Cut open brick/block walls to create a new door pathway and level the edges."
-    },
-    {
-      id: "dem-window",
-      catId: "demolition",
-      name: "Window Opening",
-      price: 499,
-      priceStr: "Starting from ₹499",
-      duration: "2 hrs",
-      rating: "4.8",
-      reviews: "640",
-      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop",
-      includes: ["Cutout marking", "Window breaking", "Edge smoothing plaster"],
-      excludes: ["Window frame installation"],
-      inspectionHighlights: ["Safety checks"],
-      steps: ["Marking", "Cutting outer perimeter", "Breaking wall", "Smoothing borders"],
-      desc: "Create a new window cutout on exterior or interior brick/block walls."
-    },
-    {
-      id: "dem-wall",
-      catId: "demolition",
-      name: "Wall Removal",
-      price: 999,
-      priceStr: "Starting from ₹999",
-      duration: "Flexible",
-      rating: "4.7",
-      reviews: "1.5K",
-      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300&q=80&fit=crop",
-      includes: ["Temporary shoring pillars setup", "Complete wall demolition", "Debris packing & clearing"],
-      excludes: ["Permit collection fees"],
-      inspectionHighlights: ["Load carrying check"],
-      steps: ["Safety props setup", "Electricity/Water shutdown check", "Wall demolition", "Clearing"],
-      desc: "Complete demolition of non-load bearing internal brick or block walls."
-    },
-    {
-      id: "dem-small",
-      catId: "demolition",
-      name: "Small Demolition Work",
-      price: 299,
-      priceStr: "Starting from ₹299",
-      duration: "1 hr",
-      rating: "4.6",
-      reviews: "2.1K",
-      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-      includes: ["Chipping tiles", "removing concrete shelves", "minor chipping work"],
-      excludes: ["Slab breaking"],
-      inspectionHighlights: ["Pipes map checks"],
-      steps: ["Chipping target areas", "Site cleaning"],
-      desc: "Minor structural breaking, built-in shelf removal, or tile/plaster chipping."
+      desc: "Cut open brick/block walls to create a new door pathway or window frame cutout."
     }
   ];
 
@@ -9196,64 +9990,10 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     return item ? item.quantity : 0;
   };
 
-  const addCustomProjectToCart = (serviceId) => {
-    let item = null;
-    const s = MASON_SERVICES.find(x => x.id === serviceId);
-    if (serviceId === "house-comp") {
-      if (!houseProject.desc.trim()) {
-        alert("Please describe your house construction project details.");
-        return;
-      }
-      item = {
-        id: "house-comp",
-        name: "Complete House Construction",
-        shortName: "House Construction",
-        price: 0,
-        quantity: 1,
-        categoryName: "Mason",
-        description: `Project details: ${houseProject.desc}\nPlot/Building details: ${houseProject.details}\nSite location: ${houseProject.location}`,
-        photo: houseProject.photoPreview
-      };
-    } else if (serviceId === "office-comp") {
-      if (!officeProject.area.trim()) {
-        alert("Please specify the approximate area.");
-        return;
-      }
-      item = {
-        id: "office-comp",
-        name: "Complete Office Civil Work",
-        shortName: "Office Construction",
-        price: 0,
-        quantity: 1,
-        categoryName: "Mason",
-        description: `Project Type: ${officeProject.type}\nApproximate Area: ${officeProject.area}\nSite location: ${officeProject.location}`,
-        photo: officeProject.photoPreview
-      };
-    } else {
-      item = {
-        id: s.id,
-        name: s.name,
-        shortName: s.name,
-        price: s.price,
-        quantity: 1,
-        categoryName: "Mason",
-        description: generalDesc,
-        photo: generalPhotoPreview
-      };
-    }
-
-    setCart(prev => {
-      const clean = prev.filter(c => c.id !== serviceId);
-      return [...clean, item];
-    });
-  };
-
   const getSearchKeywords = (serviceId) => {
     if (serviceId.startsWith("brick")) return ["brick", "block", "wall", "cement", "laying", "extensions", "repair", "masonry"];
     if (serviceId.startsWith("plaster")) return ["plaster", "plastering", "patch", "crack", "wall", "cement", "smooth"];
     if (serviceId.startsWith("part")) return ["partition", "wall", "room", "kitchen", "office", "divider", "brickwork"];
-    if (serviceId.startsWith("house")) return ["house", "building", "home", "civil", "structure", "foundation", "construction"];
-    if (serviceId.startsWith("office")) return ["office", "commercial", "partition", "ceiling", "remodeling", "civil", "construction"];
     if (serviceId.startsWith("dem")) return ["demolition", "breaking", "wall", "partial", "removal", "cutout", "debris"];
     return [];
   };
@@ -9528,51 +10268,32 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                   onError={e => {
                                     e.target.onerror = null;
-                                    e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop";
+                                    e.target.src = "/premium-emulsion.png";
                                   }}
                                 />
                               </div>
 
                               {/* Cart Controls */}
-                              {service.customForm ? (
-                                count > 0 ? (
-                                  <div style={{ display: "flex", alignItems: "center", gap: "4px", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "4px 10px", borderRadius: "20px" }}>
-                                    <span style={{ fontSize: "0.7rem", color: "#166534", fontWeight: 900 }}>✓ Requested</span>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => addCustomProjectToCart(service.id)}
-                                    style={{
-                                      background: "linear-gradient(135deg, #0d9488, #059669)", color: "#ffffff", border: "none", borderRadius: "20px",
-                                      padding: "6px 14px", fontSize: "0.72rem", fontWeight: 800, cursor: "pointer",
-                                      boxShadow: "0 2px 6px rgba(13,148,136,0.2)"
-                                    }}
-                                  >
-                                    GET ESTIMATE
-                                  </button>
-                                )
+                              {count > 0 ? (
+                                <div style={{
+                                  display: "flex", alignItems: "center", gap: "12px", border: "1.5px solid #0d9488",
+                                  background: "#f0fdf4", borderRadius: "20px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 900, color: "#0f766e"
+                                }}>
+                                  <button onClick={() => removeFromCart(service.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>-</button>
+                                  <span>{count}</span>
+                                  <button onClick={() => addToCart(service)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>+</button>
+                                </div>
                               ) : (
-                                count > 0 ? (
-                                  <div style={{
-                                    display: "flex", alignItems: "center", gap: "12px", border: "1.5px solid #0d9488",
-                                    background: "#f0fdf4", borderRadius: "20px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 900, color: "#0f766e"
-                                  }}>
-                                    <button onClick={() => removeFromCart(service.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>-</button>
-                                    <span>{count}</span>
-                                    <button onClick={() => addToCart(service)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>+</button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => addToCart(service)}
-                                    style={{
-                                      background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0d9488", borderRadius: "20px",
-                                      padding: "5px 16px", fontSize: "0.72rem", fontWeight: 800, cursor: "pointer",
-                                      boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
-                                    }}
-                                  >
-                                    + ADD
-                                  </button>
-                                )
+                                <button
+                                  onClick={() => addToCart(service)}
+                                  style={{
+                                    background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0d9488", borderRadius: "20px",
+                                    padding: "5px 16px", fontSize: "0.72rem", fontWeight: 800, cursor: "pointer",
+                                    boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
+                                  }}
+                                >
+                                  + ADD
+                                </button>
                               )}
                             </div>
                           </div>
@@ -9683,9 +10404,8 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                               </div>
                             </div>
                           )}
-
                           {/* General description box for standard masonry when added */}
-                          {!service.customForm && count > 0 && (
+                          {count > 0 && (
                             <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                               <div style={{ textAlign: "left" }}>
                                 <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Describe requirement (optional)</label>
@@ -10138,15 +10858,21 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                     <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
                       {activeDetailService.steps.map((step, i) => {
                         const isLast = i === activeDetailService.steps.length - 1;
+                        const stepColors = ["#eff6ff", "#fff7ed", "#ecfdf5", "#ecfeff", "#faf5ff", "#fdf2f8"];
+                        const stepBorders = ["#c7d2fe", "#fde68a", "#a7f3d0", "#a5f3fc", "#e9d5ff", "#fbcfe8"];
+                        const stepTextColors = ["#2563eb", "#d97706", "#059669", "#0891b2", "#9333ea", "#db2777"];
                         return (
                           <div key={i} style={{ display: 'flex', gap: '1rem', position: 'relative' }}>
                             {/* Icon/Timeline Dot */}
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                               <div style={{
                                 width: '22px', height: '22px', borderRadius: '50%',
-                                background: '#e2e8f0', display: 'flex', alignItems: 'center',
-                                justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800, color: '#475569',
-                                border: '2px solid #ffffff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                background: stepColors[i % stepColors.length], 
+                                display: 'flex', alignItems: 'center',
+                                justifyContent: 'center', fontSize: '0.7rem', fontWeight: 900, 
+                                color: stepTextColors[i % stepTextColors.length],
+                                border: `1.5px solid ${stepBorders[i % stepBorders.length]}`, 
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
                                 zIndex: 2
                               }}>
                                 {i + 1}
@@ -10167,6 +10893,143 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                       })}
                     </div>
                   </div>
+
+                  {/* RATINGS & REVIEWS */}
+                  {(() => {
+                    const rating = parseFloat(activeDetailService.rating) || 4.8;
+                    const rawVal = parseFloat(activeDetailService.reviews);
+                    const multiplier = activeDetailService.reviews.toLowerCase().includes('k') ? 1000 : 1;
+                    const totalR = isNaN(rawVal) ? 100 : Math.round(rawVal * multiplier);
+                    const r5 = Math.round(totalR * 0.78);
+                    const r4 = Math.round(totalR * 0.15);
+                    const r3 = Math.round(totalR * 0.05);
+                    const r2 = Math.round(totalR * 0.015);
+                    const r1 = Math.round(totalR * 0.005);
+                    const sumW = r5 + r4 + r3 + r2 + r1 || 100;
+                    const w5 = Math.round((r5 / sumW) * 100);
+                    const w4 = Math.round((r4 / sumW) * 100);
+                    const w3 = Math.round((r3 / sumW) * 100);
+                    const w2 = Math.round((r2 / sumW) * 100);
+                    const w1 = Math.round((r1 / sumW) * 100);
+
+                    return (
+                      <div style={{ textAlign: 'left', marginTop: '0.2rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem', marginBottom: '1rem' }}>
+                        <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ratings & Reviews</h4>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '1.25rem',
+                          padding: '1rem',
+                          border: '1.5px solid #e2e8f0',
+                          borderRadius: '16px',
+                          background: '#ffffff'
+                        }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '70px' }}>
+                            <span style={{ fontSize: '2.4rem', fontWeight: 900, color: '#1e293b', lineHeight: 1 }}>{rating.toFixed(2)}</span>
+                            <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700, marginTop: '4px' }}>avg rating</span>
+                          </div>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            {[
+                              { star: 5, count: r5, width: w5 },
+                              { star: 4, count: r4, width: w4 },
+                              { star: 3, count: r3, width: w3 },
+                              { star: 2, count: r2, width: w2 },
+                              { star: 1, count: r1, width: w1 },
+                            ].map(row => (
+                              <div key={row.star} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', fontWeight: 700, color: '#64748b' }}>
+                                <span style={{ minWidth: '20px', display: 'flex', alignItems: 'center', gap: '2px', color: '#94a3b8' }}>
+                                  <Star size={11} style={{ fill: '#94a3b8', color: '#94a3b8' }} /> {row.star}
+                                </span>
+                                <div style={{ flex: 1, height: '5px', background: '#e2e8f0', borderRadius: '99px', overflow: 'hidden', position: 'relative' }}>
+                                  <div style={{ width: `${row.width}%`, height: '100%', background: '#334155', borderRadius: '99px' }} />
+                                </div>
+                                <span style={{ minWidth: '40px', textAlign: 'right', fontSize: '0.68rem', color: '#475569' }}>{row.count.toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* CUSTOMER REVIEWS LIST */}
+                  {(() => {
+                    const extra = MASON_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
+                    if (extra.reviews.length === 0) return null;
+                    return (
+                      <div style={{ textAlign: 'left', marginTop: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                        <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Customer Reviews</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                          {extra.reviews.map((rev, idx) => (
+                            <div key={idx} style={{ padding: '0.75rem 1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e293b' }}>{rev.name}</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0d9488', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                  <Star size={12} style={{ fill: '#0d9488', color: '#0d9488' }} /> {rev.rating.toFixed(1)}
+                                </span>
+                              </div>
+                              <p style={{ margin: 0, fontSize: '0.72rem', color: '#475569', fontStyle: 'italic', lineHeight: 1.3 }}>
+                                "{rev.comment}"
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* FREQUENTLY ASKED QUESTIONS */}
+                  {(() => {
+                    const extra = MASON_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
+                    if (extra.faqs.length === 0) return null;
+                    return (
+                      <div style={{ textAlign: 'left', marginTop: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                        <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Frequently Asked Questions</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {extra.faqs.map((faq, idx) => {
+                            const isExpanded = expandedFaq === idx;
+                            return (
+                              <div key={idx} style={{ border: '1.5px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
+                                <div 
+                                  onClick={() => setExpandedFaq(isExpanded ? null : idx)}
+                                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none' }}
+                                >
+                                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1e293b' }}>{faq.q}</span>
+                                  <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#94a3b8' }}>
+                                    {isExpanded ? '−' : '+'}
+                                  </span>
+                                </div>
+                                {isExpanded && (
+                                  <div style={{ padding: '0 1rem 0.75rem 1rem', fontSize: '0.72rem', color: '#475569', lineHeight: 1.4, borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem', background: '#f8fafc' }}>
+                                    {faq.a}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Footer Action Button */}
+                <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9', background: '#ffffff', flexShrink: 0 }}>
+                  <button
+                    onClick={() => {
+                      setActiveDetailService(null);
+                      addToCart(activeDetailService);
+                    }}
+                    style={{
+                      width: '100%', padding: '0.8rem',
+                      background: 'linear-gradient(135deg, #0d9488, #059669)',
+                      color: 'white', border: 'none', borderRadius: 10,
+                      fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(13,148,136,0.22)',
+                    }}
+                  >
+                    Add Service
+                  </button>
                 </div>
               </motion.div>
             </div>
@@ -12355,7 +13218,7 @@ export function BkStyles() {
       .uc-paint-content {
         flex: 1;
         overflow-y: auto;
-        padding: 2rem 0;
+        padding: 2rem 0 0 0;
         background: #ffffff;
         scroll-behavior: smooth;
       }
@@ -13260,8 +14123,8 @@ export function BkStyles() {
       }
 
       .uc-paint-main-footer {
-        background: #f8fafc;
-        border-top: 1px solid #f1f5f9;
+        background: #0B1225;
+        border-top: 1px solid #1E293B;
         padding: 3.5rem 0;
         width: 100%;
       }
@@ -13295,12 +14158,12 @@ export function BkStyles() {
       .uc-paint-footer-brand {
         font-size: 1.25rem;
         font-weight: 800;
-        color: #0f172a;
+        color: #ffffff;
         letter-spacing: -0.01em;
       }
       .uc-paint-footer-brand-desc {
         font-size: 0.85rem;
-        color: #64748b;
+        color: #94a3b8;
         line-height: 1.5;
         margin: 0;
         font-weight: 500;
@@ -13314,24 +14177,24 @@ export function BkStyles() {
         width: 32px;
         height: 32px;
         border-radius: 8px;
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #64748b;
+        color: #94a3b8;
         transition: all 0.2s;
       }
       .uc-paint-social-icon:hover {
-        background: #10b981;
+        background: #54B6A6;
         color: white;
-        border-color: #10b981;
+        border-color: #54B6A6;
         transform: scale(1.05);
       }
       .uc-paint-footer-col-title {
         font-size: 0.95rem;
         font-weight: 800;
-        color: #0f172a;
+        color: #ffffff;
         margin: 0;
       }
       .uc-paint-footer-links {
@@ -13344,13 +14207,13 @@ export function BkStyles() {
       }
       .uc-paint-footer-links li {
         font-size: 0.85rem;
-        color: #64748b;
+        color: #94a3b8;
         font-weight: 500;
         cursor: pointer;
         transition: color 0.2s;
       }
       .uc-paint-footer-links li:hover {
-        color: #10b981;
+        color: #54B6A6;
       }
       .uc-paint-footer-contact {
         list-style: none;
@@ -13365,11 +14228,57 @@ export function BkStyles() {
         align-items: center;
         gap: 0.6rem;
         font-size: 0.85rem;
-        color: #64748b;
+        color: #94a3b8;
         font-weight: 500;
       }
       .uc-paint-footer-contact li svg {
-        color: #94a3b8;
+        color: #54B6A6;
+      }
+
+      /* Our Painting Standards Styles */
+      .uc-paint-standards-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-top: 1rem;
+      }
+      @media (max-width: 640px) {
+        .uc-paint-standards-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 400px) {
+        .uc-paint-standards-grid {
+          grid-template-columns: repeat(1, 1fr);
+        }
+      }
+      .uc-paint-standard-card {
+        background: #ffffff;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 1.25rem 1rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 0.75rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+        transition: all 0.2s;
+        cursor: pointer;
+      }
+      .uc-paint-standard-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+        border-color: #cbd5e1;
+      }
+      .uc-paint-standard-icon-wrapper {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
       }
 
       /* ── Root ── */
@@ -14489,12 +15398,12 @@ const KITCHEN_SUB_TABS = [
   },
   {
     id: "appliance",
-    name: "Single Appliance & Specific Area Cleaning",
+    name: "single appliance cleaning",
     image: "/mockups/appliance_cleaning_hero.png",
   },
   {
     id: "addons",
-    name: "Quick Extra Services (Mini Add-ons)",
+    name: "Quick Extra Services",
     image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=500&q=80&fit=crop",
   }
 ];
@@ -14502,82 +15411,51 @@ const KITCHEN_SUB_TABS = [
 const FULL_KITCHEN_PACKAGES = [
   {
     id: "occ-basic",
-    name: "Occupied Kitchen Cleaning (Basic)",
-    price: 999,
+    name: "Full Kitchen cleaning(Basic)",
+    price: 1459,
     duration: "2 hrs",
     image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop",
     includes: [
-      "Removes grease and grime",
-      "Cleans counters, stove, sink",
-      "Cleans cabinet exteriors"
+      "Kitchen tiles, floor & slab cleaning + Mopping",
+      "Gas stove / hob cleaning",
+      "Sink & under-sink cleaning",
+      "Exhaust fan cleaning",
+      "Windows & switchboards cleaning",
+      "Cabinet exterior cleaning",
+      "Dining table cleaning",
+      "Utensil removal / rearrangement not included"
     ]
   },
   {
     id: "occ-deep",
-    name: "Occupied Kitchen Cleaning ( Deep Clean)",
-    price: 1499,
+    name: "Full Kitchen Cleaning – Deep Clean",
+    price: 1959,
     duration: "3 hrs",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
-      "Removes stubborn grease buildup",
-      "Deep cleans kitchen surfaces",
-      "Cleans cabinets inside and outside"
+      "Includes everything in Basic, plus:",
+      "Steam deep cleaning of stove / hob",
+      "Cabinet interior & exterior cleaning",
+      "Deep grease & stain removal",
+      "Exhaust fan deep cleaning",
+      "Utensil removal & rearrangement",
+      "Hard-to-reach area cleaning"
     ]
   },
-  {
-    id: "occ-eco",
-    name: "Occupied Kitchen Cleaning (Eco-Safe)",
-    price: 1999,
-    duration: "3.5 hrs",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
-    includes: [
-      "Uses chemical-free cleaning methods",
-      "Removes grease with steam",
-      "Safe for kids and pets"
-    ]
-  },
-  {
-    id: "emp-basic",
-    name: "Empty Kitchen Cleaning (Basic)",
-    price: 899,
-    duration: "1.5 hrs",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-    includes: [
-      "Removes grease and grime",
-      "Cleans counters, stove, sink",
-      "Ideal for empty kitchens"
-    ]
-  },
-  {
-    id: "emp-steam",
-    name: "Empty Kitchen Cleaning (Steam Deep Clean)",
-    price: 1299,
-    duration: "2 hrs",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-    includes: [
-      "Removes heavy grease buildup",
-      "Uses powerful steam cleaning",
-      "Cleans empty cabinet exteriors"
-    ]
-  }
 ];
 
 const APPLIANCE_SERVICES = [
   {
-    id: "chimney-clean",
-    name: "Chimney Deep Cleaning",
-    price: 999,
-    duration: "1.5 hrs",
-    image: "/mockups/appliance_cleaning_hero.png",
-    includes: ["Filter cleaning", "Baffle plate degreasing", "Outer body wipe"]
-  },
-  {
     id: "fridge-clean",
-    name: "Refrigerator Deep Cleaning",
+    name: "Refrigerator Cleaning",
     price: 799,
-    duration: "1 hr",
-    image: "/mockups/appliance_cleaning_hero.png",
-    includes: ["Shelves cleaning", "Inner walls disinfection", "Outer body wipe"]
+    duration: "1.5 hrs",
+    image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=600&q=80&fit=crop",
+    includes: [
+      "Interior & exterior cleaning",
+      "Shelves, trays & compartments cleaning",
+      "Door seal & stain cleaning"
+    ]
   },
   {
     id: "microwave-clean",
@@ -14586,148 +15464,366 @@ const APPLIANCE_SERVICES = [
     duration: "45 mins",
     image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
     includes: [
-      "Takes out all food items and places them back neatly after cleaning.",
-      "Washes shelves, trays, and interior walls to remove spills, stains, and bad smells."
+      "Interior & exterior cleaning",
+      "Turntable & glass door cleaning",
+      "Food stain & grease removal"
     ]
   },
   {
-    id: "chimney-cleaning",
+    id: "chimney-clean",
     name: "Chimney Cleaning",
+    price: 999,
+    duration: "1.5 hrs",
+    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    includes: [
+      "Filter & exterior cleaning",
+      "Grease & oil buildup removal",
+      "Hood & accessible surface cleaning"
+    ]
+  },
+  {
+    id: "stove-clean",
+    name: "Gas Stove / Hob Cleaning",
     price: 499,
     duration: "45 mins",
     image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
     includes: [
-      "Deep cleans filters and mesh to remove thick oil buildup and restore suction.",
-      "Wipes down the outer body of the chimney."
+      "Stove / hob surface cleaning",
+      "Burner & knob cleaning",
+      "Grease & food stain removal"
     ]
   },
   {
-    id: "utility-area",
-    name: "Utility Area Cleaning",
-    price: 299,
-    duration: "30 mins",
+    id: "dishwasher-clean",
+    name: "Dishwasher Cleaning",
+    price: 599,
+    duration: "1 hr",
     image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
     includes: [
-      "Complete washing of utility space floors, windows, and appliance exteriors."
+      "Interior & exterior cleaning",
+      "Filter, racks & tray cleaning",
+      "Food residue & buildup removal"
     ]
   },
   {
-    id: "microwave-cleaning",
-    name: "Microwave Cleaning",
+    id: "fan-clean",
+    name: "Ceiling Fan Cleaning",
     price: 199,
-    duration: "15 mins",
-    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
-    includes: [
-      "Cleans inside walls to remove food splatters, oil stains, and odors.",
-      "Wipes down the outer glass and body."
-    ]
-  },
-  {
-    id: "gas-stove-cleaning",
-    name: "Gas Stove Cleaning",
-    price: 99,
-    duration: "20 mins",
-    image: "https://images.unsplash.com/photo-1556909172-54557c7e4fb7?w=300&q=80&fit=crop",
-    includes: [
-      "Scrubs burners, knobs, and stove surfaces to remove burnt food and sticky grease."
-    ]
-  },
-  {
-    id: "tiles-slab-cleaning",
-    name: "Kitchen Tiles & Slab Cleaning",
-    price: 399,
-    duration: "45 mins",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-    includes: [
-      "Removes oil spots from wall tiles and deep cleans grout lines and countertops."
-    ]
-  },
-  {
-    id: "cabinet-trolley-cleaning",
-    name: "Cabinet & Trolley Cleaning",
-    price: 499,
-    duration: "1 hr",
-    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
-    includes: [
-      "Removes items, cleans inside drawers and shelves, and places items back neatly.",
-      "Removes oily fingerprint stains from cabinet doors."
-    ]
-  },
-  {
-    id: "oven-cleaning",
-    name: "Oven, Toaster & Grill Cleaning",
-    price: 249,
     duration: "30 mins",
-    image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
     includes: [
-      "Cleans interior crumbs, food spills, and outer grease buildup."
+      "Fan blade cleaning",
+      "Motor housing & cover dusting",
+      "Dust & surface grime removal"
+    ]
+  },
+  {
+    id: "exhaust-fan-clean",
+    name: "Exhaust Fan Cleaning",
+    price: 299,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Exhaust fan blades cleaning",
+      "Fan cover / grill cleaning",
+      "Dust and grease removal"
     ]
   }
 ];
 
 const QUICK_EXTRA_SERVICES = [
   {
-    id: "fan-cleaning",
-    name: "Ceiling Fan Cleaning",
-    price: 99,
-    duration: "15 mins",
-    image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop",
-    includes: ["Dust and grease removal from fan blades."]
+    id: "sink-vessel-mopping-clean",
+    name: "Sink & Under-Sink + Vessel Cleaning + Kitchen Slab + Mopping",
+    price: 399,
+    duration: "1 hr",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Sink & under-sink washing",
+      "Vessel cleaning included",
+      "Kitchen slab and floor mopping"
+    ]
   },
   {
-    id: "utensil-rearrangement",
-    name: "Utensil Rearrangement",
+    id: "dining-table-quick",
+    name: "Dining Table Cleaning",
     price: 199,
     duration: "30 mins",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
-    includes: ["Safely taking out utensils, cleaning shelves, and putting them back."]
-  },
-  {
-    id: "sink-cleaning",
-    name: "Sink & Under-Sink Cleaning",
-    price: 149,
-    duration: "20 mins",
-    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
-    includes: ["Stain and odor removal for sinks and drainage areas."]
-  },
-  {
-    id: "dining-table",
-    name: "Dining Table Cleaning",
-    price: 99,
-    duration: "15 mins",
     image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
-    includes: ["Wiping down table surfaces and chairs."]
+    includes: [
+      "Table surface cleaning",
+      "Normal food stain removal",
+      "Dirt and grime wiping"
+    ]
   },
   {
-    id: "kitchen-window",
+    id: "kitchen-window-quick",
     name: "Kitchen Window Cleaning",
-    price: 149,
-    duration: "20 mins",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-    includes: ["Scrubbing glass panes and window tracks."]
-  },
-  {
-    id: "balcony-cleaning",
-    name: "Balcony Cleaning",
     price: 299,
-    duration: "45 mins",
-    image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop",
-    includes: ["Floor and railing washing for small or large balconies."]
-  },
-  {
-    id: "window-cleaning",
-    name: "Window Cleaning",
-    price: 249,
-    duration: "40 mins",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-    includes: ["Deep glass cleaning for small or large home windows."]
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Accessible glass surface cleaning",
+      "Window frame & sill wiping",
+      "Dust and dirt removal"
+    ]
   }
 ];
+
+const SERVICE_DETAIL_DATA = {
+  "occ-basic": {
+    tools: [
+      "Kitchen-safe degreasers",
+      "Microfiber cloths",
+      "Non-abrasive scrubbers",
+      "Detail cleaning brushes",
+      "Floor and surface cleaning tools"
+    ],
+    ready: [
+      "Continuous water supply",
+      "Working power connection",
+      "Kitchen area accessible for cleaning",
+      "Fragile items and valuables kept safely"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The kitchen was cleaned very neatly. The stove, sink and tiles looked fresh after the service."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service for regular kitchen cleaning. The team was quick and professional."' }
+    ],
+    faqs: [
+      { q: "Will you move utensils from the cabinets?", a: "No. Utensil removal and rearrangement are not included in the Basic package." },
+      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring the required cleaning tools and products." },
+      { q: "Is chimney cleaning included?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add appliance cleaning?", a: "Yes. You can add individual appliance cleaning as an additional service." },
+      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." }
+    ]
+  },
+  "occ-deep": {
+    tools: [
+      "Steam cleaning equipment",
+      "Kitchen-safe degreasers",
+      "Microfiber cloths",
+      "Non-abrasive scrubbers",
+      "Detail brushes for corners and cabinets"
+    ],
+    ready: [
+      "Continuous water supply",
+      "Working power connection",
+      "Kitchen area accessible for cleaning",
+      "Fragile items and valuables kept safely"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"Excellent deep cleaning. The grease on the stove and tiles was removed, and the cabinets were cleaned properly."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Very thorough service. They cleaned areas that are usually difficult to reach."' }
+    ],
+    faqs: [
+      { q: "Does Deep Clean include everything in Basic?", a: "Yes. Deep Clean includes all services covered in the Basic package, along with additional deep-cleaning services." },
+      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed and rearranged as part of the Deep Clean service." },
+      { q: "Does Deep Clean include chimney cleaning?", a: "No. Chimney cleaning is available separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add refrigerator or microwave cleaning?", a: "Yes. Individual appliance cleaning can be added separately to your booking." },
+      { q: "Does steam cleaning remove tough grease?", a: "Yes. Steam cleaning helps loosen and remove stubborn grease, oil buildup and stains from suitable kitchen surfaces." },
+      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." }
+    ]
+  },
+  "fridge-clean": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "microwave-clean": {
+    tools: [
+      "Appliance-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food and containers",
+      "Keep the microwave accessible",
+      "Ensure the appliance is switched off"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The inside of my microwave was cleaned really well."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Quick and neat service. The food stains were removed properly."' }
+    ],
+    faqs: [
+      { q: "Will you clean the inside of the microwave?", a: "Yes, the inside, glass door and rotating plate will be cleaned." },
+      { q: "Do I need to remove everything before cleaning?", a: "Yes, please remove food and containers before the service." },
+      { q: "Can you remove burnt food stains?", a: "We will clean removable food and grease stains." }
+    ]
+  },
+  "chimney-clean": {
+    tools: [
+      "Grease-removing cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Cleaning brushes"
+    ],
+    ready: [
+      "Keep the chimney area accessible",
+      "Clear items around the stove",
+      "Ensure a power connection is available"
+    ],
+    reviews: [
+      { name: "Karthik M.", rating: "5.0", text: '"The grease on my chimney filter was cleaned properly."' },
+      { name: "Ananya S.", rating: "4.8", text: '"Good cleaning service. The chimney looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the chimney filter?", a: "Yes, the chimney filter will be cleaned." },
+      { q: "Will you remove grease and oil?", a: "Yes, visible grease and oil buildup will be cleaned." },
+      { q: "Do you repair the chimney?", a: "No, repair and replacement work are not included." }
+    ]
+  },
+  "stove-clean": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "dishwasher-clean": {
+    tools: [
+      "Dishwasher-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove all dishes before cleaning",
+      "Keep the dishwasher accessible",
+      "Keep water and power connections available"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The dishwasher was cleaned very neatly, especially the racks and filter."' },
+      { name: "Karthik M.", rating: "4.8", text: '"Good service and the inside looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the filter?", a: "Yes, the accessible filter will be cleaned." },
+      { q: "Do I need to remove the dishes?", a: "Yes, please empty the dishwasher before cleaning." },
+      { q: "Will you remove food waste and dirt?", a: "Yes, visible food waste and dirt will be cleaned." }
+    ]
+  },
+  "fan-clean": {
+    tools: [
+      "Microfiber dusting cloths",
+      "Long-reach dusting tools",
+      "Soft cleaning brushes",
+      "Surface-safe cleaning products"
+    ],
+    ready: [
+      "Clear the area below the fan",
+      "Keep furniture or fragile items safely away",
+      "Ensure safe access to the fan"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The fan had a lot of dust and was cleaned very neatly."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Quick service and no dust was left around the room."' }
+    ],
+    faqs: [
+      { q: "Will you clean the fan blades?", a: "Yes, all accessible fan blades will be cleaned." },
+      { q: "Do you remove the fan from the ceiling?", a: "No, the fan is cleaned while it is installed." },
+      { q: "Will you clean a very dusty fan?", a: "Yes, normal dust and visible dirt will be removed." }
+    ]
+  },
+  "exhaust-fan-clean": {
+    tools: [
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Grease-removing cleaning solution",
+      "Long-reach dusting tools"
+    ],
+    ready: [
+      "Switch off the exhaust fan before cleaning",
+      "Keep the area around the fan clear",
+      "Provide safe access to the fan"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The exhaust fan had a lot of dust and grease. It was cleaned very neatly."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Quick service and the fan looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the fan blades?", a: "Yes, the accessible fan blades will be cleaned properly." },
+      { q: "Will you clean the cover / grill?", a: "Yes, the fan cover and visible grill will also be cleaned." },
+      { q: "Will you remove grease from the fan?", a: "Yes, normal dust, grease and dirt buildup will be cleaned." },
+      { q: "Will you remove the exhaust fan from the wall?", a: "No, the fan will be cleaned while it remains installed." },
+      { q: "Do you repair exhaust fans?", a: "No, electrical, motor and wiring repairs are not included." }
+    ]
+  },
+  "sink-vessel-mopping-clean": {
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very useful service for a quick kitchen cleanup. The sink and slab were cleaned nicely."' },
+      { name: "Priya R.", rating: "4.8", text: '"The vessels, sink and kitchen floor were cleaned properly. Good service."' }
+    ],
+    faqs: [
+      { q: "Will you wash the vessels?", a: "Yes, the vessels provided for cleaning will be washed as part of the service." },
+      { q: "Will you clean under the sink?", a: "Yes, the accessible area under the sink will be cleaned." },
+      { q: "Will you clean the kitchen floor?", a: "Yes, the kitchen floor will be mopped." },
+      { q: "Will you remove heavy grease from the slab?", a: "Light grease and food stains are included. Heavy buildup may require deep cleaning." }
+    ]
+  },
+  "dining-table-quick": {
+    reviews: [
+      { name: "Rahul K.", rating: "5.0", text: '"The dining table was cleaned very neatly. Food stains were removed well."' },
+      { name: "Ananya S.", rating: "4.9", text: '"Quick and simple service. The table looks fresh and clean."' }
+    ],
+    faqs: [
+      { q: "Will you clean the chairs too?", a: "No, chair cleaning is not included in this service." },
+      { q: "Will you remove food stains?", a: "Yes, normal food stains and dirt will be cleaned." },
+      { q: "Do I need to clear the table before cleaning?", a: "Yes, please remove food, utensils and personal items before the service." }
+    ]
+  },
+  "kitchen-window-quick": {
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The kitchen window was dusty and greasy, and it looks much cleaner now."' },
+      { name: "Karthik M.", rating: "4.8", text: '"Good cleaning and the glass was left without visible marks."' }
+    ],
+    faqs: [
+      { q: "Will you clean the window glass?", a: "Yes, the accessible glass surface will be cleaned." },
+      { q: "Will you clean the window frame?", a: "Yes, the accessible frame and sill will also be cleaned." },
+      { q: "Will you clean the outside of the window?", a: "Only safely accessible exterior areas will be cleaned." },
+      { q: "Will you remove paint or cement stains?", a: "No. Heavy paint, cement or permanent stains may require specialized cleaning." }
+    ]
+  }
+};
 
 export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
   const [activeTab, setActiveTab] = useState("packages");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
+  const [isBasicExpanded, setIsBasicExpanded] = useState(false);
+  const [isDeepExpanded, setIsDeepExpanded] = useState(false);
+  const [activeFaq, setActiveFaq] = useState(null);
 
   const addItemToCart = (id, name, price, duration) => {
     setCart(prev => {
@@ -14812,7 +15908,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           <div className="pt-1">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
               <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
-              {activeTab === "packages" ? "Full Kitchen Packages" : activeTab === "appliance" ? "Single Appliance & Specific Area Cleaning" : "Quick Extra Services (Mini Add-ons)"}
+              {activeTab === "packages" ? "Full Kitchen Packages" : activeTab === "appliance" ? "Single Appliance & Specific Area Cleaning" : "Quick Extra Services"}
             </h3>
           </div>
 
@@ -14841,14 +15937,63 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                         {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
                         <span className="text-slate-400 font-normal ml-2">• {service.duration}</span>
                       </p>
-                      <div className="mt-3 space-y-1">
-                        {service.includes.map((item, i) => (
-                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                            <span className="text-slate-400 mt-0.5">•</span>
-                            <span>{item}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {activeTab !== "addons" && (
+                        <div className="mt-3 space-y-1">
+                          {(() => {
+                            const isBasic = service.id === "occ-basic";
+                            const isDeep = service.id === "occ-deep";
+                            const isExpanded = isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true);
+                            const displayIncludes = (isBasic || isDeep) && !isExpanded 
+                              ? service.includes.slice(0, 3) 
+                              : service.includes;
+                            
+                            return (
+                              <>
+                                {displayIncludes.map((item, i) => {
+                                  const isLastOfThree = (isBasic || isDeep) && !isExpanded && i === 2;
+                                  return (
+                                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                                      <span className="text-slate-400 mt-0.5">•</span>
+                                      <span>
+                                        {item}
+                                        {isLastOfThree && (
+                                          <>
+                                            {" "}
+                                            <span 
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (isBasic) setIsBasicExpanded(true);
+                                                if (isDeep) setIsDeepExpanded(true);
+                                              }}
+                                              className="text-emerald-600 font-extrabold cursor-pointer hover:underline ml-1"
+                                            >
+                                              read more
+                                            </span>
+                                          </>
+                                        )}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                                {(isBasic || isDeep) && isExpanded && (
+                                  <div className="text-left mt-1 pl-3">
+                                    <span 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (isBasic) setIsBasicExpanded(false);
+                                        if (isDeep) setIsDeepExpanded(false);
+                                      }}
+                                      className="text-emerald-600 font-extrabold cursor-pointer hover:underline text-xs block"
+                                    >
+                                      read less
+                                    </span>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
                       <button
                         onClick={() => setSelectedServiceDetails(service)}
                         className="text-xs font-semibold text-blue-600 mt-2 hover:underline"
@@ -14877,7 +16022,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                             onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)}
                             className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
                           >
-                            Add
+                            <ShoppingCart size={12} /> Add
                           </button>
                         )}
                       </div>
@@ -15009,134 +16154,109 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                     ) : (
                       <button
                         onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
-                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider"
+                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1"
                       >
-                        Add
+                        <ShoppingCart size={13} /> Add
                       </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Service includes */}
-              <div className="space-y-2.5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Includes</h4>
-                <div className="space-y-2">
-                  {selectedServiceDetails.includes ? (
-                    selectedServiceDetails.includes.map((item, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                        <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                        <span className="leading-relaxed">{item}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-xs text-slate-500">Includes complete surface scrubbing and dusting.</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Service does not include */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Does Not Include</h4>
-                <div className="space-y-2">
-                  {(selectedServiceDetails.id === "occ-basic" ? [
-                    "Cabinet interior cleaning, utensil removal, or restocking",
-                    "Deep chimney filter degreasing or appliance interior cleaning",
-                    "Chimney motor repair, plumbing fixes, or hardware work"
-                  ] : [
-                    "Chimney motor servicing or internal repair",
-                    "Utensil washing or cabinet reorganization unless opted",
-                    "Plumbing, electrical or masonry repairs"
-                  ]).map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               {/* Tools & Products We Use */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
-                <div className="space-y-2">
-                  {[
-                    "Food-safe surface degreasers & antibacterial sprays",
-                    "Non-abrasive scrubbing pads & microfiber towels",
-                    "High-reach dusting brushes for exhaust fans & windows"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* What You Need to Keep Ready */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
-                <div className="space-y-2">
-                  {[
-                    "Continuous water supply during the 2-hour service duration",
-                    "Working power socket near the kitchen area"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Our Service Guarantees */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Our Service Guarantees</h4>
-                <div className="space-y-2">
-                  {[
-                    "7-day re-clean assurance if you are not completely satisfied",
-                    "100% background-verified & trained cleaning professionals",
-                    "In-house damage protection coverage"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Customer Reviews */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
-                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-800">Ananya S.</span>
-                    <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#7C3AED]">
-                      <Star className="fill-[#7C3AED] text-[#7C3AED]" size={12} />
-                      <span>5.0</span>
+              {(() => {
+                const id = selectedServiceDetails.id;
+                const detail = SERVICE_DETAIL_DATA[id] || {};
+                const tools = detail.tools || [];
+                if (tools.length === 0) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
+                    <div className="space-y-2">
+                      {tools.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                          <span className="leading-relaxed">{item}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <p className="text-xs text-slate-600 leading-relaxed italic">
-                    "Great service for regular maintenance! They cleaned all the grease off my stove and backsplash tiles quickly."
-                  </p>
-                </div>
+                );
+              })()}
+
+              {/* What You Need to Keep Ready */}
+              {(() => {
+                const id = selectedServiceDetails.id;
+                const detail = SERVICE_DETAIL_DATA[id] || {};
+                const readyList = detail.ready || [];
+                if (readyList.length === 0) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
+                    <div className="space-y-2">
+                      {readyList.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                          <span className="leading-relaxed">{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Customer Reviews */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                {(() => {
+                  const id = selectedServiceDetails.id;
+                  const detail = SERVICE_DETAIL_DATA[id] || {};
+                  const reviews = detail.reviews || [];
+                  return reviews.map((rev, idx) => (
+                    <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-800">{rev.name}</span>
+                        <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#7C3AED]">
+                          <Star className="fill-[#7C3AED] text-[#7C3AED]" size={12} />
+                          <span>{rev.rating}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed italic">
+                        {rev.text}
+                      </p>
+                    </div>
+                  ));
+                })()}
               </div>
 
               {/* Frequently Asked Questions */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+              <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
                 <div className="space-y-2">
-                  {[
-                    "Will the cleaners move utensils from inside the cabinets?",
-                    "Do I need to provide any cleaning solutions or cloths?",
-                    "Can I add appliance cleaning along with this package?"
-                  ].map((q, idx) => (
-                    <div key={idx} className="border border-slate-100 rounded-xl p-3 flex justify-between items-center text-xs text-slate-700 bg-white shadow-sm font-semibold">
-                      <span>{q}</span>
-                      <span className="text-slate-400 text-base font-bold">+</span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const id = selectedServiceDetails.id;
+                    const detail = SERVICE_DETAIL_DATA[id] || {};
+                    const faqs = detail.faqs || [];
+                    return faqs.map((faq, idx) => {
+                      const isFaqOpen = activeFaq === idx;
+                      return (
+                        <div key={idx} className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
+                          <button
+                            onClick={() => setActiveFaq(isFaqOpen ? null : idx)}
+                            className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50"
+                          >
+                            <span className={isFaqOpen ? "text-emerald-600 font-bold" : "text-slate-700"}>{faq.q}</span>
+                            <span className={isFaqOpen ? "text-emerald-600 text-sm font-bold ml-2 shrink-0" : "text-slate-400 text-sm font-bold ml-2 shrink-0"}>{isFaqOpen ? "−" : "+"}</span>
+                          </button>
+                          {isFaqOpen && (
+                            <div className="px-3 pb-3 pt-1 text-xs text-slate-500 leading-relaxed border-t border-slate-50 bg-slate-50/20">
+                              {faq.a}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             </div>

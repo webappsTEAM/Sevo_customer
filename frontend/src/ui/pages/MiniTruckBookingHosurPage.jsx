@@ -11,6 +11,10 @@ import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logi
 import { createBooking } from "../../api/bookingService.js"
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
+import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
+import { useAuth } from "../../state/auth/useAuth.js"
+import { CustomerAccountModal } from "./BookingPage.jsx"
+import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 
 const LOGISTICS_CITY = "hosur"
 
@@ -549,7 +553,7 @@ export function MiniTruckBookingHosurPage() {
   const [drop, setDrop] = useState("")
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
-  const [userType, setUserType] = useState("Personal Use / Shifting")
+  const [userType, setUserType] = useState("House Shifting & Personal Items")
   const [estimateModalOpen, setEstimateModalOpen] = useState(false)
   const [selectedRoute, setSelectedRoute] = useState(null)
 
@@ -558,14 +562,28 @@ export function MiniTruckBookingHosurPage() {
   const [selectedVehicle, setSelectedVehicle] = useState(null)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
+  const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
   const [otpStep, setOtpStep] = useState(false) // false = info form, true = OTP entry
   const [otpValue, setOtpValue] = useState("")
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
   const [loginEmail, setLoginEmail] = useState("")
   const [loginWhatsapp, setLoginWhatsapp] = useState(true)
-  const [isSignedIn, setIsSignedIn] = useState(false) // tracks if user has verified OTP
-  const [otpSent, setOtpSent] = useState(false)
-  const [otpLoading, setOtpLoading] = useState(false)
+  const { user } = useAuth()
+  const [showAccountPortal, setShowAccountPortal] = useState(false)
+  const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
+  const [localIsSignedIn, setLocalIsSignedIn] = useState(false)
+  const isSignedIn = Boolean(user) || localIsSignedIn
+
+  // Prefill user details if signed in
+  useEffect(() => {
+    if (user) {
+      const fullName = user.full_name || user.fullName || user.first_name || user.firstName || user.username
+      if (fullName && !name) setName(fullName)
+      if (user.phone && !phone) setPhone(user.phone)
+    }
+  }, [user])
 
   // Suggestions Dropdown State
   const [showPickupSuggestions, setShowPickupSuggestions] = useState(false)
@@ -580,6 +598,12 @@ export function MiniTruckBookingHosurPage() {
   // Truck tab selection
   const [activeTab, setActiveTab] = useState("light") // 'light' | 'heavy'
   const [activeVehicleDetails, setActiveVehicleDetails] = useState(null)
+
+  // Lock body scroll when Know More modal is open
+  useEffect(() => {
+    document.body.style.overflow = activeVehicleDetails ? "hidden" : ""
+    return () => { document.body.style.overflow = "" }
+  }, [activeVehicleDetails])
 
   // FAQ open states
   const [openFaq, setOpenFaq] = useState(null)
@@ -1013,7 +1037,7 @@ export function MiniTruckBookingHosurPage() {
     setBookingError("")
     try {
       await apiVerifyCustomerPhoneOTP(phone, otpValue)
-      setIsSignedIn(true)
+      setLocalIsSignedIn(true)
       setLoginModalOpen(false)
       setOtpStep(false)
       setOtpValue("")
@@ -1054,13 +1078,29 @@ export function MiniTruckBookingHosurPage() {
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
             <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>Services</span>
             <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>For Enterprise</span>
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>Support</span>
-            <button
-              onClick={() => navigate(routes.login)}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
-            >
-              Sign In
-            </button>
+            <span className="hover:text-emerald-600 cursor-pointer" onClick={() => setSupportModalOpen(true)}>Support</span>
+            {user ? (
+              <button
+                type="button"
+                onClick={() => setShowAccountPortal(true)}
+                className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                  <User className="w-4 h-4 stroke-[1.75]" />
+                </div>
+                <span className="font-semibold text-slate-800">
+                  {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowCustomerEntryModal(true)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+              >
+                Sign In
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -1110,7 +1150,7 @@ export function MiniTruckBookingHosurPage() {
             <div ref={pickupWrapperRef} className="flex flex-col text-left relative">
               <div className="h-5 mb-1.5 flex items-center justify-between">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 whitespace-nowrap">
-                  <span className="text-emerald-600">●</span> Pickup Address *
+                  <span className="text-emerald-600">●</span> Pickup Location *
                 </label>
                 <button
                   type="button"
@@ -1140,7 +1180,7 @@ export function MiniTruckBookingHosurPage() {
               <div className="relative flex items-center">
                 <input
                   type="text"
-                  placeholder="Enter pickup location"
+                  placeholder="Enter pickup location in Hosur"
                   value={pickup}
                   onFocus={() => {
                     setShowPickupSuggestions(true)
@@ -1236,12 +1276,12 @@ export function MiniTruckBookingHosurPage() {
             <div ref={dropWrapperRef} className="flex flex-col text-left relative">
               <div className="h-5 mb-1.5 flex items-center">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 whitespace-nowrap">
-                  <span className="text-rose-500">●</span> Drop Address *
+                  <span className="text-rose-500">●</span> Delivery Destination *
                 </label>
               </div>
               <input
                 type="text"
-                placeholder="Sending to (e.g. Bengaluru)"
+                placeholder="Enter destination (e.g. Bengaluru)"
                 value={drop}
                 onFocus={() => {
                   setShowDropSuggestions(true)
@@ -1323,12 +1363,12 @@ export function MiniTruckBookingHosurPage() {
             <div className="flex flex-col text-left">
               <div className="h-5 mb-1.5 flex items-center">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                  Name *
+                  Customer Name *
                 </label>
               </div>
               <input
                 type="text"
-                placeholder="Enter your Name"
+                placeholder="Your Full Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
@@ -1340,12 +1380,12 @@ export function MiniTruckBookingHosurPage() {
             <div className="flex flex-col text-left">
               <div className="h-5 mb-1.5 flex items-center">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                  Phone Number *
+                  Mobile Number *
                 </label>
               </div>
               <input
                 type="tel"
-                placeholder="Enter Phone Number"
+                placeholder="10-digit mobile number"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
@@ -1357,7 +1397,7 @@ export function MiniTruckBookingHosurPage() {
             <div className="flex flex-col text-left">
               <div className="h-5 mb-1.5 flex items-center">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                  What describes you best *
+                  Booking Category *
                 </label>
               </div>
               <select
@@ -1365,10 +1405,10 @@ export function MiniTruckBookingHosurPage() {
                 onChange={(e) => setUserType(e.target.value)}
                 className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium cursor-pointer"
               >
-                <option>Personal Use / Shifting</option>
-                <option>Business / Enterprise</option>
-                <option>Trader / Shopkeeper</option>
-                <option>Manufacturer / Factory</option>
+                <option value="House Shifting & Personal Items">House Shifting & Personal Items</option>
+                <option value="Commercial & Business Cargo">Commercial & Business Cargo</option>
+                <option value="Retail & Wholesale Goods">Retail & Wholesale Goods</option>
+                <option value="Industrial & Factory Freight">Industrial & Factory Freight</option>
               </select>
             </div>
 
@@ -1379,7 +1419,7 @@ export function MiniTruckBookingHosurPage() {
                 type="submit"
                 className="w-full h-10 sm:h-11 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
               >
-                <span>Get Estimate</span>
+                <span>Calculate Fare</span>
                 <ArrowRight className="w-4 h-4 shrink-0" />
               </button>
             </div>
@@ -1459,7 +1499,7 @@ export function MiniTruckBookingHosurPage() {
               <button
                 type="button"
                 onClick={() => setActiveVehicleDetails(vehicle.details)}
-                className="text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 border-b border-dotted border-blue-600 hover:border-blue-700 mt-5 cursor-pointer pb-0.5 inline-block focus:outline-none"
+                className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 border-b border-dotted border-emerald-600 hover:border-emerald-700 mt-5 cursor-pointer pb-0.5 inline-block focus:outline-none"
               >
                 Know More
               </button>
@@ -2119,10 +2159,10 @@ export function MiniTruckBookingHosurPage() {
             <div>
               <h4 className="font-bold text-slate-900 mb-3 text-sm">Support</h4>
               <ul className="space-y-2">
-                <li><span className="hover:text-emerald-600 cursor-pointer">Contact Us</span></li>
+                <li><span onClick={() => setSupportModalOpen(true)} className="hover:text-emerald-600 cursor-pointer">Contact Us</span></li>
+                <li><span onClick={() => setSupportModalOpen(true)} className="hover:text-emerald-600 cursor-pointer">Help Center</span></li>
                 <li><span className="hover:text-emerald-600 cursor-pointer">Privacy Policy</span></li>
                 <li><span className="hover:text-emerald-600 cursor-pointer">Terms of Service</span></li>
-                <li><span className="hover:text-emerald-600 cursor-pointer">Transit Insurance FAQ</span></li>
               </ul>
             </div>
             <div>
@@ -2139,6 +2179,28 @@ export function MiniTruckBookingHosurPage() {
           </div>
         </div>
       </footer>
+
+      {/* Support & Help Center Modal */}
+      <SupportHelpCenterModal
+        isOpen={supportModalOpen}
+        onClose={() => setSupportModalOpen(false)}
+      />
+
+      {/* Customer Account & Entry Flow Modals */}
+      {showAccountPortal && (
+        <CustomerAccountModal
+          isOpen={showAccountPortal}
+          onClose={() => setShowAccountPortal(false)}
+          defaultTab="My Profile"
+        />
+      )}
+      {showCustomerEntryModal && (
+        <CustomerEntryFlowModal
+          isOpen={showCustomerEntryModal}
+          onClose={() => setShowCustomerEntryModal(false)}
+          onSuccess={() => setShowCustomerEntryModal(false)}
+        />
+      )}
     </div>
   )
 }
