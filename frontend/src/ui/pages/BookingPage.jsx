@@ -13762,12 +13762,12 @@ const KITCHEN_SUB_TABS = [
   },
   {
     id: "appliance",
-    name: "Single Appliance & Specific Area Cleaning",
+    name: "single appliance cleaning",
     image: "/mockups/appliance_cleaning_hero.png",
   },
   {
     id: "addons",
-    name: "Quick Extra Services (Mini Add-ons)",
+    name: "Quick Extra Services",
     image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=500&q=80&fit=crop",
   }
 ];
@@ -13775,82 +13775,51 @@ const KITCHEN_SUB_TABS = [
 const FULL_KITCHEN_PACKAGES = [
   {
     id: "occ-basic",
-    name: "Occupied Kitchen Cleaning (Basic)",
-    price: 999,
+    name: "Full Kitchen cleaning(Basic)",
+    price: 1459,
     duration: "2 hrs",
     image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop",
     includes: [
-      "Removes grease and grime",
-      "Cleans counters, stove, sink",
-      "Cleans cabinet exteriors"
+      "Kitchen tiles, floor & slab cleaning + Mopping",
+      "Gas stove / hob cleaning",
+      "Sink & under-sink cleaning",
+      "Exhaust fan cleaning",
+      "Windows & switchboards cleaning",
+      "Cabinet exterior cleaning",
+      "Dining table cleaning",
+      "Utensil removal / rearrangement not included"
     ]
   },
   {
     id: "occ-deep",
-    name: "Occupied Kitchen Cleaning ( Deep Clean)",
-    price: 1499,
+    name: "Full Kitchen Cleaning – Deep Clean",
+    price: 1959,
     duration: "3 hrs",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
-      "Removes stubborn grease buildup",
-      "Deep cleans kitchen surfaces",
-      "Cleans cabinets inside and outside"
+      "Includes everything in Basic, plus:",
+      "Steam deep cleaning of stove / hob",
+      "Cabinet interior & exterior cleaning",
+      "Deep grease & stain removal",
+      "Exhaust fan deep cleaning",
+      "Utensil removal & rearrangement",
+      "Hard-to-reach area cleaning"
     ]
   },
-  {
-    id: "occ-eco",
-    name: "Occupied Kitchen Cleaning (Eco-Safe)",
-    price: 1999,
-    duration: "3.5 hrs",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
-    includes: [
-      "Uses chemical-free cleaning methods",
-      "Removes grease with steam",
-      "Safe for kids and pets"
-    ]
-  },
-  {
-    id: "emp-basic",
-    name: "Empty Kitchen Cleaning (Basic)",
-    price: 899,
-    duration: "1.5 hrs",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-    includes: [
-      "Removes grease and grime",
-      "Cleans counters, stove, sink",
-      "Ideal for empty kitchens"
-    ]
-  },
-  {
-    id: "emp-steam",
-    name: "Empty Kitchen Cleaning (Steam Deep Clean)",
-    price: 1299,
-    duration: "2 hrs",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-    includes: [
-      "Removes heavy grease buildup",
-      "Uses powerful steam cleaning",
-      "Cleans empty cabinet exteriors"
-    ]
-  }
 ];
 
 const APPLIANCE_SERVICES = [
   {
-    id: "chimney-clean",
-    name: "Chimney Deep Cleaning",
-    price: 999,
-    duration: "1.5 hrs",
-    image: "/mockups/appliance_cleaning_hero.png",
-    includes: ["Filter cleaning", "Baffle plate degreasing", "Outer body wipe"]
-  },
-  {
     id: "fridge-clean",
-    name: "Refrigerator Deep Cleaning",
+    name: "Refrigerator Cleaning",
     price: 799,
-    duration: "1 hr",
-    image: "/mockups/appliance_cleaning_hero.png",
-    includes: ["Shelves cleaning", "Inner walls disinfection", "Outer body wipe"]
+    duration: "1.5 hrs",
+    image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=600&q=80&fit=crop",
+    includes: [
+      "Interior & exterior cleaning",
+      "Shelves, trays & compartments cleaning",
+      "Door seal & stain cleaning"
+    ]
   },
   {
     id: "microwave-clean",
@@ -13859,148 +13828,366 @@ const APPLIANCE_SERVICES = [
     duration: "45 mins",
     image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
     includes: [
-      "Takes out all food items and places them back neatly after cleaning.",
-      "Washes shelves, trays, and interior walls to remove spills, stains, and bad smells."
+      "Interior & exterior cleaning",
+      "Turntable & glass door cleaning",
+      "Food stain & grease removal"
     ]
   },
   {
-    id: "chimney-cleaning",
+    id: "chimney-clean",
     name: "Chimney Cleaning",
+    price: 999,
+    duration: "1.5 hrs",
+    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    includes: [
+      "Filter & exterior cleaning",
+      "Grease & oil buildup removal",
+      "Hood & accessible surface cleaning"
+    ]
+  },
+  {
+    id: "stove-clean",
+    name: "Gas Stove / Hob Cleaning",
     price: 499,
     duration: "45 mins",
     image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
     includes: [
-      "Deep cleans filters and mesh to remove thick oil buildup and restore suction.",
-      "Wipes down the outer body of the chimney."
+      "Stove / hob surface cleaning",
+      "Burner & knob cleaning",
+      "Grease & food stain removal"
     ]
   },
   {
-    id: "utility-area",
-    name: "Utility Area Cleaning",
-    price: 299,
-    duration: "30 mins",
+    id: "dishwasher-clean",
+    name: "Dishwasher Cleaning",
+    price: 599,
+    duration: "1 hr",
     image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
     includes: [
-      "Complete washing of utility space floors, windows, and appliance exteriors."
+      "Interior & exterior cleaning",
+      "Filter, racks & tray cleaning",
+      "Food residue & buildup removal"
     ]
   },
   {
-    id: "microwave-cleaning",
-    name: "Microwave Cleaning",
+    id: "fan-clean",
+    name: "Ceiling Fan Cleaning",
     price: 199,
-    duration: "15 mins",
-    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
-    includes: [
-      "Cleans inside walls to remove food splatters, oil stains, and odors.",
-      "Wipes down the outer glass and body."
-    ]
-  },
-  {
-    id: "gas-stove-cleaning",
-    name: "Gas Stove Cleaning",
-    price: 99,
-    duration: "20 mins",
-    image: "https://images.unsplash.com/photo-1556909172-54557c7e4fb7?w=300&q=80&fit=crop",
-    includes: [
-      "Scrubs burners, knobs, and stove surfaces to remove burnt food and sticky grease."
-    ]
-  },
-  {
-    id: "tiles-slab-cleaning",
-    name: "Kitchen Tiles & Slab Cleaning",
-    price: 399,
-    duration: "45 mins",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-    includes: [
-      "Removes oil spots from wall tiles and deep cleans grout lines and countertops."
-    ]
-  },
-  {
-    id: "cabinet-trolley-cleaning",
-    name: "Cabinet & Trolley Cleaning",
-    price: 499,
-    duration: "1 hr",
-    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
-    includes: [
-      "Removes items, cleans inside drawers and shelves, and places items back neatly.",
-      "Removes oily fingerprint stains from cabinet doors."
-    ]
-  },
-  {
-    id: "oven-cleaning",
-    name: "Oven, Toaster & Grill Cleaning",
-    price: 249,
     duration: "30 mins",
-    image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
     includes: [
-      "Cleans interior crumbs, food spills, and outer grease buildup."
+      "Fan blade cleaning",
+      "Motor housing & cover dusting",
+      "Dust & surface grime removal"
+    ]
+  },
+  {
+    id: "exhaust-fan-clean",
+    name: "Exhaust Fan Cleaning",
+    price: 299,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Exhaust fan blades cleaning",
+      "Fan cover / grill cleaning",
+      "Dust and grease removal"
     ]
   }
 ];
 
 const QUICK_EXTRA_SERVICES = [
   {
-    id: "fan-cleaning",
-    name: "Ceiling Fan Cleaning",
-    price: 99,
-    duration: "15 mins",
-    image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop",
-    includes: ["Dust and grease removal from fan blades."]
+    id: "sink-vessel-mopping-clean",
+    name: "Sink & Under-Sink + Vessel Cleaning + Kitchen Slab + Mopping",
+    price: 399,
+    duration: "1 hr",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Sink & under-sink washing",
+      "Vessel cleaning included",
+      "Kitchen slab and floor mopping"
+    ]
   },
   {
-    id: "utensil-rearrangement",
-    name: "Utensil Rearrangement",
+    id: "dining-table-quick",
+    name: "Dining Table Cleaning",
     price: 199,
     duration: "30 mins",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
-    includes: ["Safely taking out utensils, cleaning shelves, and putting them back."]
-  },
-  {
-    id: "sink-cleaning",
-    name: "Sink & Under-Sink Cleaning",
-    price: 149,
-    duration: "20 mins",
-    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
-    includes: ["Stain and odor removal for sinks and drainage areas."]
-  },
-  {
-    id: "dining-table",
-    name: "Dining Table Cleaning",
-    price: 99,
-    duration: "15 mins",
     image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
-    includes: ["Wiping down table surfaces and chairs."]
+    includes: [
+      "Table surface cleaning",
+      "Normal food stain removal",
+      "Dirt and grime wiping"
+    ]
   },
   {
-    id: "kitchen-window",
+    id: "kitchen-window-quick",
     name: "Kitchen Window Cleaning",
-    price: 149,
-    duration: "20 mins",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-    includes: ["Scrubbing glass panes and window tracks."]
-  },
-  {
-    id: "balcony-cleaning",
-    name: "Balcony Cleaning",
     price: 299,
-    duration: "45 mins",
-    image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop",
-    includes: ["Floor and railing washing for small or large balconies."]
-  },
-  {
-    id: "window-cleaning",
-    name: "Window Cleaning",
-    price: 249,
-    duration: "40 mins",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-    includes: ["Deep glass cleaning for small or large home windows."]
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Accessible glass surface cleaning",
+      "Window frame & sill wiping",
+      "Dust and dirt removal"
+    ]
   }
 ];
+
+const SERVICE_DETAIL_DATA = {
+  "occ-basic": {
+    tools: [
+      "Kitchen-safe degreasers",
+      "Microfiber cloths",
+      "Non-abrasive scrubbers",
+      "Detail cleaning brushes",
+      "Floor and surface cleaning tools"
+    ],
+    ready: [
+      "Continuous water supply",
+      "Working power connection",
+      "Kitchen area accessible for cleaning",
+      "Fragile items and valuables kept safely"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The kitchen was cleaned very neatly. The stove, sink and tiles looked fresh after the service."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service for regular kitchen cleaning. The team was quick and professional."' }
+    ],
+    faqs: [
+      { q: "Will you move utensils from the cabinets?", a: "No. Utensil removal and rearrangement are not included in the Basic package." },
+      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring the required cleaning tools and products." },
+      { q: "Is chimney cleaning included?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add appliance cleaning?", a: "Yes. You can add individual appliance cleaning as an additional service." },
+      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." }
+    ]
+  },
+  "occ-deep": {
+    tools: [
+      "Steam cleaning equipment",
+      "Kitchen-safe degreasers",
+      "Microfiber cloths",
+      "Non-abrasive scrubbers",
+      "Detail brushes for corners and cabinets"
+    ],
+    ready: [
+      "Continuous water supply",
+      "Working power connection",
+      "Kitchen area accessible for cleaning",
+      "Fragile items and valuables kept safely"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"Excellent deep cleaning. The grease on the stove and tiles was removed, and the cabinets were cleaned properly."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Very thorough service. They cleaned areas that are usually difficult to reach."' }
+    ],
+    faqs: [
+      { q: "Does Deep Clean include everything in Basic?", a: "Yes. Deep Clean includes all services covered in the Basic package, along with additional deep-cleaning services." },
+      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed and rearranged as part of the Deep Clean service." },
+      { q: "Does Deep Clean include chimney cleaning?", a: "No. Chimney cleaning is available separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add refrigerator or microwave cleaning?", a: "Yes. Individual appliance cleaning can be added separately to your booking." },
+      { q: "Does steam cleaning remove tough grease?", a: "Yes. Steam cleaning helps loosen and remove stubborn grease, oil buildup and stains from suitable kitchen surfaces." },
+      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." }
+    ]
+  },
+  "fridge-clean": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "microwave-clean": {
+    tools: [
+      "Appliance-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food and containers",
+      "Keep the microwave accessible",
+      "Ensure the appliance is switched off"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The inside of my microwave was cleaned really well."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Quick and neat service. The food stains were removed properly."' }
+    ],
+    faqs: [
+      { q: "Will you clean the inside of the microwave?", a: "Yes, the inside, glass door and rotating plate will be cleaned." },
+      { q: "Do I need to remove everything before cleaning?", a: "Yes, please remove food and containers before the service." },
+      { q: "Can you remove burnt food stains?", a: "We will clean removable food and grease stains." }
+    ]
+  },
+  "chimney-clean": {
+    tools: [
+      "Grease-removing cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Cleaning brushes"
+    ],
+    ready: [
+      "Keep the chimney area accessible",
+      "Clear items around the stove",
+      "Ensure a power connection is available"
+    ],
+    reviews: [
+      { name: "Karthik M.", rating: "5.0", text: '"The grease on my chimney filter was cleaned properly."' },
+      { name: "Ananya S.", rating: "4.8", text: '"Good cleaning service. The chimney looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the chimney filter?", a: "Yes, the chimney filter will be cleaned." },
+      { q: "Will you remove grease and oil?", a: "Yes, visible grease and oil buildup will be cleaned." },
+      { q: "Do you repair the chimney?", a: "No, repair and replacement work are not included." }
+    ]
+  },
+  "stove-clean": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "dishwasher-clean": {
+    tools: [
+      "Dishwasher-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove all dishes before cleaning",
+      "Keep the dishwasher accessible",
+      "Keep water and power connections available"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The dishwasher was cleaned very neatly, especially the racks and filter."' },
+      { name: "Karthik M.", rating: "4.8", text: '"Good service and the inside looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the filter?", a: "Yes, the accessible filter will be cleaned." },
+      { q: "Do I need to remove the dishes?", a: "Yes, please empty the dishwasher before cleaning." },
+      { q: "Will you remove food waste and dirt?", a: "Yes, visible food waste and dirt will be cleaned." }
+    ]
+  },
+  "fan-clean": {
+    tools: [
+      "Microfiber dusting cloths",
+      "Long-reach dusting tools",
+      "Soft cleaning brushes",
+      "Surface-safe cleaning products"
+    ],
+    ready: [
+      "Clear the area below the fan",
+      "Keep furniture or fragile items safely away",
+      "Ensure safe access to the fan"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The fan had a lot of dust and was cleaned very neatly."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Quick service and no dust was left around the room."' }
+    ],
+    faqs: [
+      { q: "Will you clean the fan blades?", a: "Yes, all accessible fan blades will be cleaned." },
+      { q: "Do you remove the fan from the ceiling?", a: "No, the fan is cleaned while it is installed." },
+      { q: "Will you clean a very dusty fan?", a: "Yes, normal dust and visible dirt will be removed." }
+    ]
+  },
+  "exhaust-fan-clean": {
+    tools: [
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Grease-removing cleaning solution",
+      "Long-reach dusting tools"
+    ],
+    ready: [
+      "Switch off the exhaust fan before cleaning",
+      "Keep the area around the fan clear",
+      "Provide safe access to the fan"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The exhaust fan had a lot of dust and grease. It was cleaned very neatly."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Quick service and the fan looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the fan blades?", a: "Yes, the accessible fan blades will be cleaned properly." },
+      { q: "Will you clean the cover / grill?", a: "Yes, the fan cover and visible grill will also be cleaned." },
+      { q: "Will you remove grease from the fan?", a: "Yes, normal dust, grease and dirt buildup will be cleaned." },
+      { q: "Will you remove the exhaust fan from the wall?", a: "No, the fan will be cleaned while it remains installed." },
+      { q: "Do you repair exhaust fans?", a: "No, electrical, motor and wiring repairs are not included." }
+    ]
+  },
+  "sink-vessel-mopping-clean": {
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very useful service for a quick kitchen cleanup. The sink and slab were cleaned nicely."' },
+      { name: "Priya R.", rating: "4.8", text: '"The vessels, sink and kitchen floor were cleaned properly. Good service."' }
+    ],
+    faqs: [
+      { q: "Will you wash the vessels?", a: "Yes, the vessels provided for cleaning will be washed as part of the service." },
+      { q: "Will you clean under the sink?", a: "Yes, the accessible area under the sink will be cleaned." },
+      { q: "Will you clean the kitchen floor?", a: "Yes, the kitchen floor will be mopped." },
+      { q: "Will you remove heavy grease from the slab?", a: "Light grease and food stains are included. Heavy buildup may require deep cleaning." }
+    ]
+  },
+  "dining-table-quick": {
+    reviews: [
+      { name: "Rahul K.", rating: "5.0", text: '"The dining table was cleaned very neatly. Food stains were removed well."' },
+      { name: "Ananya S.", rating: "4.9", text: '"Quick and simple service. The table looks fresh and clean."' }
+    ],
+    faqs: [
+      { q: "Will you clean the chairs too?", a: "No, chair cleaning is not included in this service." },
+      { q: "Will you remove food stains?", a: "Yes, normal food stains and dirt will be cleaned." },
+      { q: "Do I need to clear the table before cleaning?", a: "Yes, please remove food, utensils and personal items before the service." }
+    ]
+  },
+  "kitchen-window-quick": {
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The kitchen window was dusty and greasy, and it looks much cleaner now."' },
+      { name: "Karthik M.", rating: "4.8", text: '"Good cleaning and the glass was left without visible marks."' }
+    ],
+    faqs: [
+      { q: "Will you clean the window glass?", a: "Yes, the accessible glass surface will be cleaned." },
+      { q: "Will you clean the window frame?", a: "Yes, the accessible frame and sill will also be cleaned." },
+      { q: "Will you clean the outside of the window?", a: "Only safely accessible exterior areas will be cleaned." },
+      { q: "Will you remove paint or cement stains?", a: "No. Heavy paint, cement or permanent stains may require specialized cleaning." }
+    ]
+  }
+};
 
 export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
   const [activeTab, setActiveTab] = useState("packages");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
+  const [isBasicExpanded, setIsBasicExpanded] = useState(false);
+  const [isDeepExpanded, setIsDeepExpanded] = useState(false);
+  const [activeFaq, setActiveFaq] = useState(null);
 
   const addItemToCart = (id, name, price, duration) => {
     setCart(prev => {
@@ -14101,7 +14288,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           <div className="pt-1">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
               <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
-              {activeTab === "packages" ? "Full Kitchen Packages" : activeTab === "appliance" ? "Single Appliance & Specific Area Cleaning" : "Quick Extra Services (Mini Add-ons)"}
+              {activeTab === "packages" ? "Full Kitchen Packages" : activeTab === "appliance" ? "Single Appliance & Specific Area Cleaning" : "Quick Extra Services"}
             </h3>
           </div>
 
@@ -14130,14 +14317,63 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                         {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
                         <span className="text-slate-400 font-normal ml-2">• {service.duration}</span>
                       </p>
-                      <div className="mt-3 space-y-1">
-                        {service.includes.map((item, i) => (
-                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                            <span className="text-slate-400 mt-0.5">•</span>
-                            <span>{item}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {activeTab !== "addons" && (
+                        <div className="mt-3 space-y-1">
+                          {(() => {
+                            const isBasic = service.id === "occ-basic";
+                            const isDeep = service.id === "occ-deep";
+                            const isExpanded = isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true);
+                            const displayIncludes = (isBasic || isDeep) && !isExpanded 
+                              ? service.includes.slice(0, 3) 
+                              : service.includes;
+                            
+                            return (
+                              <>
+                                {displayIncludes.map((item, i) => {
+                                  const isLastOfThree = (isBasic || isDeep) && !isExpanded && i === 2;
+                                  return (
+                                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                                      <span className="text-slate-400 mt-0.5">•</span>
+                                      <span>
+                                        {item}
+                                        {isLastOfThree && (
+                                          <>
+                                            {" "}
+                                            <span 
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (isBasic) setIsBasicExpanded(true);
+                                                if (isDeep) setIsDeepExpanded(true);
+                                              }}
+                                              className="text-emerald-600 font-extrabold cursor-pointer hover:underline ml-1"
+                                            >
+                                              read more
+                                            </span>
+                                          </>
+                                        )}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                                {(isBasic || isDeep) && isExpanded && (
+                                  <div className="text-left mt-1 pl-3">
+                                    <span 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (isBasic) setIsBasicExpanded(false);
+                                        if (isDeep) setIsDeepExpanded(false);
+                                      }}
+                                      className="text-emerald-600 font-extrabold cursor-pointer hover:underline text-xs block"
+                                    >
+                                      read less
+                                    </span>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
                       <button 
                         onClick={() => setSelectedServiceDetails(service)}
                         className="text-xs font-semibold text-blue-600 mt-2 hover:underline"
@@ -14166,7 +14402,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                             onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)}
                             className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
                           >
-                            Add
+                            <ShoppingCart size={12} /> Add
                           </button>
                         )}
                       </div>
@@ -14250,20 +14486,13 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               <X size={16} />
             </button>
 
-            {/* Header: split hero image + promo card */}
-            <div className="flex h-36 border-b border-slate-100 shrink-0">
-              <div className="w-[60%] h-full bg-slate-100">
-                <img 
-                  src={selectedServiceDetails.image} 
-                  alt={selectedServiceDetails.name} 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-[40%] bg-amber-50/70 p-4 flex flex-col justify-center text-left border-l border-amber-100/50">
-                <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-0.5">FLAT 10% OFF</span>
-                <span className="text-[10px] text-slate-600 font-bold leading-tight mb-2">For New Users</span>
-                <span className="text-[9px] font-bold text-slate-500 bg-white border border-amber-200 rounded px-1.5 py-0.5 w-fit uppercase tracking-tight">CODE: NEWCLEAN10</span>
-              </div>
+            {/* Header: full width hero image */}
+            <div className="w-full h-36 border-b border-slate-100 shrink-0 bg-slate-100">
+              <img 
+                src={selectedServiceDetails.image} 
+                alt={selectedServiceDetails.name} 
+                className="w-full h-full object-cover"
+              />
             </div>
 
             {/* Scrollable Content */}
@@ -14298,134 +14527,109 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                     ) : (
                       <button
                         onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
-                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider"
+                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1"
                       >
-                        Add
+                        <ShoppingCart size={13} /> Add
                       </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Service includes */}
-              <div className="space-y-2.5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Includes</h4>
-                <div className="space-y-2">
-                  {selectedServiceDetails.includes ? (
-                    selectedServiceDetails.includes.map((item, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                        <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                        <span className="leading-relaxed">{item}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-xs text-slate-500">Includes complete surface scrubbing and dusting.</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Service does not include */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Service Does Not Include</h4>
-                <div className="space-y-2">
-                  {(selectedServiceDetails.id === "occ-basic" ? [
-                    "Cabinet interior cleaning, utensil removal, or restocking",
-                    "Deep chimney filter degreasing or appliance interior cleaning",
-                    "Chimney motor repair, plumbing fixes, or hardware work"
-                  ] : [
-                    "Chimney motor servicing or internal repair",
-                    "Utensil washing or cabinet reorganization unless opted",
-                    "Plumbing, electrical or masonry repairs"
-                  ]).map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               {/* Tools & Products We Use */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
-                <div className="space-y-2">
-                  {[
-                    "Food-safe surface degreasers & antibacterial sprays",
-                    "Non-abrasive scrubbing pads & microfiber towels",
-                    "High-reach dusting brushes for exhaust fans & windows"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* What You Need to Keep Ready */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
-                <div className="space-y-2">
-                  {[
-                    "Continuous water supply during the 2-hour service duration",
-                    "Working power socket near the kitchen area"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Our Service Guarantees */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Our Service Guarantees</h4>
-                <div className="space-y-2">
-                  {[
-                    "7-day re-clean assurance if you are not completely satisfied",
-                    "100% background-verified & trained cleaning professionals",
-                    "In-house damage protection coverage"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-1 h-1 rounded-full bg-slate-400 mt-2 shrink-0" />
-                      <span className="leading-relaxed">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Customer Reviews */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
-                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-800">Ananya S.</span>
-                    <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#7C3AED]">
-                      <Star className="fill-[#7C3AED] text-[#7C3AED]" size={12} />
-                      <span>5.0</span>
+              {(() => {
+                const id = selectedServiceDetails.id;
+                const detail = SERVICE_DETAIL_DATA[id] || {};
+                const tools = detail.tools || [];
+                if (tools.length === 0) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
+                    <div className="space-y-2">
+                      {tools.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                          <span className="leading-relaxed">{item}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <p className="text-xs text-slate-600 leading-relaxed italic">
-                    "Great service for regular maintenance! They cleaned all the grease off my stove and backsplash tiles quickly."
-                  </p>
-                </div>
+                );
+              })()}
+
+              {/* What You Need to Keep Ready */}
+              {(() => {
+                const id = selectedServiceDetails.id;
+                const detail = SERVICE_DETAIL_DATA[id] || {};
+                const readyList = detail.ready || [];
+                if (readyList.length === 0) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
+                    <div className="space-y-2">
+                      {readyList.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                          <span className="leading-relaxed">{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Customer Reviews */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                {(() => {
+                  const id = selectedServiceDetails.id;
+                  const detail = SERVICE_DETAIL_DATA[id] || {};
+                  const reviews = detail.reviews || [];
+                  return reviews.map((rev, idx) => (
+                    <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-800">{rev.name}</span>
+                        <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#7C3AED]">
+                          <Star className="fill-[#7C3AED] text-[#7C3AED]" size={12} />
+                          <span>{rev.rating}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed italic">
+                        {rev.text}
+                      </p>
+                    </div>
+                  ));
+                })()}
               </div>
 
               {/* Frequently Asked Questions */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-5">
+              <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
                 <div className="space-y-2">
-                  {[
-                    "Will the cleaners move utensils from inside the cabinets?",
-                    "Do I need to provide any cleaning solutions or cloths?",
-                    "Can I add appliance cleaning along with this package?"
-                  ].map((q, idx) => (
-                    <div key={idx} className="border border-slate-100 rounded-xl p-3 flex justify-between items-center text-xs text-slate-700 bg-white shadow-sm font-semibold">
-                      <span>{q}</span>
-                      <span className="text-slate-400 text-base font-bold">+</span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const id = selectedServiceDetails.id;
+                    const detail = SERVICE_DETAIL_DATA[id] || {};
+                    const faqs = detail.faqs || [];
+                    return faqs.map((faq, idx) => {
+                      const isFaqOpen = activeFaq === idx;
+                      return (
+                        <div key={idx} className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
+                          <button
+                            onClick={() => setActiveFaq(isFaqOpen ? null : idx)}
+                            className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50"
+                          >
+                            <span className={isFaqOpen ? "text-emerald-600 font-bold" : "text-slate-700"}>{faq.q}</span>
+                            <span className={isFaqOpen ? "text-emerald-600 text-sm font-bold ml-2 shrink-0" : "text-slate-400 text-sm font-bold ml-2 shrink-0"}>{isFaqOpen ? "−" : "+"}</span>
+                          </button>
+                          {isFaqOpen && (
+                            <div className="px-3 pb-3 pt-1 text-xs text-slate-500 leading-relaxed border-t border-slate-50 bg-slate-50/20">
+                              {faq.a}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             </div>
