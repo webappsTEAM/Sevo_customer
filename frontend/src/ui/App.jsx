@@ -171,13 +171,13 @@ const CustomerDecisionPage = lazy(() =>
   import("./pages/CustomerDecisionPage.jsx").then(m => ({ default: m.CustomerDecisionPage }))
 )
 const MiniTruckBookingHosurPage = lazy(() =>
-  import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage }))
+  import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.default || m.MiniTruckBookingHosurPage }))
 )
 const TwoWheelerBookingHosurPage = lazy(() =>
-  import("./pages/TwoWheelerBookingHosurPage.jsx").then(m => ({ default: m.TwoWheelerBookingHosurPage }))
+  import("./pages/TwoWheelerBookingHosurPage.jsx").then(m => ({ default: m.default || m.TwoWheelerBookingHosurPage }))
 )
 const PackersMoversBookingHosurPage = lazy(() =>
-  import("./pages/PackersMoversBookingHosurPage.jsx").then(m => ({ default: m.PackersMoversBookingHosurPage }))
+  import("./pages/PackersMoversBookingHosurPage.jsx").then(m => ({ default: m.default || m.PackersMoversBookingHosurPage }))
 )
 
 // ─── Route Guards ────────────────────────────────────────────
@@ -345,7 +345,9 @@ export function App() {
             }
           />
 
+          <Route path="/" element={user?.companyId ? <Navigate to={isAdmin ? adminDefaultRoute() : routes.dashboard} replace /> : <LandingPage />} />
           <Route path={routes.landing} element={<LandingPage />} />
+          <Route path="/home" element={<LandingPage />} />
           <Route path={routes.booking} element={<LandingPage />} />
           <Route path={routes.booking_services} element={<LandingPage />} />
           <Route path={routes.booking_checkout} element={<BookingPage />} />
@@ -375,7 +377,7 @@ export function App() {
                   <Navigate to={routes.onboarding} replace />
                 )
               ) : (
-                <Navigate to={routes.login} replace />
+                <Navigate to={routes.landing} replace />
               )
             }
           >
