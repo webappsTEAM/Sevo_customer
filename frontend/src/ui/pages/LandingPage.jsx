@@ -8,6 +8,7 @@ import {
   Star, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight,
   Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User,
+  Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check,
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -545,6 +546,372 @@ function AntBedBugControlGraphic({ className = "w-12 h-12" }) {
   )
 }
 
+function ForYouGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      <rect x="22" y="20" width="56" height="54" rx="14" fill="#ecfdf5" stroke="#a7f3d0" strokeWidth="2" />
+      <circle cx="50" cy="46" r="18" fill="#059669" />
+      <path d="M50 36L53.5 43.5L61.5 44.5L55.5 50L57 58L50 54L43 58L44.5 50L38.5 44.5L46.5 43.5L50 36Z" fill="#fef08a" />
+      <circle cx="70" cy="24" r="6" fill="#f59e0b" />
+      <path d="M70 20V28M66 24H74" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="28" cy="30" r="4" fill="#3b82f6" opacity="0.8" />
+      <path d="M28 27V33M25 30H31" stroke="#ffffff" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function FoodHealthGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="80" rx="36" ry="4.5" fill="#d1fae5" opacity="0.8" />
+      <ellipse cx="50" cy="52" rx="30" ry="12" fill="#10b981" />
+      <path d="M20 52C20 68 32 74 50 74C68 74 80 68 80 52H20Z" fill="#059669" />
+      <ellipse cx="50" cy="52" rx="27" ry="9" fill="#34d399" />
+      <circle cx="40" cy="40" r="11" fill="#ef4444" />
+      <path d="M40 29C40 25 43 23 44 21" stroke="#78350f" strokeWidth="2" strokeLinecap="round" />
+      <ellipse cx="46" cy="25" rx="3.5" ry="2" fill="#22c55e" transform="rotate(-30 46 25)" />
+      <path d="M52 46L68 28C69 27 71 27 72 29C73 30 73 32 71 34L57 50Z" fill="#ea580c" />
+      <path d="M70 28L78 20M71 30L81 25M68 27L74 18" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" />
+      <rect x="56" y="32" width="12" height="20" rx="3" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
+      <rect x="59" y="28" width="6" height="4" rx="1" fill="#3b82f6" />
+      <circle cx="74" cy="62" r="9" fill="#ffffff" stroke="#ef4444" strokeWidth="2" />
+      <path d="M74 57V67M69 62H79" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function GroceriesGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="82" rx="38" ry="5" fill="#d1fae5" opacity="0.8" />
+      <path d="M26 34L22 74H78L74 34H26Z" fill="#d97706" />
+      <path d="M26 34L30 30L34 34L38 30L42 34L46 30L50 34L54 30L58 34L62 30L66 34L70 30L74 34H26Z" fill="#b45309" />
+      <rect x="28" y="14" width="10" height="26" rx="5" fill="#f59e0b" transform="rotate(-15 28 14)" />
+      <line x1="28" y1="20" x2="34" y2="22" stroke="#b45309" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="26" y1="26" x2="32" y2="28" stroke="#b45309" strokeWidth="1.5" strokeLinecap="round" />
+      <rect x="42" y="18" width="16" height="24" rx="2" fill="#3b82f6" />
+      <polygon points="42,18 50,12 58,18" fill="#60a5fa" />
+      <rect x="46" y="24" width="8" height="10" rx="1" fill="#ffffff" />
+      <text x="50" y="31" fontSize="4.5" fontWeight="bold" fill="#3b82f6" textAnchor="middle">MILK</text>
+      <rect x="62" y="20" width="12" height="20" rx="3" fill="#10b981" />
+      <rect x="65" y="15" width="6" height="5" rx="1" fill="#d97706" />
+      <circle cx="50" cy="54" r="11" fill="#fef3c7" stroke="#f59e0b" strokeWidth="1.5" />
+      <path d="M46 54L49 57L55 51" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function VegetablesGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="82" rx="38" ry="5" fill="#d1fae5" opacity="0.8" />
+      <circle cx="34" cy="38" r="8" fill="#15803d" />
+      <circle cx="28" cy="44" r="8" fill="#16a34a" />
+      <circle cx="40" cy="44" r="8" fill="#22c55e" />
+      <circle cx="34" cy="46" r="8" fill="#15803d" />
+      <path d="M30 52C30 52 32 66 34 68C36 70 38 66 38 52H30Z" fill="#86efac" stroke="#16a34a" strokeWidth="1" />
+      <circle cx="52" cy="56" r="14" fill="#dc2626" />
+      <ellipse cx="48" cy="52" rx="3" ry="5" fill="#f87171" opacity="0.6" transform="rotate(-30 48 52)" />
+      <path d="M52 42V38" stroke="#15803d" strokeWidth="2" strokeLinecap="round" />
+      <path d="M48 42L52 44L56 42L54 40L50 40L48 42Z" fill="#16a34a" />
+      <path d="M62 68L78 36C80 33 84 34 85 36C86 38 85 41 82 43L68 72C66 74 62 72 62 68Z" fill="#ea580c" />
+      <line x1="68" y1="58" x2="74" y2="55" stroke="#c2410c" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="72" y1="48" x2="78" y2="45" stroke="#c2410c" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M80 34L90 20M82 36L92 26M78 32L86 18" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" />
+      <ellipse cx="64" cy="62" rx="7" ry="10" fill="#7e22ce" transform="rotate(-20 64 62)" />
+      <path d="M67 52C67 48 70 46 72 45" stroke="#15803d" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+// ── High-Fidelity Studio Product Photography Mapping ───────────────────
+function getFoodItemPhoto(name = "", isGrocery = false) {
+  const n = name.toLowerCase()
+
+  if (isGrocery) {
+    if (n.includes("atta") || n.includes("wheat") || n.includes("flour")) {
+      return "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&auto=format&fit=crop&q=80"
+    }
+    if (n.includes("rice") || n.includes("basmati")) {
+      return "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&auto=format&fit=crop&q=80"
+    }
+    if (n.includes("dal") || n.includes("pulses") || n.includes("moong") || n.includes("toor")) {
+      return "https://images.unsplash.com/photo-1585996746973-45f8fdf1ca23?w=400&auto=format&fit=crop&q=80"
+    }
+    if (n.includes("oil") || n.includes("ghee")) {
+      return "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=400&auto=format&fit=crop&q=80"
+    }
+    if (n.includes("milk") || n.includes("dairy")) {
+      return "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&auto=format&fit=crop&q=80"
+    }
+    if (n.includes("butter")) {
+      return "https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=400&auto=format&fit=crop&q=80"
+    }
+    if (n.includes("bread")) {
+      return "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&auto=format&fit=crop&q=80"
+    }
+    if (n.includes("egg")) {
+      return "https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=400&auto=format&fit=crop&q=80"
+    }
+    if (n.includes("tea") || n.includes("coffee")) {
+      return "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=400&auto=format&fit=crop&q=80"
+    }
+    if (n.includes("spices") || n.includes("turmeric") || n.includes("chilli powder") || n.includes("masala") || n.includes("sugar") || n.includes("salt")) {
+      return "https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=400&auto=format&fit=crop&q=80"
+    }
+    if (n.includes("detergent") || n.includes("dishwash")) {
+      return "https://images.unsplash.com/photo-1585421514738-01798e348b17?w=400&auto=format&fit=crop&q=80"
+    }
+    return "/mockups/category_food_health.png"
+  }
+
+  // 100% Accurate Verified Photographic Matches for Tamil & English Vegetable Names
+  if (n.includes("coriander") || n.includes("kothamalli") || n.includes("dhaniya")) return "/mockups/veg_coriander.png"
+  if (n.includes("curry") || n.includes("karuveppilai") || n.includes("kadi patta")) return "/mockups/veg/curry_leaves.jpg"
+  if (n.includes("lemon") || n.includes("elumichai") || n.includes("nimbu")) return "/mockups/veg_lemon.png"
+  if (n.includes("ginger") || n.includes("inji") || n.includes("adrak")) return "/mockups/veg_ginger.png"
+  if (n.includes("mushroom") || n.includes("kaalan")) return "/mockups/veg_mushroom.png"
+  if (n.includes("bottle gourd") || n.includes("suraikkai") || n.includes("lauki")) return "/mockups/veg_lauki.png"
+  if (n.includes("french beans") || n.includes("beans")) return "/mockups/veg_french_beans.png"
+  if (n.includes("tomato") || n.includes("thakkali") || n.includes("tamatar") || n.includes("cherry")) return "/mockups/veg_tomato.png"
+  if (n.includes("lady finger") || n.includes("vendakkai") || n.includes("bhindi") || n.includes("okra")) return "/mockups/veg_bhindi.png"
+  if (n.includes("brinjal") || n.includes("kathirikai") || n.includes("baingan")) return "/mockups/veg_brinjal.png"
+  if (n.includes("bitter gourd") || n.includes("pavakkai") || n.includes("karela")) return "/mockups/veg/karela.jpg"
+  if (n.includes("drumstick") || n.includes("murungakkai") || n.includes("sahjan")) return "/mockups/veg/drumstick.jpg"
+  if (n.includes("peas") || n.includes("pattani") || n.includes("matar")) return "/mockups/veg/peas.jpg"
+  
+  if (n.includes("peeled garlic") || n.includes("uricha poondu")) return "/mockups/veg/peeled_garlic.jpg"
+  if (n.includes("garlic") || n.includes("poondu") || n.includes("lehsun")) return "/mockups/veg/garlic.jpg"
+  if (n.includes("sweet potato") || n.includes("sakkaraivalli") || n.includes("shakarkand")) return "/mockups/veg/sweet_potato.jpg"
+  if (n.includes("potato") || n.includes("urulaikilangu") || n.includes("aloo")) return "/mockups/veg/potato.jpg"
+  
+  // Spring Onion MUST be checked before general onion
+  if (n.includes("spring onion") || n.includes("vengaya thaal")) return "/mockups/veg/spring_onion.jpg"
+  if (n.includes("onion") || n.includes("vengayam") || n.includes("pyaz")) return "/mockups/veg/onion.jpg"
+  if (n.includes("cucumber") || n.includes("vellarikkai") || n.includes("kheera")) return "/mockups/veg/cucumber.jpg"
+  
+  // Specific Bell Peppers & Capsicum MUST be checked before general chilli
+  if (n.includes("red bell pepper") || n.includes("sigappu")) return "/mockups/veg/red_bell_pepper.jpg"
+  if (n.includes("yellow bell pepper") || n.includes("manjal kuda")) return "/mockups/veg/yellow_bell_pepper.jpg"
+  if (n.includes("capsicum") || n.includes("kuda milagai") || n.includes("shimla")) return "/mockups/veg_capsicum_green.png"
+  if (n.includes("chilli") || n.includes("milagai") || n.includes("mirch")) return "/mockups/veg/green_chilli.jpg"
+  
+  if (n.includes("cauliflower") || n.includes("kooliflower") || n.includes("phool gobhi")) return "/mockups/veg/cauliflower.jpg"
+  if (n.includes("cabbage") || n.includes("muttakose") || n.includes("patta gobhi")) return "/mockups/veg/cabbage.jpg"
+  if (n.includes("corn") || n.includes("solam") || n.includes("bhutta")) return "/mockups/veg/corn.jpg"
+  if (n.includes("radish") || n.includes("mullangi") || n.includes("mooli")) return "/mockups/veg/radish.jpg"
+  if (n.includes("lettuce") || n.includes("keerai") || n.includes("palak") || n.includes("spinach")) return "/mockups/veg/lettuce.jpg"
+  if (n.includes("beetroot")) return "/mockups/veg/beetroot.jpg"
+  if (n.includes("pumpkin") || n.includes("parangikkai") || n.includes("kaddu")) return "/mockups/veg/pumpkin.jpg"
+  if (n.includes("mint") || n.includes("pudhina")) return "/mockups/veg/mint.jpg"
+  if (n.includes("basil") || n.includes("rosemary") || n.includes("herbs")) return "/mockups/veg/herbs.jpg"
+  if (n.includes("turmeric") || n.includes("manjal") || n.includes("haldi")) return "/mockups/veg/turmeric.jpg"
+  if (n.includes("amla") || n.includes("nellikai")) return "/mockups/veg/amla.jpg"
+  if (n.includes("colocasia") || n.includes("seppankizhangu") || n.includes("arvi")) return "/mockups/veg/arvi.jpg"
+  if (n.includes("papaya") || n.includes("pappalikkai")) return "/mockups/veg/raw_papaya.jpg"
+  if (n.includes("zucchini")) return "/mockups/veg/zucchini.jpg"
+  if (n.includes("ridge gourd") || n.includes("peerkangai") || n.includes("torai")) return "/mockups/veg/ridge_gourd.jpg"
+  if (n.includes("broccoli")) return "/mockups/veg/broccoli.jpg"
+
+  return "/mockups/veg_coriander.png"
+}
+
+function HomeCombinedGraphic({ className = "w-16 h-16" }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="50" cy="82" rx="38" ry="5" fill="#d1fae5" opacity="0.8" />
+      <rect x="22" y="32" width="56" height="42" rx="8" fill="#f0fdf4" stroke="#059669" strokeWidth="2" />
+      <path d="M16 34L50 12L84 34H16Z" fill="#059669" />
+      <rect x="42" y="48" width="16" height="26" rx="3" fill="#047857" />
+      <circle cx="46" cy="61" r="1.5" fill="#fef08a" />
+      <circle cx="28" cy="46" r="9" fill="#ffffff" stroke="#059669" strokeWidth="1.5" />
+      <path d="M25 43L31 49M31 43L25 49" stroke="#059669" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="72" cy="46" r="9" fill="#ffffff" stroke="#059669" strokeWidth="1.5" />
+      <rect x="67" y="44" width="7" height="5" fill="#2563eb" />
+      <circle cx="69" cy="50" r="1.5" fill="#1e293b" />
+      <circle cx="75" cy="50" r="1.5" fill="#1e293b" />
+    </svg>
+  )
+}
+
+// ── 3 Main Top-Level Category Pillars ─────────────────────────────────
+const MAIN_CATEGORIES = [
+  {
+    id: "for_you",
+    label: "For You",
+    subtitle: "Recommended & personalized services tailored for your home",
+    badge: "Trending",
+    badgeColor: "bg-emerald-100 text-emerald-800",
+    graphic: ForYouGraphic,
+    bgGradient: "from-emerald-50/80 to-teal-50/40",
+    accentColor: "#059669",
+  },
+  {
+    id: "food_health",
+    label: "Food and Health",
+    subtitle: "Daily groceries, farm-fresh vegetables & wellness essentials",
+    badge: "Groceries & Vegetables",
+    badgeColor: "bg-amber-100 text-amber-900",
+    graphic: FoodHealthGraphic,
+    bgGradient: "from-amber-50/80 to-orange-50/40",
+    accentColor: "#d97706",
+  },
+  {
+    id: "home_services_combined",
+    label: "Home, Repair & Transport Services",
+    subtitle: "Cleaning, repairs, appliances, painting, masonry & logistics",
+    badge: "6 Core Services",
+    badgeColor: "bg-teal-100 text-teal-900",
+    graphic: HomeCombinedGraphic,
+    bgGradient: "from-teal-50/80 to-cyan-50/40",
+    accentColor: "#0d9488",
+  },
+]
+
+// ── Curated Vegetables & Groceries Data with Tamil Names ────────
+const VEGETABLE_ITEMS = [
+  { name: "Coriander Leaves (Kothamalli)", unit: "100 g", price: 25, mrp: 31, discount: "19% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  {
+    name: "Onion (Vengayam)",
+    unit: "1 kg",
+    price: 41,
+    mrp: 50,
+    discount: "18% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: [
+      { unit: "1 kg", price: 41, mrp: 50 },
+      { unit: "2 kg", price: 79, mrp: 100 }
+    ]
+  },
+  {
+    name: "Tomato (Thakkali)",
+    unit: "1 kg",
+    price: 58,
+    mrp: 70,
+    discount: "17% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: [
+      { unit: "1 kg", price: 58, mrp: 70 },
+      { unit: "2 kg", price: 112, mrp: 140 }
+    ]
+  },
+  {
+    name: "Potato (Urulaikilangu)",
+    unit: "1 kg",
+    price: 22,
+    mrp: 25,
+    discount: "12% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: [
+      { unit: "1 kg", price: 22, mrp: 25 },
+      { unit: "2 kg", price: 43, mrp: 50 }
+    ]
+  },
+  {
+    name: "Lady Finger (Vendakkai)",
+    unit: "1 kg",
+    price: 54,
+    mrp: 70,
+    discount: "23% OFF",
+    delivery: "8 MINS",
+    category: "Daily Essentials",
+    options: [
+      { unit: "1 kg", price: 54, mrp: 70 },
+      { unit: "2 kg", price: 104, mrp: 140 }
+    ]
+  },
+  { name: "Brinjal (Kathirikai)", unit: "500 g", price: 25, mrp: 29, discount: "13% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Green Chilli (Pachai Milagai)", unit: "100 g", price: 18, mrp: 22, discount: "18% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Green Capsicum (Kuda Milagai)", unit: "250 g", price: 28, mrp: 35, discount: "20% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Red Bell Pepper (Sigappu Kuda Milagai)", unit: "125 g", price: 45, mrp: 58, discount: "22% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Yellow Bell Pepper (Manjal Kuda Milagai)", unit: "125 g", price: 61, mrp: 70, discount: "12% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Ginger (Inji)", unit: "200 g", price: 75, mrp: 88, discount: "14% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Garlic (Poondu)", unit: "200 g", price: 68, mrp: 85, discount: "20% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Peeled Garlic (Uricha Poondu)", unit: "100 g", price: 54, mrp: 65, discount: "16% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Lemon (Elumichai)", unit: "200 g", price: 41, mrp: 48, discount: "14% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Cucumber (Vellarikkai)", unit: "500 g", price: 52, mrp: 61, discount: "14% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "French Beans (Beans)", unit: "250 g", price: 31, mrp: 36, discount: "13% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Cauliflower (Kooliflower)", unit: "1 pc (500g)", price: 38, mrp: 45, discount: "15% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Cabbage (Muttakose)", unit: "400 g", price: 37, mrp: 44, discount: "15% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Broccoli", unit: "300 g", price: 133, mrp: 167, discount: "20% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Button Mushroom (Kaalan)", unit: "180 g", price: 47, mrp: 55, discount: "14% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Drumstick (Murungakkai)", unit: "250 g", price: 35, mrp: 44, discount: "20% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Curry Leaves (Karuveppilai)", unit: "50 g", price: 15, mrp: 18, discount: "16% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Mint Leaves (Pudhina)", unit: "100 g", price: 26, mrp: 33, discount: "21% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Spring Onion (Vengaya Thaal)", unit: "150 g", price: 36, mrp: 42, discount: "14% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Green Lettuce (Salad Keerai)", unit: "100 g", price: 56, mrp: 64, discount: "12% OFF", delivery: "8 MINS", category: "Herbs & Leafy" },
+  { name: "Bitter Gourd (Pavakkai)", unit: "250 g", price: 17, mrp: 19, discount: "10% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Bottle Gourd (Suraikkai)", unit: "400 g", price: 21, mrp: 24, discount: "12% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Ridge Gourd (Peerkangai)", unit: "500 g", price: 38, mrp: 48, discount: "20% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Radish (Mullangi)", unit: "500 g", price: 52, mrp: 63, discount: "17% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Beetroot (Beetroot)", unit: "500 g", price: 37, mrp: 44, discount: "15% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Pumpkin (Parangikkai)", unit: "500 g", price: 46, mrp: 59, discount: "22% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Green Peas (Pattani)", unit: "250 g", price: 67, mrp: 81, discount: "17% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Sweet Corn (Solam)", unit: "1 pc", price: 24, mrp: 30, discount: "20% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Sweet Potato (Sakkaraivalli Kizhangu)", unit: "500 g", price: 69, mrp: 84, discount: "17% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Raw Papaya (Pappalikkai)", unit: "400 g", price: 39, mrp: 45, discount: "13% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Raw Turmeric (Manjal Kizhangu)", unit: "200 g", price: 38, mrp: 43, discount: "12% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+  { name: "Amla (Nellikai)", unit: "250 g", price: 64, mrp: 73, discount: "12% OFF", delivery: "8 MINS", category: "Daily Essentials" },
+  { name: "Green Zucchini", unit: "200 g", price: 30, mrp: 38, discount: "21% OFF", delivery: "8 MINS", category: "Organic & Exotic" },
+  { name: "Colocasia (Seppankizhangu)", unit: "250 g", price: 19, mrp: 21, discount: "9% OFF", delivery: "8 MINS", category: "Gourds & Roots" },
+  { name: "Fresh Rosemary & Herbs", unit: "10 g", price: 20, mrp: 25, discount: "20% OFF", delivery: "8 MINS", category: "Herbs & Seasoning" },
+]
+
+const GROCERY_ITEMS = [
+  { name: "Aashirvaad Sharbati Whole Wheat Atta", unit: "5 kg bag", price: 240, mrp: 285, discount: "15% OFF", delivery: "15 MINS", category: "Flours & Grains" },
+  { name: "India Gate Premium Basmati Rice", unit: "5 kg bag", price: 380, mrp: 460, discount: "17% OFF", delivery: "15 MINS", category: "Flours & Grains" },
+  { name: "Tata Sampann Unpolished Toor Dal", unit: "1 kg pack", price: 165, mrp: 195, discount: "15% OFF", delivery: "15 MINS", category: "Dals & Pulses" },
+  { name: "Tata Sampann Organic Moong Dal", unit: "1 kg pack", price: 155, mrp: 180, discount: "14% OFF", delivery: "15 MINS", category: "Dals & Pulses" },
+  { name: "Fortune Sunlite Refined Sunflower Oil", unit: "1 L Pouch", price: 145, mrp: 175, discount: "17% OFF", delivery: "15 MINS", category: "Oils & Ghee" },
+  { name: "Amul Pure Cow Ghee", unit: "1 L Tin", price: 580, mrp: 650, discount: "11% OFF", delivery: "15 MINS", category: "Oils & Ghee" },
+  { name: "Amul Taaza Fresh Toned Milk", unit: "500 ml pouch", price: 28, mrp: 30, discount: "7% OFF", delivery: "15 MINS", category: "Dairy & Breakfast" },
+  { name: "Amul Pasteurised Salted Butter", unit: "500 g block", price: 265, mrp: 285, discount: "7% OFF", delivery: "15 MINS", category: "Dairy & Breakfast" },
+  { name: "Britannia 100% Whole Wheat Bread", unit: "400 g pack", price: 45, mrp: 50, discount: "10% OFF", delivery: "15 MINS", category: "Dairy & Breakfast" },
+  { name: "Farm Fresh Table Eggs (Pack of 12)", unit: "12 pcs tray", price: 95, mrp: 115, discount: "17% OFF", delivery: "15 MINS", category: "Dairy & Breakfast" },
+  { name: "Tata Tea Gold Classic Tea", unit: "500 g pack", price: 285, mrp: 330, discount: "14% OFF", delivery: "15 MINS", category: "Beverages & Snacks" },
+  { name: "Nescafe Classic Instant Coffee", unit: "100 g jar", price: 340, mrp: 385, discount: "12% OFF", delivery: "15 MINS", category: "Beverages & Snacks" },
+  { name: "Tata Salt Iodized Crystal Salt", unit: "1 kg pack", price: 28, mrp: 30, discount: "7% OFF", delivery: "15 MINS", category: "Flours & Grains" },
+  { name: "Madhur Pure & Hygienic Sugar", unit: "1 kg pack", price: 52, mrp: 60, discount: "13% OFF", delivery: "15 MINS", category: "Flours & Grains" },
+  { name: "Everest Turmeric Powder (Haldi)", unit: "200 g pack", price: 48, mrp: 56, discount: "14% OFF", delivery: "15 MINS", category: "Spices & Masalas" },
+  { name: "Everest Tikhalal Red Chilli Powder", unit: "200 g pack", price: 78, mrp: 90, discount: "13% OFF", delivery: "15 MINS", category: "Spices & Masalas" },
+  { name: "Surf Excel Easy Wash Detergent Powder", unit: "1 kg pack", price: 135, mrp: 155, discount: "13% OFF", delivery: "15 MINS", category: "Household Care" },
+  { name: "Vim Dishwash Gel Lemon", unit: "500 ml bottle", price: 110, mrp: 130, discount: "15% OFF", delivery: "15 MINS", category: "Household Care" },
+]
+
+// ── Food and Health Sub-Modules ────────────────────────────────────────
+const FOOD_HEALTH_SUB = [
+  {
+    id: "groceries",
+    name: "Groceries",
+    tagline: "Daily Essentials, Staples & Packaged Goods",
+    graphic: GroceriesGraphic,
+    badge: "15-min Express Delivery",
+    items: GROCERY_ITEMS,
+  },
+  {
+    id: "vegetables",
+    name: "Vegetables",
+    tagline: "Farm-Fresh & 100% Organic Green Vegetables",
+    graphic: VegetablesGraphic,
+    badge: "8-min Farm Delivery",
+    items: VEGETABLE_ITEMS,
+  },
+]
+
+// ── For You Curated Sub-Services ───────────────────────────────────────
+const FOR_YOU_SUB = [
+  { name: "Full House Deep Cleaning", subtitle: "Complete home sanitization & scrub", graphic: FullHouseCleaningGraphic, categoryId: "cleaning", badge: "Most Booked" },
+  { name: "AC Master Service", subtitle: "Filter cleaning, coil wash & gas check", graphic: AcGraphic, categoryId: "hvac", badge: "Summer Essential" },
+  { name: "Instant Bike Courier", subtitle: "Documents & parcels delivered under 45 mins", graphic: TwoWheelerGraphic, action: "two_wheeler", badge: "Instant" },
+  { name: "Express Electrician & Plumber", subtitle: "Wiring, switchboard & pipe repairs", graphic: ElectricianGraphic, categoryId: "electrical", badge: "Verified Pro" },
+  { name: "Interior Wall Painting", subtitle: "Dustless sanding & premium finish", graphic: PaintRoller, categoryId: "painting", badge: "Top Rated" },
+  { name: "Mini Truck Transport", subtitle: "Hassle-free goods & tempo booking", graphic: TruckGraphic, action: "truck", badge: "Hosur Special" },
+]
+
 // ── Real photos already in the project (public/mockups) ─────────────────
 const CATEGORIES = [
   { label: "Home Services & Pest Control", icon: SprayCan, photo: "/mockups/service_cleaning.png", bg: "bg-indigo-50", ring: "border-indigo-100", fg: "text-indigo-600", hoverBg: "group-hover:bg-indigo-100", serviceCategoryId: "pest_control" },
@@ -656,6 +1023,15 @@ export function LandingPage() {
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
   const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(location.state?.openHomePestModal || false)
+  const [isForYouModalOpen, setIsForYouModalOpen] = useState(false)
+  const [isFoodHealthModalOpen, setIsFoodHealthModalOpen] = useState(false)
+  const [isHomeServicesCombinedModalOpen, setIsHomeServicesCombinedModalOpen] = useState(false)
+  const [selectedFoodSubModule, setSelectedFoodSubModule] = useState(null)
+  const [foodCart, setFoodCart] = useState({})
+  const [foodOrderPlaced, setFoodOrderPlaced] = useState(false)
+  const [variantModalItem, setVariantModalItem] = useState(null)
+  const [vegCategoryFilter, setVegCategoryFilter] = useState("All")
+  const [vegSearchQuery, setVegSearchQuery] = useState("")
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
@@ -703,9 +1079,12 @@ export function LandingPage() {
         setIsElecModalOpen(false)
         setIsAcModalOpen(false)
         setIsHomePestModalOpen(false)
+        setIsForYouModalOpen(false)
+        setIsFoodHealthModalOpen(false)
+        setIsHomeServicesCombinedModalOpen(false)
       }
     }
-    if (isGoodsModalOpen || isElecModalOpen || isAcModalOpen || isHomePestModalOpen) {
+    if (isGoodsModalOpen || isElecModalOpen || isAcModalOpen || isHomePestModalOpen || isForYouModalOpen || isFoodHealthModalOpen || isHomeServicesCombinedModalOpen) {
       window.addEventListener("keydown", handleKeyDown)
       document.body.style.overflow = "hidden"
     } else {
@@ -715,7 +1094,7 @@ export function LandingPage() {
       window.removeEventListener("keydown", handleKeyDown)
       document.body.style.overflow = ""
     }
-  }, [isGoodsModalOpen, isElecModalOpen, isAcModalOpen, isHomePestModalOpen])
+  }, [isGoodsModalOpen, isElecModalOpen, isAcModalOpen, isHomePestModalOpen, isForYouModalOpen, isFoodHealthModalOpen, isHomeServicesCombinedModalOpen])
 
   if (activeCategoryId && activeCategoryId !== "painting" && activeCategoryId !== "mason") {
     return (
@@ -746,7 +1125,7 @@ export function LandingPage() {
                     <User size={13} />
                   </div>
                   <span className="hidden sm:inline font-extrabold">
-                    Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
+                    {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"}
                   </span>
                 </button>
               ) : (
@@ -912,7 +1291,7 @@ export function LandingPage() {
                   <User className="w-4 h-4 stroke-[1.75]" />
                 </div>
                 <span className="font-semibold text-slate-800">
-                  Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
+                  {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"}
                 </span>
                 <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
               </button>
@@ -1007,41 +1386,89 @@ export function LandingPage() {
         <div className="mb-6">
           <h2 className="text-xl font-bold text-slate-900">Browse by Category</h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => (
-            <button
-              key={label}
-              onClick={() => {
-                if (label === "Goods & Transports") {
-                  setIsGoodsModalOpen(true)
-                } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
-                  setIsElecModalOpen(true)
-                } else if (label.includes("AC") || label.includes("Appliance")) {
-                  setIsAcModalOpen(true)
-                } else if (label === "Home Services & Pest Control") {
-                  setIsHomePestModalOpen(true)
-                } else {
-                  goToCategoryServices(serviceCategoryId)
-                }
-              }}
-              className="group flex flex-col bg-white rounded-2xl border border-slate-100 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all"
-            >
-              {photo ? (
-                <div className="h-24 w-full overflow-hidden">
-                  <img
-                    src={photo}
-                    alt={label}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                </div>
-              ) : (
-                <div className="h-24 w-full bg-emerald-50 flex items-center justify-center">
-                  <Icon className="w-8 h-8 text-emerald-600" strokeWidth={1.5} />
-                </div>
-              )}
-              <span className="text-xs font-semibold text-slate-700 leading-snug p-3">{label}</span>
-            </button>
-          ))}
+
+        {/* 3 Compact & Attractive Category Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl">
+          {/* Card 1: For You */}
+          <button
+            type="button"
+            onClick={() => setIsForYouModalOpen(true)}
+            className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-emerald-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+          >
+            <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
+              <img
+                src="/mockups/category_for_you.png"
+                alt="For You"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+              <span className="absolute top-2 left-2 bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                ✦ For You
+              </span>
+            </div>
+            <div className="p-3">
+              <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors block">
+                For You
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium mt-0.5 block">
+                Curated services &amp; recommendations
+              </span>
+            </div>
+          </button>
+
+          {/* Card 2: Food and Health */}
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedFoodSubModule(null)
+              setIsFoodHealthModalOpen(true)
+            }}
+            className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-amber-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+          >
+            <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
+              <img
+                src="/mockups/category_food_health.png"
+                alt="Food and Health"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+              <span className="absolute top-2 left-2 bg-amber-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                🥦 Groceries &amp; Veggies
+              </span>
+            </div>
+            <div className="p-3">
+              <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-amber-800 transition-colors block">
+                Food and Health
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium mt-0.5 block">
+                Groceries &amp; farm-fresh vegetables
+              </span>
+            </div>
+          </button>
+
+          {/* Card 3: Home, Repair & Transport Services */}
+          <button
+            type="button"
+            onClick={() => setIsHomeServicesCombinedModalOpen(true)}
+            className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-teal-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+          >
+            <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
+              <img
+                src="/mockups/category_home_transport.png"
+                alt="Home, Repair & Transport Services"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+              <span className="absolute top-2 left-2 bg-teal-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                ⚡ 6 Services
+              </span>
+            </div>
+            <div className="p-3">
+              <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-teal-800 transition-colors block truncate">
+                Home, Repair &amp; Transport Services
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium mt-0.5 block truncate">
+                Cleaning, repairs, painting &amp; logistics
+              </span>
+            </div>
+          </button>
         </div>
       </section>
 
@@ -1506,6 +1933,823 @@ export function LandingPage() {
                     Microwave Oven
                   </span>
                 </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ── 1. Food and Health Sub-Modules Modal Popup ── */}
+      {isFoodHealthModalOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="food-health-modal-title"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => {
+              setIsFoodHealthModalOpen(false)
+              setSelectedFoodSubModule(null)
+              setFoodOrderPlaced(false)
+            }}
+          >
+            <div
+              className={`bg-white rounded-3xl p-5 sm:p-7 w-full shadow-2xl border border-slate-100 relative max-h-[92vh] overflow-y-auto transition-all ${
+                selectedFoodSubModule ? "max-w-5xl" : "max-w-xl"
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsFoodHealthModalOpen(false)
+                  setSelectedFoodSubModule(null)
+                  setFoodOrderPlaced(false)
+                  setVegSearchQuery("")
+                  setVegCategoryFilter("All")
+                }}
+                aria-label="Close popup"
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-800 flex items-center justify-center transition-colors cursor-pointer z-20"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {!selectedFoodSubModule ? (
+                /* Sub-Modules Main View: Groceries & Vegetables (Compact & Attractive Emerald UI) */
+                <div>
+                  <div className="text-center mb-6">
+                    <h3
+                      id="food-health-modal-title"
+                      className="text-lg sm:text-xl font-extrabold text-slate-900"
+                    >
+                      Food and Health
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Choose a category to view items &amp; schedule fast delivery
+                    </p>
+                  </div>
+
+                  {/* 2 Compact & Attractive Sub-Module Cards */}
+                  <div className="grid grid-cols-2 gap-4 items-stretch max-w-lg mx-auto">
+                    {/* Option 1: Groceries */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFoodSubModule(FOOD_HEALTH_SUB[0])
+                        setFoodOrderPlaced(false)
+                        setVegSearchQuery("")
+                        setVegCategoryFilter("All")
+                      }}
+                      className="group flex flex-col items-center justify-between p-4 sm:p-5 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/40 hover:shadow-md bg-white"
+                    >
+                      <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100 flex items-center justify-center p-2.5 group-hover:scale-105 transition-all shadow-2xs">
+                        <GroceriesGraphic className="w-full h-full" />
+                      </div>
+                      <div className="mt-3">
+                        <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block">
+                          Groceries
+                        </span>
+                        <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
+                          Daily Essentials &amp; Staples
+                        </span>
+                        <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/80 text-emerald-800 border border-emerald-200">
+                          ⚡ 15-min Delivery
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Option 2: Vegetables */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFoodSubModule(FOOD_HEALTH_SUB[1])
+                        setFoodOrderPlaced(false)
+                        setVegSearchQuery("")
+                        setVegCategoryFilter("All")
+                      }}
+                      className="group flex flex-col items-center justify-between p-4 sm:p-5 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/40 hover:shadow-md bg-white"
+                    >
+                      <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100 flex items-center justify-center p-2.5 group-hover:scale-105 transition-all shadow-2xs">
+                        <VegetablesGraphic className="w-full h-full" />
+                      </div>
+                      <div className="mt-3">
+                        <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block">
+                          Vegetables
+                        </span>
+                        <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
+                          Farm-Fresh &amp; 100% Organic
+                        </span>
+                        <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/80 text-emerald-800 border border-emerald-200">
+                          🌱 8-min Farm Express
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Sub-Module Detail Catalog View */
+                <div>
+                  {/* Back Link & Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFoodSubModule(null)
+                        setFoodOrderPlaced(false)
+                        setVegSearchQuery("")
+                        setVegCategoryFilter("All")
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-emerald-700 cursor-pointer transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      <span>Back to Categories</span>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
+                        <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Title and Search Row */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <div>
+                      <h4 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                        {selectedFoodSubModule.name}
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          {selectedFoodSubModule.items.length} items
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-500 font-medium">
+                        {selectedFoodSubModule.tagline}
+                      </p>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div className="relative min-w-[240px]">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={vegSearchQuery}
+                        onChange={(e) => setVegSearchQuery(e.target.value)}
+                        placeholder={`Search ${selectedFoodSubModule.name.toLowerCase()} (e.g. Onion, Tomato)...`}
+                        className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 focus:border-emerald-500 focus:outline-none bg-slate-50/50"
+                      />
+                      {vegSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setVegSearchQuery("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Category Filter Pills (if vegetables or groceries) */}
+                  {selectedFoodSubModule.id === "vegetables" && (
+                    <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-4 no-scrollbar">
+                      {["All", "Daily Essentials", "Herbs & Leafy", "Gourds & Roots", "Organic & Exotic", "Herbs & Seasoning"].map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setVegCategoryFilter(cat)}
+                          className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                            vegCategoryFilter === cat
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {foodOrderPlaced ? (
+                    <div className="p-8 rounded-3xl bg-gradient-to-b from-emerald-50 to-teal-50 border-2 border-emerald-200 text-center my-6">
+                      <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-600/30">
+                        <Check className="w-8 h-8 stroke-[3]" />
+                      </div>
+                      <h5 className="text-xl font-extrabold text-emerald-950">
+                        Order Confirmed Successfully!
+                      </h5>
+                      <p className="text-xs sm:text-sm text-emerald-800 font-medium mt-1.5 max-w-md mx-auto">
+                        Your fresh {selectedFoodSubModule.name.toLowerCase()} order has been placed. Our Hosur delivery partner is packing and dispatching your items within 8-10 minutes.
+                      </p>
+                      <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-emerald-800 text-xs font-bold border border-emerald-200">
+                        <span>📍 Delivery to:</span> Hosur Central &bull; ⏱ ETA: 8-12 mins
+                      </div>
+                      <div className="mt-6">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFoodCart({})
+                            setFoodOrderPlaced(false)
+                            setSelectedFoodSubModule(null)
+                          }}
+                          className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 cursor-pointer shadow-md transition-all"
+                        >
+                          Back to Home
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Products Grid matching Quick Commerce Layout */}
+                      {selectedFoodSubModule.items.filter((item) => {
+                        const q = vegSearchQuery.toLowerCase()
+                        const matchesSearch =
+                          !vegSearchQuery ||
+                          item.name.toLowerCase().includes(q) ||
+                          (item.category && item.category.toLowerCase().includes(q))
+                        const matchesCat =
+                          vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                        return matchesSearch && matchesCat
+                      }).length === 0 ? (
+                        <div className="py-12 text-center">
+                          <p className="text-sm font-bold text-slate-500">No items found matching your search.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVegSearchQuery("")
+                              setVegCategoryFilter("All")
+                            }}
+                            className="mt-2 text-xs font-bold text-emerald-600 hover:underline"
+                          >
+                            Clear filters
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-3.5 mb-6">
+                          {selectedFoodSubModule.items
+                            .filter((item) => {
+                              const q = vegSearchQuery.toLowerCase()
+                              const matchesSearch =
+                                !vegSearchQuery ||
+                                item.name.toLowerCase().includes(q) ||
+                                (item.category && item.category.toLowerCase().includes(q))
+                              const matchesCat =
+                                vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                              return matchesSearch && matchesCat
+                            })
+                            .map((item, idx) => {
+                              const hasOptions = item.options && item.options.length > 0
+                              const count = hasOptions
+                                ? item.options.reduce((sum, opt) => sum + (foodCart[`${item.name} (${opt.unit})`] || 0), 0)
+                                : (foodCart[item.name] || 0)
+                              return (
+                                <div
+                                  key={idx}
+                                  className="group rounded-2xl border border-slate-200/90 bg-white hover:border-emerald-500 hover:shadow-lg flex flex-col justify-between transition-all duration-200 overflow-hidden"
+                                >
+                                  <div>
+                                    {/* Real Studio Photographic Product Image */}
+                                    <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
+                                      <img
+                                        src={getFoodItemPhoto(item.name, selectedFoodSubModule.id === "groceries")}
+                                        alt={item.name}
+                                        className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-300"
+                                        onError={(e) => {
+                                          e.target.onerror = null
+                                          e.target.src = "/mockups/category_food_health.png"
+                                        }}
+                                        loading="lazy"
+                                      />
+                                    </div>
+
+                                    {/* 8 MINS Delivery Pill */}
+                                    <div className="px-3 pt-2.5 flex items-center text-[10px] font-bold text-slate-400 gap-1">
+                                      <Clock className="w-3 h-3 text-slate-400" />
+                                      <span>{item.delivery || "8 MINS"}</span>
+                                    </div>
+
+                                    {/* Name and Weight / Options Pill */}
+                                    <h5 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-2 min-h-[34px] px-3 mt-1 leading-snug group-hover:text-emerald-700 transition-colors">
+                                      {item.name}
+                                    </h5>
+                                    {hasOptions ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setVariantModalItem(item)}
+                                        className="mx-3 mt-1 px-2 py-0.5 rounded-md bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-500 flex items-center justify-between text-[10px] font-bold text-slate-700 transition-all cursor-pointer"
+                                      >
+                                        <span>{item.unit}</span>
+                                        <span className="text-emerald-700 font-extrabold flex items-center gap-0.5">
+                                          2 Options <ChevronDown className="w-2.5 h-2.5" />
+                                        </span>
+                                      </button>
+                                    ) : (
+                                      <p className="text-[11px] font-semibold text-slate-400 px-3 mt-0.5">
+                                        {item.unit}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* Price and Add / Quantity Row */}
+                                  <div className="px-3 pb-3 pt-2 mt-3 border-t border-slate-100 flex items-center justify-between gap-1">
+                                    <div className="flex flex-col">
+                                      <span className="text-xs sm:text-sm font-black text-slate-900 leading-none">
+                                        ₹{item.price}
+                                      </span>
+                                      {item.mrp && (
+                                        <span className="text-[10px] line-through text-slate-400 font-semibold mt-0.5">
+                                          ₹{item.mrp}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* ADD or Counter Button */}
+                                    {hasOptions ? (
+                                      count > 0 ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setVariantModalItem(item)}
+                                          className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1 text-xs font-black shadow-xs cursor-pointer active:scale-95 transition-all"
+                                        >
+                                          <span>{count} added</span>
+                                          <ChevronDown className="w-3 h-3" />
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => setVariantModalItem(item)}
+                                          className="px-3 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white flex items-center gap-1"
+                                        >
+                                          <span>ADD</span>
+                                          <ChevronDown className="w-2.5 h-2.5" />
+                                        </button>
+                                      )
+                                    ) : count > 0 ? (
+                                      <div className="flex items-center bg-emerald-600 text-white rounded-lg px-1.5 py-1 shadow-xs">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setFoodCart((prev) => ({
+                                              ...prev,
+                                              [item.name]: Math.max(0, (prev[item.name] || 0) - 1),
+                                            }))
+                                          }
+                                          className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                        >
+                                          -
+                                        </button>
+                                        <span className="text-xs font-extrabold min-w-[14px] text-center px-0.5">
+                                          {count}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setFoodCart((prev) => ({
+                                              ...prev,
+                                              [item.name]: (prev[item.name] || 0) + 1,
+                                            }))
+                                          }
+                                          className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setFoodCart((prev) => ({
+                                            ...prev,
+                                            [item.name]: 1,
+                                          }))
+                                        }
+                                        className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white"
+                                      >
+                                        ADD
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      )}
+
+                      {/* Quick Pack/Weight Options Modal matching User Screenshot */}
+                      {variantModalItem && (
+                        <div
+                          className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+                          onClick={() => setVariantModalItem(null)}
+                        >
+                          <div
+                            className="relative bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {/* Floating Close Button on top */}
+                            <button
+                              type="button"
+                              onClick={() => setVariantModalItem(null)}
+                              className="absolute -top-4 right-1/2 translate-x-1/2 sm:translate-x-0 sm:right-3 sm:-top-4 w-9 h-9 rounded-full bg-slate-900 text-white hover:bg-slate-800 flex items-center justify-center shadow-lg transition-transform hover:scale-105 cursor-pointer z-10"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+
+                            {/* Modal Header */}
+                            <h4 className="text-base sm:text-lg font-black text-slate-900 mb-4 pr-6">
+                              {variantModalItem.name}
+                            </h4>
+
+                            {/* Options List */}
+                            <div className="space-y-3">
+                              {variantModalItem.options?.map((opt, oIdx) => {
+                                const cartKey = `${variantModalItem.name} (${opt.unit})`
+                                const optCount = foodCart[cartKey] || 0
+                                return (
+                                  <div
+                                    key={oIdx}
+                                    className="bg-white rounded-2xl border border-slate-200/90 p-3 flex items-center justify-between gap-3 shadow-xs hover:border-emerald-500 transition-all"
+                                  >
+                                    {/* Left: Product Thumbnail */}
+                                    <div className="w-14 h-14 rounded-xl bg-[#f5f1eb] overflow-hidden shrink-0">
+                                      <img
+                                        src={getFoodItemPhoto(variantModalItem.name, false)}
+                                        alt={variantModalItem.name}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </div>
+
+                                    {/* Middle: Unit & Price */}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-bold text-slate-800">
+                                        {opt.unit}
+                                      </p>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        <span className="text-sm font-black text-slate-900">
+                                          ₹{opt.price}
+                                        </span>
+                                        {opt.mrp && (
+                                          <span className="text-xs line-through text-slate-400 font-semibold">
+                                            ₹{opt.mrp}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Right: Add / Counter Button */}
+                                    <div>
+                                      {optCount > 0 ? (
+                                        <div className="flex items-center bg-emerald-600 text-white rounded-lg px-2 py-1 shadow-xs">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setFoodCart((prev) => ({
+                                                ...prev,
+                                                [cartKey]: Math.max(0, (prev[cartKey] || 0) - 1),
+                                              }))
+                                            }
+                                            className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                          >
+                                            -
+                                          </button>
+                                          <span className="text-xs font-extrabold min-w-[16px] text-center px-1">
+                                            {optCount}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setFoodCart((prev) => ({
+                                                ...prev,
+                                                [cartKey]: (prev[cartKey] || 0) + 1,
+                                              }))
+                                            }
+                                            className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                          >
+                                            +
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setFoodCart((prev) => ({
+                                              ...prev,
+                                              [cartKey]: 1,
+                                            }))
+                                          }
+                                          className="px-4 py-1.5 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-xs transition-all cursor-pointer active:scale-95 bg-white"
+                                        >
+                                          ADD
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sticky Order Action Bar */}
+                      <div className="sticky bottom-0 bg-white/95 backdrop-blur-md pt-3 pb-1 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="text-xs text-slate-600 font-semibold">
+                          {Object.values(foodCart).reduce((a, b) => a + b, 0) > 0 ? (
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-extrabold text-xs">
+                                {Object.values(foodCart).reduce((a, b) => a + b, 0)} items in cart
+                              </span>
+                              <span className="text-slate-800 font-bold">
+                                Total: ₹
+                                {Object.entries(foodCart).reduce((sum, [nameWithUnit, qty]) => {
+                                  if (qty <= 0) return sum
+                                  let matchedPrice = 0
+                                  if (selectedFoodSubModule?.items) {
+                                    for (const it of selectedFoodSubModule.items) {
+                                      if (it.options) {
+                                        for (const opt of it.options) {
+                                          if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                            matchedPrice = opt.price
+                                            break
+                                          }
+                                        }
+                                      }
+                                      if (matchedPrice) break
+                                      if (it.name === nameWithUnit) {
+                                        matchedPrice = it.price
+                                        break
+                                      }
+                                    }
+                                  }
+                                  return sum + matchedPrice * qty
+                                }, 0)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span>Select vegetables above for instant Hosur door delivery</span>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
+                          onClick={() => {
+                            const itemsList = []
+                            Object.entries(foodCart).forEach(([nameWithUnit, qty]) => {
+                              if (qty <= 0) return
+                              let matchedItem = null
+                              let unit = "1 unit"
+                              let price = 0
+                              let mrp = 0
+                              let baseName = nameWithUnit
+
+                              if (selectedFoodSubModule?.items) {
+                                for (const it of selectedFoodSubModule.items) {
+                                  if (it.options) {
+                                    for (const opt of it.options) {
+                                      if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                        matchedItem = it
+                                        unit = opt.unit
+                                        price = opt.price
+                                        mrp = opt.mrp || Math.round(opt.price * 1.2)
+                                        baseName = it.name
+                                        break
+                                      }
+                                    }
+                                  }
+                                  if (matchedItem) break
+                                  if (it.name === nameWithUnit) {
+                                    matchedItem = it
+                                    unit = it.unit
+                                    price = it.price
+                                    mrp = it.mrp || Math.round(it.price * 1.2)
+                                    baseName = it.name
+                                    break
+                                  }
+                                }
+                              }
+
+                              itemsList.push({
+                                id: `veg_${nameWithUnit.replace(/[^a-zA-Z0-9]/g, "_")}`,
+                                name: baseName,
+                                displayName: nameWithUnit,
+                                unit: unit,
+                                price: price || 30,
+                                mrp: mrp || (price ? Math.round(price * 1.2) : 36),
+                                quantity: qty,
+                                image: getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
+                                serviceType: "vegetables_quick_delivery",
+                                deliveryMins: "15-25 mins",
+                              })
+                            })
+
+                            if (itemsList.length === 0) return
+
+                            setSelectedFoodSubModule(null)
+                            navigate(routes.booking_checkout, {
+                              state: {
+                                category: {
+                                  id: "vegetables_quick_delivery",
+                                  name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
+                                  isQuickCommerce: true,
+                                  deliveryTime: "15-25 mins",
+                                },
+                                cart: itemsList,
+                                isQuickCommerce: true,
+                              }
+                            })
+                          }}
+                          className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
+                            Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                              : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                          }`}
+                        >
+                          <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ── 2. For You Curated Services Modal Popup ── */}
+      {isForYouModalOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="foryou-modal-title"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsForYouModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setIsForYouModalOpen(false)}
+                aria-label="Close popup"
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer z-10"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold uppercase tracking-wider mb-2">
+                  ✦ Personalized Recommendations
+                </div>
+                <h3
+                  id="foryou-modal-title"
+                  className="text-xl sm:text-2xl font-extrabold text-slate-900"
+                >
+                  Curated For You
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md mx-auto">
+                  Top-rated doorstep services and instant transport tailored for fast booking in your locality.
+                </p>
+              </div>
+
+              {/* Grid of 6 For You Sub Services */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {FOR_YOU_SUB.map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setIsForYouModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      if (item.action === "truck") {
+                        navigate(routes.truck_booking_hosur)
+                      } else if (item.action === "two_wheeler") {
+                        navigate(routes.two_wheeler_booking_hosur)
+                      } else if (item.categoryId === "cleaning") {
+                        setIsHomePestModalOpen(true)
+                      } else if (item.categoryId === "hvac") {
+                        setIsAcModalOpen(true)
+                      } else if (item.categoryId === "electrical") {
+                        setIsElecModalOpen(true)
+                      } else {
+                        goToCategoryServices(item.categoryId)
+                      }
+                    }}
+                    className="group p-4 rounded-2xl border-2 border-slate-100 hover:border-emerald-500 bg-slate-50/60 hover:bg-emerald-50/30 flex flex-col justify-between text-left transition-all hover:shadow-md cursor-pointer"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          {item.badge}
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
+                      </div>
+                      <div className="w-14 h-14 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center p-2 mb-3 group-hover:scale-105 transition-transform">
+                        {typeof item.graphic === "function" && item.graphic.prototype ? (
+                          <item.graphic className="w-10 h-10" />
+                        ) : (
+                          <item.graphic className="w-10 h-10" />
+                        )}
+                      </div>
+                      <h4 className="text-sm font-extrabold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                        {item.name}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                        {item.subtitle}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ── 3. Home, Repair & Transport Services Combined Modal Popup ── */}
+      {isHomeServicesCombinedModalOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="home-combined-modal-title"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsHomeServicesCombinedModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-4xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setIsHomeServicesCombinedModalOpen(false)}
+                aria-label="Close popup"
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-teal-50 text-slate-500 hover:text-teal-800 flex items-center justify-center transition-colors cursor-pointer z-10"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="text-center mb-8">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-extrabold uppercase tracking-wider mb-2">
+                  ⚡ 6 Core Specialized Pillars
+                </div>
+                <h3
+                  id="home-combined-modal-title"
+                  className="text-xl sm:text-2xl font-extrabold text-slate-900"
+                >
+                  Home, Repair &amp; Transport Services
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg mx-auto">
+                  Select any service below to explore specific options, verified technicians, and transparent pricing.
+                </p>
+              </div>
+
+              {/* 6 Combined Services Grid matching the exact items from the 3rd image */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
+                {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => (
+                  <button
+                    key={label}
+                    onClick={() => {
+                      setIsHomeServicesCombinedModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      if (label === "Goods & Transports") {
+                        setIsGoodsModalOpen(true)
+                      } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
+                        setIsElecModalOpen(true)
+                      } else if (label.includes("AC") || label.includes("Appliance")) {
+                        setIsAcModalOpen(true)
+                      } else if (label === "Home Services & Pest Control") {
+                        setIsHomePestModalOpen(true)
+                      } else {
+                        goToCategoryServices(serviceCategoryId)
+                      }
+                    }}
+                    className="group flex flex-col bg-white rounded-2xl border-2 border-slate-100 hover:border-teal-500 overflow-hidden text-center hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer"
+                  >
+                    {photo ? (
+                      <div className="h-24 w-full overflow-hidden bg-slate-100">
+                        <img
+                          src={photo}
+                          alt={label}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-24 w-full bg-teal-50 flex items-center justify-center">
+                        <Icon className="w-8 h-8 text-teal-600" strokeWidth={1.5} />
+                      </div>
+                    )}
+                    <span className="text-xs font-extrabold text-slate-700 leading-snug p-3 group-hover:text-teal-800 transition-colors">
+                      {label}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
           </div>,

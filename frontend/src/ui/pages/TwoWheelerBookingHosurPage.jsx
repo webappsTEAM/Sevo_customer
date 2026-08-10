@@ -11,6 +11,10 @@ import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logi
 import { createBooking } from "../../api/bookingService.js"
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
+import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
+import { useAuth } from "../../state/auth/useAuth.js"
+import { CustomerAccountModal } from "./BookingPage.jsx"
+import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 
 const LOGISTICS_CITY = "hosur"
 
@@ -299,7 +303,7 @@ export function TwoWheelerBookingHosurPage() {
   const [drop, setDrop] = useState("")
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
-  const [userType, setUserType] = useState("Personal Use / Delivery")
+  const [userType, setUserType] = useState("Personal Parcels & Documents")
   const [selectedRoute, setSelectedRoute] = useState(null)
 
   // Booking Flow State
@@ -307,14 +311,28 @@ export function TwoWheelerBookingHosurPage() {
   const [selectedVehicle, setSelectedVehicle] = useState(null)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
+  const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
   const [otpStep, setOtpStep] = useState(false)
   const [otpValue, setOtpValue] = useState("")
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
   const [loginEmail, setLoginEmail] = useState("")
   const [loginWhatsapp, setLoginWhatsapp] = useState(true)
-  const [isSignedIn, setIsSignedIn] = useState(false)
-  const [otpSent, setOtpSent] = useState(false)
-  const [otpLoading, setOtpLoading] = useState(false)
+  const { user } = useAuth()
+  const [showAccountPortal, setShowAccountPortal] = useState(false)
+  const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
+  const [localIsSignedIn, setLocalIsSignedIn] = useState(false)
+  const isSignedIn = Boolean(user) || localIsSignedIn
+
+  // Prefill user details if signed in
+  useEffect(() => {
+    if (user) {
+      const fullName = user.full_name || user.fullName || user.first_name || user.firstName || user.username
+      if (fullName && !name) setName(fullName)
+      if (user.phone && !phone) setPhone(user.phone)
+    }
+  }, [user])
 
   // Suggestions Dropdown State
   const [showPickupSuggestions, setShowPickupSuggestions] = useState(false)
@@ -328,6 +346,12 @@ export function TwoWheelerBookingHosurPage() {
 
   // Details Modal
   const [activeVehicleDetails, setActiveVehicleDetails] = useState(null)
+
+  // Lock body scroll when Know More modal is open
+  useEffect(() => {
+    document.body.style.overflow = activeVehicleDetails ? "hidden" : ""
+    return () => { document.body.style.overflow = "" }
+  }, [activeVehicleDetails])
 
   // FAQ state
   const [openFaq, setOpenFaq] = useState(null)
@@ -672,7 +696,7 @@ export function TwoWheelerBookingHosurPage() {
     setBookingError("")
     try {
       await apiVerifyCustomerPhoneOTP(phone, otpValue)
-      setIsSignedIn(true)
+      setLocalIsSignedIn(true)
       setLoginModalOpen(false)
       setOtpStep(false)
       setOtpValue("")
@@ -713,13 +737,29 @@ export function TwoWheelerBookingHosurPage() {
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
             <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>Services</span>
             <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>For Enterprise</span>
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>Support</span>
-            <button
-              onClick={() => navigate(routes.login)}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
-            >
-              Sign In
-            </button>
+            <span className="hover:text-emerald-600 cursor-pointer" onClick={() => setSupportModalOpen(true)}>Support</span>
+            {user ? (
+              <button
+                type="button"
+                onClick={() => setShowAccountPortal(true)}
+                className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                  <User className="w-4 h-4 stroke-[1.75]" />
+                </div>
+                <span className="font-semibold text-slate-800">
+                  {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowCustomerEntryModal(true)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+              >
+                Sign In
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -769,7 +809,7 @@ export function TwoWheelerBookingHosurPage() {
             <div ref={pickupWrapperRef} className="flex flex-col text-left relative">
               <div className="h-5 mb-1.5 flex items-center justify-between">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 whitespace-nowrap">
-                  <span className="text-emerald-600">●</span> Pickup Address *
+                  <span className="text-emerald-600">●</span> Pickup Location *
                 </label>
                 <button
                   type="button"
@@ -799,7 +839,7 @@ export function TwoWheelerBookingHosurPage() {
               <div className="relative flex items-center">
                 <input
                   type="text"
-                  placeholder="Enter pickup location"
+                  placeholder="Enter pickup location in Hosur"
                   value={pickup}
                   onFocus={() => {
                     setShowPickupSuggestions(true)
@@ -895,12 +935,12 @@ export function TwoWheelerBookingHosurPage() {
             <div ref={dropWrapperRef} className="flex flex-col text-left relative">
               <div className="h-5 mb-1.5 flex items-center">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 whitespace-nowrap">
-                  <span className="text-rose-500">●</span> Drop Address *
+                  <span className="text-rose-500">●</span> Delivery Destination *
                 </label>
               </div>
               <input
                 type="text"
-                placeholder="Sending to (e.g. Bengaluru)"
+                placeholder="Enter delivery destination"
                 value={drop}
                 onFocus={() => {
                   setShowDropSuggestions(true)
@@ -982,12 +1022,12 @@ export function TwoWheelerBookingHosurPage() {
             <div className="flex flex-col text-left">
               <div className="h-5 mb-1.5 flex items-center">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                  Name *
+                  Sender Name *
                 </label>
               </div>
               <input
                 type="text"
-                placeholder="Enter your Name"
+                placeholder="Your Full Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
@@ -999,12 +1039,12 @@ export function TwoWheelerBookingHosurPage() {
             <div className="flex flex-col text-left">
               <div className="h-5 mb-1.5 flex items-center">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                  Phone Number *
+                  Mobile Number *
                 </label>
               </div>
               <input
                 type="tel"
-                placeholder="Enter Phone Number"
+                placeholder="10-digit mobile number"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))}
                 className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
@@ -1016,7 +1056,7 @@ export function TwoWheelerBookingHosurPage() {
             <div className="flex flex-col text-left">
               <div className="h-5 mb-1.5 flex items-center">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                  What describes you best *
+                  Parcel Category *
                 </label>
               </div>
               <select
@@ -1024,10 +1064,10 @@ export function TwoWheelerBookingHosurPage() {
                 onChange={(e) => setUserType(e.target.value)}
                 className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium cursor-pointer"
               >
-                <option value="Personal Use / Delivery">Personal Use / Delivery</option>
-                <option value="Business / SME Courier">Business / SME Courier</option>
-                <option value="Retail / E-commerce">Retail / E-commerce</option>
-                <option value="Pharmacy / Urgent Delivery">Pharmacy / Urgent Delivery</option>
+                <option value="Personal Parcels & Documents">Personal Parcels & Documents</option>
+                <option value="Business & SME Courier">Business & SME Courier</option>
+                <option value="Retail & E-Commerce Orders">Retail & E-Commerce Orders</option>
+                <option value="Medical & Urgent Essentials">Medical & Urgent Essentials</option>
               </select>
             </div>
 
@@ -1038,7 +1078,7 @@ export function TwoWheelerBookingHosurPage() {
                 type="submit"
                 className="w-full h-10 sm:h-11 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
               >
-                <span>Get Estimate</span>
+                <span>Calculate Fare</span>
                 <ArrowRight className="w-4 h-4 shrink-0" />
               </button>
             </div>
@@ -1066,7 +1106,7 @@ export function TwoWheelerBookingHosurPage() {
         </div>
 
         {/* 2 Centered Cards matching Truck UI layout */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto mt-8 items-stretch">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto mt-6 sm:mt-8 items-stretch">
           {TWO_WHEELER_VEHICLES.map((vehicle) => (
             <div
               key={vehicle.id}
@@ -1089,32 +1129,16 @@ export function TwoWheelerBookingHosurPage() {
                 <p className="text-sm text-slate-600 mt-1">
                   Starting from <span className="font-bold text-slate-900 text-base">{vehicle.price}</span>
                 </p>
-                <p className="text-[11px] text-slate-500 leading-relaxed mt-2 max-w-xs">
-                  Base fare is inclusive of 1.0 km distance &amp; 25 minutes of order time. Pricing may vary basis locality.
-                </p>
               </div>
 
-              {/* Know More dotted link & Book Button */}
-              <div className="w-full mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setActiveVehicleDetails(vehicle)}
-                  className="text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 border-b border-dotted border-blue-600 hover:border-blue-700 cursor-pointer pb-0.5 inline-block focus:outline-none"
-                >
-                  Know More
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedVehicle(vehicle)
-                    handleGetEstimate()
-                  }}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span>Select &amp; Book</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              {/* Know More dotted link */}
+              <button
+                type="button"
+                onClick={() => setActiveVehicleDetails(vehicle)}
+                className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 border-b border-dotted border-emerald-600 hover:border-emerald-700 mt-5 cursor-pointer pb-0.5 inline-block focus:outline-none"
+              >
+                Know More
+              </button>
             </div>
           ))}
         </div>
@@ -1132,7 +1156,7 @@ export function TwoWheelerBookingHosurPage() {
             </p>
           </div>
 
-          <div className="bg-[#EFF6FF]/60 border border-blue-100 rounded-3xl p-5 sm:p-8">
+          <div className="bg-[#F0FDF4]/70 border border-emerald-100 rounded-3xl p-5 sm:p-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {POPULAR_ROUTES.map((route, idx) => (
                 <div
@@ -1149,7 +1173,7 @@ export function TwoWheelerBookingHosurPage() {
                     <span className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
                       to {route.to} <span className="text-xs font-semibold text-slate-400">({route.distance})</span>
                     </span>
-                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
                       {route.time}
                     </span>
                   </div>
@@ -1457,7 +1481,7 @@ export function TwoWheelerBookingHosurPage() {
                   {otpStep ? "Enter OTP Verification" : "Sign In to Complete Booking"}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {otpStep ? `We sent a 4-digit code to +91 ${phone}` : "Quick verification to confirm your booking"}
+                  {otpStep ? `We sent a 6-digit code to +91 ${phone}` : "Quick verification to confirm your booking"}
                 </p>
               </div>
               <button
@@ -1629,6 +1653,28 @@ export function TwoWheelerBookingHosurPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* 5. Support & Help Center Modal */}
+      <SupportHelpCenterModal
+        isOpen={supportModalOpen}
+        onClose={() => setSupportModalOpen(false)}
+      />
+
+      {/* Customer Account & Entry Flow Modals */}
+      {showAccountPortal && (
+        <CustomerAccountModal
+          isOpen={showAccountPortal}
+          onClose={() => setShowAccountPortal(false)}
+          defaultTab="My Profile"
+        />
+      )}
+      {showCustomerEntryModal && (
+        <CustomerEntryFlowModal
+          isOpen={showCustomerEntryModal}
+          onClose={() => setShowCustomerEntryModal(false)}
+          onSuccess={() => setShowCustomerEntryModal(false)}
+        />
       )}
     </div>
   )

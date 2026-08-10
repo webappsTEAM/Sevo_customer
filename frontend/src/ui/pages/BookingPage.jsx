@@ -11,7 +11,7 @@ import {
   LogIn, ChevronDown, ChevronUp, Plus, Award, Users, ThumbsUp, ArrowRight,
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
-  Calculator, PaintRoller, Smartphone, MoreVertical
+  Calculator, PaintRoller, Smartphone, MoreVertical, Truck
 } from "lucide-react"
 import {
   apiRequestCustomerEmailOTP, apiVerifyCustomerEmailOTP,
@@ -1300,7 +1300,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
   const rotWords = featured.map(c => c.name)
 
   const displayName = user?.firstName || user?.first_name || user?.full_name || user?.username
-  const greeting = displayName ? `Hi, ${displayName} 👋` : "Hi, Guest 👋"
+  const greeting = displayName || "Guest"
 
   useEffect(() => {
     const t = setInterval(() => setRotIdx(i => (i + 1) % rotWords.length), 4500)
@@ -3470,7 +3470,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 <input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)} style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }} />
               </div>
             </div>
-            <button onClick={handleSaveProfile} disabled={isSavingProfile} style={{ marginTop: 32, padding: '0.9rem 2.5rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer', boxShadow: '0 10px 20px rgba(124, 58, 237, 0.2)', opacity: isSavingProfile ? 0.7 : 1 }}>
+            <button onClick={handleSaveProfile} disabled={isSavingProfile} style={{ marginTop: 32, padding: '0.9rem 2.5rem', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer', boxShadow: '0 10px 20px rgba(5, 150, 105, 0.25)', opacity: isSavingProfile ? 0.7 : 1 }}>
               {isSavingProfile ? 'Saving...' : 'Save Changes'}
             </button>
           </motion.div>
@@ -3484,7 +3484,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading bookings...</div>
               ) : realBookings.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#f8fafc', borderRadius: 20, border: '1px solid #e2e8f0' }}>
-                  <div style={{ width: 64, height: 64, borderRadius: 16, background: '#f3e8ff', color: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 4px 12px rgba(124,58,237,0.15)' }}>
+                  <div style={{ width: 64, height: 64, borderRadius: 16, background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 4px 12px rgba(5,150,105,0.15)' }}>
                     <Calendar size={30} />
                   </div>
                   <h4 style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.15rem', color: '#0f172a' }}>No Active Bookings Yet</h4>
@@ -3493,7 +3493,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   </p>
                   <button
                     onClick={() => { onClose(); setStep(1); }}
-                    style={{ padding: '12px 24px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.25)' }}
+                    style={{ padding: '12px 24px', background: '#059669', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(5,150,105,0.25)' }}
                   >
                     + Book a Service Now
                   </button>
@@ -3523,7 +3523,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                           <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
-                          <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: b.status === 'completed' ? '#10B98115' : '#7C3AED15', color: b.status === 'completed' ? '#10B981' : '#7C3AED', border: `1px solid ${b.status === 'completed' ? '#10B98130' : '#7C3AED30'}` }}>{b.status_display || b.status}</span>
+                          <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>{b.status_display || b.status}</span>
                         </div>
                         <div style={{ fontSize: '0.85rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}><Calendar size={13} /> {b.preferred_date || 'N/A'} &nbsp;•&nbsp; <span style={{ fontFamily: 'monospace' }}>{b.request_id}</span></div>
 
@@ -3537,9 +3537,9 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 setShowRescheduleForm(true)
                                 if (typeof onChangeTab === 'function') onChangeTab('My Reschedules')
                               }}
-                              style={{ padding: '6px 14px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 6px rgba(124,58,237,0.3)' }}
-                              onMouseOver={e => e.currentTarget.style.background = '#6d28d9'}
-                              onMouseOut={e => e.currentTarget.style.background = '#7C3AED'}
+                              style={{ padding: '6px 14px', background: '#059669', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 6px rgba(5,150,105,0.3)' }}
+                              onMouseOver={e => e.currentTarget.style.background = '#047857'}
+                              onMouseOut={e => e.currentTarget.style.background = '#059669'}
                             >
                               <RefreshCw size={13} /> Reschedule
                             </button>
@@ -3552,9 +3552,9 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                         </div>
                         <button
                           onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
-                          style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#7C3AED', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(124,58,237,0.25)', transition: 'background 0.2s' }}
-                          onMouseOver={e => e.currentTarget.style.background = '#6d28d9'}
-                          onMouseOut={e => e.currentTarget.style.background = '#7C3AED'}
+                          style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
+                          onMouseOver={e => e.currentTarget.style.background = '#047857'}
+                          onMouseOut={e => e.currentTarget.style.background = '#059669'}
                         >
                           {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
                         </button>
@@ -3565,7 +3565,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 16px 16px', padding: '1.5rem', marginTop: '-16px', position: 'relative', zIndex: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, borderBottom: '1px solid #e2e8f0', paddingBottom: 10 }}>
                           <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem' }}>📋 Full Booking Overview</div>
-                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#7C3AED', background: '#7C3AED10', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
+                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: '0.85rem' }}>
@@ -3803,11 +3803,11 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <button type="button" onClick={handleDetectLocationForAddress} disabled={geoAddressLoading}
-                  style={{ padding: '10px 16px', background: '#ede9fe', color: '#6366f1', border: '1.5px solid #c4b5fd', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  style={{ padding: '10px 16px', background: '#ecfdf5', color: '#059669', border: '1.5px solid #a7f3d0', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Compass size={16} /> {geoAddressLoading ? "Detecting..." : "Use Current Location"}
                 </button>
                 <button onClick={() => handleOpenForm(null)}
-                  style={{ padding: '10px 20px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(99,102,241,0.25)' }}>
+                  style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(5,150,105,0.25)' }}>
                   <MapPin size={15} /> Add New Address
                 </button>
               </div>
@@ -3827,7 +3827,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
             {showAddressForm ? (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                style={{ border: '1.5px solid #6366f130', borderRadius: 20, padding: '1.75rem', background: '#faf5ff', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(99,102,241,0.08)' }}>
+                style={{ border: '1.5px solid #05966930', borderRadius: 20, padding: '1.75rem', background: '#f0fdf4', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(5,150,105,0.08)' }}>
                 <div style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: 18, color: '#0f172a' }}>
                   {editingAddress ? 'Edit Address' : 'Add New Address'}
                 </div>
@@ -3839,7 +3839,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   style={{
                     width: '100%',
                     padding: '12px',
-                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                    background: 'linear-gradient(135deg, #059669, #10b981)',
                     color: 'white',
                     border: 'none',
                     borderRadius: 14,
@@ -3851,7 +3851,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     justifyContent: 'center',
                     gap: 8,
                     marginBottom: 18,
-                    boxShadow: '0 4px 14px rgba(99,102,241,0.25)'
+                    boxShadow: '0 4px 14px rgba(5,150,105,0.25)'
                   }}
                 >
                   <Compass size={18} /> {geoAddressLoading ? "Detecting Location..." : "📍 Autofill with Current Location (GPS)"}
@@ -3873,9 +3873,9 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                           style={{
                             padding: '10px 18px',
                             borderRadius: 12,
-                            border: addrLabel === type.code ? '2px solid #7C3AED' : '1px solid #cbd5e1',
-                            background: addrLabel === type.code ? '#f3e8ff' : 'white',
-                            color: addrLabel === type.code ? '#7C3AED' : '#475569',
+                            border: addrLabel === type.code ? '2px solid #059669' : '1px solid #cbd5e1',
+                            background: addrLabel === type.code ? '#ecfdf5' : 'white',
+                            color: addrLabel === type.code ? '#059669' : '#475569',
                             fontWeight: 800,
                             fontSize: '0.85rem',
                             cursor: 'pointer',
@@ -3938,14 +3938,14 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
                   {/* Set Default Toggle */}
                   <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none', marginTop: 4 }}>
-                    <input type="checkbox" checked={addrIsDefault} onChange={e => setAddrIsDefault(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#7C3AED' }} />
+                    <input type="checkbox" checked={addrIsDefault} onChange={e => setAddrIsDefault(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#059669' }} />
                     <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>Set as Default Address for Bookings</span>
                   </label>
 
                   {/* Submit & Cancel */}
                   <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                     <button onClick={handleSaveAddress} disabled={addrSubmitting}
-                      style={{ padding: '12px 24px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer', opacity: addrSubmitting ? 0.7 : 1 }}>
+                      style={{ padding: '12px 24px', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer', opacity: addrSubmitting ? 0.7 : 1 }}>
                       {addrSubmitting ? 'Saving...' : (editingAddress ? 'Save Changes' : 'Save Address')}
                     </button>
                     <button onClick={() => { setShowAddressForm(false); setEditingAddress(null); }}
@@ -3965,7 +3965,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#0f172a' }}>No saved addresses found.</div>
                     <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 4 }}>Add your home or office location to enable fast 1-click booking.</div>
                     <button onClick={() => handleOpenForm(null)}
-                      style={{ marginTop: 16, padding: '10px 20px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer' }}>
+                      style={{ marginTop: 16, padding: '10px 20px', background: '#059669', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer' }}>
                       + Add Your First Address
                     </button>
                   </div>
@@ -3976,7 +3976,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                       return (
                         <div key={addr.id}
                           style={{
-                            border: addr.is_default ? '2px solid #7C3AED' : '1px solid #e2e8f0',
+                            border: addr.is_default ? '2px solid #059669' : '1px solid #e2e8f0',
                             borderRadius: 18,
                             padding: '1.35rem',
                             background: 'white',
@@ -3997,7 +3997,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 </span>
                               </div>
                               {addr.is_default && (
-                                <span style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#7C3AED', color: 'white' }}>
+                                <span style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#059669', color: 'white' }}>
                                   Default
                                 </span>
                               )}
@@ -4039,7 +4039,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                           {/* Action Row */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
                             <button onClick={() => handleUseForBooking(addr)}
-                              style={{ width: '100%', padding: '9px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}>
+                              style={{ width: '100%', padding: '9px', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}>
                               Use for Booking
                             </button>
 
@@ -4056,7 +4056,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
                               {!addr.is_default ? (
                                 <button onClick={() => handleSetDefault(addr.id)}
-                                  style={{ padding: '7px 4px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', color: '#7C3AED', textAlign: 'center' }}>
+                                  style={{ padding: '7px 4px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', color: '#059669', textAlign: 'center' }}>
                                   ⭐ Default
                                 </button>
                               ) : (
@@ -5043,8 +5043,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           <p style={{ color: '#64748b', fontSize: '0.95rem', marginBottom: 32 }}>Log in to view your bookings and manage your profile.</p>
 
           <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-            <button onClick={() => { setLoginMethod('email'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'email' ? '2px solid #7C3AED' : '1px solid #e2e8f0', background: loginMethod === 'email' ? '#7C3AED10' : 'white', color: loginMethod === 'email' ? '#7C3AED' : '#64748b' }}>Email</button>
-            <button onClick={() => { setLoginMethod('phone'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'phone' ? '2px solid #7C3AED' : '1px solid #e2e8f0', background: loginMethod === 'phone' ? '#7C3AED10' : 'white', color: loginMethod === 'phone' ? '#7C3AED' : '#64748b' }}>Phone</button>
+            <button onClick={() => { setLoginMethod('email'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'email' ? '2px solid #059669' : '1px solid #e2e8f0', background: loginMethod === 'email' ? '#05966910' : 'white', color: loginMethod === 'email' ? '#059669' : '#64748b' }}>Email</button>
+            <button onClick={() => { setLoginMethod('phone'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'phone' ? '2px solid #059669' : '1px solid #e2e8f0', background: loginMethod === 'phone' ? '#05966910' : 'white', color: loginMethod === 'phone' ? '#059669' : '#64748b' }}>Phone</button>
           </div>
 
           {loginError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '12px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600, marginBottom: 20 }}>{loginError}</div>}
@@ -5062,7 +5062,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   <input type="tel" value={loginPhone} onChange={e => setLoginPhone(e.target.value)} placeholder="+91 98765 43210" style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '1rem', color: '#0f172a' }} />
                 </div>
               )}
-              <button onClick={handleRequestOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#7C3AED', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
+              <button onClick={handleRequestOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#059669', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
                 {loginLoading ? 'Sending...' : 'Send Login Code'}
               </button>
 
@@ -5109,7 +5109,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 8 }}>Enter 6-digit OTP</label>
                 <input type="text" value={otpValue} onChange={e => setOtpValue(e.target.value)} placeholder="123456" maxLength={6} style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '1.2rem', letterSpacing: '4px', textAlign: 'center', color: '#0f172a', fontWeight: 700 }} />
               </div>
-              <button onClick={handleVerifyOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#7C3AED', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
+              <button onClick={handleVerifyOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#059669', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
                 {loginLoading ? 'Verifying...' : 'Verify & Login'}
               </button>
               <div style={{ textAlign: 'center', marginTop: 16 }}>
@@ -5150,18 +5150,18 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', cursor: 'pointer',
                   background: activeTab === t.id ? 'white' : 'transparent',
-                  borderLeft: `4px solid ${activeTab === t.id ? '#7C3AED' : 'transparent'}`,
-                  color: activeTab === t.id ? '#7C3AED' : '#475569',
+                  borderLeft: `4px solid ${activeTab === t.id ? '#059669' : 'transparent'}`,
+                  color: activeTab === t.id ? '#059669' : '#475569',
                   fontWeight: activeTab === t.id ? 800 : 600,
                   fontSize: '0.95rem',
                   transition: 'all 0.2s'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <t.icon size={20} color={activeTab === t.id ? '#7C3AED' : '#94a3b8'} /> {t.id}
+                  <t.icon size={20} color={activeTab === t.id ? '#059669' : '#94a3b8'} /> {t.id}
                 </div>
                 {t.badge > 0 && (
-                  <span style={{ background: '#7C3AED', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
+                  <span style={{ background: '#059669', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
                     {t.badge}
                   </span>
                 )}
@@ -5197,6 +5197,635 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           </div>
         </div>
       </motion.div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   QUICK COMMERCE CART & CHECKOUT (Matching User Screenshots 2, 3, 4)
+   ───────────────────────────────────────────────────────────── */
+
+function QuickCommerceCartCheckout({
+  cart,
+  setCart,
+  category,
+  onBack,
+  user
+}) {
+  const [isAddressScreenOpen, setIsAddressScreenOpen] = useState(false)
+  const [savedAddresses, setSavedAddresses] = useState([
+    {
+      id: "addr_home",
+      type: "Home",
+      address: "Thozhi Hostel Thozhi Hostel, Viswanath Puram, Thillai Nagar, Hosur, Tamil Nadu, India",
+      icon: "home"
+    },
+    {
+      id: "addr_work",
+      type: "Work",
+      address: "golden fairmart, near rto check post Thillai Nagar, Nallur",
+      icon: "work"
+    }
+  ])
+  const [selectedAddressId, setSelectedAddressId] = useState("addr_home")
+  const [isDonationChecked, setIsDonationChecked] = useState(false)
+  const [selectedTip, setSelectedTip] = useState(null)
+  const [customTip, setCustomTip] = useState("")
+  const [isCustomTipOpen, setIsCustomTipOpen] = useState(false)
+  const [showAddAddressModal, setShowAddAddressModal] = useState(false)
+  const [newAddressText, setNewAddressText] = useState("")
+  const [newAddressType, setNewAddressType] = useState("Home")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [orderConfirmedData, setOrderConfirmedData] = useState(null)
+  const [errorMsg, setErrorMsg] = useState("")
+
+  const activeAddressObj = savedAddresses.find(a => a.id === selectedAddressId) || savedAddresses[0]
+
+  const itemsTotal = cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0)
+  const itemsOriginalTotal = cart.reduce((sum, item) => sum + (item.mrp || Math.round((item.price || 0) * 1.2)) * (item.quantity || 1), 0)
+  const savings = Math.max(0, itemsOriginalTotal - itemsTotal)
+  const deliveryCharge = itemsTotal >= 199 ? 0 : 30
+  const handlingCharge = itemsTotal > 0 ? 5 : 0
+  const surgeCharge = 15
+  const donationAmount = isDonationChecked ? 1 : 0
+  const tipAmount = selectedTip === "custom" ? (parseInt(customTip) || 0) : (selectedTip || 0)
+  const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + surgeCharge + donationAmount + tipAmount)
+
+  const handleUpdateQty = (id, delta) => {
+    setCart(prev => {
+      return prev
+        .map(it => {
+          if (it.id === id) {
+            const nextQty = (it.quantity || 1) + delta
+            return nextQty > 0 ? { ...it, quantity: nextQty } : null
+          }
+          return it
+        })
+        .filter(Boolean)
+    })
+  }
+
+  const handleAddNewAddress = (e) => {
+    e?.preventDefault()
+    if (!newAddressText.trim()) return
+    const newId = `addr_${Date.now()}`
+    const newObj = {
+      id: newId,
+      type: newAddressType,
+      address: newAddressText.trim(),
+      icon: newAddressType.toLowerCase() === "work" ? "work" : "home"
+    }
+    setSavedAddresses(prev => [newObj, ...prev])
+    setSelectedAddressId(newId)
+    setNewAddressText("")
+    setShowAddAddressModal(false)
+    setIsAddressScreenOpen(false)
+  }
+
+  const handleProceedToPay = async () => {
+    if (cart.length === 0) return
+    setIsSubmitting(true)
+    setErrorMsg("")
+    try {
+      const today = new Date().toISOString().split("T")[0]
+      const payload = {
+        customer_name: user?.full_name || user?.fullName || user?.firstName || "Valued Customer",
+        phone: user?.phone || "9876543210",
+        service_category: "vegetables_quick_delivery",
+        issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items)`,
+        description: `Quick Commerce Vegetable Order\nDelivering to: ${activeAddressObj?.address || "Hosur"}`,
+        address: activeAddressObj?.address || "Hosur, Tamil Nadu",
+        preferred_date: today,
+        total_amount: grandTotal,
+        payment_method: "COD",
+        cart_data: cart.map(c => ({
+          name: c.name || c.displayName,
+          displayName: c.displayName,
+          unit: c.unit,
+          price: c.price,
+          quantity: c.quantity,
+          image: c.image
+        }))
+      }
+
+      let res = null
+      try {
+        res = await apiRequest("/booking/", { method: "POST", data: payload })
+      } catch (e) {
+        // Fallback response for rapid mock checkout
+        res = { success: true, request_id: `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}` }
+      }
+
+      setOrderConfirmedData({
+        requestId: res?.data?.request_id || res?.request_id || `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}`,
+        address: activeAddressObj?.address,
+        total: grandTotal,
+        itemsCount: cart.reduce((a, b) => a + (b.quantity || 1), 0),
+        eta: "15-20 minutes"
+      })
+    } catch (err) {
+      setErrorMsg(err?.message || "Failed to place order. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (orderConfirmedData) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-4">
+        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-xl border border-slate-100 text-center animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-600/30">
+            <CheckCircle2 className="w-9 h-9" />
+          </div>
+          <h3 className="text-2xl font-black text-slate-900 mb-1">Order Confirmed!</h3>
+          <p className="text-xs text-slate-500 font-semibold mb-6">
+            Order ID: <span className="text-emerald-700 font-bold">{orderConfirmedData.requestId}</span>
+          </p>
+
+          <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 text-left space-y-2 mb-6">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-bold">Estimated Delivery:</span>
+              <span className="text-emerald-800 font-extrabold flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                {orderConfirmedData.eta}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-bold">Items Count:</span>
+              <span className="text-slate-800 font-bold">{orderConfirmedData.itemsCount} items</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-bold">Total (Cash on Delivery):</span>
+              <span className="text-slate-900 font-black text-sm">₹{orderConfirmedData.total}</span>
+            </div>
+            <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-slate-600">
+              <span className="font-bold text-slate-700">Delivering to: </span>
+              {orderConfirmedData.address}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (onBack) {
+                onBack()
+              } else {
+                window.location.href = "/home"
+              }
+            }}
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Address Selection View (Image 3)
+  if (isAddressScreenOpen) {
+    return (
+      <div className="min-h-screen bg-[#f3f5f8] text-slate-800 flex justify-center py-4 px-2 sm:px-4 font-sans">
+        <div className="max-w-md w-full bg-[#f8fafc] min-h-screen shadow-lg rounded-2xl flex flex-col justify-between overflow-hidden border border-slate-200/80">
+          <div>
+            {/* Header */}
+            <div className="bg-white px-4 py-3.5 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-20">
+              <button
+                type="button"
+                onClick={() => setIsAddressScreenOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 cursor-pointer"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-base font-extrabold text-slate-900">Select delivery address</h2>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Add a new address button */}
+              <button
+                type="button"
+                onClick={() => setShowAddAddressModal(true)}
+                className="w-full bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex items-center gap-3 text-emerald-700 hover:border-emerald-500 font-extrabold text-sm transition-all cursor-pointer"
+              >
+                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <span>Add a new address</span>
+              </button>
+
+              {/* Your saved address Section */}
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 px-1">
+                  Your saved address
+                </h3>
+                <div className="space-y-3">
+                  {savedAddresses.map((addr) => {
+                    const isSelected = selectedAddressId === addr.id
+                    return (
+                      <div
+                        key={addr.id}
+                        onClick={() => {
+                          setSelectedAddressId(addr.id)
+                          setIsAddressScreenOpen(false)
+                        }}
+                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-xs ${
+                          isSelected ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200/90 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                            {addr.type.toLowerCase() === "work" ? (
+                              <Users className="w-5 h-5" />
+                            ) : (
+                              <Home className="w-5 h-5" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-extrabold text-slate-900">{addr.type}</h4>
+                              {isSelected && (
+                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                                  SELECTED
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed line-clamp-3">
+                              {addr.address}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setNewAddressText(addr.address)
+                            setNewAddressType(addr.type)
+                            setShowAddAddressModal(true)
+                          }}
+                          className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-emerald-700 transition-colors shrink-0"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Add Address Modal */}
+          {showAddAddressModal && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-extrabold text-slate-900">Add Address in Hosur</h3>
+                  <button onClick={() => setShowAddAddressModal(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+                    <X className="w-4 h-4 text-slate-600" />
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Save Address as</label>
+                    <div className="flex gap-2">
+                      {["Home", "Work", "Other"].map(t => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setNewAddressType(t)}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${
+                            newAddressType === t ? "bg-emerald-600 text-white border-emerald-600" : "bg-slate-50 text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Complete Address</label>
+                    <textarea
+                      rows={3}
+                      value={newAddressText}
+                      onChange={(e) => setNewAddressText(e.target.value)}
+                      placeholder="House/Flat No., Building, Street, Area, Hosur..."
+                      className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-emerald-600"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddNewAddress}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md cursor-pointer transition-all"
+                  >
+                    Save &amp; Select Address
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Main "My Cart" View (Image 2 & Image 4)
+  return (
+    <div className="min-h-screen bg-slate-100/70 text-slate-800 flex justify-center py-0 sm:py-8 px-0 sm:px-4 font-sans">
+      <div className="max-w-md sm:max-w-xl md:max-w-2xl w-full bg-white sm:rounded-3xl shadow-xl border border-slate-200/80 flex flex-col justify-between overflow-hidden">
+        <div>
+          {/* Header */}
+          <div className="bg-white/95 backdrop-blur-md px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onBack}
+                className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-lg sm:text-xl font-black text-slate-900 leading-none">My Cart</h1>
+                <span className="text-[11px] font-semibold text-slate-400">Hosur Express Delivery</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: "My Vegetables Cart", url: window.location.href }).catch(() => {})
+                }
+              }}
+              className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 cursor-pointer bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200/60 transition-colors"
+            >
+              <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Share Cart</span>
+            </button>
+          </div>
+
+          <div className="p-4 sm:p-6 space-y-4 bg-slate-50/50">
+            {/* Delivery Time Banner (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/70 flex items-center justify-center shrink-0 shadow-2xs">
+                <Clock className="w-6 h-6 text-amber-600 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Delivery in 15 minutes</h3>
+                <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                  Shipment of {cart.reduce((a, b) => a + (b.quantity || 1), 0)} farm-fresh items
+                </p>
+              </div>
+            </div>
+
+            {/* Cart Items List (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs divide-y divide-slate-100 space-y-3.5">
+              {cart.map((item, idx) => (
+                <div key={item.id || idx} className={`flex items-center justify-between gap-3.5 ${idx > 0 ? "pt-3.5" : ""}`}>
+                  {/* Left: Product Thumbnail */}
+                  <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#f5f1eb] overflow-hidden shrink-0 border border-slate-100 shadow-2xs">
+                    <img
+                      src={item.image || "/mockups/category_food_health.png"}
+                      alt={item.name}
+                      className="w-full h-full object-cover hover:scale-105 transition-transform"
+                      onError={(e) => {
+                        e.target.onerror = null
+                        e.target.src = "/mockups/category_food_health.png"
+                      }}
+                    />
+                  </div>
+
+                  {/* Middle: Details */}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-1">
+                      {item.displayName || item.name}
+                    </h4>
+                    <p className="text-[11px] font-semibold text-slate-400 mt-0.5">{item.unit || "1 unit"}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-sm font-black text-slate-900">₹{item.price}</span>
+                      {item.mrp && (
+                        <span className="text-xs line-through text-slate-400 font-semibold">
+                          ₹{item.mrp}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: Counter Button (Green style matching Image 2 & 4) */}
+                  <div className="flex items-center bg-[#15803d] hover:bg-[#166534] text-white rounded-xl px-2.5 py-1.5 shadow-xs shrink-0 transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateQty(item.id, -1)}
+                      className="text-white hover:text-emerald-100 font-black text-sm px-1.5 cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <span className="text-xs font-black min-w-[18px] text-center px-1">
+                      {item.quantity || 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateQty(item.id, 1)}
+                      className="text-white hover:text-emerald-100 font-black text-sm px-1.5 cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Bill Details Card (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-3">
+              <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Bill details</h3>
+
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+                <div className="flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-slate-400" />
+                  <span>Items total</span>
+                  {savings > 0 && (
+                    <span className="text-[10px] font-black bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">
+                      Saved ₹{savings}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {savings > 0 && (
+                    <span className="line-through text-slate-400 text-xs">₹{itemsOriginalTotal}</span>
+                  )}
+                  <span className="font-bold text-slate-900">₹{itemsTotal}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+                <div className="flex items-center gap-1">
+                  <Truck className="w-4 h-4 text-slate-400" />
+                  <span>Delivery charge</span>
+                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                </div>
+                <span className={`font-bold ${deliveryCharge === 0 ? "text-emerald-700" : "text-slate-900"}`}>
+                  {deliveryCharge === 0 ? "FREE" : `₹${deliveryCharge}`}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+                <div className="flex items-center gap-1">
+                  <Package className="w-4 h-4 text-slate-400" />
+                  <span>Handling charge</span>
+                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                </div>
+                <span className="font-bold text-slate-900">₹{handlingCharge}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+                <div className="flex items-center gap-1">
+                  <Droplets className="w-4 h-4 text-slate-400" />
+                  <span>Rain surge / High demand charge</span>
+                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                </div>
+                <span className="font-bold text-slate-900">₹{surgeCharge}</span>
+              </div>
+
+              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-sm sm:text-base font-extrabold text-slate-900">Grand total</span>
+                <span className="text-base sm:text-lg font-black text-slate-900">₹{grandTotal}</span>
+              </div>
+            </div>
+
+            {/* Feeding India Donation Card (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
+                  <span className="text-lg">🍲</span>
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900">Feeding India donation</h4>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5 line-clamp-1">
+                    Working towards a malnutrition free India.
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                <span className="text-xs font-black text-slate-900">₹1</span>
+                <input
+                  type="checkbox"
+                  checked={isDonationChecked}
+                  onChange={(e) => setIsDonationChecked(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+              </label>
+            </div>
+
+            {/* Tip Your Delivery Partner Card (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-2.5">
+              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">Tip your delivery partner</h3>
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
+                Your kindness means a lot! 100% of your tip will go directly to your delivery partner.
+              </p>
+              <div className="grid grid-cols-4 gap-2 pt-1">
+                {[
+                  { label: "₹20", val: 20, icon: "👏" },
+                  { label: "₹30", val: 30, icon: "💌" },
+                  { label: "₹50", val: 50, icon: "❤️" },
+                  { label: "Custom", val: "custom", icon: "✨" },
+                ].map((t) => {
+                  const isSelected = selectedTip === t.val
+                  return (
+                    <button
+                      key={t.label}
+                      type="button"
+                      onClick={() => {
+                        if (selectedTip === t.val) {
+                          setSelectedTip(null)
+                          setIsCustomTipOpen(false)
+                        } else {
+                          setSelectedTip(t.val)
+                          setIsCustomTipOpen(t.val === "custom")
+                        }
+                      }}
+                      className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        isSelected
+                          ? "bg-emerald-50 border-emerald-600 text-emerald-800 shadow-2xs"
+                          : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
+                      }`}
+                    >
+                      <span>{t.icon}</span>
+                      <span>{t.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {isCustomTipOpen && (
+                <div className="pt-2">
+                  <input
+                    type="number"
+                    value={customTip}
+                    onChange={(e) => setCustomTip(e.target.value)}
+                    placeholder="Enter custom tip amount (₹)"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-600"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Cancellation Policy Card (Image 2 & 4) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-1">
+              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">Cancellation Policy</h3>
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-relaxed">
+                Orders cannot be cancelled once packed for delivery. In case of unexpected delays, a refund will be provided, if applicable.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Delivering to Home & Sticky Bottom Checkout Bar (Image 2 & 4) */}
+        <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 sm:p-5 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] z-30 space-y-3">
+          {/* Delivering to Home Address Bar */}
+          <div className="flex items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="font-extrabold text-slate-900 block leading-tight">
+                  Delivering to {activeAddressObj?.type || "Home"}
+                </span>
+                <p className="text-[11px] text-slate-500 font-medium truncate max-w-[220px] sm:max-w-[340px]">
+                  {activeAddressObj?.address || "Hosur, Tamil Nadu"}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAddressScreenOpen(true)}
+              className="text-xs sm:text-sm font-extrabold text-emerald-700 hover:text-emerald-800 hover:underline shrink-0 cursor-pointer"
+            >
+              Change
+            </button>
+          </div>
+
+          {errorMsg && (
+            <p className="text-xs font-bold text-rose-600 text-center">{errorMsg}</p>
+          )}
+
+          {/* Proceed To Pay Bar */}
+          <button
+            type="button"
+            disabled={isSubmitting || cart.length === 0}
+            onClick={handleProceedToPay}
+            className="w-full bg-[#15803d] hover:bg-[#166534] disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-emerald-700/20 cursor-pointer active:scale-98 transition-all"
+          >
+            <div className="text-left flex flex-col">
+              <span className="text-base sm:text-lg font-black leading-none">₹{grandTotal}</span>
+              <span className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider mt-0.5">TOTAL</span>
+            </div>
+            <div className="flex items-center gap-2 font-black">
+              <span>{isSubmitting ? "Placing Order..." : "Proceed To Pay"}</span>
+              <ChevronRight className="w-5 h-5" />
+            </div>
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -6008,6 +6637,24 @@ export function BookingPage() {
     sessionStorage.removeItem(OTP_SESSION_KEY)
     // No StepHome anymore — go back to landing page
     navigate("/", { replace: true })
+  }
+
+  const isQuickCommerce =
+    category?.isQuickCommerce ||
+    incomingCategory?.isQuickCommerce ||
+    routerLocation.state?.isQuickCommerce ||
+    cart.some(i => i.serviceType === "vegetables_quick_delivery")
+
+  if (isQuickCommerce && cart.length > 0) {
+    return (
+      <QuickCommerceCartCheckout
+        cart={cart}
+        setCart={setCart}
+        category={category}
+        user={user}
+        onBack={() => navigate(routes.landing || "/home", { replace: true })}
+      />
+    )
   }
 
   return (

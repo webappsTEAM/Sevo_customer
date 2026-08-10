@@ -12,6 +12,10 @@ import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logi
 import { createBooking } from "../../api/bookingService.js"
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
+import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
+import { useAuth } from "../../state/auth/useAuth.js"
+import { CustomerAccountModal } from "./BookingPage.jsx"
+import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 
 const LOGISTICS_CITY = "hosur"
 
@@ -490,14 +494,28 @@ export function PackersMoversBookingHosurPage() {
   const [selectedPackage, setSelectedPackage] = useState(null)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
+  const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
   const [otpStep, setOtpStep] = useState(false)
   const [otpValue, setOtpValue] = useState("")
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
   const [loginEmail, setLoginEmail] = useState("")
   const [loginWhatsapp, setLoginWhatsapp] = useState(true)
-  const [isSignedIn, setIsSignedIn] = useState(false)
-  const [otpSent, setOtpSent] = useState(false)
-  const [otpLoading, setOtpLoading] = useState(false)
+  const { user } = useAuth()
+  const [showAccountPortal, setShowAccountPortal] = useState(false)
+  const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
+  const [localIsSignedIn, setLocalIsSignedIn] = useState(false)
+  const isSignedIn = Boolean(user) || localIsSignedIn
+
+  // Prefill user details if signed in
+  useEffect(() => {
+    if (user) {
+      const fullName = user.full_name || user.fullName || user.first_name || user.firstName || user.username
+      if (fullName && !name) setName(fullName)
+      if (user.phone && !phone) setPhone(user.phone)
+    }
+  }, [user])
 
   // Suggestions Dropdown State
   const [showPickupSuggestions, setShowPickupSuggestions] = useState(false)
@@ -514,6 +532,12 @@ export function PackersMoversBookingHosurPage() {
 
   // Details Modal
   const [activePackageDetails, setActivePackageDetails] = useState(null)
+
+  // Lock body scroll when Know More modal is open
+  useEffect(() => {
+    document.body.style.overflow = activePackageDetails ? "hidden" : ""
+    return () => { document.body.style.overflow = "" }
+  }, [activePackageDetails])
 
   // FAQ state
   const [openFaq, setOpenFaq] = useState(null)
@@ -829,7 +853,7 @@ export function PackersMoversBookingHosurPage() {
     setBookingError("")
     try {
       await apiVerifyCustomerPhoneOTP(phone, otpValue)
-      setIsSignedIn(true)
+      setLocalIsSignedIn(true)
       setLoginModalOpen(false)
       setOtpStep(false)
       setOtpValue("")
@@ -883,13 +907,29 @@ export function PackersMoversBookingHosurPage() {
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
             <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>Services</span>
             <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>For Enterprise</span>
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>Support</span>
-            <button
-              onClick={() => navigate(routes.login)}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
-            >
-              Sign In
-            </button>
+            <span className="hover:text-emerald-600 cursor-pointer" onClick={() => setSupportModalOpen(true)}>Support</span>
+            {user ? (
+              <button
+                type="button"
+                onClick={() => setShowAccountPortal(true)}
+                className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                  <User className="w-4 h-4 stroke-[1.75]" />
+                </div>
+                <span className="font-semibold text-slate-800">
+                  {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowCustomerEntryModal(true)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+              >
+                Sign In
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -1260,7 +1300,7 @@ export function PackersMoversBookingHosurPage() {
                 <button
                   type="button"
                   onClick={() => setActivePackageDetails(pkg)}
-                  className="text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 border-b border-dotted border-blue-600 hover:border-blue-700 cursor-pointer pb-0.5 inline-block focus:outline-none"
+                  className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 border-b border-dotted border-emerald-600 hover:border-emerald-700 cursor-pointer pb-0.5 inline-block focus:outline-none"
                 >
                   Know More
                 </button>
@@ -1281,41 +1321,7 @@ export function PackersMoversBookingHosurPage() {
         </div>
       </section>
 
-      {/* 🌟 Section: Comparison Table */}
-      <section className="py-6 sm:py-10 max-w-4xl mx-auto px-4 sm:px-6">
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#F8F9FA] border-b border-slate-200">
-                <th className="py-4 sm:py-5 px-5 sm:px-8 text-sm sm:text-[15px] font-extrabold text-slate-800">Services</th>
-                <th className="py-4 sm:py-5 px-5 sm:px-8 text-sm sm:text-[15px] font-extrabold text-[#0B8860] text-center w-[30%] border-l border-slate-200 bg-emerald-50/30">CalServices</th>
-                <th className="py-4 sm:py-5 px-5 sm:px-8 text-sm sm:text-[15px] font-extrabold text-slate-500 text-center w-[30%] border-l border-slate-200">Local Vendors</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {[
-                "Vehicle Assurance",
-                "Verified Professional Partners",
-                "Regular Update",
-                "Packaging & Unpacking",
-                "Dismantling & Re-Assemble",
-                "Bubble / Foam Wrapping",
-                "Damage Assurance"
-              ].map((feature, i) => (
-                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="py-3.5 sm:py-4 px-5 sm:px-8 text-[13px] sm:text-[14px] font-medium text-slate-700">{feature}</td>
-                  <td className="py-3.5 sm:py-4 px-5 sm:px-8 text-center border-l border-slate-100 bg-emerald-50/10">
-                    <Check className="w-5 h-5 text-[#0B8860] mx-auto" strokeWidth={2.5} />
-                  </td>
-                  <td className="py-3.5 sm:py-4 px-5 sm:px-8 text-center border-l border-slate-100">
-                    <X className="w-5 h-5 text-red-400 mx-auto" strokeWidth={2.5} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+
 
       {/* ── Section: Popular Relocation Routes from Hosur ─────────── */}
       <section className="py-12 sm:py-16 bg-slate-50/80 border-y border-slate-200/60">
@@ -1329,7 +1335,7 @@ export function PackersMoversBookingHosurPage() {
             </p>
           </div>
 
-          <div className="bg-[#EFF6FF]/60 border border-blue-100 rounded-3xl p-5 sm:p-8">
+          <div className="bg-[#F0FDF4]/70 border border-emerald-100 rounded-3xl p-5 sm:p-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {POPULAR_ROUTES.map((route, idx) => (
                 <div
@@ -1346,7 +1352,7 @@ export function PackersMoversBookingHosurPage() {
                     <span className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
                       to {route.to} <span className="text-xs font-semibold text-slate-400">({route.distance})</span>
                     </span>
-                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
                       {route.time}
                     </span>
                   </div>
@@ -1514,33 +1520,33 @@ export function PackersMoversBookingHosurPage() {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-[#f8faff] rounded-2xl p-6 text-center hover:shadow-md transition-shadow border border-blue-200/60">
-            <div className="w-12 h-12 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-3">
-              <Package className="w-6 h-6 text-blue-600" />
+          <div className="bg-white rounded-2xl p-6 text-center hover:shadow-md hover:border-indigo-300 transition-all border border-slate-200/80">
+            <div className="w-12 h-12 mx-auto bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center mb-3 shadow-xs">
+              <Package className="w-6 h-6 text-indigo-500" />
             </div>
             <h3 className="font-bold text-slate-900 mb-1">Rope Pulling Services</h3>
             <p className="text-xs text-slate-500">Assistance from experts in handling heavy goods that need extra care</p>
           </div>
           
-          <div className="bg-[#f0f3fa] rounded-2xl p-6 text-center hover:shadow-md transition-shadow border border-slate-200/60">
-            <div className="w-12 h-12 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-3">
-              <Settings className="w-6 h-6 text-blue-600" />
+          <div className="bg-white rounded-2xl p-6 text-center hover:shadow-md hover:border-rose-300 transition-all border border-slate-200/80">
+            <div className="w-12 h-12 mx-auto bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-center mb-3 shadow-xs">
+              <Settings className="w-6 h-6 text-rose-500" />
             </div>
             <h3 className="font-bold text-slate-900 mb-1">Appliance Installation</h3>
             <p className="text-xs text-slate-500">Un-installation and installation of electrical appliances by professionals</p>
           </div>
           
-          <div className="bg-[#f0f3fa] rounded-2xl p-6 text-center hover:shadow-md transition-shadow border border-slate-200/60">
-            <div className="w-12 h-12 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-3">
-              <Zap className="w-6 h-6 text-blue-600" />
+          <div className="bg-white rounded-2xl p-6 text-center hover:shadow-md hover:border-amber-300 transition-all border border-slate-200/80">
+            <div className="w-12 h-12 mx-auto bg-amber-50 border border-amber-100 rounded-2xl flex items-center justify-center mb-3 shadow-xs">
+              <Zap className="w-6 h-6 text-amber-500" />
             </div>
             <h3 className="font-bold text-slate-900 mb-1">Professional Electrician</h3>
             <p className="text-xs text-slate-500">Expertise at your rescue for complex wiring and setups</p>
           </div>
           
-          <div className="bg-[#f0f3fa] rounded-2xl p-6 text-center hover:shadow-md transition-shadow border border-slate-200/60">
-            <div className="w-12 h-12 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-3">
-              <Wrench className="w-6 h-6 text-blue-600" />
+          <div className="bg-white rounded-2xl p-6 text-center hover:shadow-md hover:border-emerald-300 transition-all border border-slate-200/80">
+            <div className="w-12 h-12 mx-auto bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-center mb-3 shadow-xs">
+              <Wrench className="w-6 h-6 text-emerald-500" />
             </div>
             <h3 className="font-bold text-slate-900 mb-1">Professional Carpenter</h3>
             <p className="text-xs text-slate-500">Professionally skilled carpenters in furniture handling</p>
@@ -2209,7 +2215,7 @@ export function PackersMoversBookingHosurPage() {
                   {otpStep ? "Enter OTP Verification" : "Sign In to Complete Booking"}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {otpStep ? `We sent a 4-digit code to +91 ${phone}` : "Quick verification to confirm your moving booking"}
+                  {otpStep ? `We sent a 6-digit code to +91 ${phone}` : "Quick verification to confirm your moving booking"}
                 </p>
               </div>
               <button
@@ -2381,6 +2387,28 @@ export function PackersMoversBookingHosurPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Support & Help Center Modal */}
+      <SupportHelpCenterModal
+        isOpen={supportModalOpen}
+        onClose={() => setSupportModalOpen(false)}
+      />
+
+      {/* Customer Account & Entry Flow Modals */}
+      {showAccountPortal && (
+        <CustomerAccountModal
+          isOpen={showAccountPortal}
+          onClose={() => setShowAccountPortal(false)}
+          defaultTab="My Profile"
+        />
+      )}
+      {showCustomerEntryModal && (
+        <CustomerEntryFlowModal
+          isOpen={showCustomerEntryModal}
+          onClose={() => setShowCustomerEntryModal(false)}
+          onSuccess={() => setShowCustomerEntryModal(false)}
+        />
       )}
     </div>
   )
