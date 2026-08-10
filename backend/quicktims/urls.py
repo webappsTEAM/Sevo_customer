@@ -21,9 +21,7 @@ urlpatterns = [
     path("api/settings/", include("settings_hub.urls")),
     path("api/mileage/", include("mileage.urls")),
     path("api/trial/", include("trial_management.urls")),
-    # Service Requests module — covers /booking/, /feedback/, /admin/service-requests/, /employee/
     path("api/", include("service_requests.urls")),
-    # Goods Transport (truck, two-wheeler) + Packers & Movers catalog
     path("api/logistics/", include("logistics.urls")),
 ]
 
