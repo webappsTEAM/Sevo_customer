@@ -144,6 +144,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   const [attemptsRemaining, setAttemptsRemaining] = useState(null)
   const [resendTimer, setResendTimer] = useState(0)
   const [devOtp, setDevOtp] = useState("")
+  const [detectedLocationData, setDetectedLocationData] = useState(null)
   const otpInputRefs = useRef([])
 
   useEffect(() => {
@@ -232,7 +233,6 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
     finally { setLoading(false) }
   }
 
-  const [detectedLocationData, setDetectedLocationData] = useState(null)
 
   const handleAllowLocation = () => {
     if (geoLoading) return

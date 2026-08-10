@@ -717,7 +717,7 @@ export function LandingPage() {
     }
   }, [isGoodsModalOpen, isElecModalOpen, isAcModalOpen, isHomePestModalOpen])
 
-  if (activeCategoryId && activeCategoryId !== "painting") {
+  if (activeCategoryId && activeCategoryId !== "painting" && activeCategoryId !== "mason") {
     return (
       <>
       <div className="min-h-screen bg-[#F7FAF9] text-slate-800 flex flex-col" style={{ animation: "fadeUp 0.4s ease both" }}>
