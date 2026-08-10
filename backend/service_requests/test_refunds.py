@@ -16,7 +16,7 @@ User = get_user_model()
 
 class RefundWorkflowTests(TestCase):
     def setUp(self):
-        self.company = Company.objects.create(company_name="Test Service Co", schema_name="testco")
+        self.company = Company.objects.create(company_name="Test Service Co", slug="testco")
         self.customer_user = User.objects.create_user(
             username="refund_customer",
             email="refcustomer@example.com",

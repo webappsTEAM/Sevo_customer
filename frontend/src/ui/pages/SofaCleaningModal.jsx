@@ -149,18 +149,6 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
             </button>
             <h2 className="text-xl font-black text-slate-900">Sofa Cleaning</h2>
           </div>
-          <div className="relative w-full sm:w-64">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={14} />
-            </span>
-            <input
-              type="text"
-              placeholder="Search services..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all bg-slate-50/50"
-            />
-          </div>
         </div>
 
         {/* Sub-tabs */}
@@ -176,13 +164,11 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 <img
                   src={tab.image}
                   alt={tab.name}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
-                    isSelected ? "scale-[1.05] shadow-md" : "opacity-80 hover:opacity-100"
-                  }`}
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected ? "scale-[1.05] shadow-md" : "opacity-80 hover:opacity-100"
+                    }`}
                 />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                  isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
-                }`}>
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
+                  }`}>
                   {tab.name}
                 </span>
               </button>

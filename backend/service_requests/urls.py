@@ -114,6 +114,7 @@ from .payment_views import (
     AdminPaymentUpdateView,
     InvoiceDownloadView,
 )
+from .views import CustomerReverseGeocodeView   # Address Picker — Slice 2
 
 urlpatterns = [
     # ── Public & Customer ─────────────────────────────────────────────────────
@@ -125,6 +126,9 @@ urlpatterns = [
     path("booking/<int:pk>/invoice/",        InvoiceDownloadView.as_view(),  name="sr-invoice"),
     path("feedback/<uuid:token>/",           FeedbackTokenView.as_view(),    name="sr-feedback-token"),
     path("public/feedback/",                 PublicFeedbackListView.as_view(), name="sr-public-feedback"),
+
+    # ── Customer Address Picker (Slice 2) ──────────────────────────────
+    path("customer/addresses/reverse-geocode/", CustomerReverseGeocodeView.as_view(), name="customer-reverse-geocode"),
 
     # ── Payment ───────────────────────────────────────────────────────────────
     path("payment/initiate/",                PaymentInitiateView.as_view(),  name="payment-initiate"),

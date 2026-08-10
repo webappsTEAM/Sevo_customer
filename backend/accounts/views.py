@@ -2373,10 +2373,16 @@ def _serialize_address(addr):
         "label_display":         addr.get_label_display(),
         "address_line1":         addr.address_line1,
         "address_line2":         addr.address_line2,
+        "formatted_address":     addr.formatted_address or "",
+        "flat_house_no":         addr.flat_house_no or "",
+        "landmark":              addr.landmark or "",
+        "locality":              addr.locality or "",
         "city":                  addr.city,
         "state":                 addr.state,
         "pincode":               addr.pincode,
         "phone_number":          addr.phone_number or "",
+        "receiver_name":         addr.receiver_name or "",
+        "receiver_phone":        addr.receiver_phone or "",
         "latitude":              str(addr.latitude) if addr.latitude is not None else None,
         "longitude":             str(addr.longitude) if addr.longitude is not None else None,
         "is_default":            addr.is_default,
@@ -2483,10 +2489,27 @@ class CustomerAddressListCreateView(APIView):
         return _cs([_serialize_address(a) for a in addresses])
 
     def post(self, request):
-        required = ["address_line1", "city", "state", "pincode"]
+        flat_house_no = str(request.data.get("flat_house_no", "")).strip()
+        address_line1 = str(request.data.get("address_line1", "")).strip() or flat_house_no
+        if not address_line1 and not flat_house_no:
+            return _ce("'flat_house_no' or 'address_line1' is required.", 400)
+
+        required = ["city", "state", "pincode"]
         for field in required:
             if not request.data.get(field):
                 return _ce(f"'{field}' is required.", 400)
+
+        import re
+        pincode = str(request.data.get("pincode", "")).strip()
+        if not re.match(r"^\d{6}$", pincode):
+            return _ce("Pincode must be a 6-digit number.", 400)
+
+        receiver_phone = str(request.data.get("receiver_phone", "")).strip() or str(request.data.get("phone_number", "")).strip()
+        if receiver_phone:
+            clean_phone = re.sub(r"\s+", "", receiver_phone)
+            if not re.match(r"^[6-9]\d{9}$", clean_phone):
+                return _ce("Receiver phone must be a valid 10-digit mobile number.", 400)
+            receiver_phone = clean_phone
 
         def _clean_coord(val):
             if val is None or val == "":
@@ -2497,16 +2520,22 @@ class CustomerAddressListCreateView(APIView):
                 return None
 
         data = {
-            "label":         request.data.get("label", "home"),
-            "address_line1": request.data.get("address_line1", ""),
-            "address_line2": request.data.get("address_line2", ""),
-            "city":          request.data.get("city", ""),
-            "state":         request.data.get("state", ""),
-            "pincode":       request.data.get("pincode", ""),
-            "phone_number":  request.data.get("phone_number", ""),
-            "latitude":      _clean_coord(request.data.get("latitude")),
-            "longitude":     _clean_coord(request.data.get("longitude")),
-            "is_default":    request.data.get("is_default", False),
+            "label":             request.data.get("label", "home"),
+            "address_line1":     address_line1,
+            "address_line2":     request.data.get("address_line2", ""),
+            "formatted_address": request.data.get("formatted_address", ""),
+            "flat_house_no":     flat_house_no or address_line1,
+            "landmark":          request.data.get("landmark", ""),
+            "locality":          request.data.get("locality", ""),
+            "city":              request.data.get("city", ""),
+            "state":             request.data.get("state", ""),
+            "pincode":           pincode,
+            "phone_number":      receiver_phone,
+            "receiver_name":     request.data.get("receiver_name", ""),
+            "receiver_phone":    receiver_phone,
+            "latitude":          _clean_coord(request.data.get("latitude")),
+            "longitude":         _clean_coord(request.data.get("longitude")),
+            "is_default":        request.data.get("is_default", False),
         }
 
         try:

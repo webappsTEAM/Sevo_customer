@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom"
 import {
@@ -7,7 +7,7 @@ import {
   ShieldCheck, BadgeCheck, Clock, Award, Headphones,
   Star, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight,
   Smartphone, Phone, Mail, X, ArrowRight,
-  ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User,
+  ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -16,7 +16,7 @@ import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { apiUpdateCustomerLastLocation } from "../../api/authService.js"
-import { AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -457,7 +457,7 @@ function TermiteControlGraphic({ className = "w-12 h-12" }) {
       <ellipse cx="50" cy="84" rx="42" ry="5.5" fill="#cbd5e1" opacity="0.7" />
       {/* Circular border brush effect (clean vector circular line) */}
       <circle cx="50" cy="46" r="32" stroke="#475569" strokeWidth="2.5" strokeDasharray="6 3 2 3" opacity="0.8" />
-      
+
       {/* Termite Bug matching 1st image */}
       <g transform="translate(0, 2)">
         {/* Antennae */}
@@ -489,7 +489,7 @@ function AntBedBugControlGraphic({ className = "w-12 h-12" }) {
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="50" cy="84" rx="42" ry="5.5" fill="#cbd5e1" opacity="0.7" />
-      
+
       {/* Ant Trail on the left (tiny black ants crawling diagonally) */}
       <g stroke="#1e293b" strokeWidth="1" fill="#1e293b">
         {/* Ant 1 */}
@@ -660,7 +660,37 @@ export function LandingPage() {
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
   const [showLocationPickerModal, setShowLocationPickerModal] = useState(false)
-  const [activeLocationLabel, setActiveLocationLabel] = useState(null)
+  const [activeLocationLabel, setActiveLocationLabel] = useState(() => {
+    return localStorage.getItem("calservice_user_location") || null;
+  })
+
+  useEffect(() => {
+    if (!activeLocationLabel && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+            const data = await res.json();
+            if (data?.features?.[0]?.properties) {
+              const p = data.features[0].properties;
+              const display = [p.name, p.street, p.city, p.state].filter(Boolean).slice(0, 2).join(", ");
+              if (display) {
+                setActiveLocationLabel(display);
+                localStorage.setItem("calservice_user_location", display);
+              }
+            }
+          } catch (e) {
+            setActiveLocationLabel("Hosur, Tamil Nadu");
+          }
+        },
+        () => {
+          if (!activeLocationLabel) setActiveLocationLabel("Hosur, Tamil Nadu");
+        }
+      );
+    } else if (!activeLocationLabel) {
+      setActiveLocationLabel("Hosur, Tamil Nadu");
+    }
+  }, []);
 
   useEffect(() => {
     if (location.state?.openHomePestModal) setIsHomePestModalOpen(true)
@@ -709,30 +739,342 @@ export function LandingPage() {
       window.addEventListener("keydown", handleKeyDown)
       document.body.style.overflow = "hidden"
     } else {
-      document.body.style.overflow = ""
-    }
-    return () => {
       window.removeEventListener("keydown", handleKeyDown)
       document.body.style.overflow = ""
     }
   }, [isGoodsModalOpen, isElecModalOpen, isAcModalOpen, isHomePestModalOpen])
 
+  const SEARCH_ROTATING_SERVICES = useMemo(() => [
+    "AC Repair & Servicing",
+    "Kitchen Deep Cleaning",
+    "Sofa Shampooing",
+    "Bathroom Sanitization",
+    "Plumbing Leak Repair",
+    "Fan & Electrical Service",
+    "Pest Control Treatment",
+    "Washing Machine Repair"
+  ], []);
+
+  const [searchRotateIdx, setSearchRotateIdx] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSearchRotateIdx((prev) => (prev + 1) % SEARCH_ROTATING_SERVICES.length);
+    }, 2800);
+    return () => clearInterval(timer);
+  }, [SEARCH_ROTATING_SERVICES.length]);
+
+  const allServicesCatalog = useMemo(() => [
+    { id: "kc-1", name: "Occupied Kitchen Cleaning (Basic)", price: 999, categoryName: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400&q=80&fit=crop", catId: "kitchen_cleaning" },
+    { id: "kc-2", name: "Occupied Kitchen Cleaning (Deep Clean)", price: 1499, categoryName: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "kitchen_cleaning" },
+    { id: "kc-3", name: "Empty Kitchen Deep Cleaning", price: 1799, categoryName: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=400&q=80&fit=crop", catId: "kitchen_cleaning" },
+    { id: "sc-1", name: "Sofa Deep Cleaning & Shampooing", price: 799, categoryName: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&q=80&fit=crop", catId: "sofa_cleaning" },
+    { id: "bc-1", name: "Bathroom Deep Cleaning & Sanitization", price: 499, categoryName: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "bathroom_cleaning" },
+    { id: "ac-1", name: "Power Jet AC Foam Service", price: 599, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=400&q=80&fit=crop", catId: "hvac" },
+    { id: "ac-2", name: "Anti-Rust Protective Coating", price: 249, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80&fit=crop", catId: "hvac" },
+    { id: "ac-3", name: "AC Gas Leak Audit & Refill", price: 899, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&q=80&fit=crop", catId: "hvac" },
+    { id: "el-1", name: "Fan Repair & Installation", price: 149, categoryName: "Electrical", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80&fit=crop", catId: "electrical" },
+    { id: "pl-1", name: "Tap & Basin Leak Repair", price: 199, categoryName: "Plumbing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=400&q=80&fit=crop", catId: "plumbing" },
+    { id: "cp-1", name: "Furniture Repair & Assembly", price: 299, categoryName: "Carpentry", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=400&q=80&fit=crop", catId: "carpentry" },
+    { id: "pc-1", name: "Cockroach & Ant Pest Control", price: 699, categoryName: "Pest Control", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=400&q=80&fit=crop", catId: "pest_control" },
+    { id: "app-1", name: "Automatic Washing Machine Service", price: 499, categoryName: "Appliance Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop", catId: "appliance_repair" }
+  ], []);
+
+  const searchResults = useMemo(() => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase().trim();
+    return allServicesCatalog.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      s.categoryName.toLowerCase().includes(q)
+    );
+  }, [query, allServicesCatalog]);
+
   if (activeCategoryId && activeCategoryId !== "painting" && activeCategoryId !== "mason") {
+    const displayLocationText = activeLocationLabel ||
+      (typeof user?.last_known_location === "string" ? user?.last_known_location : user?.last_known_location?.label) ||
+      (typeof user?.lastKnownLocation === "string" ? user?.lastKnownLocation : user?.lastKnownLocation?.label) ||
+      user?.address || "Hosur, Tamil Nadu";
+
     return (
       <>
-      <div className="min-h-screen bg-[#F7FAF9] text-slate-800 flex flex-col" style={{ animation: "fadeUp 0.4s ease both" }}>
-        {/* Header */}
-        <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-100">
+        <div className="min-h-screen bg-[#F7FAF9] text-slate-800 flex flex-col" style={{ animation: "fadeUp 0.4s ease both" }}>
+          {/* Urban Style Header for Service Choosing View */}
+          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-2xs">
+            <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
+
+              {/* Logo & Urban Location Selector Pill */}
+              <div className="flex items-center gap-3 sm:gap-6">
+                <Logo />
+
+                <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
+                {/* Urban Location Selector Pill (Matching exact home page location view style) */}
+                <button
+                  type="button"
+                  onClick={() => setShowLocationPickerModal(true)}
+                  className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[320px] truncate"
+                  title="Select Location"
+                >
+                  <MapPin className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span className="truncate">{displayLocationText}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-auto" />
+                </button>
+              </div>
+
+              {/* Urban Style Service Search Box (Matching exact screenshot structure & animated rotating text) */}
+              <div className="relative max-w-[340px] w-full hidden sm:block">
+                <div className="relative flex items-center bg-white border border-slate-200 hover:border-slate-300 focus-within:border-emerald-500 rounded-xl px-3.5 py-2 shadow-2xs transition-all">
+                  <Search className="w-4 h-4 text-slate-400 shrink-0 mr-2.5 pointer-events-none" />
+
+                  <div className="relative flex-1 flex items-center min-w-0">
+                    <input
+                      type="text"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      className="w-full bg-transparent text-xs font-extrabold text-slate-800 outline-none z-10"
+                    />
+                    {!query && (
+                      <div className="absolute inset-0 flex items-center pointer-events-none overflow-hidden select-none">
+                        <span className="text-xs font-medium text-slate-400 mr-1 shrink-0">Search for</span>
+                        <AnimatePresence mode="wait">
+                          <motion.span
+                            key={searchRotateIdx}
+                            initial={{ opacity: 0, y: 7 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -7 }}
+                            transition={{ duration: 0.3, ease: "easeOut" }}
+                            className="text-xs font-bold text-slate-500 truncate"
+                          >
+                            '{SEARCH_ROTATING_SERVICES[searchRotateIdx]}'...
+                          </motion.span>
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
+
+                  {query && (
+                    <button
+                      type="button"
+                      onClick={() => setQuery("")}
+                      className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer ml-1.5 shrink-0"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Live Search Results Dropdown (Visible one-by-one with image, category, and price) */}
+                <AnimatePresence>
+                  {query.trim() && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 6 }}
+                      className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 max-h-80 overflow-y-auto z-50 p-2 space-y-1"
+                    >
+                      {searchResults.length > 0 ? (
+                        searchResults.map((svc) => (
+                          <div
+                            key={svc.id}
+                            onClick={() => {
+                              setQuery("");
+                              if (activeCategoryId !== svc.catId) {
+                                navigate(`/booking/services?category=${svc.catId}`);
+                              }
+                            }}
+                            className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors group"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              {svc.image && (
+                                <img src={svc.image} alt={svc.name} className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                              )}
+                              <div className="min-w-0">
+                                <div className="text-xs font-extrabold text-slate-800 truncate group-hover:text-emerald-700">{svc.name}</div>
+                                <div className="text-[10px] font-bold text-emerald-600">{svc.categoryName}</div>
+                              </div>
+                            </div>
+                            <div className="text-xs font-black text-slate-900 shrink-0 ml-2">
+                              ₹{svc.price}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-3 text-center text-xs font-bold text-slate-400">
+                          No services matching "{query}"
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+            </div>
+          </header>
+
+          {/* Full Page View Wrapper */}
+          <main className={`flex-1 max-w-7xl w-full mx-auto px-6 ${activeCategory ? "pt-4 pb-10" : "py-10"}`}>
+            {activeCategory && (
+              (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
+                <PaintingPackageModal
+                  category={activeCategory}
+                  cart={modalCart}
+                  setCart={setModalCart}
+                  onClose={handleCloseCategory}
+                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
+                />
+              ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+                <MasonPackageModal
+                  category={activeCategory}
+                  cart={modalCart}
+                  setCart={setModalCart}
+                  onClose={handleCloseCategory}
+                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
+                />
+              ) : (
+                <CustomCleaningPackageModal
+                  category={activeCategory}
+                  cart={modalCart}
+                  setCart={setModalCart}
+                  isFullPage={true}
+                  onClose={handleCloseCategory}
+                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                />
+              )
+            )}
+          </main>
+
+          {/* Footer */}
+          <footer className="bg-slate-50 border-t border-slate-100 py-12">
+            <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white font-black flex items-center justify-center">C</div>
+                  <span className="font-extrabold text-slate-800 text-base">CalServices</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
+                  Your trusted partner for professional home services. Quality service, transparent pricing, and trusted professionals.
+                </p>
+                <div className="flex gap-3 mt-4 text-slate-400">
+                  <FacebookMark className="w-4 h-4" />
+                  <InstagramMark className="w-4 h-4" />
+                  <YoutubeMark className="w-4 h-4" />
+                  <TwitterMark className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800 mb-3">Services</p>
+                <ul className="space-y-2 text-xs text-slate-500">
+                  {CATEGORIES.slice(0, 4).map((c) => <li key={c.label}>{c.label}</li>)}
+                </ul>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800 mb-3">Company</p>
+                <ul className="space-y-2 text-xs text-slate-500">
+                  <li>About Us</li><li>Careers</li><li>Blog</li><li>Become a Partner</li>
+                </ul>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800 mb-3">Need Help?</p>
+                <ul className="space-y-2 text-xs text-slate-500">
+                  <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-emerald-600" /> +91 98765 43210</li>
+                  <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-emerald-600" /> support@calservices.com</li>
+                  <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-emerald-600" /> Mon &ndash; Sun (8 AM &ndash; 8 PM)</li>
+                </ul>
+              </div>
+            </div>
+          </footer>
+        </div>
+        <BkStyles />
+
+        {showLocationPickerModal && (
+          <AddAddressSearchModal
+            onClose={() => setShowLocationPickerModal(false)}
+            onSelectLocation={async (locStr) => {
+              setShowLocationPickerModal(false)
+              if (locStr) {
+                const labelStr = typeof locStr === "string" ? locStr : (locStr?.formatted_address || locStr?.locality || locStr?.city || "")
+                setActiveLocationLabel(labelStr)
+                localStorage.setItem("calservice_user_location", labelStr)
+                if (user) {
+                  try {
+                    await apiUpdateCustomerLastLocation({
+                      label: labelStr,
+                      detected_at: new Date().toISOString()
+                    })
+                  } catch (e) { }
+                  if (typeof refreshMe === "function") refreshMe()
+                }
+              }
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="min-h-screen bg-[#F7FAF9] text-slate-800" style={{ animation: "fadeUp 0.4s ease both" }}>
+        {/* ── Header ─────────────────────────────────────────── */}
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-6">
-            <Logo />
+            <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => navigate(routes.landing)}>
+              <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white">
+                <Home className="w-5 h-5" strokeWidth={2.5} />
+              </div>
+              <span className="text-lg font-extrabold tracking-tight text-slate-900">CalServices</span>
+            </div>
+
             <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600">
-              <a href="#home" className="text-emerald-600 font-semibold" onClick={() => navigate("/home")}>Home</a>
-              <a href="#categories" className="hover:text-slate-900" onClick={() => navigate("/home")}>Services</a>
-              <a href="#how-it-works" className="hover:text-slate-900" onClick={() => navigate("/home")}>How It Works</a>
-              <a href="#professionals" className="hover:text-slate-900" onClick={() => navigate("/home")}>Professionals</a>
-              <a href="#about" className="hover:text-slate-900" onClick={() => navigate("/home")}>About Us</a>
+              <a href="#home" className="text-teal-600 font-semibold">Home</a>
+              <a href="#categories" className="hover:text-slate-900 transition-colors">Services</a>
+              <a href="#how-it-works" className="hover:text-slate-900 transition-colors">How It Works</a>
+              <a href="#professionals" className="hover:text-slate-900 transition-colors">Professionals</a>
+              <a href="#about" className="hover:text-slate-900 transition-colors">About Us</a>
             </nav>
-            <div className="flex items-center gap-3">
+
+            <div className="flex items-center gap-8">
+              {/* Location Selector Pill (Matching exact home page location view style) */}
+              <button
+                type="button"
+                onClick={() => setShowLocationPickerModal(true)}
+                className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[320px] truncate"
+                title="Select Location"
+              >
+                <MapPin className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span className="truncate">
+                  {(() => {
+                    if (activeLocationLabel) return activeLocationLabel
+                    const locObj = user?.last_known_location || user?.lastKnownLocation
+                    if (locObj) {
+                      if (typeof locObj === "string" && locObj.trim()) return locObj
+                      if (locObj.label) return locObj.label
+                    }
+                    if (user?.address) return user.address
+                    return "Hosur, Tamil Nadu, India"
+                  })()}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-auto" />
+              </button>
+
+              {/* Cart Icon with Numeric Badge (UC Style) */}
+              {modalCart && modalCart.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate(routes.booking_checkout, { state: { cart: modalCart } })}
+                  className="relative p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 text-slate-700 hover:text-emerald-700 transition-all cursor-pointer shrink-0"
+                  title="View Cart"
+                >
+                  <ShoppingCart size={18} />
+                  <span className="absolute -top-1.5 -right-1.5 bg-emerald-600 text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                    {modalCart.reduce((sum, i) => sum + i.quantity, 0)}
+                  </span>
+                </button>
+              )}
+
+              {/* User Profile / Login (Urban Company Style) */}
               {user ? (
                 <button
                   type="button"
@@ -740,1073 +1082,944 @@ export function LandingPage() {
                     setActiveAccountTab("My Profile")
                     setShowAccountPortal(true)
                   }}
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-950 font-black text-xs transition-all shadow-2xs cursor-pointer"
+                  className="flex items-center gap-2.5 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
                 >
-                  <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-[10px] shrink-0">
-                    <User size={13} />
+                  <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                    <User className="w-4 h-4 stroke-[1.75]" />
                   </div>
-                  <span className="hidden sm:inline font-extrabold">
+                  <span className="font-semibold text-slate-800">
                     Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
                   </span>
+                  <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={goToLogin}
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition-all shadow-sm cursor-pointer"
+                  className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
                 >
-                  <User size={14} />
-                  <span>Login / Sign Up</span>
+                  <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                    <User className="w-4 h-4 stroke-[1.75]" />
+                  </div>
+                  <span className="font-semibold text-slate-800">Login / Sign Up</span>
+                  <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
                 </button>
               )}
-              <button onClick={goToBooking} className="btn btnPrimary bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-full transition-colors cursor-pointer">
-                Book Service
-              </button>
             </div>
           </div>
         </header>
 
-        {/* Full Page View Wrapper */}
-        <main className={`flex-1 max-w-7xl w-full mx-auto px-6 ${activeCategory ? "pt-4 pb-10" : "py-10"}`}>
-          {activeCategory && activeCategory.id === "kitchen_cleaning" && (
-            <KitchenCleaningModal
-              category={activeCategory}
-              cart={modalCart}
-              setCart={setModalCart}
-              onClose={handleCloseCategory}
-              onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-            />
-          )}
-          {activeCategory && activeCategory.id === "sofa_cleaning" && (
-            <SofaCleaningModal
-              category={activeCategory}
-              cart={modalCart}
-              setCart={setModalCart}
-              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
-              onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-            />
-          )}
-          {activeCategory && activeCategory.id === "bathroom_cleaning" && (
-            <BathroomCleaningModal
-              category={activeCategory}
-              cart={modalCart}
-              setCart={setModalCart}
-              onClose={() => navigate("/home", { state: { openHomePestModal: true } })}
-              onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-            />
-          )}
-          {activeCategory && activeCategory.id !== "kitchen_cleaning" && activeCategory.id !== "sofa_cleaning" && activeCategory.id !== "bathroom_cleaning" && (
-            <CustomCleaningPackageModal
-              category={activeCategory}
-              cart={modalCart}
-              setCart={setModalCart}
-              isFullPage={true}
-              onClose={handleCloseCategory}
-              onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-            />
-          )}
-        </main>
+        {/* ── Hero ───────────────────────────────────────────── */}
+        <section id="home" className="max-w-7xl mx-auto px-6 pt-14 pb-16 grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <p className="text-sm font-medium text-teal-600 mb-4">
+              Reliable. Affordable. Right at Your Doorstep.
+            </p>
+            <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight text-slate-900 mb-5">
+              Professional<br />
+              <span className="text-teal-600">Services</span><br />
+              Made Simple
+            </h1>
+            <p className="text-slate-500 text-base mb-8 max-w-md">
+              Quick booking. Quality work. Guaranteed satisfaction.
+            </p>
 
-        {/* Footer */}
-        <footer className="bg-slate-50 border-t border-slate-100 py-12">
-          <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white font-black flex items-center justify-center">C</div>
-                <span className="font-extrabold text-slate-800 text-base">CalServices</span>
+            <form
+              onSubmit={(e) => { e.preventDefault(); goToBooking() }}
+              className="flex items-center bg-white rounded-2xl shadow-sm border border-slate-200 p-1.5 mb-6 max-w-xl"
+            >
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="What service do you need?"
+                className="flex-1 bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-slate-400"
+              />
+              <LocationDropdown className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3" />
+              <button
+                type="submit"
+                aria-label="Search services"
+                className="ml-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl w-11 h-11 flex items-center justify-center shrink-0 transition-colors"
+              >
+                <Search className="w-4.5 h-4.5" />
+              </button>
+            </form>
+
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs font-medium text-slate-500">
+              <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-teal-600" /> Verified Pros</span>
+              <span className="inline-flex items-center gap-1.5"><Star className="w-4 h-4 text-amber-500" /> 4.8★ Rated</span>
+              <span className="inline-flex items-center gap-1.5"><Award className="w-4 h-4 text-rose-500" /> 1M+ Happy Homes</span>
+              <span className="inline-flex items-center gap-1.5"><Clock className="w-4 h-4 text-violet-500" /> 30-Day Guarantee</span>
+            </div>
+          </div>
+
+          {/* Real photo collage */}
+          <div className="relative h-[420px] hidden sm:block">
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 via-violet-50 to-orange-50 rounded-[3rem] -z-10" />
+            <img
+              src="/mockups/service_hvac.png"
+              alt="Technician servicing an AC unit"
+              className="absolute top-0 left-0 w-[62%] h-[65%] object-cover rounded-3xl shadow-lg border-4 border-white"
+            />
+            <img
+              src="/mockups/service_electrical.png"
+              alt="Electrician at work"
+              className="absolute bottom-0 left-[8%] w-[48%] h-[45%] object-cover rounded-3xl shadow-lg border-4 border-white"
+            />
+            <img
+              src="/mockups/service_cleaning.png"
+              alt="Home cleaning professional"
+              className="absolute top-[8%] right-0 w-[46%] h-[52%] object-cover rounded-3xl shadow-lg border-4 border-white"
+            />
+            <img
+              src="/mockups/service_plumbing.png"
+              alt="Plumber fixing a sink"
+              className="absolute bottom-[4%] right-[2%] w-[42%] h-[42%] object-cover rounded-3xl shadow-lg border-4 border-white"
+            />
+          </div>
+        </section>
+
+        {/* ── Browse by Category ─────────────────────────────── */}
+        <section id="categories" className="max-w-7xl mx-auto px-6 py-10">
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-slate-900">Browse by Category</h2>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => (
+              <button
+                key={label}
+                onClick={() => {
+                  if (label === "Goods & Transports") {
+                    setIsGoodsModalOpen(true)
+                  } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
+                    setIsElecModalOpen(true)
+                  } else if (label.includes("AC") || label.includes("Appliance")) {
+                    setIsAcModalOpen(true)
+                  } else if (label === "Home Services & Pest Control") {
+                    setIsHomePestModalOpen(true)
+                  } else {
+                    goToCategoryServices(serviceCategoryId)
+                  }
+                }}
+                className="group flex flex-col bg-white rounded-2xl border border-slate-100 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all"
+              >
+                {photo ? (
+                  <div className="h-24 w-full overflow-hidden">
+                    <img
+                      src={photo}
+                      alt={label}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-24 w-full bg-emerald-50 flex items-center justify-center">
+                    <Icon className="w-8 h-8 text-emerald-600" strokeWidth={1.5} />
+                  </div>
+                )}
+                <span className="text-xs font-semibold text-slate-700 leading-snug p-3">{label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Home Services & Pest Control Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
+        {isHomePestModalOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="homepest-modal-title"
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+              onClick={() => setIsHomePestModalOpen(false)}
+            >
+              <div
+                className="bg-white rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsHomePestModalOpen(false)}
+                  aria-label="Close popup"
+                  className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-white text-slate-900 hover:bg-slate-100 flex items-center justify-center shadow-md border border-slate-200 transition-colors z-50"
+                >
+                  <X className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+
+                {/* Modal Title */}
+                <div className="text-left mb-6">
+                  <h3
+                    id="homepest-modal-title"
+                    className="text-lg sm:text-xl font-extrabold text-slate-900"
+                  >
+                    Cleaning &amp; Pest Control
+                  </h3>
+                </div>
+
+                {/* Cleaning Section */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
+                    Cleaning
+                  </h4>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
+                    {HOME_SERVICES_SUB.map((item) => (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => {
+                          setIsHomePestModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          if (item.name === "Kitchen Cleaning") {
+                            navigate(`?category=kitchen_cleaning`)
+                          } else if (item.name === "Sofa Cleaning") {
+                            navigate(`?category=sofa_cleaning`)
+                          } else {
+                            navigate(`?category=${item.categoryId}`)
+                          }
+                        }}
+                        className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
+                      >
+                        <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
+                          <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
+                          {item.badge && (
+                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
+                              {item.badge}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
+                          {item.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pest Control Section */}
+                <div>
+                  <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
+                    Pest Control
+                  </h4>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
+                    {PEST_CONTROL_SUB.map((item) => (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => {
+                          setIsHomePestModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          navigate(`?category=${item.categoryId}`)
+                        }}
+                        className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
+                      >
+                        <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
+                          <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
+                          {item.badge && (
+                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
+                              {item.badge}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
+                          {item.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
-                Your trusted partner for professional home services. Quality service, transparent pricing, and trusted professionals.
+            </div>,
+            document.body
+          )}
+
+        {/* ── Goods & Transports Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
+        {isGoodsModalOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="transport-modal-title"
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+              onClick={() => setIsGoodsModalOpen(false)}
+            >
+              <div
+                className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsGoodsModalOpen(false)}
+                  aria-label="Close popup"
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                {/* Modal Title */}
+                <div className="text-center mb-6">
+                  <h3
+                    id="transport-modal-title"
+                    className="text-lg sm:text-xl font-extrabold text-slate-900"
+                  >
+                    Goods &amp; Transports
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Choose a transport type to get an instant estimate
+                  </p>
+                </div>
+
+                {/* Items Grid matching Image 2 with Landing Page Emerald styling */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-stretch">
+                  {/* Option 1: Truck */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsGoodsModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      navigate(routes.truck_booking_hosur)
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <TruckGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
+                      Truck
+                    </span>
+                  </button>
+
+                  {/* Option 2: Two Wheeler */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsGoodsModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      navigate(routes.two_wheeler_booking_hosur)
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <TwoWheelerGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
+                      Two Wheeler
+                    </span>
+                  </button>
+
+                  {/* Option 3: Packers & Movers */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsGoodsModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      navigate(routes.packers_movers_booking_hosur)
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <PackersMoversGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
+                      Packers &amp; Movers
+                    </span>
+                  </button>
+
+                  {/* Option 4: Get an Estimate card/button in Landing Page Emerald theme */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsGoodsModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      navigate(routes.truck_booking_hosur)
+                    }}
+                    className="group flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-[0.98] text-white shadow-lg shadow-emerald-600/25 transition-all text-left cursor-pointer min-h-[140px]"
+                  >
+                    <div>
+                      <p className="text-lg sm:text-xl font-extrabold leading-tight tracking-tight">
+                        Get an<br />Estimate
+                      </p>
+                      <p className="text-xs text-emerald-100 font-medium mt-2 opacity-95">
+                        (takes ~2 mins)
+                      </p>
+                    </div>
+                    <div className="pt-4 flex items-center">
+                      <ArrowRight className="w-6 h-6 text-white stroke-[2.5] group-hover:translate-x-1.5 transition-transform" />
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
+        {/* ── Electrician, Plumbing & Carpentry Sub-Category Modal Popup ── */}
+        {isElecModalOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="elec-modal-title"
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+              onClick={() => setIsElecModalOpen(false)}
+            >
+              <div
+                className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsElecModalOpen(false)}
+                  aria-label="Close popup"
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                {/* Modal Title */}
+                <div className="text-center mb-6">
+                  <h3
+                    id="elec-modal-title"
+                    className="text-lg sm:text-xl font-extrabold text-slate-900"
+                  >
+                    Electrician, Plumbing &amp; Carpentry
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Choose a service type to view related services
+                  </p>
+                </div>
+
+                {/* Items Grid for Electrician, Plumbing & Carpentry (3 options) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 items-stretch">
+                  {/* Option 1: Electrician */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsElecModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      goToCategoryServices("electrical")
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <ElectricianGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      Electrician
+                    </span>
+                  </button>
+
+                  {/* Option 2: Plumber */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsElecModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      goToCategoryServices("plumbing")
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <PlumberGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      Plumber
+                    </span>
+                  </button>
+
+                  {/* Option 3: Carpentry */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsElecModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      goToCategoryServices("carpentry")
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <CarpentryGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      Carpentry
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
+        {/* ── AC & Appliance Sub-Category Modal Popup ── */}
+        {isAcModalOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="ac-modal-title"
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+              onClick={() => setIsAcModalOpen(false)}
+            >
+              <div
+                className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsAcModalOpen(false)}
+                  aria-label="Close popup"
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                {/* Modal Title */}
+                <div className="text-center mb-6">
+                  <h3
+                    id="ac-modal-title"
+                    className="text-lg sm:text-xl font-extrabold text-slate-900"
+                  >
+                    AC &amp; Appliance Repair
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Choose an appliance type to view related services
+                  </p>
+                </div>
+
+                {/* Items Grid for AC & Appliance Repair (5 options) */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 items-stretch">
+                  {/* Option 1: AC Service */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAcModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      goToCategoryServices("hvac")
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <AcGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      Air Conditioner
+                    </span>
+                  </button>
+
+                  {/* Option 2: Refrigerator */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAcModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      goToCategoryServices("appliance_repair")
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <FridgeGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      Refrigerator
+                    </span>
+                  </button>
+
+                  {/* Option 3: Washing Machine */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAcModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      goToCategoryServices("appliance_repair")
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <WashingMachineGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      Washing Machine
+                    </span>
+                  </button>
+
+                  {/* Option 4: TV & Home Theatre */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAcModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      goToCategoryServices("appliance_repair")
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <TvGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      TV &amp; Display
+                    </span>
+                  </button>
+
+                  {/* Option 5: Microwave Oven */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAcModalOpen(false)
+                      document.body.style.overflow = "unset"
+                      goToCategoryServices("appliance_repair")
+                    }}
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                  >
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                      <MicrowaveGraphic className="w-full h-full" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      Microwave Oven
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
+        {/* ── Trust strip ────────────────────────────────────── */}
+        <section className="max-w-7xl mx-auto px-6">
+          <div className="bg-slate-50 border border-slate-200 rounded-3xl grid sm:grid-cols-2 lg:grid-cols-5 gap-6 p-8">
+            {TRUST_STRIP.map(({ icon: Icon, title, body }, idx) => {
+              const iconColors = ["text-teal-600", "text-rose-500", "text-violet-600", "text-amber-500", "text-sky-500"]
+              return (
+                <div key={title} className="flex flex-col items-start gap-2">
+                  <Icon className={`w-6 h-6 ${iconColors[idx % iconColors.length]}`} strokeWidth={1.75} />
+                  <p className="text-sm font-bold text-slate-800 leading-snug">{title}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* ── Offers ─────────────────────────────────────────── */}
+        <section className="max-w-7xl mx-auto px-6 py-14 grid lg:grid-cols-[220px_1fr] gap-6 items-stretch">
+          <div className="bg-gradient-to-br from-teal-600 to-emerald-700 rounded-3xl p-6 flex flex-col justify-center">
+            <p className="text-lg font-extrabold text-white mb-1">Limited Time Offers!</p>
+            <p className="text-xs text-teal-100 mb-4">Great deals on services you love.</p>
+            <button onClick={goToBooking} className="bg-white text-teal-700 hover:bg-teal-50 text-xs font-bold px-4 py-2 rounded-full self-start transition-colors">
+              Explore Offers
+            </button>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4">
+            {[
+              { tag: "UPTO", big: "20% OFF", sub: "on Home Cleaning", bg: "bg-amber-50 hover:bg-amber-100", tag_color: "text-amber-600", link_color: "text-amber-700" },
+              { tag: "FLAT", big: "15% OFF", sub: "on Painting", bg: "bg-rose-50 hover:bg-rose-100", tag_color: "text-rose-600", link_color: "text-rose-700" },
+              { tag: "UPTO", big: "₹500 OFF", sub: "on AC Service", bg: "bg-violet-50 hover:bg-violet-100", tag_color: "text-violet-600", link_color: "text-violet-700" },
+            ].map((offer) => (
+              <button
+                key={offer.sub}
+                onClick={goToBooking}
+                className={`${offer.bg} rounded-3xl p-6 text-left hover:shadow-md transition-all`}
+              >
+                <p className={`text-[11px] font-bold tracking-wide ${offer.tag_color}`}>{offer.tag}</p>
+                <p className="text-2xl font-extrabold text-slate-900 mb-1">{offer.big}</p>
+                <p className="text-sm text-slate-600 mb-4">{offer.sub}</p>
+                <span className={`text-xs font-semibold ${offer.link_color}`}>Book Now &rarr;</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* ── How It Works ───────────────────────────────────── */}
+        <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-10">
+          <h2 className="text-xl font-bold text-slate-900 text-center mb-10">How It Works</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-8">
+            {STEPS.map(({ icon: Icon, title, body }, i) => {
+              const stepColors = [
+                { bg: "bg-teal-50", icon: "text-teal-600", badge: "bg-teal-600" },
+                { bg: "bg-rose-50", icon: "text-rose-500", badge: "bg-rose-500" },
+                { bg: "bg-violet-50", icon: "text-violet-600", badge: "bg-violet-600" },
+                { bg: "bg-amber-50", icon: "text-amber-500", badge: "bg-amber-500" },
+                { bg: "bg-sky-50", icon: "text-sky-500", badge: "bg-sky-500" },
+              ]
+              const c = stepColors[i % stepColors.length]
+              return (
+                <div key={title} className="flex flex-col items-center text-center gap-3">
+                  <div className="relative">
+                    <div className={`w-16 h-16 rounded-full ${c.bg} flex items-center justify-center`}>
+                      <Icon className={`w-7 h-7 ${c.icon}`} strokeWidth={1.75} />
+                    </div>
+                    <span className={`absolute -top-1 -left-1 w-5 h-5 rounded-full ${c.badge} text-white text-[10px] font-bold flex items-center justify-center`}>
+                      {i + 1}
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-slate-800">{title}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* ── Stats ──────────────────────────────────────────── */}
+        <section className="bg-slate-800 py-10">
+          <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-5 gap-6 text-center text-white">
+            {STATS.map((s) => (
+              <div key={s.label}>
+                <p className="text-2xl font-extrabold">{s.value}</p>
+                <p className="text-xs text-slate-300">{s.label}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Featured Professionals ─────────────────────────── */}
+        <section id="professionals" className="max-w-7xl mx-auto px-6 py-14">
+          <h2 className="text-xl font-bold text-slate-900 text-center mb-2">Featured Professionals</h2>
+          <p className="text-sm text-slate-500 text-center mb-10">Top-rated experts ready to help</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+            {PROFESSIONALS.map((p) => (
+              <div key={p.name} className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
+                <img src={p.photo} alt={p.name} className="w-full h-36 object-cover" />
+                <div className="p-4">
+                  <p className="text-sm font-bold text-slate-800">{p.name}</p>
+                  <p className="text-xs text-slate-500 mb-2">{p.role}</p>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="inline-flex items-center gap-1 font-semibold text-amber-500">
+                      <Star className="w-3.5 h-3.5 fill-current" /> {p.rating}
+                    </span>
+                    <span className="text-slate-400">{p.jobs}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Testimonials ───────────────────────────────────── */}
+        <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">What Our Customers Say</h2>
+            <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">View all reviews &rarr;</a>
+          </div>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setTestimonialIdx((i) => (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)}
+              className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="grid sm:grid-cols-3 gap-5 flex-1">
+              {TESTIMONIALS.map((t, i) => (
+                <div key={t.name} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                      {t.initials}
+                    </span>
+                    <div className="flex gap-0.5 text-amber-400">
+                      {Array.from({ length: 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
+                    </div>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-3 leading-relaxed">{t.text}</p>
+                  <p className="text-sm font-bold text-slate-800">&mdash; {t.name}</p>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setTestimonialIdx((i) => (i + 1) % TESTIMONIALS.length)}
+              className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex justify-center gap-1.5 mt-6">
+            {TESTIMONIALS.map((_, i) => (
+              <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === testimonialIdx ? "bg-teal-600" : "bg-slate-200"}`} />
+            ))}
+          </div>
+        </section>
+
+        {/* ── App download banner ────────────────────────────── */}
+        <section className="max-w-7xl mx-auto px-6 pb-14">
+          <div className="bg-gradient-to-r from-rose-500 to-amber-500 rounded-3xl px-8 py-7 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/25 flex items-center justify-center text-white shrink-0">
+                <Smartphone className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">Book on the go!</p>
+                <p className="text-lg font-extrabold text-white">Download the CalServices App</p>
+                <p className="text-xs text-rose-100">Faster booking, real-time tracking &amp; exclusive app offers.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Get it on Google Play</button>
+              <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Download on App Store</button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Footer ─────────────────────────────────────────── */}
+        <footer id="about" className="border-t border-slate-200 bg-slate-900">
+          <div className="max-w-7xl mx-auto px-6 py-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
+            <div>
+              <div className="flex items-center gap-2 select-none">
+                <div className="w-9 h-9 rounded-xl bg-teal-500 flex items-center justify-center text-white">
+                  <Home className="w-5 h-5" strokeWidth={2.5} />
+                </div>
+                <span className="text-lg font-extrabold tracking-tight text-white">CalServices</span>
+              </div>
+              <p className="text-xs text-slate-400 mt-3 leading-relaxed max-w-[220px]">
+                Your trusted partner for all home services. Quality you can count on.
               </p>
-              <div className="flex gap-3 mt-4 text-slate-400">
-                <FacebookMark className="w-4 h-4" />
-                <InstagramMark className="w-4 h-4" />
-                <YoutubeMark className="w-4 h-4" />
-                <TwitterMark className="w-4 h-4" />
+              <div className="flex gap-3 mt-4 text-slate-400 hover:[&>*]:text-teal-400">
+                <FacebookMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
+                <InstagramMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
+                <YoutubeMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
+                <TwitterMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
               </div>
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-800 mb-3">Services</p>
-              <ul className="space-y-2 text-xs text-slate-500">
-                {CATEGORIES.slice(0, 4).map((c) => <li key={c.label}>{c.label}</li>)}
+              <p className="text-sm font-bold text-white mb-3">Services</p>
+              <ul className="space-y-2 text-xs text-slate-400">
+                {CATEGORIES.slice(0, 4).map((c) => <li key={c.label} className="hover:text-white cursor-pointer transition-colors">{c.label}</li>)}
               </ul>
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-800 mb-3">Company</p>
-              <ul className="space-y-2 text-xs text-slate-500">
-                <li>About Us</li><li>Careers</li><li>Blog</li><li>Become a Partner</li>
+              <p className="text-sm font-bold text-white mb-3">Company</p>
+              <ul className="space-y-2 text-xs text-slate-400">
+                <li className="hover:text-white cursor-pointer transition-colors">About Us</li>
+                <li className="hover:text-white cursor-pointer transition-colors">Careers</li>
+                <li className="hover:text-white cursor-pointer transition-colors">Blog</li>
+                <li className="hover:text-white cursor-pointer transition-colors">Become a Partner</li>
               </ul>
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-800 mb-3">Need Help?</p>
-              <ul className="space-y-2 text-xs text-slate-500">
-                <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-emerald-600" /> +91 98765 43210</li>
-                <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-emerald-600" /> support@calservices.com</li>
-                <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-emerald-600" /> Mon &ndash; Sun (8 AM &ndash; 8 PM)</li>
+              <p className="text-sm font-bold text-white mb-3">Need Help?</p>
+              <ul className="space-y-2 text-xs text-slate-400">
+                <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-teal-400" /> +91 98765 43210</li>
+                <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-teal-400" /> support@calservices.com</li>
+                <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-teal-400" /> Mon &ndash; Sun (8 AM &ndash; 8 PM)</li>
               </ul>
             </div>
           </div>
         </footer>
       </div>
+
       <BkStyles />
-      </>
-    );
-  }
-
-  return (
-    <>
-    <div className="min-h-screen bg-[#F7FAF9] text-slate-800" style={{ animation: "fadeUp 0.4s ease both" }}>
-      {/* ── Header ─────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-6">
-          <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => navigate(routes.landing)}>
-            <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white">
-              <Home className="w-5 h-5" strokeWidth={2.5} />
-            </div>
-            <span className="text-lg font-extrabold tracking-tight text-slate-900">CalServices</span>
-          </div>
-
-          <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600">
-            <a href="#home" className="text-teal-600 font-semibold">Home</a>
-            <a href="#categories" className="hover:text-slate-900 transition-colors">Services</a>
-            <a href="#how-it-works" className="hover:text-slate-900 transition-colors">How It Works</a>
-            <a href="#professionals" className="hover:text-slate-900 transition-colors">Professionals</a>
-            <a href="#about" className="hover:text-slate-900 transition-colors">About Us</a>
-          </nav>
-
-          <div className="flex items-center gap-8">
-            {/* Location Selector (Urban Company Style) */}
-            <button
-              type="button"
-              onClick={() => setShowLocationPickerModal(true)}
-              className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
-              title="Location"
-            >
-              <MapPin className="w-5 h-5 text-slate-700 stroke-[1.75] shrink-0 group-hover:text-slate-900 transition-colors" />
-              <span className="truncate max-w-[180px] font-semibold text-slate-800">
-                {(() => {
-                  if (activeLocationLabel) return activeLocationLabel
-                  const locObj = user?.last_known_location || user?.lastKnownLocation
-                  if (locObj) {
-                    if (typeof locObj === "string" && locObj.trim()) return locObj
-                    if (locObj.label) return locObj.label
-                  }
-                  if (user?.address) return user.address
-                  return "Set location"
-                })()}
-              </span>
-              <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
-            </button>
-
-            {/* User Profile / Login (Urban Company Style) */}
-            {user ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveAccountTab("My Profile")
-                  setShowAccountPortal(true)
-                }}
-                className="flex items-center gap-2.5 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
-              >
-                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
-                  <User className="w-4 h-4 stroke-[1.75]" />
-                </div>
-                <span className="font-semibold text-slate-800">
-                  Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
-                </span>
-                <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={goToLogin}
-                className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
-              >
-                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
-                  <User className="w-4 h-4 stroke-[1.75]" />
-                </div>
-                <span className="font-semibold text-slate-800">Login / Sign Up</span>
-                <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* ── Hero ───────────────────────────────────────────── */}
-      <section id="home" className="max-w-7xl mx-auto px-6 pt-14 pb-16 grid lg:grid-cols-2 gap-12 items-center">
-        <div>
-          <p className="text-sm font-medium text-teal-600 mb-4">
-            Reliable. Affordable. Right at Your Doorstep.
-          </p>
-          <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight text-slate-900 mb-5">
-            Professional<br />
-            <span className="text-teal-600">Services</span><br />
-            Made Simple
-          </h1>
-          <p className="text-slate-500 text-base mb-8 max-w-md">
-            Quick booking. Quality work. Guaranteed satisfaction.
-          </p>
-
-          <form
-            onSubmit={(e) => { e.preventDefault(); goToBooking() }}
-            className="flex items-center bg-white rounded-2xl shadow-sm border border-slate-200 p-1.5 mb-6 max-w-xl"
-          >
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="What service do you need?"
-              className="flex-1 bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-slate-400"
-            />
-            <LocationDropdown className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3" />
-            <button
-              type="submit"
-              aria-label="Search services"
-              className="ml-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl w-11 h-11 flex items-center justify-center shrink-0 transition-colors"
-            >
-              <Search className="w-4.5 h-4.5" />
-            </button>
-          </form>
-
-          <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs font-medium text-slate-500">
-            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-teal-600" /> Verified Pros</span>
-            <span className="inline-flex items-center gap-1.5"><Star className="w-4 h-4 text-amber-500" /> 4.8★ Rated</span>
-            <span className="inline-flex items-center gap-1.5"><Award className="w-4 h-4 text-rose-500" /> 1M+ Happy Homes</span>
-            <span className="inline-flex items-center gap-1.5"><Clock className="w-4 h-4 text-violet-500" /> 30-Day Guarantee</span>
-          </div>
-        </div>
-
-        {/* Real photo collage */}
-        <div className="relative h-[420px] hidden sm:block">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 via-violet-50 to-orange-50 rounded-[3rem] -z-10" />
-          <img
-            src="/mockups/service_hvac.png"
-            alt="Technician servicing an AC unit"
-            className="absolute top-0 left-0 w-[62%] h-[65%] object-cover rounded-3xl shadow-lg border-4 border-white"
+      {activeCategory && (
+        (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
+          <PaintingPackageModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            onClose={() => navigate("/home")}
+            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
           />
-          <img
-            src="/mockups/service_electrical.png"
-            alt="Electrician at work"
-            className="absolute bottom-0 left-[8%] w-[48%] h-[45%] object-cover rounded-3xl shadow-lg border-4 border-white"
+        ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+          <MasonPackageModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            onClose={() => navigate("/home")}
+            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
           />
-          <img
-            src="/mockups/service_cleaning.png"
-            alt="Home cleaning professional"
-            className="absolute top-[8%] right-0 w-[46%] h-[52%] object-cover rounded-3xl shadow-lg border-4 border-white"
+        ) : (
+          <CustomCleaningPackageModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            onClose={() => navigate("/home")}
+            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
           />
-          <img
-            src="/mockups/service_plumbing.png"
-            alt="Plumber fixing a sink"
-            className="absolute bottom-[4%] right-[2%] w-[42%] h-[42%] object-cover rounded-3xl shadow-lg border-4 border-white"
-          />
-        </div>
-      </section>
-
-      {/* ── Browse by Category ─────────────────────────────── */}
-      <section id="categories" className="max-w-7xl mx-auto px-6 py-10">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-900">Browse by Category</h2>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => (
-            <button
-              key={label}
-              onClick={() => {
-                if (label === "Goods & Transports") {
-                  setIsGoodsModalOpen(true)
-                } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
-                  setIsElecModalOpen(true)
-                } else if (label.includes("AC") || label.includes("Appliance")) {
-                  setIsAcModalOpen(true)
-                } else if (label === "Home Services & Pest Control") {
-                  setIsHomePestModalOpen(true)
-                } else {
-                  goToCategoryServices(serviceCategoryId)
-                }
-              }}
-              className="group flex flex-col bg-white rounded-2xl border border-slate-100 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all"
-            >
-              {photo ? (
-                <div className="h-24 w-full overflow-hidden">
-                  <img
-                    src={photo}
-                    alt={label}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                </div>
-              ) : (
-                <div className="h-24 w-full bg-emerald-50 flex items-center justify-center">
-                  <Icon className="w-8 h-8 text-emerald-600" strokeWidth={1.5} />
-                </div>
-              )}
-              <span className="text-xs font-semibold text-slate-700 leading-snug p-3">{label}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Home Services & Pest Control Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
-      {isHomePestModalOpen &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="homepest-modal-title"
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsHomePestModalOpen(false)}
-          >
-            <div
-              className="bg-white rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => setIsHomePestModalOpen(false)}
-                aria-label="Close popup"
-                className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-white text-slate-900 hover:bg-slate-100 flex items-center justify-center shadow-md border border-slate-200 transition-colors z-50"
-              >
-                <X className="w-4 h-4" strokeWidth={2.5} />
-              </button>
-
-              {/* Modal Title */}
-              <div className="text-left mb-6">
-                <h3
-                  id="homepest-modal-title"
-                  className="text-lg sm:text-xl font-extrabold text-slate-900"
-                >
-                  Cleaning &amp; Pest Control
-                </h3>
-              </div>
-
-              {/* Cleaning Section */}
-              <div className="mb-6">
-                <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                  Cleaning
-                </h4>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                  {HOME_SERVICES_SUB.map((item) => (
-                    <button
-                      key={item.name}
-                      type="button"
-                      onClick={() => {
-                        setIsHomePestModalOpen(false)
-                        document.body.style.overflow = "unset"
-                        if (item.name === "Kitchen Cleaning") {
-                          navigate(`?category=kitchen_cleaning`)
-                        } else if (item.name === "Sofa Cleaning") {
-                          navigate(`?category=sofa_cleaning`)
-                        } else {
-                          navigate(`?category=${item.categoryId}`)
-                        }
-                      }}
-                      className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                    >
-                      <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                        <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                        {item.badge && (
-                          <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                            {item.badge}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                        {item.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Pest Control Section */}
-              <div>
-                <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                  Pest Control
-                </h4>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                  {PEST_CONTROL_SUB.map((item) => (
-                    <button
-                      key={item.name}
-                      type="button"
-                      onClick={() => {
-                        setIsHomePestModalOpen(false)
-                        document.body.style.overflow = "unset"
-                        navigate(`?category=${item.categoryId}`)
-                      }}
-                      className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                    >
-                      <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                        <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                        {item.badge && (
-                          <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                            {item.badge}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                        {item.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-      {/* ── Goods & Transports Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
-      {isGoodsModalOpen &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="transport-modal-title"
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsGoodsModalOpen(false)}
-          >
-            <div
-              className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => setIsGoodsModalOpen(false)}
-                aria-label="Close popup"
-                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              {/* Modal Title */}
-              <div className="text-center mb-6">
-                <h3
-                  id="transport-modal-title"
-                  className="text-lg sm:text-xl font-extrabold text-slate-900"
-                >
-                  Goods &amp; Transports
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Choose a transport type to get an instant estimate
-                </p>
-              </div>
-
-              {/* Items Grid matching Image 2 with Landing Page Emerald styling */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-stretch">
-                {/* Option 1: Truck */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGoodsModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    navigate(routes.truck_booking_hosur)
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <TruckGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                    Truck
-                  </span>
-                </button>
-
-                {/* Option 2: Two Wheeler */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGoodsModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    navigate(routes.two_wheeler_booking_hosur)
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <TwoWheelerGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                    Two Wheeler
-                  </span>
-                </button>
-
-                {/* Option 3: Packers & Movers */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGoodsModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    navigate(routes.packers_movers_booking_hosur)
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <PackersMoversGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                    Packers &amp; Movers
-                  </span>
-                </button>
-
-                {/* Option 4: Get an Estimate card/button in Landing Page Emerald theme */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGoodsModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    navigate(routes.truck_booking_hosur)
-                  }}
-                  className="group flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-[0.98] text-white shadow-lg shadow-emerald-600/25 transition-all text-left cursor-pointer min-h-[140px]"
-                >
-                  <div>
-                    <p className="text-lg sm:text-xl font-extrabold leading-tight tracking-tight">
-                      Get an<br />Estimate
-                    </p>
-                    <p className="text-xs text-emerald-100 font-medium mt-2 opacity-95">
-                      (takes ~2 mins)
-                    </p>
-                  </div>
-                  <div className="pt-4 flex items-center">
-                    <ArrowRight className="w-6 h-6 text-white stroke-[2.5] group-hover:translate-x-1.5 transition-transform" />
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-      {/* ── Electrician, Plumbing & Carpentry Sub-Category Modal Popup ── */}
-      {isElecModalOpen &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="elec-modal-title"
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsElecModalOpen(false)}
-          >
-            <div
-              className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => setIsElecModalOpen(false)}
-                aria-label="Close popup"
-                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              {/* Modal Title */}
-              <div className="text-center mb-6">
-                <h3
-                  id="elec-modal-title"
-                  className="text-lg sm:text-xl font-extrabold text-slate-900"
-                >
-                  Electrician, Plumbing &amp; Carpentry
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Choose a service type to view related services
-                </p>
-              </div>
-
-              {/* Items Grid for Electrician, Plumbing & Carpentry (3 options) */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 items-stretch">
-                {/* Option 1: Electrician */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsElecModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("electrical")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <ElectricianGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Electrician
-                  </span>
-                </button>
-
-                {/* Option 2: Plumber */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsElecModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("plumbing")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <PlumberGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Plumber
-                  </span>
-                </button>
-
-                {/* Option 3: Carpentry */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsElecModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("carpentry")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <CarpentryGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Carpentry
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-      {/* ── AC & Appliance Sub-Category Modal Popup ── */}
-      {isAcModalOpen &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ac-modal-title"
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsAcModalOpen(false)}
-          >
-            <div
-              className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => setIsAcModalOpen(false)}
-                aria-label="Close popup"
-                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              {/* Modal Title */}
-              <div className="text-center mb-6">
-                <h3
-                  id="ac-modal-title"
-                  className="text-lg sm:text-xl font-extrabold text-slate-900"
-                >
-                  AC &amp; Appliance Repair
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Choose an appliance type to view related services
-                </p>
-              </div>
-
-              {/* Items Grid for AC & Appliance Repair (5 options) */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 items-stretch">
-                {/* Option 1: AC Service */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("hvac")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <AcGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Air Conditioner
-                  </span>
-                </button>
-
-                {/* Option 2: Refrigerator */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("appliance_repair")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <FridgeGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Refrigerator
-                  </span>
-                </button>
-
-                {/* Option 3: Washing Machine */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("appliance_repair")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <WashingMachineGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Washing Machine
-                  </span>
-                </button>
-
-                {/* Option 4: TV & Home Theatre */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("appliance_repair")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <TvGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    TV &amp; Display
-                  </span>
-                </button>
-
-                {/* Option 5: Microwave Oven */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAcModalOpen(false)
-                    document.body.style.overflow = "unset"
-                    goToCategoryServices("appliance_repair")
-                  }}
-                  className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                >
-                  <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                    <MicrowaveGraphic className="w-full h-full" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                    Microwave Oven
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-      {/* ── Trust strip ────────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6">
-        <div className="bg-slate-50 border border-slate-200 rounded-3xl grid sm:grid-cols-2 lg:grid-cols-5 gap-6 p-8">
-          {TRUST_STRIP.map(({ icon: Icon, title, body }, idx) => {
-            const iconColors = ["text-teal-600", "text-rose-500", "text-violet-600", "text-amber-500", "text-sky-500"]
-            return (
-              <div key={title} className="flex flex-col items-start gap-2">
-                <Icon className={`w-6 h-6 ${iconColors[idx % iconColors.length]}`} strokeWidth={1.75} />
-                <p className="text-sm font-bold text-slate-800 leading-snug">{title}</p>
-                <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ── Offers ─────────────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6 py-14 grid lg:grid-cols-[220px_1fr] gap-6 items-stretch">
-        <div className="bg-gradient-to-br from-teal-600 to-emerald-700 rounded-3xl p-6 flex flex-col justify-center">
-          <p className="text-lg font-extrabold text-white mb-1">Limited Time Offers!</p>
-          <p className="text-xs text-teal-100 mb-4">Great deals on services you love.</p>
-          <button onClick={goToBooking} className="bg-white text-teal-700 hover:bg-teal-50 text-xs font-bold px-4 py-2 rounded-full self-start transition-colors">
-            Explore Offers
-          </button>
-        </div>
-        <div className="grid sm:grid-cols-3 gap-4">
-          {[
-            { tag: "UPTO", big: "20% OFF", sub: "on Home Cleaning", bg: "bg-amber-50 hover:bg-amber-100", tag_color: "text-amber-600", link_color: "text-amber-700" },
-            { tag: "FLAT", big: "15% OFF", sub: "on Painting",      bg: "bg-rose-50 hover:bg-rose-100",   tag_color: "text-rose-600",  link_color: "text-rose-700"  },
-            { tag: "UPTO", big: "₹500 OFF", sub: "on AC Service",   bg: "bg-violet-50 hover:bg-violet-100", tag_color: "text-violet-600", link_color: "text-violet-700" },
-          ].map((offer) => (
-            <button
-              key={offer.sub}
-              onClick={goToBooking}
-              className={`${offer.bg} rounded-3xl p-6 text-left hover:shadow-md transition-all`}
-            >
-              <p className={`text-[11px] font-bold tracking-wide ${offer.tag_color}`}>{offer.tag}</p>
-              <p className="text-2xl font-extrabold text-slate-900 mb-1">{offer.big}</p>
-              <p className="text-sm text-slate-600 mb-4">{offer.sub}</p>
-              <span className={`text-xs font-semibold ${offer.link_color}`}>Book Now &rarr;</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* ── How It Works ───────────────────────────────────── */}
-      <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-10">
-        <h2 className="text-xl font-bold text-slate-900 text-center mb-10">How It Works</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-8">
-          {STEPS.map(({ icon: Icon, title, body }, i) => {
-            const stepColors = [
-              { bg: "bg-teal-50",   icon: "text-teal-600",   badge: "bg-teal-600"   },
-              { bg: "bg-rose-50",   icon: "text-rose-500",   badge: "bg-rose-500"   },
-              { bg: "bg-violet-50", icon: "text-violet-600", badge: "bg-violet-600" },
-              { bg: "bg-amber-50",  icon: "text-amber-500",  badge: "bg-amber-500"  },
-              { bg: "bg-sky-50",    icon: "text-sky-500",    badge: "bg-sky-500"    },
-            ]
-            const c = stepColors[i % stepColors.length]
-            return (
-              <div key={title} className="flex flex-col items-center text-center gap-3">
-                <div className="relative">
-                  <div className={`w-16 h-16 rounded-full ${c.bg} flex items-center justify-center`}>
-                    <Icon className={`w-7 h-7 ${c.icon}`} strokeWidth={1.75} />
-                  </div>
-                  <span className={`absolute -top-1 -left-1 w-5 h-5 rounded-full ${c.badge} text-white text-[10px] font-bold flex items-center justify-center`}>
-                    {i + 1}
-                  </span>
-                </div>
-                <p className="text-sm font-bold text-slate-800">{title}</p>
-                <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ── Stats ──────────────────────────────────────────── */}
-      <section className="bg-slate-800 py-10">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-5 gap-6 text-center text-white">
-          {STATS.map((s) => (
-            <div key={s.label}>
-              <p className="text-2xl font-extrabold">{s.value}</p>
-              <p className="text-xs text-slate-300">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Featured Professionals ─────────────────────────── */}
-      <section id="professionals" className="max-w-7xl mx-auto px-6 py-14">
-        <h2 className="text-xl font-bold text-slate-900 text-center mb-2">Featured Professionals</h2>
-        <p className="text-sm text-slate-500 text-center mb-10">Top-rated experts ready to help</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-          {PROFESSIONALS.map((p) => (
-            <div key={p.name} className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
-              <img src={p.photo} alt={p.name} className="w-full h-36 object-cover" />
-              <div className="p-4">
-                <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                <p className="text-xs text-slate-500 mb-2">{p.role}</p>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="inline-flex items-center gap-1 font-semibold text-amber-500">
-                    <Star className="w-3.5 h-3.5 fill-current" /> {p.rating}
-                  </span>
-                  <span className="text-slate-400">{p.jobs}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Testimonials ───────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">What Our Customers Say</h2>
-          <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">View all reviews &rarr;</a>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setTestimonialIdx((i) => (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)}
-            className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <div className="grid sm:grid-cols-3 gap-5 flex-1">
-            {TESTIMONIALS.map((t, i) => (
-              <div key={t.name} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                    {t.initials}
-                  </span>
-                  <div className="flex gap-0.5 text-amber-400">
-                    {Array.from({ length: 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
-                  </div>
-                </div>
-                <p className="text-sm text-slate-600 mb-3 leading-relaxed">{t.text}</p>
-                <p className="text-sm font-bold text-slate-800">&mdash; {t.name}</p>
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={() => setTestimonialIdx((i) => (i + 1) % TESTIMONIALS.length)}
-            className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="flex justify-center gap-1.5 mt-6">
-          {TESTIMONIALS.map((_, i) => (
-            <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === testimonialIdx ? "bg-teal-600" : "bg-slate-200"}`} />
-          ))}
-        </div>
-      </section>
-
-      {/* ── App download banner ────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6 pb-14">
-        <div className="bg-gradient-to-r from-rose-500 to-amber-500 rounded-3xl px-8 py-7 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-white/25 flex items-center justify-center text-white shrink-0">
-              <Smartphone className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white">Book on the go!</p>
-              <p className="text-lg font-extrabold text-white">Download the CalServices App</p>
-              <p className="text-xs text-rose-100">Faster booking, real-time tracking &amp; exclusive app offers.</p>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Get it on Google Play</button>
-            <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Download on App Store</button>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Footer ─────────────────────────────────────────── */}
-      <footer id="about" className="border-t border-slate-200 bg-slate-900">
-        <div className="max-w-7xl mx-auto px-6 py-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
-          <div>
-            <div className="flex items-center gap-2 select-none">
-              <div className="w-9 h-9 rounded-xl bg-teal-500 flex items-center justify-center text-white">
-                <Home className="w-5 h-5" strokeWidth={2.5} />
-              </div>
-              <span className="text-lg font-extrabold tracking-tight text-white">CalServices</span>
-            </div>
-            <p className="text-xs text-slate-400 mt-3 leading-relaxed max-w-[220px]">
-              Your trusted partner for all home services. Quality you can count on.
-            </p>
-            <div className="flex gap-3 mt-4 text-slate-400 hover:[&>*]:text-teal-400">
-              <FacebookMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
-              <InstagramMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
-              <YoutubeMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
-              <TwitterMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
-            </div>
-          </div>
-          <div>
-            <p className="text-sm font-bold text-white mb-3">Services</p>
-            <ul className="space-y-2 text-xs text-slate-400">
-              {CATEGORIES.slice(0, 4).map((c) => <li key={c.label} className="hover:text-white cursor-pointer transition-colors">{c.label}</li>)}
-            </ul>
-          </div>
-          <div>
-            <p className="text-sm font-bold text-white mb-3">Company</p>
-            <ul className="space-y-2 text-xs text-slate-400">
-              <li className="hover:text-white cursor-pointer transition-colors">About Us</li>
-              <li className="hover:text-white cursor-pointer transition-colors">Careers</li>
-              <li className="hover:text-white cursor-pointer transition-colors">Blog</li>
-              <li className="hover:text-white cursor-pointer transition-colors">Become a Partner</li>
-            </ul>
-          </div>
-          <div>
-            <p className="text-sm font-bold text-white mb-3">Need Help?</p>
-            <ul className="space-y-2 text-xs text-slate-400">
-              <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-teal-400" /> +91 98765 43210</li>
-              <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-teal-400" /> support@calservices.com</li>
-              <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-teal-400" /> Mon &ndash; Sun (8 AM &ndash; 8 PM)</li>
-            </ul>
-          </div>
-        </div>
-      </footer>
-    </div>
-
-    <BkStyles />
-    {activeCategory && (
-      (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
-        <PaintingPackageModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-          onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
-        />
-      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
-        <MasonPackageModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-          onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
-        />
-      ) : (
-        <PackageModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          packagesData={{}}
-          onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-        />
-      )
-    )}
-
-    <CustomerEntryFlowModal
-      isOpen={showCustomerEntryModal}
-      onClose={() => setShowCustomerEntryModal(false)}
-      onComplete={() => {
-        setShowCustomerEntryModal(false)
-        if (typeof refreshMe === "function") refreshMe()
-      }}
-    />
-
-    <AnimatePresence>
-      {showAccountPortal && (
-        <CustomerAccountModal
-          activeTab={activeAccountTab}
-          onChangeTab={setActiveAccountTab}
-          onClose={() => setShowAccountPortal(false)}
-        />
+        )
       )}
-    </AnimatePresence>
 
-    {showLocationPickerModal && (
-      <AddAddressSearchModal
-        onClose={() => setShowLocationPickerModal(false)}
-        onSelectLocation={async (locStr) => {
-          setShowLocationPickerModal(false)
-          if (locStr) {
-            setActiveLocationLabel(locStr)
-            if (user) {
-              try {
-                await apiUpdateCustomerLastLocation({
-                  label: locStr,
-                  detected_at: new Date().toISOString()
-                })
-              } catch (e) {}
-              if (typeof refreshMe === "function") refreshMe()
-            }
-          }
-        }}
-        onUseCurrentLocation={() => {
-          setShowLocationPickerModal(false)
+      <CustomerEntryFlowModal
+        isOpen={showCustomerEntryModal}
+        onClose={() => setShowCustomerEntryModal(false)}
+        onComplete={() => {
+          setShowCustomerEntryModal(false)
+          if (typeof refreshMe === "function") refreshMe()
         }}
       />
-    )}
+
+      <AnimatePresence>
+        {showAccountPortal && (
+          <CustomerAccountModal
+            activeTab={activeAccountTab}
+            onChangeTab={setActiveAccountTab}
+            onClose={() => setShowAccountPortal(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Urban Company Style Floating Bottom Cart Bar */}
+      {modalCart && modalCart.length > 0 && (
+        <motion.div
+          initial={{ y: 50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 50, opacity: 0 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[9995] w-[92%] max-w-lg bg-slate-900 text-white rounded-2xl p-3.5 shadow-2xl border border-slate-800 flex items-center justify-between gap-4 backdrop-blur-lg"
+        >
+          {/* Cart Item Count & Total Price */}
+          <div className="flex items-center gap-3 pl-1">
+            <div className="relative w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+              <ShoppingCart size={18} />
+              <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-slate-950 font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-xs">
+                {modalCart.reduce((sum, i) => sum + i.quantity, 0)}
+              </span>
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-300">
+                {modalCart.reduce((sum, i) => sum + i.quantity, 0)} {modalCart.reduce((sum, i) => sum + i.quantity, 0) === 1 ? "Service" : "Services"} Added
+              </div>
+              <div className="text-sm font-black text-white">
+                ₹{modalCart.reduce((sum, i) => sum + (i.price * i.quantity), 0).toLocaleString("en-IN")}
+              </div>
+            </div>
+          </div>
+
+          {/* View Cart / Proceed Action Button */}
+          <button
+            type="button"
+            onClick={() => navigate(routes.booking_checkout, { state: { cart: modalCart } })}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-600/30 transition-all cursor-pointer active:scale-95 shrink-0 uppercase tracking-wider"
+          >
+            <span>View Cart</span>
+            <ChevronRight size={15} strokeWidth={3} />
+          </button>
+        </motion.div>
+      )}
+
+      {showLocationPickerModal && (
+        <AddAddressSearchModal
+          onClose={() => setShowLocationPickerModal(false)}
+          onSelectLocation={async (locStr) => {
+            setShowLocationPickerModal(false)
+            if (locStr) {
+              const labelStr = typeof locStr === "string" ? locStr : (locStr?.formatted_address || locStr?.locality || locStr?.city || "")
+              setActiveLocationLabel(labelStr)
+              localStorage.setItem("calservice_user_location", labelStr)
+              if (user) {
+                try {
+                  await apiUpdateCustomerLastLocation({
+                    label: labelStr,
+                    detected_at: new Date().toISOString()
+                  })
+                } catch (e) { }
+                if (typeof refreshMe === "function") refreshMe()
+              }
+            }
+          }}
+        />
+      )}
     </>
   )
 }

@@ -98,11 +98,11 @@
   --muted: #7C8592;
   --subtle: #B4BCC8;
 
-  /* Brand (Editorial Black/Monochrome) */
-  --primary: #0E1116;
-  --primary-light: #F1F3F5;
-  --primary-dark: #000000;
-  --primary-glow: rgba(14, 17, 22, 0.12);
+  /* Brand (Vibrant Indigo Theme) */
+  --primary: #6366F1;
+  --primary-light: #EEF2FF;
+  --primary-dark: #4F46E5;
+  --primary-glow: rgba(99, 102, 241, 0.25);
 
   /* Status */
   --good: #059669;
@@ -2615,16 +2615,16 @@ h6 {
 }
 
 .btnPrimary {
-  background: var(--fg);
-  color: var(--surface);
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #ffffff;
   border-color: transparent;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
 }
 
 .btnPrimary:hover {
-  background: var(--fg2);
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
   border-color: transparent;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.35);
 }
 
 .btnGhost {

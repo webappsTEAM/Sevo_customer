@@ -19,6 +19,7 @@ import {
   apiDetectCustomerLocation
 } from "../../api/authService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
+import { LocationPermissionHandler } from "./AddressPicker"
 
 const MODAL_STYLES = `
   .cef-overlay {
@@ -146,6 +147,8 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   const [devOtp, setDevOtp] = useState("")
   const [detectedLocationData, setDetectedLocationData] = useState(null)
   const otpInputRefs = useRef([])
+  // AddressPicker map flow (Slice 1)
+  const [showMapPicker, setShowMapPicker] = useState(false)
 
   useEffect(() => {
     let interval = null
@@ -290,7 +293,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
         }
         setShowManualLocation(true)
       },
-      { timeout: 10000, enableHighAccuracy: true }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     )
   }
 
@@ -462,13 +465,19 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                 </div>
                 {!showManualLocation ? (
                   <>
-                    <div className="cef-location-card" onClick={!geoLoading ? handleAllowLocation : undefined} style={{ cursor: geoLoading ? "wait" : "pointer" }}>
+                    {/* "Use Current Location" → opens MapPickerScreen (Slice 1) */}
+                    <div
+                      className="cef-location-card"
+                      onClick={() => setShowMapPicker(true)}
+                      style={{ cursor: "pointer" }}
+                      id="use-current-location-card"
+                    >
                       <div className="cef-location-icon" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
-                        {geoLoading ? <RefreshCcw size={20} style={{ color: "#6366f1", animation: "spin 1s linear infinite" }} /> : <Compass size={20} style={{ color: "#6366f1" }} />}
+                        <Compass size={20} style={{ color: "#6366f1" }} />
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a", marginBottom: 2 }}>{geoLoading ? "Detecting Location..." : "Allow Location Access"}</div>
-                        <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500 }}>Automatically detect your current location</div>
+                        <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a", marginBottom: 2 }}>Use Current Location</div>
+                        <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500 }}>Using GPS for exact address</div>
                       </div>
                       <ChevronRight size={16} style={{ color: "#94a3b8" }} />
                     </div>
@@ -510,6 +519,24 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
           </div>
         </motion.div>
       </div>
+
+      {/* Map Picker (Slice 1) — mounts outside the modal card so it covers the full screen */}
+      {showMapPicker && (
+        <LocationPermissionHandler
+          onClose={() => setShowMapPicker(false)}
+          onManualSearch={() => {
+            setShowMapPicker(false)
+            setShowManualLocation(true)
+          }}
+          onLocationConfirmed={(savedAddress) => {
+            setShowMapPicker(false)
+            if (typeof onComplete === "function") {
+              onComplete(savedAddress)
+            }
+            onClose()
+          }}
+        />
+      )}
     </>
   )
 }

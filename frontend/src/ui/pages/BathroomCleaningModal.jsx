@@ -236,13 +236,11 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 <img
                   src={tab.image}
                   alt={tab.name}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
-                    isSelected ? "scale-[1.05] shadow-md border-2 border-white" : "opacity-80 hover:opacity-100"
-                  }`}
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected ? "scale-[1.05] shadow-md border-2 border-white" : "opacity-80 hover:opacity-100"
+                    }`}
                 />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                  isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
-                }`}>
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
+                  }`}>
                   {tab.name}
                 </span>
               </button>
@@ -274,18 +272,18 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                         <Star className="text-yellow-500 fill-yellow-500" size={16} />
                         <h4 className="text-base font-black text-slate-900">{service.name}</h4>
                       </div>
-                      
+
                       {service.description && (
-                         <p className="text-xs text-slate-500 mb-3">{service.description}</p>
+                        <p className="text-xs text-slate-500 mb-3">{service.description}</p>
                       )}
 
                       <div className="flex items-center gap-2 mb-4">
-                         <div className="text-sm font-extrabold text-slate-900">
-                           {service.options && <span className="text-slate-500 font-medium text-xs mr-1">{service.options}</span>}
-                           ₹{service.price}
-                         </div>
-                         <span className="text-slate-300">•</span>
-                         <span className="text-xs font-semibold text-slate-600">{service.duration}</span>
+                        <div className="text-sm font-extrabold text-slate-900">
+                          {service.options && <span className="text-slate-500 font-medium text-xs mr-1">{service.options}</span>}
+                          ₹{service.price}
+                        </div>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-xs font-semibold text-slate-600">{service.duration}</span>
                       </div>
 
                       <div className="space-y-2 mb-4">
@@ -296,12 +294,12 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                           </div>
                         ))}
                       </div>
-                      
+
                       {service.tag && (
-                         <div className="mt-2 text-[11px] font-bold text-emerald-600 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block"></span>
-                            {service.tag}
-                         </div>
+                        <div className="mt-2 text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block"></span>
+                          {service.tag}
+                        </div>
                       )}
                     </div>
 
@@ -330,7 +328,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 </div>
               );
             })}
-            
+
             {activeServices.length === 0 && (
               <div className="py-10 text-center text-slate-400 text-sm">
                 No services found.
@@ -344,7 +342,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
           <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-48">
             <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
               <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
-              <span className="text-[10px] font-bold text-slate-400">{cart.reduce((a,b)=>a+b.quantity,0)} items</span>
+              <span className="text-[10px] font-bold text-slate-400">{cart.reduce((a, b) => a + b.quantity, 0)} items</span>
             </div>
 
             {cart.length > 0 ? (

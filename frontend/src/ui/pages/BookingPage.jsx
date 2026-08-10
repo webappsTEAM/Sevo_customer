@@ -24,6 +24,7 @@ import { routes } from "../routes.js"
 import { apiRequest } from "../../api/client.js"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { LocationPermissionHandler } from "../components/AddressPicker/index.js"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 
@@ -417,9 +418,8 @@ function SavedAddressesModal({
                 className={`pt-3 first:pt-0 flex items-start gap-3 cursor-pointer group`}
               >
                 {/* Custom Radio Circle */}
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${
-                  isSelected ? "border-slate-900 bg-white" : "border-slate-300 group-hover:border-slate-400"
-                }`}>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${isSelected ? "border-slate-900 bg-white" : "border-slate-300 group-hover:border-slate-400"
+                  }`}>
                   {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />}
                 </div>
 
@@ -498,6 +498,7 @@ export function AddAddressSearchModal({
   savedAddresses: initialSaved = []
 }) {
   const [query, setQuery] = useState("")
+  const [showMapPicker, setShowMapPicker] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [searchResults, setSearchResults] = useState([])
   const [isGeoLoading, setIsGeoLoading] = useState(false)
@@ -576,7 +577,7 @@ export function AddAddressSearchModal({
               const d = backendDetect.data
               readableLocation = [d.area, d.city, d.state].filter(Boolean).join(", ")
             }
-          } catch (e) {}
+          } catch (e) { }
 
           if (!readableLocation) {
             try {
@@ -586,7 +587,7 @@ export function AddAddressSearchModal({
                 const a = data.address
                 readableLocation = [a.road || a.suburb || a.neighbourhood, a.city || a.town || a.village, a.state].filter(Boolean).join(", ")
               }
-            } catch (e) {}
+            } catch (e) { }
           }
 
           if (!readableLocation) readableLocation = `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
@@ -660,7 +661,13 @@ export function AddAddressSearchModal({
 
         {/* Use current location option */}
         <button
-          onClick={handleUseCurrentLocationClick}
+          onClick={() => {
+            if (typeof onUseCurrentLocation === "function") {
+              onUseCurrentLocation()
+            } else {
+              setShowMapPicker(true)
+            }
+          }}
           disabled={isGeoLoading}
           className="flex items-center gap-3 text-purple-700 hover:text-purple-800 font-extrabold text-xs py-2.5 px-1 rounded-xl transition-colors cursor-pointer group mb-3 hover:bg-purple-50/50"
         >
@@ -802,6 +809,24 @@ export function AddAddressSearchModal({
           <span>powered by</span>
           <span className="font-bold text-slate-600">Google</span>
         </div>
+
+        {/* Swiggy/Zomato style Map Picker overlay */}
+        {showMapPicker && (
+          <LocationPermissionHandler
+            onClose={() => setShowMapPicker(false)}
+            onManualSearch={() => setShowMapPicker(false)}
+            onLocationConfirmed={(addressData) => {
+              setShowMapPicker(false)
+              const locStr = typeof addressData === "string"
+                ? addressData
+                : addressData?.formatted_address || [addressData?.flat_house_no, addressData?.locality, addressData?.city].filter(Boolean).join(", ")
+              if (typeof onSelectLocation === "function") {
+                onSelectLocation(locStr || addressData)
+              }
+              onClose()
+            }}
+          />
+        )}
       </motion.div>
     </div>
   )
@@ -974,11 +999,11 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
       `(${liftStr})`,
       landmarkInput
     ].filter(Boolean).join(", ");
-    
+
     let fullAddress = `${details}, ${search}`;
     if (altPhone) fullAddress += ` | Alt Contact: ${altPhone}`;
     if (directions) fullAddress += ` | Directions: ${directions}`;
-    
+
     onConfirm(fullAddress)
   }
 
@@ -1593,9 +1618,9 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
 
   // Urban time slots: Morning / Afternoon / Evening
   const UC_TIME_SLOTS = [
-    { period: 'Morning', icon: '🌅', slots: ['07:00','08:00','09:00','10:00','11:00','12:00'] },
-    { period: 'Afternoon', icon: '☀️', slots: ['12:00','13:00','14:00','15:00','16:00','17:00'] },
-    { period: 'Evening', icon: '🌙', slots: ['17:00','18:00','19:00','20:00','21:00'] },
+    { period: 'Morning', icon: '🌅', slots: ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00'] },
+    { period: 'Afternoon', icon: '☀️', slots: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'] },
+    { period: 'Evening', icon: '🌙', slots: ['17:00', '18:00', '19:00', '20:00', '21:00'] },
   ]
   const formatSlot = t => {
     const [h] = t.split(':').map(Number)
@@ -3014,6 +3039,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   const [addrSubmitting, setAddrSubmitting] = useState(false)
   const [addrError, setAddrError] = useState('')
   const [addrSuccess, setAddrSuccess] = useState('')
+  const [addrAccuracy, setAddrAccuracy] = useState(null)
 
   const [mapAddress, setMapAddress] = useState(null)
 
@@ -3295,12 +3321,15 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     setGeoAddressLoading(true)
     setAddrError("")
     setAddrSuccess("")
+    setAddrAccuracy(null)
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = parseFloat(pos.coords.latitude.toFixed(6))
         const lng = parseFloat(pos.coords.longitude.toFixed(6))
-        const acc = pos.coords.accuracy
+        const acc = Math.round(pos.coords.accuracy)
+        const rating = acc <= 30 ? 'high' : acc <= 100 ? 'acceptable' : 'low'
+        setAddrAccuracy({ meters: acc, rating })
 
         try {
           let line1 = ""
@@ -3356,7 +3385,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           setAddrState(state)
           setAddrPincode(pincode)
 
-          // Update last_known_location for home page pill
+          // Update last_known_location for session
           await apiUpdateCustomerLastLocation({
             latitude: lat,
             longitude: lng,
@@ -3364,38 +3393,11 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
             detected_at: new Date().toISOString()
           })
 
-          // Deduplicate: check if home/default address already exists
-          const existing = (savedAddresses || []).find(a => a.label === 'home' || a.is_default)
-          const targetUrl = existing ? `/auth/customer/addresses/${existing.id}/` : '/auth/customer/addresses/'
-          const targetMethod = existing ? 'PATCH' : 'POST'
-
-          try {
-            const saveRes = await apiRequest(targetUrl, {
-              method: targetMethod,
-              json: {
-                label: 'home',
-                address_line1: line1,
-                address_line2: '',
-                city: city,
-                state: state,
-                pincode: pincode,
-                phone_number: user?.phone || '',
-                latitude: lat,
-                longitude: lng,
-                is_default: true
-              }
-            })
-            if (saveRes.success || saveRes.data || saveRes.id) {
-              fetchAddresses()
-              setAddrSuccess(`✓ Real-time GPS location detected (${line1}, ${city}) & saved!`)
-              setShowAddressForm(false)
-            } else {
-              setShowAddressForm(true)
-              setAddrSuccess("Current location detected! Please review and click Save Address.")
-            }
-          } catch (e) {
-            setShowAddressForm(true)
-            setAddrSuccess("Current location detected! Please review and click Save Address.")
+          setShowAddressForm(true)
+          if (rating === 'low') {
+            setAddrError(`⚠️ Location accuracy is low (~${acc}m). Please move outdoors or refine your street address details before saving.`)
+          } else {
+            setAddrSuccess(`📍 Current location detected (~${acc}m accuracy). Please review your address details below and click Confirm & Save Address.`)
           }
 
           if (typeof refreshMe === 'function') await refreshMe()
@@ -3435,6 +3437,38 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     { id: "BK482910", service: "AC Servicing", date: "Aug 15, 2026", status: "Completed", amount: BOOKING_CURRENCY_SYMBOL + "899" },
     { id: "BK483122", service: "Deep Cleaning", date: "Sep 02, 2026", status: "Upcoming", amount: BOOKING_CURRENCY_SYMBOL + "2,499" },
   ]
+  const renderBookedSubmodulesSummary = (b) => {
+    if (!b) return null;
+    let parsedCart = [];
+    if (typeof b.cart_data === 'string') {
+      try { parsedCart = JSON.parse(b.cart_data); } catch (e) { }
+    } else if (Array.isArray(b.cart_data)) {
+      parsedCart = b.cart_data;
+    }
+
+    if (!parsedCart || parsedCart.length === 0) return null;
+
+    return (
+      <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 14px', border: '1px solid #e2e8f0', marginTop: 10 }}>
+        <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>📦</span> Booked Service Submodules ({parsedCart.length})
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {parsedCart.map((item, idx) => (
+            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: '#0f172a' }}>
+              <span style={{ fontWeight: 600 }}>
+                • {item.name || item.title || item.service_name || item.tier || 'Service Submodule'}
+                {item.categoryName ? <span style={{ color: '#64748b', fontWeight: 400 }}> ({item.categoryName})</span> : ''}
+              </span>
+              <span style={{ fontWeight: 700, color: '#059669' }}>
+                Qty: {item.quantity || 1} &nbsp;•&nbsp; ₹{(parseFloat(item.price || item.estimated_price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -3609,10 +3643,57 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
                           {b.description && (
                             <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-                              <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Service Notes & Items</div>
+                              <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Service Notes</div>
                               <div style={{ fontWeight: 500, color: '#334155', background: 'white', padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0' }}>{b.description}</div>
                             </div>
                           )}
+
+                          {(() => {
+                            let parsedCart = [];
+                            if (typeof b.cart_data === 'string') {
+                              try { parsedCart = JSON.parse(b.cart_data); } catch (e) { }
+                            } else if (Array.isArray(b.cart_data)) {
+                              parsedCart = b.cart_data;
+                            }
+
+                            if (!parsedCart || parsedCart.length === 0) return null;
+
+                            return (
+                              <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                                <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 8 }}>
+                                  📦 Booked Service Modules ({parsedCart.length})
+                                </div>
+                                <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+                                    <thead>
+                                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', textAlign: 'left' }}>
+                                        <th style={{ padding: '8px 12px', fontWeight: 700 }}>Service Module / Item</th>
+                                        <th style={{ padding: '8px 12px', fontWeight: 700, textAlign: 'center' }}>Qty</th>
+                                        <th style={{ padding: '8px 12px', fontWeight: 700, textAlign: 'right' }}>Price</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {parsedCart.map((item, idx) => (
+                                        <tr key={idx} style={{ borderBottom: idx < parsedCart.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                                          <td style={{ padding: '10px 12px', color: '#0f172a', fontWeight: 600 }}>
+                                            {item.name || item.title || item.service_name || item.tier || 'Service Item'}
+                                            {item.categoryName && <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 400 }}>{item.categoryName}</div>}
+                                            {item.route && <div style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 500 }}>Route: {item.route}</div>}
+                                          </td>
+                                          <td style={{ padding: '10px 12px', textAlign: 'center', color: '#475569', fontWeight: 700 }}>
+                                            {item.quantity || 1}
+                                          </td>
+                                          <td style={{ padding: '10px 12px', textAlign: 'right', color: '#059669', fontWeight: 800 }}>
+                                            ₹{(parseFloat(item.price || item.estimated_price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )
+                          })()}
 
                           <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                             {(b.available_actions || []).map(act => {
@@ -3798,37 +3879,37 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Saved Addresses</h3>
-                <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#64748b' }}>Manage your home, office, and preferred service delivery locations.</p>
+                <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em' }}>Saved Addresses</h3>
+                <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>Manage your home, office, and preferred service delivery locations.</p>
               </div>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button type="button" onClick={handleDetectLocationForAddress} disabled={geoAddressLoading}
-                  style={{ padding: '10px 16px', background: '#ede9fe', color: '#6366f1', border: '1.5px solid #c4b5fd', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Compass size={16} /> {geoAddressLoading ? "Detecting..." : "Use Current Location"}
+                  style={{ padding: '9px 16px', background: '#ede9fe', color: '#6366f1', border: '1.5px solid #c4b5fd', borderRadius: 12, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
+                  <Compass size={15} color="#6366f1" /> {geoAddressLoading ? "Detecting..." : "Use Current Location"}
                 </button>
                 <button onClick={() => handleOpenForm(null)}
-                  style={{ padding: '10px 20px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(99,102,241,0.25)' }}>
-                  <MapPin size={15} /> Add New Address
+                  style={{ padding: '9px 18px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 4px 14px rgba(99,102,241,0.25)', transition: 'all 0.15s' }}>
+                  <MapPin size={14} /> Add New Address
                 </button>
               </div>
             </div>
 
             {addrSuccess && (
-              <div style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', padding: '12px 16px', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, marginBottom: 20 }}>
+              <div style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '10px 14px', borderRadius: 12, fontSize: '0.82rem', fontWeight: 700, marginBottom: 18 }}>
                 ✓ {addrSuccess}
               </div>
             )}
 
             {addrError && (
-              <div style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, marginBottom: 20 }}>
+              <div style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: 12, fontSize: '0.82rem', fontWeight: 700, marginBottom: 18 }}>
                 ⚠️ {addrError}
               </div>
             )}
 
             {showAddressForm ? (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                style={{ border: '1.5px solid #6366f130', borderRadius: 20, padding: '1.75rem', background: '#faf5ff', marginBottom: 24, boxShadow: '0 10px 25px -5px rgba(99,102,241,0.08)' }}>
-                <div style={{ fontWeight: 800, fontSize: '1.1rem', marginBottom: 18, color: '#0f172a' }}>
+                style={{ border: '1.5px solid #6366f130', borderRadius: 18, padding: '1.5rem', background: '#faf5ff', marginBottom: 24, boxShadow: '0 8px 24px rgba(99,102,241,0.08)' }}>
+                <div style={{ fontWeight: 800, fontSize: '1.05rem', marginBottom: 16, color: '#0f172a' }}>
                   {editingAddress ? 'Edit Address' : 'Add New Address'}
                 </div>
 
@@ -3838,32 +3919,70 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   disabled={geoAddressLoading}
                   style={{
                     width: '100%',
-                    padding: '12px',
+                    padding: '11px',
                     background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
                     color: 'white',
                     border: 'none',
-                    borderRadius: 14,
+                    borderRadius: 12,
                     fontWeight: 800,
-                    fontSize: '0.85rem',
+                    fontSize: '0.83rem',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    marginBottom: 18,
-                    boxShadow: '0 4px 14px rgba(99,102,241,0.25)'
+                    marginBottom: 16,
+                    boxShadow: '0 4px 14px rgba(99,102,241,0.25)',
+                    transition: 'all 0.15s'
                   }}
                 >
-                  <Compass size={18} /> {geoAddressLoading ? "Detecting Location..." : "📍 Autofill with Current Location (GPS)"}
+                  <Compass size={17} color="white" /> {geoAddressLoading ? "Detecting Location..." : "📍 Autofill with Current Location (GPS)"}
                 </button>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {addrAccuracy && (
+                  <div style={{
+                    background: addrAccuracy.rating === 'low' ? '#fef2f2' : addrAccuracy.rating === 'high' ? '#f0fdf4' : '#fffbeb',
+                    border: `1px solid ${addrAccuracy.rating === 'low' ? '#fecaca' : addrAccuracy.rating === 'high' ? '#bbf7d0' : '#fef08a'}`,
+                    borderRadius: 12,
+                    padding: '10px 14px',
+                    marginBottom: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Compass size={18} style={{ color: addrAccuracy.rating === 'low' ? '#dc2626' : addrAccuracy.rating === 'high' ? '#16a34a' : '#d97706' }} />
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#0f172a' }}>
+                          📍 Live GPS Location Detected
+                        </div>
+                        <div style={{ fontSize: '0.73rem', color: '#475569', fontWeight: 500 }}>
+                          {addrAccuracy.rating === 'low' ? 'Accuracy is low. Please review before confirming.' : 'Please add Flat/House No. if needed and click Confirm & Save.'}
+                        </div>
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: '3px 8px',
+                      borderRadius: 99,
+                      fontSize: '0.7rem',
+                      fontWeight: 800,
+                      whiteSpace: 'nowrap',
+                      background: addrAccuracy.rating === 'low' ? '#fee2e2' : addrAccuracy.rating === 'high' ? '#dcfce7' : '#fef3c7',
+                      color: addrAccuracy.rating === 'low' ? '#991b1b' : addrAccuracy.rating === 'high' ? '#166534' : '#92400e'
+                    }}>
+                      ~{addrAccuracy.meters}m
+                    </span>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {/* Address Label Pills */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#334155', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       Address Type
                     </label>
-                    <div style={{ display: 'flex', gap: 10 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
                       {[
                         { code: 'home', title: 'Home', icon: '🏠' },
                         { code: 'work', title: 'Work', icon: '💼' },
@@ -3871,13 +3990,13 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                       ].map(type => (
                         <button key={type.code} type="button" onClick={() => setAddrLabel(type.code)}
                           style={{
-                            padding: '10px 18px',
-                            borderRadius: 12,
-                            border: addrLabel === type.code ? '2px solid #7C3AED' : '1px solid #cbd5e1',
-                            background: addrLabel === type.code ? '#f3e8ff' : 'white',
-                            color: addrLabel === type.code ? '#7C3AED' : '#475569',
+                            padding: '8px 16px',
+                            borderRadius: 10,
+                            border: addrLabel === type.code ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
+                            background: addrLabel === type.code ? '#f5f3ff' : 'white',
+                            color: addrLabel === type.code ? '#6366f1' : '#475569',
                             fontWeight: 800,
-                            fontSize: '0.85rem',
+                            fontSize: '0.82rem',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -3891,65 +4010,65 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
                   {/* Street Lines */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#334155', fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       Street Address (Line 1) *
                     </label>
                     <input value={addrLine1} onChange={e => setAddrLine1(e.target.value)} type="text" placeholder="e.g. 123 Main Street, Apt 4B"
-                      style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: '1.5px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', background: 'white' }} />
+                      style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#334155', fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       Landmark / Suite (Line 2)
                     </label>
                     <input value={addrLine2} onChange={e => setAddrLine2(e.target.value)} type="text" placeholder="e.g. Near Central Park Tower"
-                      style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: '1.5px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', background: 'white' }} />
+                      style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
                   </div>
 
                   {/* City, State, Pincode */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#334155', fontWeight: 800, marginBottom: 6, textTransform: 'uppercase' }}>City *</label>
-                      <input value={addrCity} onChange={e => setAddrCity(e.target.value)} type="text" placeholder="New York"
-                        style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: '1.5px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', background: 'white' }} />
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase' }}>City *</label>
+                      <input value={addrCity} onChange={e => setAddrCity(e.target.value)} type="text" placeholder="Bengaluru"
+                        style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#334155', fontWeight: 800, marginBottom: 6, textTransform: 'uppercase' }}>State *</label>
-                      <input value={addrState} onChange={e => setAddrState(e.target.value)} type="text" placeholder="NY"
-                        style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: '1.5px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', background: 'white' }} />
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase' }}>State *</label>
+                      <input value={addrState} onChange={e => setAddrState(e.target.value)} type="text" placeholder="Karnataka"
+                        style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#334155', fontWeight: 800, marginBottom: 6, textTransform: 'uppercase' }}>Pincode *</label>
-                      <input value={addrPincode} onChange={e => setAddrPincode(e.target.value)} type="text" placeholder="10001"
-                        style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: '1.5px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', background: 'white' }} />
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase' }}>Pincode *</label>
+                      <input value={addrPincode} onChange={e => setAddrPincode(e.target.value)} type="text" placeholder="560102"
+                        style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
                     </div>
                   </div>
 
                   {/* Phone Number */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#334155', fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       Contact Phone Number
                     </label>
-                    <input value={addrPhone} onChange={e => setAddrPhone(e.target.value)} type="text" placeholder="+1 (555) 123-4567"
-                      style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: 12, border: '1.5px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', background: 'white' }} />
+                    <input value={addrPhone} onChange={e => setAddrPhone(e.target.value)} type="text" placeholder="+91 98765 43210"
+                      style={{ width: '100%', padding: '0.75rem 0.9rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: 'white' }} />
                   </div>
 
                   {/* Set Default Toggle */}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none', marginTop: 4 }}>
-                    <input type="checkbox" checked={addrIsDefault} onChange={e => setAddrIsDefault(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#7C3AED' }} />
-                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>Set as Default Address for Bookings</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none', marginTop: 2 }}>
+                    <input type="checkbox" checked={addrIsDefault} onChange={e => setAddrIsDefault(e.target.checked)} style={{ width: 16, height: 16, accentColor: '#6366f1' }} />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>Set as Default Address for Bookings</span>
                   </label>
 
                   {/* Submit & Cancel */}
-                  <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                     <button onClick={handleSaveAddress} disabled={addrSubmitting}
-                      style={{ padding: '12px 24px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer', opacity: addrSubmitting ? 0.7 : 1 }}>
-                      {addrSubmitting ? 'Saving...' : (editingAddress ? 'Save Changes' : 'Save Address')}
+                      style={{ padding: '10px 22px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(99,102,241,0.25)', opacity: addrSubmitting ? 0.7 : 1 }}>
+                      {addrSubmitting ? 'Saving...' : (editingAddress ? 'Save Changes' : (addrAccuracy ? 'Confirm & Save Address' : 'Save Address'))}
                     </button>
                     <button onClick={() => { setShowAddressForm(false); setEditingAddress(null); }}
-                      style={{ padding: '12px 20px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 12, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', color: '#475569' }}>
+                      style={{ padding: '10px 18px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', color: '#475569' }}>
                       Cancel
                     </button>
                   </div>
@@ -3958,115 +4077,116 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
             ) : (
               <div>
                 {addressesLoading ? (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>Loading saved addresses...</div>
+                  <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8', fontSize: '0.88rem' }}>Loading saved addresses...</div>
                 ) : savedAddresses.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '4rem 1rem', background: 'white', borderRadius: 20, border: '1px solid #e2e8f0' }}>
-                    <MapPin size={40} style={{ marginBottom: 14, color: '#cbd5e1' }} />
-                    <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#0f172a' }}>No saved addresses found.</div>
-                    <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 4 }}>Add your home or office location to enable fast 1-click booking.</div>
+                  <div style={{ textAlign: 'center', padding: '3.5rem 1rem', background: '#f8fafc', borderRadius: 18, border: '1px solid #e2e8f0' }}>
+                    <MapPin size={36} style={{ marginBottom: 12, color: '#cbd5e1' }} />
+                    <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>No saved addresses found.</div>
+                    <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: 4 }}>Add your home or office location for 1-click booking.</div>
                     <button onClick={() => handleOpenForm(null)}
-                      style={{ marginTop: 16, padding: '10px 20px', background: '#7C3AED', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer' }}>
-                      + Add Your First Address
+                      style={{ marginTop: 14, padding: '9px 18px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(99,102,241,0.25)' }}>
+                      + Add Address
                     </button>
                   </div>
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 18 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18 }}>
                     {savedAddresses.map(addr => {
                       const icon = labelIcons[addr.label] || '📍'
                       return (
                         <div key={addr.id}
                           style={{
-                            border: addr.is_default ? '2px solid #7C3AED' : '1px solid #e2e8f0',
+                            border: addr.is_default ? '2px solid #6366f1' : '1.5px solid #e2e8f0',
                             borderRadius: 18,
-                            padding: '1.35rem',
-                            background: 'white',
-                            boxShadow: '0 4px 14px rgba(0,0,0,0.04)',
+                            padding: '1.35rem 1.4rem',
+                            background: '#ffffff',
+                            boxShadow: addr.is_default ? '0 8px 24px rgba(99,102,241,0.12)' : '0 2px 10px rgba(0,0,0,0.03)',
                             display: 'flex',
                             flexDirection: 'column',
-                            justify: 'space-between',
+                            justifyContent: 'space-between',
                             position: 'relative'
                           }}>
 
                           <div>
                             {/* Card Header: Icon, Label, Default Badge */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontSize: '1.2rem' }}>{icon}</span>
+                                <div style={{ width: 34, height: 34, borderRadius: 10, background: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.05rem' }}>
+                                  {icon}
+                                </div>
                                 <span style={{ fontWeight: 800, fontSize: '1.05rem', color: '#0f172a', textTransform: 'capitalize' }}>
                                   {addr.label_display || addr.label}
                                 </span>
                               </div>
                               {addr.is_default && (
-                                <span style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#7C3AED', color: 'white' }}>
-                                  Default
+                                <span style={{ fontSize: '0.68rem', padding: '3px 10px', borderRadius: 99, fontWeight: 800, background: '#f5f3ff', color: '#6366f1', border: '1px solid #ddd6fe', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                                  DEFAULT
                                 </span>
                               )}
                             </div>
 
                             {/* Address Lines */}
-                            <div style={{ fontSize: '0.88rem', color: '#334155', fontWeight: 600, lineHeight: 1.5, marginBottom: 12 }}>
-                              <div>{addr.address_line1}</div>
+                            <div style={{ fontSize: '0.88rem', color: '#1e293b', fontWeight: 600, lineHeight: 1.5, marginBottom: 12 }}>
+                              <div style={{ color: '#0f172a', fontWeight: 700 }}>{addr.address_line1}</div>
                               {addr.address_line2 && <div style={{ color: '#64748b', fontSize: '0.82rem' }}>{addr.address_line2}</div>}
-                              <div style={{ color: '#475569', fontSize: '0.83rem', marginTop: 2 }}>
-                                {addr.city}, {addr.state} - <strong>{addr.pincode}</strong>
+                              <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 3, fontWeight: 500 }}>
+                                {addr.city}, {addr.state} - <strong style={{ color: '#334155' }}>{addr.pincode}</strong>
                               </div>
                             </div>
 
-                            {/* Phone & Last Used Row */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.78rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: 10, marginBottom: 12 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span>📞</span> <strong style={{ color: '#334155' }}>{addr.phone_number || user?.phone || 'No phone attached'}</strong>
+                            {/* Phone & Serviceable strip */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: '0.78rem', color: '#64748b', paddingTop: 10, borderTop: '1px solid #f1f5f9', marginBottom: 12, flexWrap: 'wrap' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span>📞</span> <strong style={{ color: '#334155', fontWeight: 700 }}>{addr.phone_number || user?.phone || 'No phone'}</strong>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span>🕒</span> <span>Last used: <strong style={{ color: '#475569' }}>{humanizeLastUsed(addr.last_used_at)}</strong></span>
+                              <div>
+                                {addr.serviceable ? (
+                                  <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 99, fontWeight: 800, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                    ✓ Service Available
+                                  </span>
+                                ) : (
+                                  <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 99, fontWeight: 800, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                    ✕ {addr.serviceability_reason || 'Not Serviceable'}
+                                  </span>
+                                )}
                               </div>
-                            </div>
-
-                            {/* Serviceability Row */}
-                            <div style={{ marginBottom: 14 }}>
-                              {addr.serviceable ? (
-                                <span style={{ fontSize: '0.73rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#d1fae5', color: '#059669', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  ✓ Service Available
-                                </span>
-                              ) : (
-                                <span style={{ fontSize: '0.73rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#fee2e2', color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  ✕ {addr.serviceability_reason || 'Not Serviceable'}
-                                </span>
-                              )}
                             </div>
                           </div>
 
                           {/* Action Row */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <button onClick={() => handleUseForBooking(addr)}
-                              style={{ width: '100%', padding: '9px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer' }}>
+                              style={{ width: '100%', padding: '11px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(99,102,241,0.22)', transition: 'all 0.15s' }}>
                               Use for Booking
                             </button>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, paddingTop: 4 }}>
                               <button onClick={() => setMapAddress(addr)}
-                                style={{ padding: '7px 4px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', color: '#475569', textAlign: 'center' }}>
-                                🗺️ Map
+                                style={{ padding: '5px 8px', background: 'transparent', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#f5f3ff'; e.currentTarget.style.color = '#6366f1' }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b' }}>
+                                🗺️ Map Pin
                               </button>
 
                               <button onClick={() => handleOpenForm(addr)}
-                                style={{ padding: '7px 4px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', color: '#475569', textAlign: 'center' }}>
+                                style={{ padding: '5px 8px', background: 'transparent', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#f5f3ff'; e.currentTarget.style.color = '#6366f1' }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b' }}>
                                 ✏️ Edit
                               </button>
 
                               {!addr.is_default ? (
                                 <button onClick={() => handleSetDefault(addr.id)}
-                                  style={{ padding: '7px 4px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', color: '#7C3AED', textAlign: 'center' }}>
+                                  style={{ padding: '5px 8px', background: 'transparent', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', color: '#6366f1', display: 'flex', alignItems: 'center', gap: 4 }}
+                                  onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                   ⭐ Default
                                 </button>
-                              ) : (
-                                <span style={{ padding: '7px 4px', background: '#f1f5f9', borderRadius: 8, fontWeight: 700, fontSize: '0.72rem', color: '#94a3b8', textAlign: 'center' }}>
-                                  ⭐ Default
-                                </span>
-                              )}
+                              ) : null}
 
                               <button onClick={() => handleDelete(addr.id)}
-                                style={{ padding: '7px 4px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontWeight: 700, fontSize: '0.72rem', cursor: 'pointer', color: '#dc2626', textAlign: 'center' }}>
+                                style={{ padding: '5px 8px', background: 'transparent', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center', gap: 4 }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                 🗑️ Delete
                               </button>
                             </div>
@@ -4090,7 +4210,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                   setMapAddress(null)
                   if (!confirmedPayload) return
 
-                  const line1 = confirmedPayload.area ? [confirmedPayload.area, confirmedPayload.formatted_address?.split(',')[0]].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(', ') : (confirmedPayload.formatted_address || mapAddress.address_line1)
+                  const line1 = confirmedPayload.area ? [confirmedPayload.area, confirmedPayload.formatted_address?.split(',')[0]].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ') : (confirmedPayload.formatted_address || mapAddress.address_line1)
                   const city = confirmedPayload.city || mapAddress.city || "Hosur"
                   const state = confirmedPayload.state || mapAddress.state || "Tamil Nadu"
                   const pincode = confirmedPayload.pincode || mapAddress.pincode || "635109"
@@ -4288,18 +4408,21 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     )}
                   </div>
 
-                  {/* 2. Current Schedule Read-Only Display */}
+                  {/* 2. Current Schedule & Booked Submodules Read-Only Display */}
                   {selectedBooking && (
-                    <div style={{ background: 'white', borderRadius: 14, padding: '1rem 1.25rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Current Schedule</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>
-                          📅 {selectedBooking.preferred_date || 'Not set'} | ⏰ {selectedBooking.preferred_time || '09-10 (Morning)'}
+                    <div style={{ background: 'white', borderRadius: 14, padding: '1rem 1.25rem', border: '1px solid #e2e8f0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Current Schedule</div>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>
+                            📅 {selectedBooking.preferred_date || 'Not set'} | ⏰ {selectedBooking.preferred_time || '09-10 (Morning)'}
+                          </div>
                         </div>
+                        <span style={{ fontSize: '0.75rem', padding: '6px 12px', borderRadius: 99, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
+                          Active Snapshot
+                        </span>
                       </div>
-                      <span style={{ fontSize: '0.75rem', padding: '6px 12px', borderRadius: 99, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
-                        Active Snapshot
-                      </span>
+                      {renderBookedSubmodulesSummary(selectedBooking)}
                     </div>
                   )}
 
@@ -4748,6 +4871,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                           </div>
                         </div>
                       </div>
+                      {renderBookedSubmodulesSummary(selectedRefundBooking)}
                     </div>
                   )}
 
@@ -5128,77 +5252,301 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
         initial={{ x: 400, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 400, opacity: 0 }}
         transition={{ type: 'spring', damping: 35, stiffness: 300 }}
         onClick={e => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 900, background: 'white', height: '100%', display: 'flex', boxShadow: '-20px 0 50px rgba(0,0,0,0.15)' }}
+        style={{ width: '100%', maxWidth: 960, background: 'white', height: '100%', display: 'flex', boxShadow: '-20px 0 50px rgba(0,0,0,0.15)' }}
       >
         {/* Sidebar */}
-        <div style={{ width: 280, background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '2.5rem 0', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '0 2rem', marginBottom: '2.5rem', display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <User size={24} color="#64748b" />
+        <div style={{ width: 280, background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '2.25rem 0', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '0 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg,#ede9fe,#ddd6fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #c4b5fd', flexShrink: 0 }}>
+              <User size={22} color="#6366f1" />
             </div>
-            <div>
-              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{userFullName}</div>
-              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>{userEmail || userPhone}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userFullName}</div>
+              <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail || userPhone}</div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 4, padding: '0 12px' }}>
             {tabs.map(t => (
               <div
                 key={t.id}
                 onClick={() => onChangeTab(t.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', cursor: 'pointer',
-                  background: activeTab === t.id ? 'white' : 'transparent',
-                  borderLeft: `4px solid ${activeTab === t.id ? '#7C3AED' : 'transparent'}`,
-                  color: activeTab === t.id ? '#7C3AED' : '#475569',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1.1rem', cursor: 'pointer',
+                  borderRadius: 14,
+                  background: activeTab === t.id ? '#f5f3ff' : 'transparent',
+                  borderLeft: `4px solid ${activeTab === t.id ? '#6366f1' : 'transparent'}`,
+                  color: activeTab === t.id ? '#6366f1' : '#475569',
                   fontWeight: activeTab === t.id ? 800 : 600,
-                  fontSize: '0.95rem',
-                  transition: 'all 0.2s'
+                  fontSize: '0.9rem',
+                  transition: 'all 0.18s'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <t.icon size={20} color={activeTab === t.id ? '#7C3AED' : '#94a3b8'} /> {t.id}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <t.icon size={19} color={activeTab === t.id ? '#6366f1' : '#94a3b8'} /> {t.id}
                 </div>
                 {t.badge > 0 && (
-                  <span style={{ background: '#7C3AED', color: 'white', fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
+                  <span style={{ background: '#6366f1', color: 'white', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>
                     {t.badge}
                   </span>
                 )}
               </div>
             ))}
           </div>
-          <div style={{ padding: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ padding: '1.25rem 1.5rem', borderTop: '1px solid #e2e8f0' }}>
             <button
               onClick={handleLogout}
               style={{
-                width: '100%', padding: '0.8rem 1rem', background: '#fef2f2',
-                color: '#ef4444', border: '1px solid #fee2e2', borderRadius: 10,
-                fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center',
+                width: '100%', padding: '0.75rem 1rem', background: '#fef2f2',
+                color: '#ef4444', border: '1px solid #fee2e2', borderRadius: 12,
+                fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center',
                 transition: 'all 0.2s'
               }}
             >
-              <LogOut size={18} />
+              <LogOut size={16} />
               Log Out
             </button>
           </div>
         </div>
 
         {/* Content Area */}
-        <div style={{ flex: 1, padding: '3rem', overflowY: 'auto', background: 'white' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-            <div onClick={onClose} style={{ width: 40, height: 40, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#475569', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'} onMouseLeave={e => e.currentTarget.style.background = '#f1f5f9'}>
-              <X size={20} />
+        <div style={{ flex: 1, padding: '2.5rem 3rem', overflowY: 'auto', background: 'white' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.25rem' }}>
+            <div onClick={onClose} style={{ width: 38, height: 38, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#475569', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'} onMouseLeave={e => e.currentTarget.style.background = '#f1f5f9'}>
+              <X size={18} />
             </div>
           </div>
-          <div style={{ maxWidth: 500 }}>
+          <div style={{ maxWidth: 680, width: '100%' }}>
             {renderTabContent()}
           </div>
         </div>
       </motion.div>
     </div>
   )
+}
+
+/* ─────────────────────────────────────────────────────────────
+   URBAN STYLE "PEOPLE ALSO TAKE" CAROUSEL COMPONENT
+   ───────────────────────────────────────────────────────────── */
+
+export function PeopleAlsoTake({ category, cart, setCart }) {
+  const sliderRef = useRef(null);
+
+  const peopleAlsoTakeCatalog = useMemo(() => ({
+    ac: [
+      { id: "pat-ac-1", name: "Anti-Rust Protective Coating", price: 249, rating: "4.8", reviews: "12K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
+      { id: "pat-ac-2", name: "AC Gas Leak Audit & Top-Up", price: 499, rating: "4.9", reviews: "24K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop" },
+      { id: "pat-ac-3", name: "Foam Filter Deep Sanitization", price: 199, rating: "4.8", reviews: "18K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" },
+      { id: "pat-ac-4", name: "Drain Pipe Flushing & De-clog", price: 149, rating: "4.7", reviews: "9K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+      { id: "pat-ac-5", name: "AC Condenser Coil Jet Wash", price: 299, rating: "4.8", reviews: "15K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop" },
+      { id: "pat-ac-6", name: "AC Outdoor Unit Bracket Setup", price: 349, rating: "4.7", reviews: "11K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" }
+    ],
+    cleaning: [
+      { id: "pat-cl-1", name: "Sofa deep cleaning", price: 499, rating: "4.85", reviews: "210K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=500&q=80&fit=crop" },
+      { id: "pat-cl-2", name: "Kitchen deep cleaning", price: 999, rating: "4.81", reviews: "140K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&q=80&fit=crop" },
+      { id: "pat-cl-3", name: "Bathroom deep cleaning", price: 399, rating: "4.88", reviews: "310K", optionsText: null, image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+      { id: "pat-cl-4", name: "Balcony & window cleaning", price: 299, rating: "4.75", reviews: "65K", optionsText: null, image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" }
+    ],
+    painting: [
+      { id: "pat-pt-1", name: "Wall crack & dampness repair", price: 499, rating: "4.80", reviews: "55K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&q=80&fit=crop" },
+      { id: "pat-pt-2", name: "Wood polishing & lacquer", price: 799, rating: "4.77", reviews: "40K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=500&q=80&fit=crop" },
+      { id: "pat-pt-3", name: "Metal grill anti-rust painting", price: 399, rating: "4.74", reviews: "30K", optionsText: null, image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=500&q=80&fit=crop" },
+      { id: "pat-pt-4", name: "Texture wall design", price: 1299, rating: "4.89", reviews: "75K", optionsText: "4 options", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=500&q=80&fit=crop" }
+    ],
+    plumbing: [
+      { id: "pat-pl-1", name: "Water heater geyser repair", price: 599, rating: "4.76", reviews: "100K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
+      { id: "pat-pl-2", name: "Tap & mixer replacement", price: 199, rating: "4.82", reviews: "110K", optionsText: null, image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+      { id: "pat-pl-3", name: "Drain block removal", price: 299, rating: "4.79", reviews: "150K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" },
+      { id: "pat-pl-4", name: "Water tank cleaning", price: 899, rating: "4.84", reviews: "90K", optionsText: null, image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=500&q=80&fit=crop" }
+    ],
+    general: [
+      { id: "pat-gn-1", name: "Anti-Rust Protective Coating", price: 249, rating: "4.8", reviews: "12K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
+      { id: "pat-gn-2", name: "AC Gas Leak Audit & Top-Up", price: 499, rating: "4.9", reviews: "24K", optionsText: "3 options", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop" },
+      { id: "pat-gn-3", name: "Foam Filter Deep Sanitization", price: 199, rating: "4.8", reviews: "18K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop" },
+      { id: "pat-gn-4", name: "Drain Pipe Flushing & De-clog", price: 149, rating: "4.7", reviews: "9K", optionsText: "2 options", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
+    ]
+  }), []);
+
+  const catKey = useMemo(() => {
+    const cartName = (cart && cart[0]?.name) || "";
+    const raw = `${category?.name || ""} ${category?.id || ""} ${category?.slug || ""} ${cartName}`.toLowerCase();
+    if (raw.includes("ac") || raw.includes("hvac") || raw.includes("foam") || raw.includes("jet") || raw.includes("cooler") || raw.includes("appliance")) return "ac";
+    if (raw.includes("clean") || raw.includes("sofa") || raw.includes("kitchen") || raw.includes("bathroom")) return "cleaning";
+    if (raw.includes("paint") || raw.includes("waterproof") || raw.includes("texture")) return "painting";
+    if (raw.includes("plumb") || raw.includes("pipe") || raw.includes("tap")) return "plumbing";
+    return "general";
+  }, [category, cart]);
+
+  const [dynamicBackendServices, setDynamicBackendServices] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadServices() {
+      try {
+        const res = await apiRequest("/catalog/services/");
+        if (res && isMounted) {
+          const list = Array.isArray(res) ? res : (res.results || []);
+          if (list.length > 0) {
+            const filtered = list.filter(s => {
+              const sCat = (s.category_slug || s.category_id || s.category_name || s.category || "").toString().toLowerCase();
+              const sName = (s.name || "").toLowerCase();
+              if (catKey === "ac") return sCat.includes("ac") || sCat.includes("hvac") || sName.includes("ac") || sName.includes("foam");
+              if (catKey === "cleaning") return sCat.includes("clean") || sName.includes("clean");
+              if (catKey === "painting") return sCat.includes("paint") || sName.includes("paint");
+              if (catKey === "plumbing") return sCat.includes("plumb") || sName.includes("plumb");
+              return true;
+            });
+
+            if (filtered.length > 0) {
+              const mapped = filtered.map((s, idx) => ({
+                id: s.id ? s.id.toString() : `pat-dyn-${idx}`,
+                name: s.name,
+                price: parseFloat(s.price) || 299,
+                rating: s.rating ? s.rating.toString() : "4.8",
+                reviews: s.reviews ? s.reviews.toString() : "10K",
+                optionsText: "2 options",
+                image: s.image || "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop"
+              }));
+              setDynamicBackendServices(mapped);
+            }
+          }
+        }
+      } catch (e) {
+        console.log("Using static curated category services", e);
+      }
+    }
+    loadServices();
+    return () => { isMounted = false; };
+  }, [catKey, category, cart]);
+
+  const itemsList = dynamicBackendServices.length > 0
+    ? dynamicBackendServices
+    : (peopleAlsoTakeCatalog[catKey] || peopleAlsoTakeCatalog.general);
+
+  const scrollLeft = () => {
+    if (sliderRef.current) {
+      sliderRef.current.scrollBy({ left: -260, behavior: "smooth" });
+    }
+  };
+
+  const scrollRight = () => {
+    if (sliderRef.current) {
+      sliderRef.current.scrollBy({ left: 260, behavior: "smooth" });
+    }
+  };
+
+  const handleAdd = (item) => {
+    setCart(prev => {
+      const cur = prev || [];
+      const exists = cur.find(i => i.id === item.id);
+      if (exists) {
+        return cur.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...cur, { id: item.id, name: item.name, price: item.price, quantity: 1, image: item.image }];
+    });
+  };
+
+  const handleRemove = (itemId) => {
+    setCart(prev => {
+      if (!prev) return [];
+      const exists = prev.find(i => i.id === itemId);
+      if (!exists) return prev;
+      if (exists.quantity <= 1) {
+        return prev.filter(i => i.id !== itemId);
+      }
+      return prev.map(i => i.id === itemId ? { ...i, quantity: i.quantity - 1 } : i);
+    });
+  };
+
+  return (
+    <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs my-6 relative group">
+      <h3 className="text-xl font-bold text-slate-900 mb-4 tracking-tight">People also take</h3>
+
+      {/* Slider Left Arrow */}
+      <button
+        type="button"
+        onClick={scrollLeft}
+        aria-label="Previous services"
+        className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white border border-slate-300 shadow-md flex items-center justify-center text-slate-800 hover:bg-slate-50 transition-all cursor-pointer opacity-90 group-hover:opacity-100"
+      >
+        <ChevronLeft size={18} strokeWidth={2.5} />
+      </button>
+
+      {/* Slider Right Arrow */}
+      <button
+        type="button"
+        onClick={scrollRight}
+        aria-label="Next services"
+        className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-white border border-slate-300 shadow-md flex items-center justify-center text-slate-800 hover:bg-slate-50 transition-all cursor-pointer opacity-90 group-hover:opacity-100"
+      >
+        <ChevronRight size={18} strokeWidth={2.5} />
+      </button>
+
+      {/* Horizontal Carousel */}
+      <div
+        ref={sliderRef}
+        className="flex gap-4 overflow-x-auto scrollbar-none pb-2 scroll-smooth px-1"
+      >
+        {itemsList.map(item => {
+          const cartItem = (cart || []).find(i => i.id === item.id);
+          const isAdded = !!cartItem && cartItem.quantity > 0;
+          return (
+            <div
+              key={item.id}
+              className="w-[200px] sm:w-[220px] shrink-0 flex flex-col justify-between"
+            >
+              <div>
+                <div className="w-full h-36 rounded-2xl overflow-hidden bg-slate-100 mb-3 shadow-2xs">
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                  />
+                </div>
+                <h4 className="font-extrabold text-sm text-slate-900 leading-snug line-clamp-1">
+                  {item.name}
+                </h4>
+                <div className="flex items-center gap-1 text-xs text-slate-600 mt-1">
+                  <Star size={13} className="fill-slate-900 text-slate-900" />
+                  <span className="font-bold text-slate-900">{item.rating}</span>
+                  <span className="text-slate-500 font-medium">({item.reviews})</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mt-4">
+                <div>
+                  <span className="text-[11px] text-slate-500 block font-medium">Starts at</span>
+                  <span className="text-sm font-black text-slate-900">₹{item.price.toLocaleString("en-IN")}</span>
+                </div>
+
+                {isAdded ? (
+                  <div className="flex items-center gap-2 border border-purple-600 bg-white rounded-xl px-2.5 py-1.5 shadow-2xs text-xs font-black">
+                    <button type="button" onClick={() => handleRemove(item.id)} className="text-purple-700 font-extrabold hover:text-purple-900 cursor-pointer px-1">-</button>
+                    <span className="text-slate-900 font-black">{cartItem.quantity}</span>
+                    <button type="button" onClick={() => handleAdd(item)} className="text-purple-700 font-extrabold hover:text-purple-900 cursor-pointer px-1">+</button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <button
+                      type="button"
+                      onClick={() => handleAdd(item)}
+                      className="px-5 py-1.5 rounded-xl border border-purple-600 bg-white text-purple-700 font-extrabold text-sm hover:bg-purple-50 transition-all shadow-2xs cursor-pointer active:scale-95"
+                    >
+                      Add
+                    </button>
+                    {item.optionsText && (
+                      <span className="text-[10px] text-slate-400 font-medium mt-0.5">{item.optionsText}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -5254,7 +5602,7 @@ function StepWorkflowCheckout({
     "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM"
   ]
 
-  const items = cart && cart.length > 0 ? cart : [{ id: "def-1", name: category?.name || "Service Booking", price: 1198, quantity: 1 }]
+  const items = cart || [];
 
   const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const origTotal = Math.round(itemTotal * 1.1)
@@ -5263,32 +5611,197 @@ function StepWorkflowCheckout({
   const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
   const grandTotal = Math.max(0, itemTotal + taxFee - discount + tipAmount)
 
+  const relatedServicesCatalog = {
+    ac: [
+      { id: "rel-ac-1", name: "Anti-Rust Protective Coating", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", reviews: "12K", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80&fit=crop" },
+      { id: "rel-ac-2", name: "AC Gas Leak Audit & Top-Up", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", reviews: "24K", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop" },
+      { id: "rel-ac-3", name: "Foam Filter Deep Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "18K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
+      { id: "rel-ac-4", name: "Drain Pipe Flushing & De-clog", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", reviews: "9K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" }
+    ],
+    cleaning: [
+      { id: "rel-cl-1", name: "Kitchen Sink Drain Degrease", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "15K", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&q=80&fit=crop" },
+      { id: "rel-cl-2", name: "Balcony Pressure Wash Polish", price: 299, origPrice: 499, duration: "25 mins", rating: "4.7", reviews: "21K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
+      { id: "rel-cl-3", name: "Chimney Filter Oil Degreasing", price: 349, origPrice: 499, duration: "30 mins", rating: "4.9", reviews: "32K", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=400&q=80&fit=crop" },
+      { id: "rel-cl-4", name: "Ceiling Fan & Light Wipe", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", reviews: "10K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" }
+    ],
+    painting: [
+      { id: "rel-pt-1", name: "Anti-Dampness Primer Shield", price: 399, origPrice: 599, duration: "30 mins", rating: "4.8", reviews: "14K", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=400&q=80&fit=crop" },
+      { id: "rel-pt-2", name: "Furniture Masking Protection", price: 199, origPrice: 299, duration: "20 mins", rating: "4.7", reviews: "8K", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=400&q=80&fit=crop" },
+      { id: "rel-pt-3", name: "Wall Crack Filler (2 Walls)", price: 299, origPrice: 499, duration: "25 mins", rating: "4.9", reviews: "27K", image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=400&q=80&fit=crop" },
+      { id: "rel-pt-4", name: "Post-Paint Floor Scrub Cleanup", price: 499, origPrice: 699, duration: "40 mins", rating: "4.8", reviews: "19K", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=400&q=80&fit=crop" }
+    ],
+    plumbing: [
+      { id: "rel-pl-1", name: "Tap Spout Aerator Replacement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", reviews: "16K", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=400&q=80&fit=crop" },
+      { id: "rel-pl-2", name: "Drain Gel De-clogging Treatment", price: 199, origPrice: 299, duration: "20 mins", rating: "4.9", reviews: "22K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" },
+      { id: "rel-pl-3", name: "High Pressure Pipe Seal Tape", price: 99, origPrice: 199, duration: "10 mins", rating: "4.7", reviews: "11K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
+      { id: "rel-pl-4", name: "Tank Float Valve Safety Check", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", reviews: "13K", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=400&q=80&fit=crop" }
+    ],
+    electrical: [
+      { id: "rel-el-1", name: "MCB Trip Switch Safety Audit", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "17K", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80&fit=crop" },
+      { id: "rel-el-2", name: "Socket Voltage & Earthing Test", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", reviews: "14K", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop" },
+      { id: "rel-el-3", name: "Appliance Cable Concealing", price: 299, origPrice: 499, duration: "25 mins", rating: "4.8", reviews: "20K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" },
+      { id: "rel-el-4", name: "Fan Speed Regulator Polish", price: 119, origPrice: 199, duration: "10 mins", rating: "4.9", reviews: "25K", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=400&q=80&fit=crop" }
+    ],
+    masonry: [
+      { id: "rel-ms-1", name: "Tile Joint Waterproof Grout", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", reviews: "30K", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=400&q=80&fit=crop" },
+      { id: "rel-ms-2", name: "Debris Bagging & Transport Prep", price: 349, origPrice: 499, duration: "25 mins", rating: "4.8", reviews: "15K", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=400&q=80&fit=crop" },
+      { id: "rel-ms-3", name: "Wall Plastering Touch-Up", price: 299, origPrice: 449, duration: "20 mins", rating: "4.7", reviews: "18K", image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=400&q=80&fit=crop" },
+      { id: "rel-ms-4", name: "Laser Level Surface Scan Audit", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "12K", image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=400&q=80&fit=crop" }
+    ],
+    general: [
+      { id: "rel-gn-1", name: "Post-Service Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", reviews: "28K", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop" },
+      { id: "rel-gn-2", name: "Express Priority Slot Assurance", price: 149, origPrice: 249, duration: "Instant", rating: "4.9", reviews: "50K", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=400&q=80&fit=crop" },
+      { id: "rel-gn-3", name: "Pre-Service Safety Inspection", price: 99, origPrice: 199, duration: "10 mins", rating: "4.8", reviews: "22K", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop" },
+      { id: "rel-gn-4", name: "Eco Waste Disposal & Cleanup", price: 129, origPrice: 199, duration: "15 mins", rating: "4.7", reviews: "19K", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400&q=80&fit=crop" }
+    ]
+  };
+
+  const categoryKey = useMemo(() => {
+    const raw = (category?.name || category?.id || category?.slug || items[0]?.name || "").toLowerCase();
+    if (raw.includes("ac") || raw.includes("hvac") || raw.includes("appliance") || raw.includes("foam")) return "ac";
+    if (raw.includes("clean") || raw.includes("sofa") || raw.includes("kitchen") || raw.includes("bathroom")) return "cleaning";
+    if (raw.includes("paint") || raw.includes("waterproof") || raw.includes("texture")) return "painting";
+    if (raw.includes("plumb") || raw.includes("pipe") || raw.includes("tap")) return "plumbing";
+    if (raw.includes("electr") || raw.includes("wire") || raw.includes("light")) return "electrical";
+    if (raw.includes("mason") || raw.includes("brick") || raw.includes("civil") || raw.includes("demolition")) return "masonry";
+    return "general";
+  }, [category, items]);
+
+  const [dynamicRelatedServices, setDynamicRelatedServices] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadBackendRelated() {
+      try {
+        const res = await apiRequest("/catalog/services/");
+        if (res && isMounted) {
+          const list = Array.isArray(res) ? res : (res.results || []);
+          if (list.length > 0) {
+            const filtered = list.filter(s => {
+              const sCat = (s.category_slug || s.category_id || s.category_name || s.category || "").toString().toLowerCase();
+              const sName = (s.name || "").toLowerCase();
+              if (categoryKey === "ac") return sCat.includes("ac") || sCat.includes("hvac") || sName.includes("ac");
+              if (categoryKey === "cleaning") return sCat.includes("clean") || sName.includes("clean");
+              if (categoryKey === "painting") return sCat.includes("paint") || sName.includes("paint");
+              if (categoryKey === "plumbing") return sCat.includes("plumb") || sName.includes("plumb");
+              if (categoryKey === "electrical") return sCat.includes("electr") || sName.includes("electr");
+              if (categoryKey === "masonry") return sCat.includes("mason") || sName.includes("mason");
+              return true;
+            });
+
+            if (filtered.length > 0) {
+              const mapped = filtered.slice(0, 4).map((s, idx) => ({
+                id: s.id ? s.id.toString() : `backend-rel-${idx}`,
+                name: s.name,
+                price: parseFloat(s.price) || 249,
+                origPrice: Math.round((parseFloat(s.price) || 249) * 1.35),
+                duration: s.duration || "20 mins",
+                icon: s.image ? null : (categoryKey === "ac" ? "❄️" : categoryKey === "cleaning" ? "🧼" : categoryKey === "painting" ? "🎨" : "✨"),
+                image: s.image || null
+              }));
+              setDynamicRelatedServices(mapped);
+            }
+          }
+        }
+      } catch (e) {
+        console.log("Using static category related services", e);
+      }
+    }
+    loadBackendRelated();
+    return () => { isMounted = false; };
+  }, [categoryKey, category]);
+
+  const displayCategoryTitle = useMemo(() => {
+    if (cart && cart.length > 0) {
+      if (cart[0].categoryName) return cart[0].categoryName;
+      const first = cart[0].name.toLowerCase();
+      if (first.includes("washing") || first.includes("fridge") || first.includes("appliance")) return "Appliance Service & Repair";
+      if (first.includes("ac") || first.includes("foam") || first.includes("jet") || first.includes("heating")) return "AC & Heating";
+      if (first.includes("clean") || first.includes("sofa") || first.includes("kitchen")) return "Home Cleaning Services";
+      if (first.includes("paint") || first.includes("waterproof")) return "Painting & Waterproofing";
+      if (first.includes("plumb") || first.includes("drain") || first.includes("tap")) return "Plumbing Services";
+    }
+    if (category?.name && category.name !== "General Service") return category.name;
+    return "Services Added";
+  }, [category, cart]);
+
   const addItem = (id) => {
-    setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i))
-  }
+    setCart(prev => {
+      const current = prev || [];
+      return current.map(item => item.id === id ? { ...item, quantity: item.quantity + 1 } : item);
+    });
+  };
+
   const removeItem = (id) => {
-    setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
-  }
+    setCart(prev => {
+      if (!prev) return [];
+      const existing = prev.find(item => item.id === id);
+      if (!existing) return prev;
+      if (existing.quantity <= 1) {
+        const nextCart = prev.filter(item => item.id !== id);
+        if (nextCart.length === 0 && onBack) {
+          setTimeout(() => {
+            onBack();
+          }, 100);
+        }
+        return nextCart;
+      }
+      return prev.map(item => item.id === id ? { ...item, quantity: item.quantity - 1 } : item);
+    });
+  };
+
+  const relatedExtraServices = dynamicRelatedServices.length > 0
+    ? dynamicRelatedServices
+    : (relatedServicesCatalog[categoryKey] || relatedServicesCatalog.general);
+
+  const addExtraRelatedService = (extraItem) => {
+    setCart(prev => {
+      const currentCart = prev && prev.length > 0 ? prev : [];
+      const existing = currentCart.find(i => i.id === extraItem.id);
+      if (existing) {
+        return currentCart.map(i => i.id === extraItem.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...currentCart, { id: extraItem.id, name: extraItem.name, price: extraItem.price, origPrice: extraItem.origPrice, quantity: 1, duration: extraItem.duration }];
+    });
+  };
+
+  const removeExtraRelatedService = (extraItemId) => {
+    setCart(prev => {
+      if (!prev) return [];
+      const existing = prev.find(i => i.id === extraItemId);
+      if (!existing) return prev;
+      if (existing.quantity <= 1) {
+        return prev.filter(i => i.id !== extraItemId);
+      }
+      return prev.map(i => i.id === extraItemId ? { ...i, quantity: i.quantity - 1 } : i);
+    });
+  };
 
   const isSlotSelected = selectedDate && selectedTime
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-6 font-sans text-slate-800">
-      
-      {/* Top Offer Banner */}
-      <div className="mb-6 flex items-center gap-2 bg-emerald-50 border border-emerald-200/60 rounded-xl px-4 py-3 text-emerald-800 text-xs font-bold shadow-xs">
-        <TagIcon size={16} className="text-emerald-600 shrink-0" />
-        <span>Saving ₹{discount} on this order</span>
+
+      {/* Top Header Bar with Back to Services Button */}
+      <div className="mb-6 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50/90 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
+        >
+          <ChevronLeft size={16} />
+          <span>Back to Services</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
+
         {/* LEFT COLUMN: Steps / Workflow Accordion */}
         <div className="lg:col-span-7 space-y-6">
-          
+
           {/* Main Accordion Card */}
           <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
-            
+
             {/* Step 1: Phone / Contact */}
             <div className="p-5 flex items-start gap-4">
               <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 mt-0.5">
@@ -5346,7 +5859,7 @@ function StepWorkflowCheckout({
                 </div>
                 <div className="flex-1">
                   <span className="text-xs font-bold text-slate-500 block mb-2">Slot</span>
-                  
+
                   {/* Select button or current slot */}
                   {isSlotSelected && !showSlotPicker ? (
                     <div className="flex items-center justify-between bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
@@ -5377,7 +5890,7 @@ function StepWorkflowCheckout({
                   {/* Inline Slot Picker Panel */}
                   {showSlotPicker && (
                     <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
-                      
+
                       {/* Date Pills */}
                       <div>
                         <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
@@ -5390,11 +5903,10 @@ function StepWorkflowCheckout({
                               <button
                                 key={item.dateStr}
                                 onClick={() => onDateChange(item.dateStr)}
-                                className={`flex flex-col items-center justify-center min-w-[70px] p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                                  isSel
-                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                                    : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300"
-                                }`}
+                                className={`flex flex-col items-center justify-center min-w-[70px] p-2.5 rounded-xl border text-center transition-all cursor-pointer ${isSel
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                  : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300"
+                                  }`}
                               >
                                 <span className="text-[10px] font-bold opacity-80 uppercase">{item.dayName}</span>
                                 <span className="text-sm font-black mt-0.5">{item.dayNum}</span>
@@ -5419,11 +5931,10 @@ function StepWorkflowCheckout({
                                   onTimeChange(t)
                                   if (selectedDate) setShowSlotPicker(false)
                                 }}
-                                className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
-                                  isSel
-                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white"
-                                }`}
+                                className={`py-2 px-1 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${isSel
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                  : "bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-white"
+                                  }`}
                               >
                                 {t}
                               </button>
@@ -5455,16 +5966,15 @@ function StepWorkflowCheckout({
               </div>
               <div className="flex-1">
                 <span className="text-xs font-bold text-slate-500 block mb-2">Payment Method</span>
-                
+
                 {isSlotSelected ? (
                   <div className="space-y-3">
                     <div
                       onClick={() => setPayMethod("online")}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                        payMethod === "online"
-                          ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
-                          : "border-slate-200 hover:border-slate-300"
-                      }`}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${payMethod === "online"
+                        ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
+                        : "border-slate-200 hover:border-slate-300"
+                        }`}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💳</div>
@@ -5478,11 +5988,10 @@ function StepWorkflowCheckout({
 
                     <div
                       onClick={() => setPayMethod("cash")}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                        payMethod === "cash"
-                          ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
-                          : "border-slate-200 hover:border-slate-300"
-                      }`}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${payMethod === "cash"
+                        ? "border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600"
+                        : "border-slate-200 hover:border-slate-300"
+                        }`}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">💵</div>
@@ -5531,38 +6040,52 @@ function StepWorkflowCheckout({
 
         {/* RIGHT COLUMN: Cart Items & Payment Summary */}
         <div className="lg:col-span-5 space-y-5 lg:sticky lg:top-24">
-          
+
           {/* Items Card */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
             <h4 className="text-sm font-black text-slate-900 border-b border-slate-100 pb-2">
-              {category?.name || "Services Added"}
+              {displayCategoryTitle}
             </h4>
 
             <div className="space-y-3">
-              {items.map(item => (
-                <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
-                  <span className="font-bold text-slate-800 flex-1">{item.name}</span>
-                  
-                  {/* Quantity controls */}
-                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2 py-0.5 bg-slate-50 font-bold">
-                    <button onClick={() => removeItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold">-</button>
-                    <span className="text-slate-800 font-black">{item.quantity}</span>
-                    <button onClick={() => addItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold">+</button>
-                  </div>
-
-                  {/* Price */}
-                  <div className="text-right">
-                    <span className="font-black text-slate-900 block">
-                      ₹{(item.price * item.quantity).toLocaleString("en-IN")}
-                    </span>
-                    {origTotal > itemTotal && (
-                      <span className="text-[10px] text-slate-400 line-through block">
-                        ₹{(origTotal * item.quantity).toLocaleString("en-IN")}
-                      </span>
-                    )}
-                  </div>
+              {items.length === 0 ? (
+                <div className="text-center py-5 px-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl space-y-2.5">
+                  <p className="text-xs font-bold text-slate-500">Your cart is currently empty</p>
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl transition-all shadow-2xs cursor-pointer active:scale-95"
+                  >
+                    <Plus size={13} strokeWidth={3} />
+                    <span>Choose Services</span>
+                  </button>
                 </div>
-              ))}
+              ) : (
+                items.map(item => (
+                  <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="font-bold text-slate-800 flex-1">{item.name}</span>
+
+                    {/* Quantity controls */}
+                    <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2 py-0.5 bg-slate-50 font-bold">
+                      <button type="button" onClick={() => removeItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold cursor-pointer px-1">-</button>
+                      <span className="text-slate-800 font-black">{item.quantity}</span>
+                      <button type="button" onClick={() => addItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold cursor-pointer px-1">+</button>
+                    </div>
+
+                    {/* Price */}
+                    <div className="text-right">
+                      <span className="font-black text-slate-900 block">
+                        ₹{(item.price * item.quantity).toLocaleString("en-IN")}
+                      </span>
+                      {origTotal > itemTotal && (
+                        <span className="text-[10px] text-slate-400 line-through block">
+                          ₹{(origTotal * item.quantity).toLocaleString("en-IN")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Checkbox option */}
@@ -5647,11 +6170,10 @@ function StepWorkflowCheckout({
                     <button
                       key={amt}
                       onClick={() => setTip(isSel ? null : amt)}
-                      className={`relative py-2 rounded-xl border text-xs font-bold transition-all ${
-                        isSel
-                          ? "border-indigo-600 bg-indigo-50/60 text-indigo-700"
-                          : "border-slate-200 text-slate-700 hover:border-slate-300"
-                      }`}
+                      className={`relative py-2 rounded-xl border text-xs font-bold transition-all ${isSel
+                        ? "border-indigo-600 bg-indigo-50/60 text-indigo-700"
+                        : "border-slate-200 text-slate-700 hover:border-slate-300"
+                        }`}
                     >
                       ₹{amt}
                       {amt === 75 && (
@@ -5664,11 +6186,10 @@ function StepWorkflowCheckout({
                 })}
                 <button
                   onClick={() => setTip(tip === "custom" ? null : "custom")}
-                  className={`py-2 rounded-xl border text-xs font-bold transition-all ${
-                    tip === "custom"
-                      ? "border-indigo-600 bg-indigo-50/60 text-indigo-700"
-                      : "border-slate-200 text-slate-700 hover:border-slate-300"
-                  }`}
+                  className={`py-2 rounded-xl border text-xs font-bold transition-all ${tip === "custom"
+                    ? "border-indigo-600 bg-indigo-50/60 text-indigo-700"
+                    : "border-slate-200 text-slate-700 hover:border-slate-300"
+                    }`}
                 >
                   Custom
                 </button>
@@ -5688,8 +6209,10 @@ function StepWorkflowCheckout({
                 100% of the tip goes to the professional.
               </span>
             </div>
-
           </div>
+
+          {/* Urban Company "People also take" Slider Component */}
+          <PeopleAlsoTake category={category} cart={cart} setCart={setCart} />
 
         </div>
 
@@ -5713,25 +6236,32 @@ function StepWorkflowCheckout({
         <AddAddressSearchModal
           onClose={() => setShowAddSearchModal(false)}
           onSelectLocation={(loc) => {
-            setSelectedSearchLoc(loc)
             setShowAddSearchModal(false)
-            setShowMapModal(true)
+            if (loc) {
+              onChange({ target: { name: "address", value: loc } })
+              if (typeof setLocation === "function") setLocation(loc)
+              localStorage.setItem("calservice_user_location", loc)
+            }
           }}
           onUseCurrentLocation={() => {
-            setSelectedSearchLoc("")
             setShowAddSearchModal(false)
-            setShowMapModal(true)
-          }}
-        />
-      )}
-
-      {showMapModal && (
-        <LocationPickerModal
-          initialLocation={selectedSearchLoc || formData.address}
-          onClose={() => setShowMapModal(false)}
-          onConfirm={(loc) => {
-            onChange({ target: { name: "address", value: loc } })
-            setShowMapModal(false)
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(async (pos) => {
+                try {
+                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                  const data = await res.json();
+                  if (data?.features?.[0]?.properties) {
+                    const p = data.features[0].properties;
+                    const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+                    if (display) {
+                      onChange({ target: { name: "address", value: display } });
+                      if (typeof setLocation === "function") setLocation(display);
+                      localStorage.setItem("calservice_user_location", display);
+                    }
+                  }
+                } catch (e) { }
+              });
+            }
           }}
         />
       )}
@@ -5745,10 +6275,10 @@ export function BookingPage() {
   const routerLocation = useLocation()
   const incomingCart = routerLocation.state?.cart
   const incomingCategory = routerLocation.state?.category
-  // BookingPage is purely a checkout flow — if no cart arrives, go back to landing
+  // BookingPage is purely a checkout flow — if no cart arrives, go back to landing page (/home)
   useEffect(() => {
     if (!incomingCart?.length && !incomingCategory && !routerLocation.state?.triggerLocPicker) {
-      navigate("/", { replace: true })
+      navigate(routes.landing, { replace: true })
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -5765,6 +6295,16 @@ export function BookingPage() {
   const [successData, setSuccessData] = useState(null)
   const [category, setCategory] = useState(incomingCategory || null)
   const [cart, setCart] = useState(incomingCart || [])
+
+  // When customer removes all items (- button), automatically move back to home services selection side (/home)
+  useEffect(() => {
+    if (Array.isArray(cart) && cart.length === 0) {
+      const timer = setTimeout(() => {
+        navigate(routes.landing, { replace: true });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [cart, navigate]);
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
@@ -5787,8 +6327,21 @@ export function BookingPage() {
 
   // Auth state — customer profile + bookings
   const { user, refreshMe } = useAuth()
+  const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
   const [customerBookings, setCustomerBookings] = useState([])
   const hasNonDraftBookings = customerBookings.some(b => b.status !== "draft")
+
+  // Auto-sync customer name, phone, and email from authenticated user session
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        customer_name: prev.customer_name || user.full_name || user.fullName || user.first_name || user.username || "Customer",
+        phone: prev.phone || user.phone || user.mobile || "9150632938",
+        email: prev.email || user.email || ""
+      }))
+    }
+  }, [user])
 
   useEffect(() => { contentRef.current?.scrollTo({ top: 0, behavior: "smooth" }) }, [step])
 
@@ -5944,6 +6497,10 @@ export function BookingPage() {
   }
 
   const handleSubmit = async (paymentMethod = "cash") => {
+    if (!user && (!formData.phone || formData.phone === "9150632938")) {
+      setShowCustomerEntryModal(true)
+      return
+    }
     setLoading(true); setError(null)
     // Map frontend choices to backend enum values
     const backendPaymentMethod = paymentMethod === "online" ? "ONLINE" : "COD"
@@ -6006,31 +6563,15 @@ export function BookingPage() {
     setPhotoFile(null); setPhotoPreview(null); setSuccessData(null); setError(null)
     setShowPostFlow(false); setAssignedTech(null)
     sessionStorage.removeItem(OTP_SESSION_KEY)
-    // No StepHome anymore — go back to landing page
-    navigate("/", { replace: true })
+    // Return to public home services catalog page (/home)
+    navigate(routes.landing, { replace: true })
   }
 
   return (
     <div className="uc-root">
       <BkStyles />
 
-      <AnimatePresence>
-        {showLocPicker && (
-          <LocationPickerModal
-            initialLocation={location}
-            onClose={() => setShowLocPicker(false)}
-            onConfirm={(loc) => {
-              setLocation(loc);
-              setFormData(prev => ({ ...prev, address: loc }));
-              setShowLocPicker(false);
-              setShowPackageModal(false);
-              if (step === 1) {
-                setStep(3);
-              }
-            }}
-          />
-        )}
-      </AnimatePresence>
+
 
       {/* Post-Booking Animated Flow Overlay */}
       <AnimatePresence>
@@ -6064,12 +6605,27 @@ export function BookingPage() {
         )}
       </AnimatePresence>
 
-      {/* Login flow removed from BookingPage — login is handled on LandingPage */}
+      {/* Customer Login / OTP Flow Modal */}
+      <AnimatePresence>
+        {showCustomerEntryModal && (
+          <CustomerEntryFlowModal
+            isOpen={showCustomerEntryModal}
+            onClose={() => setShowCustomerEntryModal(false)}
+            onComplete={(locData) => {
+              setShowCustomerEntryModal(false)
+              // After login, sync user data into booking form
+              setTimeout(() => {
+                refreshMe && refreshMe()
+              }, 200)
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Urban Style Top Navigation Header */}
       <header className="bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          
+
           {/* Brand Logo & Urban Location Selector */}
           <div className="flex items-center gap-3 sm:gap-6">
             <div
@@ -6087,10 +6643,10 @@ export function BookingPage() {
             {/* Location Selector Pill */}
             <button
               onClick={() => setShowLocPicker(true)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[280px] truncate"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[280px] truncate"
             >
               <MapPin size={15} className="text-indigo-600 shrink-0" />
-              <span className="truncate">{location || "Select Location"}</span>
+              <span className="truncate">{location || formData?.address || "Select Location"}</span>
               <ChevronDown size={14} className="text-slate-400 shrink-0 ml-auto" />
             </button>
           </div>
@@ -6110,26 +6666,26 @@ export function BookingPage() {
               </button>
             )}
 
-            {/* Urban Profile Icon Button */}
+            {/* Urban Profile Icon Button (Exact Home Page Visual Style) */}
             <button
+              type="button"
               onClick={() => {
                 if (user) {
                   setActiveAccountTab(hasNonDraftBookings ? "My Bookings" : "My Profile")
                   setShowAccountPortal(true)
                 } else {
-                  // Login is on LandingPage — redirect there
-                  navigate("/")
+                  setShowCustomerEntryModal(true)
                 }
               }}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/80 border border-indigo-100 text-indigo-950 font-black text-xs transition-all shadow-2xs cursor-pointer active:scale-95"
+              className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
             >
-              <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-[10px] shrink-0">
-                <User size={13} />
+              <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                <User className="w-4 h-4 stroke-[1.75]" />
               </div>
-              <span className="hidden sm:inline font-extrabold">
-                {user?.firstName || user?.username || "Login / Sign Up"}
+              <span className="font-semibold text-slate-800 hidden sm:inline">
+                {user ? `Hi, ${user?.fullName || user?.full_name || user?.firstName || user?.first_name || user?.username || "Customer"} 👋` : "Login / Sign Up"}
               </span>
-              <ChevronDown size={13} className="text-indigo-500 hidden sm:inline" />
+              <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors hidden sm:inline" />
             </button>
           </div>
 
@@ -6197,7 +6753,34 @@ export function BookingPage() {
                 onSubmit={handleSubmit}
                 loading={loading}
                 error={error}
-                onBack={() => navigate("/", { replace: true })}
+                onBack={() => {
+                  let activeCat = category;
+                  if (!activeCat && cart && cart.length > 0) {
+                    const first = cart[0];
+                    const catName = first.categoryName || first.name || "";
+                    const nameLower = catName.toLowerCase();
+                    if (nameLower.includes("ac") || nameLower.includes("foam") || nameLower.includes("heating") || nameLower.includes("appliance") || nameLower.includes("fridge") || nameLower.includes("washing")) {
+                      activeCat = { id: "ac", name: "AC & Heating", slug: "ac" };
+                    } else if (nameLower.includes("electric") || nameLower.includes("switch") || nameLower.includes("fan") || nameLower.includes("mcb") || nameLower.includes("wire")) {
+                      activeCat = { id: "electrical", name: "Electrical", slug: "electrical" };
+                    } else if (nameLower.includes("paint") || nameLower.includes("waterproof")) {
+                      activeCat = { id: "painting", name: "Painting", slug: "painting" };
+                    } else if (nameLower.includes("mason") || nameLower.includes("brick") || nameLower.includes("tile")) {
+                      activeCat = { id: "mason", name: "Masonry", slug: "mason" };
+                    } else if (nameLower.includes("plumb") || nameLower.includes("tap") || nameLower.includes("drain")) {
+                      activeCat = { id: "plumbing", name: "Plumbing", slug: "plumbing" };
+                    } else {
+                      activeCat = { id: "cleaning", name: "Cleaning", slug: "cleaning" };
+                    }
+                    setCategory(activeCat);
+                  }
+
+                  if (activeCat) {
+                    setShowPackageModal(true);
+                  } else {
+                    navigate(routes.landing, { state: { cart } });
+                  }
+                }}
               />
             </motion.div>
           )}
@@ -6217,7 +6800,10 @@ export function BookingPage() {
         {showSubCategoryChoiceModal && (
           <div
             className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setShowSubCategoryChoiceModal(false)}
+            onClick={() => {
+              setShowSubCategoryChoiceModal(false);
+              navigate(routes.landing, { state: { cart } });
+            }}
           >
             <motion.div
               className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
@@ -6227,7 +6813,10 @@ export function BookingPage() {
               onClick={e => e.stopPropagation()}
             >
               <button
-                onClick={() => setShowSubCategoryChoiceModal(false)}
+                onClick={() => {
+                  setShowSubCategoryChoiceModal(false);
+                  navigate(routes.landing, { state: { cart } });
+                }}
                 className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X size={18} />
@@ -6316,7 +6905,10 @@ export function BookingPage() {
               category={category}
               cart={cart}
               setCart={setCart}
-              onClose={() => setShowPackageModal(false)}
+              onClose={() => {
+                setShowPackageModal(false);
+                navigate(routes.landing, { state: { cart } });
+              }}
               onCheckout={() => { setShowPackageModal(false); setStep(3); }}
               onGetEstimate={() => {
                 setShowLocPicker(true);
@@ -6327,7 +6919,10 @@ export function BookingPage() {
               category={category}
               cart={cart}
               setCart={setCart}
-              onClose={() => setShowPackageModal(false)}
+              onClose={() => {
+                setShowPackageModal(false);
+                navigate(routes.landing, { state: { cart } });
+              }}
               onCheckout={() => { setShowPackageModal(false); setStep(3); }}
               onGetEstimate={() => {
                 setShowLocPicker(true);
@@ -6342,31 +6937,57 @@ export function BookingPage() {
               setCart={setCart}
               packagesData={packagesData}
               onClose={() => {
-                const currentCatId = (category?.id || category?.slug || "").toLowerCase();
                 setShowPackageModal(false);
-                if (["electrical", "plumbing", "carpentry", "elec", "plum", "carp"].some(k => currentCatId.includes(k))) {
-                  setShowSubCategoryChoiceModal(true);
-                } else {
-                  setStep(1);
-                  setTimeout(() => {
-                    const targetCard = document.getElementById(`cat-card-${currentCatId}`) ||
-                                       document.querySelector(`[data-cat-id="${currentCatId}"]`) ||
-                                       document.querySelector('.uc-cat-grid');
-                    if (targetCard) {
-                      targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      targetCard.classList.add('ring-4', 'ring-emerald-500', 'ring-offset-2', 'transition-all');
-                      setTimeout(() => {
-                        targetCard.classList.remove('ring-4', 'ring-emerald-500', 'ring-offset-2');
-                      }, 2200);
-                    }
-                  }, 120);
-                }
+                navigate(routes.landing, { state: { cart } });
               }}
               onCheckout={() => { setShowPackageModal(false); setStep(3); }}
             />
           )
         )}
       </AnimatePresence>
+
+      {showLocPicker && (
+        <AddAddressSearchModal
+          onClose={() => setShowLocPicker(false)}
+          onSelectLocation={(loc) => {
+            setShowLocPicker(false)
+            if (loc) {
+              setLocation(loc)
+              setFormData(prev => ({ ...prev, address: loc }))
+              localStorage.setItem("calservice_user_location", loc)
+            }
+          }}
+          onUseCurrentLocation={() => {
+            setShowLocPicker(false)
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(async (pos) => {
+                try {
+                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                  const data = await res.json();
+                  if (data?.features?.[0]?.properties) {
+                    const p = data.features[0].properties;
+                    const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+                    if (display) {
+                      setLocation(display);
+                      setFormData(prev => ({ ...prev, address: display }));
+                      localStorage.setItem("calservice_user_location", display);
+                    }
+                  }
+                } catch (e) { }
+              });
+            }
+          }}
+        />
+      )}
+
+      <CustomerEntryFlowModal
+        isOpen={showCustomerEntryModal}
+        onClose={() => setShowCustomerEntryModal(false)}
+        onComplete={() => {
+          setShowCustomerEntryModal(false)
+          if (typeof refreshMe === "function") refreshMe()
+        }}
+      />
     </div>
   )
 }
@@ -6597,38 +7218,47 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const [searchQuery, setSearchQuery] = useState("")
   const [expanded, setExpanded] = useState({})
   const [activeDetailService, setActiveDetailService] = useState(null)
+  const [showLocSearchModal, setShowLocSearchModal] = useState(false)
+  const [paintLocation, setPaintLocation] = useState(() => localStorage.getItem("calservice_user_location") || "Hosur, Tamil Nadu")
+  const [paintSearchRotateIdx, setPaintSearchRotateIdx] = useState(0)
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const PAINT_SEARCH_HINTS = ["Interior Painting", "Exterior Painting", "Waterproofing", "Wood Polish", "Texture Finish"];
+  useEffect(() => {
+    const t = setInterval(() => setPaintSearchRotateIdx(i => (i + 1) % PAINT_SEARCH_HINTS.length), 2800);
+    return () => clearInterval(t);
+  }, []);
 
   const getSubOptionDescription = (id, serviceName) => {
-    switch(id) {
+    switch (id) {
       case "int-single-wall": return "Inspection of one focus wall, moisture checking, and measurement.";
       case "int-one-room": return "Measurement and putty/paint assessment for a single room.";
       case "int-multi-room": return "Comprehensive consultation for two or more rooms.";
       case "int-full-home": return "Complete house painting assessment including all walls and ceilings.";
       case "int-ceiling": return "Ceiling inspection, leakage check, and measurement.";
-      
+
       case "ext-wall": return "Exterior wall check, cracks checking, and pressure wash assessment.";
       case "ext-building": return "Full building external paint assessment and safety review.";
       case "ext-compound": return "Compound wall length measurement and weather-coat suggestions.";
       case "ext-terrace": return "Terrace floor assessment and heat-resistant paint options.";
-      
+
       case "wp-terrace": return "Terrace leakage detection, mapping, and joint water testing.";
       case "wp-bathroom": return "Bathroom floor and wall tile joint inspection for moisture.";
       case "wp-wall": return "Moisture meter check of internal damp walls and leakage source detection.";
       case "wp-roof": return "Roof slab checking, crack width testing, and protective coating assessment.";
       case "wp-crack": return "Identification of structural/hairline cracks and sealant suggestions.";
-      
+
       case "wm-doors": return "Wooden/metal doors surface rust check, sanding estimation.";
       case "wm-windows": return "Window grill and frame surface protection check.";
       case "wm-grills": return "Balcony/staircase grills rust removal and paint planning.";
       case "wm-cabinets": return "Kitchen or bedroom wooden cabinet wood condition review.";
       case "wm-gates": return "Main gate rust scraping and PU/enamel coat assessment.";
-      
+
       case "td-texture": return "Consultation on accent wall patterns, stencils, and metallic textures.";
       case "td-designer": return "Custom high-end designs, glazes, and pattern catalog showcase.";
       case "td-stencil": return "Living room or bedroom stencil pattern consultation.";
       case "td-accent": return "Single focal wall color selection and texture mockups.";
-      
+
       default: return `Assessment and digital measurement of your ${serviceName.toLowerCase()}.`;
     }
   }
@@ -6820,15 +7450,15 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
       if (existing) {
         return prev.map(c => c.id === subOpt.id ? { ...c, quantity: c.quantity + 1 } : c);
       }
-      return [...prev, { 
-        id: subOpt.id, 
-        name: `${parentService.name}: ${subOpt.name}`, 
+      return [...prev, {
+        id: subOpt.id,
+        name: `${parentService.name}: ${subOpt.name}`,
         shortName: subOpt.name,
-        price: subOpt.price, 
-        parentId: parentService.id, 
+        price: subOpt.price,
+        parentId: parentService.id,
         parentName: parentService.name,
-        quantity: 1, 
-        categoryName: "Painting" 
+        quantity: 1,
+        categoryName: "Painting"
       }];
     });
   }
@@ -6876,29 +7506,29 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
   const filteredServices = searchQuery
     ? PAINTING_SERVICES.filter(s => {
-        try {
-          const queryLower = searchQuery.toLowerCase().trim();
-          if (!queryLower) return true;
-          const words = queryLower.split(/\s+/);
-          
-          const exactMatch = (s.name && s.name.toLowerCase().includes(queryLower)) ||
-                             (s.points && s.points.some(p => p && p.toLowerCase().includes(queryLower))) ||
-                             (s.includes && s.includes.some(inc => inc && inc.toLowerCase().includes(queryLower)));
-          if (exactMatch) return true;
+      try {
+        const queryLower = searchQuery.toLowerCase().trim();
+        if (!queryLower) return true;
+        const words = queryLower.split(/\s+/);
 
-          const keywords = getSearchKeywords(s.id);
-          if (keywords && keywords.length > 0) {
-            return words.some(word => 
-              keywords.some(kw => kw && (kw.includes(word) || word.includes(kw)))
-            );
-          }
-          return false;
-        } catch (err) {
-          console.error("Error in search filter:", err);
-          const queryLower = searchQuery.toLowerCase().trim();
-          return s.name && s.name.toLowerCase().includes(queryLower);
+        const exactMatch = (s.name && s.name.toLowerCase().includes(queryLower)) ||
+          (s.points && s.points.some(p => p && p.toLowerCase().includes(queryLower))) ||
+          (s.includes && s.includes.some(inc => inc && inc.toLowerCase().includes(queryLower)));
+        if (exactMatch) return true;
+
+        const keywords = getSearchKeywords(s.id);
+        if (keywords && keywords.length > 0) {
+          return words.some(word =>
+            keywords.some(kw => kw && (kw.includes(word) || word.includes(kw)))
+          );
         }
-      })
+        return false;
+      } catch (err) {
+        console.error("Error in search filter:", err);
+        const queryLower = searchQuery.toLowerCase().trim();
+        return s.name && s.name.toLowerCase().includes(queryLower);
+      }
+    })
     : PAINTING_SERVICES;
 
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -6916,147 +7546,183 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
       >
 
 
-        {/* Header */}
-        <div className="uc-paint-header">
-          <div className="uc-paint-header-inner">
-            <div className="uc-paint-header-left">
-              <button 
-                onClick={onClose} 
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", display: "flex", alignItems: "center", padding: "6px", borderRadius: "9999px", marginRight: "4px" }}
-                className="hover:bg-slate-100"
-                aria-label="Go back"
-              >
-                <ArrowLeft size={16} />
-              </button>
+        {/* Urban Style Header */}
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
 
+            {/* Left: Logo + divider + Location Pill */}
+            <div className="flex items-center gap-3 sm:gap-5">
               {/* Logo */}
-              <div className="uc-paint-header-logo" onClick={onClose}>
-                <Home size={18} strokeWidth={2.5} />
-                <span><span style={{ color: "#0d9488" }}>Cal</span>Services</span>
+              <div
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={onClose}
+              >
+                <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center shrink-0">
+                  <Home size={15} strokeWidth={2.5} className="text-white" />
+                </div>
+                <span className="text-sm font-black text-slate-900 hidden sm:block">
+                  <span className="text-teal-600">Cal</span>Services
+                </span>
               </div>
 
-              {/* Navigation Links */}
-              <nav className="uc-paint-header-nav">
-                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home")}>Home</a>
-                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#categories")}>Services</a>
-                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#how-it-works")}>How It Works</a>
-                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#professionals")}>Professionals</a>
-                {user && (
-                  <a className="uc-paint-header-nav-link" onClick={() => navigate("/booking/checkout")}>My Bookings</a>
-                )}
-                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#about")}>Support</a>
-              </nav>
+              <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
+              {/* Location Selector Pill */}
+              <button
+                type="button"
+                onClick={() => setShowLocSearchModal(true)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-sm max-w-[180px] sm:max-w-[260px] truncate"
+                title="Select Location"
+              >
+                <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="truncate">{paintLocation}</span>
+                <ChevronDown className="w-3 h-3 text-slate-400 shrink-0 ml-auto" />
+              </button>
             </div>
 
-            <div className="uc-paint-header-right">
-              {/* Search Bar */}
-              <div className="uc-paint-search-bar">
-                <Search size={15} style={{ color: "#94a3b8" }} />
-                <input
-                  type="text"
-                  placeholder="Search painting..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  style={{
-                    border: "none", outline: "none", fontSize: "0.8rem", width: "120px", marginLeft: "4px", background: "transparent"
-                  }}
-                />
+            {/* Center: Animated Search Bar */}
+            <div className="relative max-w-[300px] w-full hidden sm:block">
+              <div className="relative flex items-center bg-white border border-slate-200 hover:border-slate-300 focus-within:border-teal-500 rounded-xl px-3 py-2 shadow-sm transition-all">
+                <Search className="w-4 h-4 text-slate-400 shrink-0 mr-2 pointer-events-none" />
+                <div className="relative flex-1 flex items-center min-w-0">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full bg-transparent text-xs font-extrabold text-slate-800 outline-none z-10"
+                  />
+                  {!searchQuery && (
+                    <div className="absolute inset-0 flex items-center pointer-events-none overflow-hidden select-none">
+                      <span className="text-xs font-medium text-slate-400 mr-1 shrink-0">Search for</span>
+                      <AnimatePresence mode="wait">
+                        <motion.span
+                          key={paintSearchRotateIdx}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.3, ease: "easeOut" }}
+                          className="text-xs font-bold text-slate-500 truncate"
+                        >
+                          '{PAINT_SEARCH_HINTS[paintSearchRotateIdx]}'...
+                        </motion.span>
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </div>
                 {searchQuery && (
-                  <button
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}
-                    onClick={() => setSearchQuery("")}
-                  >
+                  <button type="button" onClick={() => setSearchQuery("")} className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer ml-1 shrink-0">
                     <X size={12} />
                   </button>
                 )}
               </div>
-
-              <button className="uc-paint-header-btn-book" onClick={() => {
-                const element = document.querySelector(".uc-paint-choices");
-                if (element) {
-                  element.scrollIntoView({ behavior: "smooth" });
-                }
-              }}>
-                Book Service
-              </button>
-
-              {!user ? (
-                <>
-                  <button className="uc-paint-header-btn-outline" onClick={() => navigate("/login")}>
-                    Login
-                  </button>
-                  <button className="uc-paint-header-btn-outline" onClick={() => navigate(routes.activation_journey || "/signup")}>
-                    Sign Up
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button className="uc-paint-header-icon-btn" title="Notifications">
-                    <Bell size={18} />
-                  </button>
-                  <div className="uc-paint-profile-icon" title="Profile">
-                    <User size={16} />
-                  </div>
-                </>
-              )}
             </div>
+
+            {/* Right: Close Button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+              title="Close"
+            >
+              <X size={18} />
+            </button>
           </div>
-        </div>
+        </header>
+
+        {/* Location Search Modal */}
+        {showLocSearchModal && (
+          <AddAddressSearchModal
+            onClose={() => setShowLocSearchModal(false)}
+            onSelectLocation={(loc) => {
+              setShowLocSearchModal(false);
+              if (loc) { setPaintLocation(loc); localStorage.setItem("calservice_user_location", loc); }
+            }}
+            onUseCurrentLocation={() => {
+              setShowLocSearchModal(false);
+              if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (pos) => {
+                  try {
+                    const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                    const data = await res.json();
+                    if (data?.features?.[0]?.properties) {
+                      const p = data.features[0].properties;
+                      const display = [p.name, p.street, p.city, p.state].filter(Boolean).slice(0, 2).join(", ");
+                      if (display) { setPaintLocation(display); localStorage.setItem("calservice_user_location", display); }
+                    }
+                  } catch (e) { }
+                });
+              }
+            }}
+          />
+        )}
 
         {/* Fixed Horizontal Sub-Navigation Tab bar (outside scroll container) */}
         <div className="uc-paint-horizontal-nav">
-          <div className="uc-paint-horizontal-nav-list">
-            <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-interior")}>
-              <img
-                className="uc-paint-tab-img"
-                src="https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"
-                alt="Interior Painting"
-                onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-              />
-              <span className="uc-paint-tab-label">Interior Painting</span>
-            </button>
-            <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-exterior")}>
-              <img
-                className="uc-paint-tab-img"
-                src="https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=150&auto=format&fit=crop&q=60"
-                alt="Exterior Painting"
-                onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-              />
-              <span className="uc-paint-tab-label">Exterior Painting</span>
-            </button>
-            <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-waterproofing")}>
-              <img
-                className="uc-paint-tab-img"
-                src="https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=150&auto=format&fit=crop&q=60"
-                alt="Waterproofing"
-                onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-              />
-              <span className="uc-paint-tab-label">Waterproofing</span>
-            </button>
-            <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-wood-metal")}>
-              <img
-                className="uc-paint-tab-img"
-                src="https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=150&auto=format&fit=crop&q=60"
-                alt="Wood & Metal"
-                onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-              />
-              <span className="uc-paint-tab-label">Wood & Metal</span>
-            </button>
-            <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-texture")}>
-              <img
-                className="uc-paint-tab-img"
-                src="https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=150&auto=format&fit=crop&q=60"
-                alt="Texture Decor"
-                onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-              />
-              <span className="uc-paint-tab-label">Texture Decor</span>
-            </button>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-3 pb-2 pt-1 border-b border-slate-100">
+              <button
+                onClick={onClose}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+              >
+                <ChevronLeft size={16} /> Back to Services
+              </button>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                {category?.name || "Painting Services"}
+              </h2>
+            </div>
+            <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", margin: 0, padding: "8px 0" }}>
+              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-interior")}>
+                <img
+                  className="uc-paint-tab-img"
+                  src="https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"
+                  alt="Interior Painting"
+                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+                />
+                <span className="uc-paint-tab-label">Interior Painting</span>
+              </button>
+              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-exterior")}>
+                <img
+                  className="uc-paint-tab-img"
+                  src="https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=150&auto=format&fit=crop&q=60"
+                  alt="Exterior Painting"
+                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+                />
+                <span className="uc-paint-tab-label">Exterior Painting</span>
+              </button>
+              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-waterproofing")}>
+                <img
+                  className="uc-paint-tab-img"
+                  src="https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=150&auto=format&fit=crop&q=60"
+                  alt="Waterproofing"
+                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+                />
+                <span className="uc-paint-tab-label">Waterproofing</span>
+              </button>
+              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-wood-metal")}>
+                <img
+                  className="uc-paint-tab-img"
+                  src="https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=150&auto=format&fit=crop&q=60"
+                  alt="Wood & Metal"
+                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+                />
+                <span className="uc-paint-tab-label">Wood & Metal</span>
+              </button>
+              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-texture")}>
+                <img
+                  className="uc-paint-tab-img"
+                  src="https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=150&auto=format&fit=crop&q=60"
+                  alt="Texture Decor"
+                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+                />
+                <span className="uc-paint-tab-label">Texture Decor</span>
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Content - ONLY this div scrolls */}
         <div className="uc-paint-content" ref={contentRef}>
-          <div className="uc-paint-container">
+          <div className="uc-paint-container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Title & Rating */}
             <div className="uc-paint-hero-row">
               <h2 className="uc-paint-sidebar-title">Painting Services</h2>
@@ -7167,9 +7833,9 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         <thead>
                           <tr style={{ background: "#f8fafc" }}>
                             <th style={{ padding: "1rem", textAlign: "left", fontSize: "0.8rem", fontWeight: 800, color: "#475569", width: "40%", borderRight: "2px solid #34d399" }}>Services</th>
-                            <th style={{ 
-                              padding: "1rem", textAlign: "center", fontSize: "0.85rem", fontWeight: 900, 
-                              color: "#0d9488", background: "#f0fdf4", width: "30%", borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399" 
+                            <th style={{
+                              padding: "1rem", textAlign: "center", fontSize: "0.85rem", fontWeight: 900,
+                              color: "#0d9488", background: "#f0fdf4", width: "30%", borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399"
                             }}>
                               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
                                 <span style={{ color: "#0f172a", fontWeight: 900, letterSpacing: "0.02em" }}>CAL<span style={{ color: "#0d9488" }}>services</span></span>
@@ -7196,13 +7862,13 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           ].map((row, idx) => (
                             <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
                               <td style={{ padding: "0.85rem 1rem", fontSize: "0.78rem", fontWeight: 700, color: "#334155", textAlign: "left", borderRight: "2px solid #34d399" }}>
-                                <span style={{ marginRight: "6px", color: "#94a3b8" }}>•</span> 
+                                <span style={{ marginRight: "6px", color: "#94a3b8" }}>•</span>
                                 <span style={{ fontWeight: 800, color: "#1e293b" }}>{row.title}</span>
                                 <div style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 500, marginTop: "2px" }}>{row.desc}</div>
                               </td>
-                              <td style={{ 
+                              <td style={{
                                 padding: "0.85rem 1rem", textAlign: "center", background: "#f0fdf4",
-                                borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399" 
+                                borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399"
                               }}>
                                 <Check size={16} strokeWidth={3} style={{ color: "#10b981", margin: "0 auto" }} />
                               </td>
@@ -7289,8 +7955,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                     </div>
                   </div>
 
-                    </div>
-                  </div>
+                </div>
+              </div>
 
               {/* Right Column - Promise & Cart Summary */}
               <div className="uc-paint-right-col">
@@ -7521,7 +8187,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                   const rawVal = parseFloat(activeDetailService.reviews);
                   const multiplier = activeDetailService.reviews.toLowerCase().includes('k') ? 1000 : 1;
                   const total = isNaN(rawVal) ? 100 : Math.round(rawVal * multiplier);
-                  
+
                   let r5 = 0, r4 = 0, r3 = 0, r2 = 0, r1 = 0;
                   if (rating >= 4.7) {
                     r5 = Math.round(total * 0.88);
@@ -7839,8 +8505,16 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   const [searchQuery, setSearchQuery] = useState("");
   const [expanded, setExpanded] = useState({});
   const [activeDetailService, setActiveDetailService] = useState(null);
+  const [showLocSearchModal, setShowLocSearchModal] = useState(false);
+  const [masonLocation, setMasonLocation] = useState(() => localStorage.getItem("calservice_user_location") || "Hosur, Tamil Nadu");
+  const [masonSearchRotateIdx, setMasonSearchRotateIdx] = useState(0);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const MASON_SEARCH_HINTS = ["Brick & Block Work", "Plastering", "Wall Partition", "House Construction", "Demolition"];
+  useEffect(() => {
+    const t = setInterval(() => setMasonSearchRotateIdx(i => (i + 1) % MASON_SEARCH_HINTS.length), 2800);
+    return () => clearInterval(t);
+  }, []);
 
   // Questionnaire form states
   const [generalDesc, setGeneralDesc] = useState("");
@@ -8586,14 +9260,14 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
   const filteredServices = searchQuery
     ? MASON_SERVICES.filter(s => {
-        const queryLower = searchQuery.toLowerCase().trim();
-        const exactMatch = s.name.toLowerCase().includes(queryLower) || s.desc.toLowerCase().includes(queryLower);
-        if (exactMatch) return true;
-        const keywords = getSearchKeywords(s.id);
-        return queryLower.split(/\s+/).some(word => 
-          keywords.some(kw => kw && (kw.includes(word) || word.includes(kw)))
-        );
-      })
+      const queryLower = searchQuery.toLowerCase().trim();
+      const exactMatch = s.name.toLowerCase().includes(queryLower) || s.desc.toLowerCase().includes(queryLower);
+      if (exactMatch) return true;
+      const keywords = getSearchKeywords(s.id);
+      return queryLower.split(/\s+/).some(word =>
+        keywords.some(kw => kw && (kw.includes(word) || word.includes(kw)))
+      );
+    })
     : MASON_SERVICES.filter(s => s.catId === activeTab);
 
   const totalQuantity = cart.filter(c => c.id.startsWith("mason-")).reduce((sum, item) => sum + item.quantity, 0);
@@ -8609,134 +9283,170 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
         transition={{ duration: 0.25, ease: "easeOut" }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="uc-paint-header">
-          <div className="uc-paint-header-inner">
-            <div className="uc-paint-header-left">
-              <button 
-                onClick={onClose} 
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", display: "flex", alignItems: "center", padding: "6px", borderRadius: "9999px", marginRight: "4px" }}
-                className="hover:bg-slate-100"
-                aria-label="Go back"
-              >
-                <ArrowLeft size={16} />
-              </button>
+        {/* Urban Style Header */}
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
 
+            {/* Left: Logo + divider + Location Pill */}
+            <div className="flex items-center gap-3 sm:gap-5">
               {/* Logo */}
-              <div className="uc-paint-header-logo" onClick={onClose}>
-                <Home size={18} strokeWidth={2.5} />
-                <span><span style={{ color: "#0d9488" }}>Cal</span>Services</span>
+              <div
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={onClose}
+              >
+                <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center shrink-0">
+                  <Home size={15} strokeWidth={2.5} className="text-white" />
+                </div>
+                <span className="text-sm font-black text-slate-900 hidden sm:block">
+                  <span className="text-teal-600">Cal</span>Services
+                </span>
               </div>
 
-              {/* Navigation Links */}
-              <nav className="uc-paint-header-nav">
-                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home")}>Home</a>
-                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#categories")}>Services</a>
-                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#how-it-works")}>How It Works</a>
-                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#professionals")}>Professionals</a>
-                {user && (
-                  <a className="uc-paint-header-nav-link" onClick={() => navigate("/booking/checkout")}>My Bookings</a>
-                )}
-                <a className="uc-paint-header-nav-link" onClick={() => navigate("/home#about")}>Support</a>
-              </nav>
+              <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
+              {/* Location Selector Pill */}
+              <button
+                type="button"
+                onClick={() => setShowLocSearchModal(true)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-sm max-w-[180px] sm:max-w-[260px] truncate"
+                title="Select Location"
+              >
+                <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="truncate">{masonLocation}</span>
+                <ChevronDown className="w-3 h-3 text-slate-400 shrink-0 ml-auto" />
+              </button>
             </div>
 
-            <div className="uc-paint-header-right">
-              {/* Search Bar */}
-              <div className="uc-paint-search-bar">
-                <Search size={15} style={{ color: "#94a3b8" }} />
-                <input
-                  type="text"
-                  placeholder="Search masonry..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  style={{
-                    border: "none", outline: "none", fontSize: "0.8rem", width: "120px", marginLeft: "4px", background: "transparent"
-                  }}
-                />
+            {/* Center: Animated Search Bar */}
+            <div className="relative max-w-[300px] w-full hidden sm:block">
+              <div className="relative flex items-center bg-white border border-slate-200 hover:border-slate-300 focus-within:border-teal-500 rounded-xl px-3 py-2 shadow-sm transition-all">
+                <Search className="w-4 h-4 text-slate-400 shrink-0 mr-2 pointer-events-none" />
+                <div className="relative flex-1 flex items-center min-w-0">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full bg-transparent text-xs font-extrabold text-slate-800 outline-none z-10"
+                  />
+                  {!searchQuery && (
+                    <div className="absolute inset-0 flex items-center pointer-events-none overflow-hidden select-none">
+                      <span className="text-xs font-medium text-slate-400 mr-1 shrink-0">Search for</span>
+                      <AnimatePresence mode="wait">
+                        <motion.span
+                          key={masonSearchRotateIdx}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.3, ease: "easeOut" }}
+                          className="text-xs font-bold text-slate-500 truncate"
+                        >
+                          '{MASON_SEARCH_HINTS[masonSearchRotateIdx]}'...
+                        </motion.span>
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </div>
                 {searchQuery && (
-                  <button
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}
-                    onClick={() => setSearchQuery("")}
-                  >
+                  <button type="button" onClick={() => setSearchQuery("")} className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer ml-1 shrink-0">
                     <X size={12} />
                   </button>
                 )}
               </div>
-
-              <button className="uc-paint-header-btn-book" onClick={() => {
-                const element = document.querySelector(".uc-paint-choices");
-                if (element) {
-                  element.scrollIntoView({ behavior: "smooth" });
-                }
-              }}>
-                Book Service
-              </button>
-
-              {!user ? (
-                <>
-                  <button className="uc-paint-header-btn-outline" onClick={() => navigate("/login")}>
-                    Login
-                  </button>
-                  <button className="uc-paint-header-btn-outline" onClick={() => navigate(routes.activation_journey || "/signup")}>
-                    Sign Up
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button className="uc-paint-header-icon-btn" title="Notifications">
-                    <Bell size={18} />
-                  </button>
-                  <div className="uc-paint-profile-icon" title="Profile">
-                    <User size={16} />
-                  </div>
-                </>
-              )}
             </div>
+
+            {/* Right: Close Button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+              title="Close"
+            >
+              <X size={18} />
+            </button>
           </div>
-        </div>
+        </header>
+
+        {/* Location Search Modal */}
+        {showLocSearchModal && (
+          <AddAddressSearchModal
+            onClose={() => setShowLocSearchModal(false)}
+            onSelectLocation={(loc) => {
+              setShowLocSearchModal(false);
+              if (loc) { setMasonLocation(loc); localStorage.setItem("calservice_user_location", loc); }
+            }}
+            onUseCurrentLocation={() => {
+              setShowLocSearchModal(false);
+              if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (pos) => {
+                  try {
+                    const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                    const data = await res.json();
+                    if (data?.features?.[0]?.properties) {
+                      const p = data.features[0].properties;
+                      const display = [p.name, p.street, p.city, p.state].filter(Boolean).slice(0, 2).join(", ");
+                      if (display) { setMasonLocation(display); localStorage.setItem("calservice_user_location", display); }
+                    }
+                  } catch (e) { }
+                });
+              }
+            }}
+          />
+        )}
 
         <div className="uc-paint-horizontal-nav">
-          <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", display: "flex", gap: "1.25rem", padding: "10px 0 10px 2rem" }}>
-            {MASON_CATEGORIES.map(cat => {
-              const isActive = activeTab === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  className={`uc-paint-tab-btn ${isActive ? "active" : ""}`}
-                  onClick={() => { setActiveTab(cat.id); setSearchQuery(""); }}
-                  style={{
-                    background: "transparent", border: "none", cursor: "pointer",
-                    display: "flex", flexDirection: "column", alignItems: "center", width: "90px"
-                  }}
-                >
-                  <div style={{
-                    width: "56px", height: "56px", borderRadius: "16px",
-                    background: isActive ? "#0d9488" : "#f0fdf4",
-                    border: isActive ? "1.5px solid #0d9488" : "1.5px solid #dcfce7",
-                    color: isActive ? "#ffffff" : "#059669",
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem",
-                    boxShadow: isActive ? "0 4px 12px rgba(13,148,136,0.25)" : "0 2px 6px rgba(0, 0, 0, 0.04)",
-                    transition: "all 0.2s ease"
-                  }}>
-                    {cat.icon}
-                  </div>
-                  <span className="uc-paint-tab-label" style={{
-                    marginTop: "6px", fontSize: "0.68rem", lineHeight: "1.2",
-                    fontWeight: isActive ? 900 : 700, color: isActive ? "#0f172a" : "#64748b",
-                    textAlign: "center"
-                  }}>
-                    {cat.name}
-                  </span>
-                </button>
-              );
-            })}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-3 pb-2 pt-1 border-b border-slate-100">
+              <button
+                onClick={onClose}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+              >
+                <ChevronLeft size={16} /> Back to Services
+              </button>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                {category?.name || "Masonry Work"}
+              </h2>
+            </div>
+            <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", display: "flex", gap: "1.25rem", margin: 0, padding: "8px 0" }}>
+              {MASON_CATEGORIES.map(cat => {
+                const isActive = activeTab === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    className={`uc-paint-tab-btn ${isActive ? "active" : ""}`}
+                    onClick={() => { setActiveTab(cat.id); setSearchQuery(""); }}
+                    style={{
+                      background: "transparent", border: "none", cursor: "pointer",
+                      display: "flex", flexDirection: "column", alignItems: "center", width: "90px"
+                    }}
+                  >
+                    <div style={{
+                      width: "56px", height: "56px", borderRadius: "16px",
+                      background: isActive ? "#0d9488" : "#f0fdf4",
+                      border: isActive ? "1.5px solid #0d9488" : "1.5px solid #dcfce7",
+                      color: isActive ? "#ffffff" : "#059669",
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem",
+                      boxShadow: isActive ? "0 4px 12px rgba(13,148,136,0.25)" : "0 2px 6px rgba(0, 0, 0, 0.04)",
+                      transition: "all 0.2s ease"
+                    }}>
+                      {cat.icon}
+                    </div>
+                    <span className="uc-paint-tab-label" style={{
+                      marginTop: "6px", fontSize: "0.68rem", lineHeight: "1.2",
+                      fontWeight: isActive ? 900 : 700, color: isActive ? "#0f172a" : "#64748b",
+                      textAlign: "center"
+                    }}>
+                      {cat.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* Content Container - Only this scrolls */}
         <div className="uc-paint-content" ref={contentRef}>
-          <div className="uc-paint-container">
+          <div className="uc-paint-container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Title & Rating */}
             <div className="uc-paint-hero-row">
               <h2 className="uc-paint-sidebar-title">Masonry & Civil Services</h2>
@@ -8753,7 +9463,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   <h3 className="uc-paint-section-title">
                     {MASON_CATEGORIES.find(c => c.id === activeTab)?.name}
                   </h3>
-                  
+
                   {/* Demolition Structural Warning Banner */}
                   {activeTab === "demolition" && (
                     <div style={{
@@ -8788,7 +9498,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                 {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
                               </p>
                               <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
-                              
+
                               {/* Includes Badges */}
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                                 {service.includes.slice(0, 3).map((inc, i) => (
@@ -8880,39 +9590,39 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                 />
                               </div>
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", textAlign: "left" }}>
-                                  <div>
-                                    <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Plot details</label>
-                                    <input
-                                      type="text"
-                                      value={houseProject.details}
-                                      onChange={e => setHouseProject(prev => ({ ...prev, details: e.target.value }))}
-                                      placeholder="e.g. 30x40 plot..."
-                                      style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Location address</label>
-                                    <input
-                                      type="text"
-                                      value={houseProject.location}
-                                      onChange={e => setHouseProject(prev => ({ ...prev, location: e.target.value }))}
-                                      placeholder="Full address in Hosur..."
-                                      style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
-                                    />
-                                  </div>
-                                </div>
-                                <div style={{ textAlign: "left" }}>
-                                  <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Drawings/Photos</label>
+                                <div>
+                                  <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Plot details</label>
                                   <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={e => handlePhotoUpload(e, "house")}
-                                    style={{ fontSize: "0.75rem", color: "#64748b" }}
+                                    type="text"
+                                    value={houseProject.details}
+                                    onChange={e => setHouseProject(prev => ({ ...prev, details: e.target.value }))}
+                                    placeholder="e.g. 30x40 plot..."
+                                    style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
                                   />
-                                  {houseProject.photoPreview && (
-                                    <img src={houseProject.photoPreview} alt="Preview" style={{ marginTop: "10px", width: "100px", height: "75px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
-                                  )}
                                 </div>
+                                <div>
+                                  <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Location address</label>
+                                  <input
+                                    type="text"
+                                    value={houseProject.location}
+                                    onChange={e => setHouseProject(prev => ({ ...prev, location: e.target.value }))}
+                                    placeholder="Full address in Hosur..."
+                                    style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem" }}
+                                  />
+                                </div>
+                              </div>
+                              <div style={{ textAlign: "left" }}>
+                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Drawings/Photos</label>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={e => handlePhotoUpload(e, "house")}
+                                  style={{ fontSize: "0.75rem", color: "#64748b" }}
+                                />
+                                {houseProject.photoPreview && (
+                                  <img src={houseProject.photoPreview} alt="Preview" style={{ marginTop: "10px", width: "100px", height: "75px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
+                                )}
+                              </div>
                             </div>
                           )}
 
@@ -9057,9 +9767,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                       <thead>
                         <tr style={{ background: "#f8fafc" }}>
                           <th style={{ padding: "1rem", textAlign: "left", fontSize: "0.8rem", fontWeight: 800, color: "#475569", width: "40%", borderRight: "2px solid #34d399" }}>Services</th>
-                          <th style={{ 
-                            padding: "1rem", textAlign: "center", fontSize: "0.85rem", fontWeight: 900, 
-                            color: "#0d9488", background: "#f0fdf4", width: "30%", borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399" 
+                          <th style={{
+                            padding: "1rem", textAlign: "center", fontSize: "0.85rem", fontWeight: 900,
+                            color: "#0d9488", background: "#f0fdf4", width: "30%", borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399"
                           }}>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
                               <span style={{ color: "#0f172a", fontWeight: 900, letterSpacing: "0.02em" }}>CAL<span style={{ color: "#0d9488" }}>services</span></span>
@@ -9083,13 +9793,13 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                         ].map((row, idx) => (
                           <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
                             <td style={{ padding: "0.85rem 1rem", fontSize: "0.78rem", fontWeight: 700, color: "#334155", textAlign: "left", borderRight: "2px solid #34d399" }}>
-                              <span style={{ marginRight: "6px", color: "#94a3b8" }}>•</span> 
+                              <span style={{ marginRight: "6px", color: "#94a3b8" }}>•</span>
                               <span style={{ fontWeight: 800, color: "#1e293b" }}>{row.title}</span>
                               <div style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 500, marginTop: "2px" }}>{row.desc}</div>
                             </td>
-                            <td style={{ 
+                            <td style={{
                               padding: "0.85rem 1rem", textAlign: "center", background: "#f0fdf4",
-                              borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399" 
+                              borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399"
                             }}>
                               <Check size={16} strokeWidth={3} style={{ color: "#10b981", margin: "0 auto" }} />
                             </td>
@@ -9475,6 +10185,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   else if (["plumbing", "plumber", "plum"].some(k => rawCatKey.includes(k))) normalizedKey = "plumbing";
   else if (["carpentry", "carpenter", "carp"].some(k => rawCatKey.includes(k))) normalizedKey = "carpentry";
   else if (["painting", "painter", "paint"].some(k => rawCatKey.includes(k))) normalizedKey = "painting";
+  else if (["mason", "masonry", "civil"].some(k => rawCatKey.includes(k))) normalizedKey = "mason";
   else if (["pest", "pest_control"].some(k => rawCatKey.includes(k))) normalizedKey = "pest_control";
   else if (["goods", "transport", "mini_truck", "truck"].some(k => rawCatKey.includes(k))) normalizedKey = "goods_transport";
 
@@ -9505,9 +10216,18 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Drill & Hanging", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" }
     ],
     painting: [
-      { name: "Full Home Painting", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-      { name: "Wall Waterproofing", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Door & Wood Polish", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      { name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
+      { name: "Exterior Painting", image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=300&q=80&fit=crop" },
+      { name: "Wall Waterproofing", image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=300&q=80&fit=crop" },
+      { name: "Wood & Metal Polish", image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop" },
+      { name: "Texture Decor", image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=300&q=80&fit=crop" }
+    ],
+    mason: [
+      { name: "Brick & Block Work", image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop" },
+      { name: "Plastering & Wall Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "Wall & Partition Construction", image: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=300&q=80&fit=crop" },
+      { name: "House Construction", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
+      { name: "Demolition & Breaking", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
     ],
     pest_control: [
       { name: "Termite Control", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
@@ -9802,14 +10522,39 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       ]
     },
     painting: {
-      "Full Home Painting": [
-        { id: "paint-home-1", name: "Single Wall Feature Accent Paint", price: 1999, duration: "3 hrs", badge: "Design Choice", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Surface putty repair, 2 coats premium royal emulsion paint, geometric or texture accent finish.", includes: ["Surface putty & sanding", "2 coats premium emulsion", "Floor masking sheet protection"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      "Interior Painting": [
+        { id: "paint-int-1", name: "Full Home Interior Emulsion Painting", price: 3499, duration: "1 day", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete putty touching, primer coat, and 2 coats premium washable emulsion paint.", includes: ["Surface masking & protection", "2 coats Asian Paints/Nerolac emulsion", "Post-paint deep cleanup"], image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
+        { id: "paint-int-2", name: "Single Room / Accent Wall Paint", price: 1499, duration: "3 hrs", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Single room wall coat or royal accent wall with high sheen finish.", includes: ["1 room wall putty & sanding", "2 coats luxury emulsion", "Furniture masking"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Exterior Painting": [
+        { id: "paint-ext-1", name: "Exterior Weatherproof Paint Coat", price: 4999, duration: "1 day", badge: "Weather Shield", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "High-pressure wall jet wash, anti-fungal primer, and 2 coats exterior weather shield paint.", includes: ["Wall pressure wash", "Anti-algae primer coat", "2 coats weather shield"], image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=300&q=80&fit=crop" }
       ],
       "Wall Waterproofing": [
-        { id: "paint-water-1", name: "Wall Dampness & Seepage Treatment", price: 2999, duration: "4 hrs", badge: "Protection", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Laser dampness diagnosis, anti-fungal chemical scraper, waterproof barrier coat application.", includes: ["Dampness diagnosis scan", "Chemical barrier coating", "1-year warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "paint-water-1", name: "Wall Dampness & Seepage Barrier", price: 2499, duration: "4 hrs", badge: "Protection", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Laser dampness scan, efflorescence scraper, and 3-layer chemical waterproof seal.", includes: ["Efflorescence salt scraper", "3-layer polymer waterproof coat", "1-year warranty"], image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=300&q=80&fit=crop" }
       ],
-      "Door & Wood Polish": [
-        { id: "paint-wood-1", name: "Door PU Enamel & Polish", price: 1499, duration: "2 hrs", badge: "Restoration", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High-grade wood sanding, PU lacquer spray polish or enamel gloss paint coat.", includes: ["Wood surface sanding", "2 coats PU polish/enamel", "Hardware masking"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      "Wood & Metal Polish": [
+        { id: "paint-wood-1", name: "Door PU Polish & Enamel Spray", price: 1299, duration: "2 hrs", badge: "Restoration", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Wood surface sanding, grain filling, and 2 coats clear PU polish or enamel spray.", includes: ["Wood sanding & grain filler", "2 coats PU polish/enamel", "Hardware masking"], image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop" }
+      ],
+      "Texture Decor": [
+        { id: "paint-tex-1", name: "Royal Stencil & Designer Texture Wall", price: 2999, duration: "4 hrs", badge: "Designer Art", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Specialized metallic or velvet texture paint application with designer stencil patterns.", includes: ["Base coat preparation", "Designer texture trowel application", "Top coat metallic glaze"], image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=300&q=80&fit=crop" }
+      ]
+    },
+    mason: {
+      "Brick & Block Work": [
+        { id: "mason-brick-1", name: "Red Brick Wall Construction", price: 1499, duration: "3 hrs", badge: "Popular", badgeColor: "bg-orange-50 text-orange-700 border-orange-100", description: "Standard red clay brick masonry work with high-grade cement mortar mix.", includes: ["Red brick supply & laying", "Cement mortar alignment", "Curing guidance"], image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop" },
+        { id: "mason-brick-2", name: "AAC Concrete Block Masonry", price: 1799, duration: "3 hrs", badge: "Lightweight", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Autoclaved Aerated Concrete block laying with thin-bed adhesive mortar.", includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "Plastering & Wall Repair": [
+        { id: "mason-plast-1", name: "Internal Wall Plastering & Patching", price: 899, duration: "2 hrs", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Smooth sand-cement plaster application, crack repair, and sponge finish.", includes: ["Crack v-groove carving", "Plaster patch application", "Smooth trowel finish"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "Wall & Partition Construction": [
+        { id: "mason-part-1", name: "Room Partition Wall Build", price: 2499, duration: "4 hrs", badge: "Structural", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Half-brick or AAC block partition wall creation with door frame insertion cutout.", includes: ["Foundation course anchoring", "Block partition build", "Lintel beam support"], image: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=300&q=80&fit=crop" }
+      ],
+      "House Construction": [
+        { id: "mason-house-1", name: "Civil Structure & Renovation Consultation", price: 999, duration: "1.5 hrs", badge: "Expert Consult", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "On-site civil engineer assessment for home extensions, RCC slab, or foundation work.", includes: ["On-site structural evaluation", "BOQ & material estimate", "Consultation report"], image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" }
+      ],
+      "Demolition & Breaking": [
+        { id: "mason-demo-1", name: "Wall Demolition & Tile Chipping", price: 1299, duration: "2 hrs", badge: "Heavy Duty", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Controlled wall breaking with rotary hammer drill, safety props, and debris bagging.", includes: ["Rotary breaker demotion", "Safety prop support", "Debris clearing"], image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
       ]
     },
     pest_control: {
@@ -9871,7 +10616,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               onClick={() => {
                 if (typeof onClose === 'function') onClose();
               }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-extrabold text-xs transition-all cursor-pointer border border-slate-200/80 shadow-xs active:scale-95"
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
               <ChevronLeft size={16} /> Back to Services
             </button>
@@ -9880,20 +10625,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
             </h2>
           </div>
 
-          {/* Inner Search box & Close */}
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="relative w-full sm:w-72">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Search size={15} />
-              </span>
-              <input
-                type="text"
-                placeholder="Search services..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all bg-slate-50/50"
-              />
-            </div>
+          {/* Close Button */}
+          <div className="flex items-center gap-3">
             {!isFullPage && (
               <button
                 className="w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
@@ -9925,15 +10658,13 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     e.target.onerror = null;
                     e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
                   }}
-                  className={`w-14 h-14 object-cover rounded-2xl mb-1.5 transition-all duration-200 ${
-                    isSelected
-                      ? "scale-[1.08] shadow-md border-2 border-slate-800"
-                      : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
-                  }`}
+                  className={`w-14 h-14 object-cover rounded-2xl mb-1.5 transition-all duration-200 ${isSelected
+                    ? "scale-[1.08] shadow-md border-2 border-slate-800"
+                    : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                    }`}
                 />
-                <span className={`text-[11px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                  isSelected ? "text-slate-900 font-black" : "text-slate-600 font-bold"
-                }`}>
+                <span className={`text-[11px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-900 font-black" : "text-slate-600 font-bold"
+                  }`}>
                   {tab.name}
                 </span>
               </button>
@@ -9994,11 +10725,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                               <button
                                 key={b}
                                 onClick={() => setBhkSelections(prev => ({ ...prev, [p.id]: b }))}
-                                className={`text-xs px-3 py-1 rounded-full border transition-all cursor-pointer ${
-                                  currentBhk === b
-                                    ? "bg-emerald-600 border-emerald-600 text-white font-bold"
-                                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                                }`}
+                                className={`text-xs px-3 py-1 rounded-full border transition-all cursor-pointer ${currentBhk === b
+                                  ? "bg-emerald-600 border-emerald-600 text-white font-bold"
+                                  : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                                  }`}
                               >
                                 {b} BHK
                               </button>
@@ -11543,7 +12273,7 @@ export function BkStyles() {
         gap: 1rem;
       }
       .uc-paint-header-btn-book {
-        background: #0d9488;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
         color: #ffffff;
         font-size: 0.8rem;
         font-weight: 700;
@@ -11551,10 +12281,11 @@ export function BkStyles() {
         border-radius: 9999px;
         border: none;
         cursor: pointer;
-        transition: background 0.15s ease;
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
+        transition: opacity 0.15s ease;
       }
       .uc-paint-header-btn-book:hover {
-        background: #0f766e;
+        opacity: 0.9;
       }
       .uc-paint-header-btn-outline {
         background: transparent;
@@ -11672,7 +12403,7 @@ export function BkStyles() {
       .uc-paint-horizontal-nav {
         background: #ffffff;
         border-bottom: 1.5px solid #f1f5f9;
-        padding: 0.75rem 2rem;
+        padding: 0.75rem 1.5rem;
         width: 100%;
         flex-shrink: 0;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -11683,8 +12414,8 @@ export function BkStyles() {
         gap: 1.5rem;
         overflow-x: auto;
         scrollbar-width: none; /* Hide scrollbar in Firefox */
-        max-width: 1200px;
-        margin: 0 auto;
+        max-width: 100%;
+        margin: 0;
       }
       .uc-paint-horizontal-nav-list::-webkit-scrollbar {
         display: none; /* Hide scrollbar in Chrome/Safari/Webkit */
@@ -11848,10 +12579,6 @@ export function BkStyles() {
         font-weight: 900;
         cursor: pointer;
         padding: 0 0.1rem;
-      }
-      .uc-paint-cart-item-qty span {
-        font-size: 0.78rem;
-        font-weight: 800;
         color: #1e293b;
         min-width: 12px;
         text-align: center;
@@ -14028,7 +14755,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
     if (activeTab === "packages") list = FULL_KITCHEN_PACKAGES;
     else if (activeTab === "appliance") list = APPLIANCE_SERVICES;
     else if (activeTab === "addons") list = QUICK_EXTRA_SERVICES;
-    
+
     if (!searchQuery) return list;
     return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
   };
@@ -14049,21 +14776,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             </button>
             <h2 className="text-xl font-black text-slate-900">Kitchen Cleaning</h2>
           </div>
-          <div className="relative w-full sm:w-64">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={14} />
-            </span>
-            <input
-              type="text"
-              placeholder="Search services..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all bg-slate-50/50"
-            />
-          </div>
         </div>
-
-        {/* Sub-tabs */}
         <div className="flex gap-5 pb-3 pt-2 border-b border-slate-100 justify-start">
           {KITCHEN_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
@@ -14076,13 +14789,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 <img
                   src={tab.image}
                   alt={tab.name}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
-                    isSelected ? "scale-[1.05] shadow-md" : "opacity-80 hover:opacity-100"
-                  }`}
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected ? "scale-[1.05] shadow-md" : "opacity-80 hover:opacity-100"
+                    }`}
                 />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                  isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
-                }`}>
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
+                  }`}>
                   {tab.name}
                 </span>
               </button>
@@ -14138,7 +14849,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           </div>
                         ))}
                       </div>
-                      <button 
+                      <button
                         onClick={() => setSelectedServiceDetails(service)}
                         className="text-xs font-semibold text-blue-600 mt-2 hover:underline"
                       >
@@ -14243,8 +14954,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
         <div className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans">
             {/* Close button */}
-            <button 
-              onClick={() => setSelectedServiceDetails(null)} 
+            <button
+              onClick={() => setSelectedServiceDetails(null)}
               className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors"
             >
               <X size={16} />
@@ -14253,9 +14964,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             {/* Header: split hero image + promo card */}
             <div className="flex h-36 border-b border-slate-100 shrink-0">
               <div className="w-[60%] h-full bg-slate-100">
-                <img 
-                  src={selectedServiceDetails.image} 
-                  alt={selectedServiceDetails.name} 
+                <img
+                  src={selectedServiceDetails.image}
+                  alt={selectedServiceDetails.name}
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -14271,7 +14982,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {/* Title, rating and add wrap */}
               <div className="border-b border-slate-100 pb-5">
                 <h3 className="text-base font-extrabold text-slate-900 mb-1">{selectedServiceDetails.name}</h3>
-                
+
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
                   <Star className="text-[#7C3AED] fill-[#7C3AED]" size={12} />
                   <span className="text-slate-800">4.82</span>
@@ -14454,196 +15165,13 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
 
 export function PackageModal({ category, cart, setCart, onClose, onCheckout, packagesData }) {
-  if (category?.id === "cleaning" || category?.slug === "cleaning") {
-    return (
-      <CustomCleaningPackageModal
-        category={category}
-        cart={cart}
-        setCart={setCart}
-        onClose={onClose}
-        onCheckout={onCheckout}
-      />
-    );
-  }
-
-  const [activeTab, setActiveTab] = useState(0)
-  const [activeFilter, setActiveFilter] = useState("All")
-  const rawList = (packagesData && (packagesData[category?.id] || packagesData[category?.slug] || packagesData[category?.name?.toLowerCase()])) || PACKAGES[category?.id] || PACKAGES[category?.slug] || []
-  const packages = rawList.map(p => ({ ...p, priceStr: BOOKING_CURRENCY_SYMBOL + p.price }))
-  const relatedServices = packages.slice(0, 4);
-
-  const filteredPackages = packages.filter(p => {
-    if (activeFilter === "All") return true;
-    if (activeFilter === "Premium") return p.price >= 1000;
-    if (activeFilter === "Standard") return p.price < 1000;
-    return true;
-  });
-
-  const getCartCount = (pkgId) => {
-    const item = cart.find(c => c.id === pkgId);
-    return item ? item.quantity : 0;
-  }
-
-  const addToCart = (pkg) => {
-    setCart(prev => {
-      const existing = prev.find(c => c.id === pkg.id);
-      if (existing) {
-        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
-      }
-      return [...prev, { ...pkg, quantity: 1, categoryName: category.name }];
-    });
-  }
-
-  const removeFromCart = (pkgId) => {
-    setCart(prev => {
-      const existing = prev.find(c => c.id === pkgId);
-      if (existing.quantity === 1) {
-        return prev.filter(c => c.id !== pkgId);
-      }
-      return prev.map(c => c.id === pkgId ? { ...c, quantity: c.quantity - 1 } : c);
-    });
-  }
-
-  const renderCard = (p, i) => (
-    <motion.div
-      key={p.id}
-      className="uc-pkg-modal-card-uc"
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: i * 0.1 }}
-    >
-      <div className="uc-pkg-modal-card-uc-info">
-        <h3 className="uc-pkg-uc-title">{p.name}</h3>
-        <div className="uc-pkg-uc-rating">
-          <Star size={12} style={{ fill: "#7C3AED", color: "#7C3AED", marginRight: 4 }} />
-          <span style={{ fontWeight: 700 }}>4.8</span> <span style={{ color: "#94a3b8", textDecoration: "underline" }}>(113K reviews)</span>
-        </div>
-        <div className="uc-pkg-uc-price">
-          Starts at {p.priceStr} <span className="uc-pkg-uc-dot">•</span> {p.duration}
-        </div>
-        <ul className="uc-pkg-uc-includes">
-          {p.includes.map(inc => <li key={inc}>{inc}</li>)}
-        </ul>
-        <div className="uc-pkg-uc-view-details">View details</div>
-      </div>
-      <div className="uc-pkg-modal-card-uc-imgbox">
-        <img
-          src={p.image || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"}
-          alt={p.name}
-          className="uc-pkg-uc-img"
-          onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop"; }}
-        />
-        <div className="uc-pkg-uc-add-wrap" onClick={(e) => e.stopPropagation()}>
-          {getCartCount(p.id) > 0 ? (
-            <div className="uc-swiggy-qty">
-              <button onClick={() => removeFromCart(p.id)}>-</button>
-              <span>{getCartCount(p.id)}</span>
-              <button onClick={() => addToCart(p)}>+</button>
-            </div>
-          ) : (
-            <button className="uc-btn-add-swiggy" onClick={() => addToCart(p)}>
-              <ShoppingCart size={13} style={{ display: 'inline-block', verticalAlign: 'middle' }} /> Add
-            </button>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-
   return (
-    <div className="uc-modal-overlay" onClick={onClose}>
-      <motion.div
-        className="uc-pkg-modal"
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        onClick={e => e.stopPropagation()}
-      >
-        <button className="uc-pkg-modal-close" onClick={onClose}><X size={20} /></button>
-
-        <div className="uc-pkg-modal-header">
-          <div className="uc-pkg-modal-hero">
-            <img src={category.image} alt={category.name} />
-            <div className="uc-pkg-modal-hero-overlay">
-              <h2>{category.name}</h2>
-              <p>{category.desc}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="uc-pkg-modal-split" style={{ display: 'flex', flexDirection: 'row', gap: 0 }}>
-          {/* Left Sidebar: Individual Services */}
-          <div className="uc-pkg-sidebar" style={{ width: '35%', borderRight: '1px solid #e2e8f0', paddingRight: '1.5rem', overflowY: 'auto' }}>
-            <h3 className="uc-pkg-sidebar-title" style={{ fontSize: '1.1rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 900 }}>Individual Services</h3>
-            <div className="uc-pkg-related-list" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {relatedServices.map((s, idx) => (
-                <div key={s.id || idx} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.8rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-                  <img
-                    src={s.image || s.img || category?.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=100&q=80&fit=crop"}
-                    alt={s.name}
-                    style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }}
-                    onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=100&q=80&fit=crop"; }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#1e293b', lineHeight: 1.2, marginBottom: '0.2rem' }}>{s.name}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.5rem' }}>{s.priceStr || (BOOKING_CURRENCY_SYMBOL + '499')} • {s.duration || '1 hr'}</div>
-
-                    {getCartCount(s.id) > 0 ? (
-                      <div className="uc-swiggy-qty" style={{ width: 80, height: 28, fontSize: '0.8rem' }}>
-                        <button style={{ padding: '0 0.5rem' }} onClick={() => removeFromCart(s.id)}>-</button>
-                        <span>{getCartCount(s.id)}</span>
-                        <button style={{ padding: '0 0.5rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>+</button>
-                      </div>
-                    ) : (
-                      <button className="uc-btn-add-swiggy" style={{ padding: '0.3rem 1rem', fontSize: '0.75rem' }} onClick={() => addToCart({ ...s, image: s.image || s.img, price: s.price || 499 })}>
-                        <ShoppingCart size={12} style={{ display: 'inline-block', verticalAlign: 'middle' }} /> ADD
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right Content: Packages */}
-          <div className="uc-pkg-content" style={{ width: '65%', paddingLeft: '1.5rem', overflowY: 'auto' }}>
-            <h3 className="uc-pkg-content-title" style={{ fontSize: '1.4rem', marginBottom: '1rem', color: '#1e293b', fontWeight: 900 }}>Packages & Bundles</h3>
-
-            <div className="uc-pkg-filter-row">
-              {["All", "Standard", "Premium"].map(f => (
-                <button
-                  key={f}
-                  className={`uc-pkg-filter-pill ${activeFilter === f ? "active" : ""}`}
-                  onClick={() => setActiveFilter(f)}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-
-            <div className="uc-pkg-modal-list">
-              {filteredPackages.map((p, i) => renderCard(p, i))}
-            </div>
-          </div>
-        </div>
-
-        {cart.length > 0 && (
-          <motion.div
-            className="uc-pkg-modal-cart-bar"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="uc-cart-bar-left">
-              <span className="uc-cart-bar-items">{cart.reduce((a, c) => a + c.quantity, 0)} items</span>
-              <span className="uc-cart-bar-price">{BOOKING_CURRENCY_SYMBOL}{cart.reduce((a, c) => a + (c.price * c.quantity), 0)}</span>
-            </div>
-            <button className="uc-cart-bar-btn" onClick={onCheckout}>
-              Proceed to Checkout <ChevronRight size={16} />
-            </button>
-          </motion.div>
-        )}
-      </motion.div>
-    </div>
-  )
+    <CustomCleaningPackageModal
+      category={category}
+      cart={cart}
+      setCart={setCart}
+      onClose={onClose}
+      onCheckout={onCheckout}
+    />
+  );
 }
