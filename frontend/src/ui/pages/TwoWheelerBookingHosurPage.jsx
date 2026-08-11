@@ -15,6 +15,7 @@ import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx
 import { useAuth } from "../../state/auth/useAuth.js"
 import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { getAddress } from "../../api/geocoding.js"
 
 const LOGISTICS_CITY = "hosur"
 
@@ -193,8 +194,6 @@ const HOSUR_LOCATIONS_DATABASE = [
   { name: "Hosur Taluk Office", subtitle: "NH44, Hosur", category: "Hosur Central" },
   { name: "Hosur Ring Road", subtitle: "Outer Ring Road, Hosur", category: "Hosur Central" },
   { name: "Harita (Hosur)", subtitle: "TVS Motor Corridor, Hosur", category: "Hosur Area" },
-
-  // Industrial Zones
   { name: "SIPCOT Phase 1", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
   { name: "SIPCOT Phase 2", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
   { name: "SIPCOT Phase 3", subtitle: "Zuzuvadi, Hosur", category: "SIPCOT Industrial" },
@@ -205,8 +204,6 @@ const HOSUR_LOCATIONS_DATABASE = [
   { name: "TVS Motor Factory", subtitle: "Harita, Hosur", category: "Hosur Industrial" },
   { name: "Titan Industries", subtitle: "SIPCOT Phase 1, Hosur", category: "Hosur Industrial" },
   { name: "Exide Industries", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
-
-  // Residential & Commercial
   { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
   { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
   { name: "Zuzuvadi", subtitle: "Hosur Border, Tamil Nadu", category: "Hosur Area" },
@@ -225,8 +222,6 @@ const HOSUR_LOCATIONS_DATABASE = [
   { name: "Poonapalli", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
   { name: "Bagalur Town", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
   { name: "Berigai", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
-
-  // Nearby Borders & Bengaluru Hubs
   { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
   { name: "Attibele Industrial Area", subtitle: "Anekal Taluk (~10 Kms)", category: "Near Hosur" },
   { name: "Anekal Town", subtitle: "Karnataka (~18 Kms)", category: "Near Hosur" },
@@ -238,7 +233,7 @@ const HOSUR_LOCATIONS_DATABASE = [
   { name: "Jigani Industrial Area", subtitle: "Bengaluru (~25 Kms)", category: "Bengaluru Hub" },
   { name: "Sarjapur Road", subtitle: "Bengaluru (~32 Kms)", category: "Bengaluru Hub" },
   { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
-  { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" }
+  { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
 ]
 
 function filterLocationSuggestions(searchText) {
@@ -248,10 +243,10 @@ function filterLocationSuggestions(searchText) {
       { name: "SIPCOT Phase 1", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
       { name: "SIPCOT Phase 2", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
       { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-      { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
       { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
       { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
-      { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" }
+      { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
+      { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
     ]
   }
 
@@ -272,11 +267,7 @@ function filterLocationSuggestions(searchText) {
       subLow.split(/[\s,/-]+/).some((w) => w.startsWith(query))
     ) {
       wordStarts.push(item)
-    } else if (
-      nameLow.includes(query) ||
-      subLow.includes(query) ||
-      catLow.includes(query)
-    ) {
+    } else if (nameLow.includes(query) || subLow.includes(query) || catLow.includes(query)) {
       containsMatches.push(item)
     }
   })
@@ -293,6 +284,7 @@ function filterLocationSuggestions(searchText) {
   }
   return result
 }
+
 
 /* ── Two Wheeler Booking in Hosur Page (Image 2 Uniform Design) ── */
 export function TwoWheelerBookingHosurPage() {
@@ -440,24 +432,8 @@ export function TwoWheelerBookingHosurPage() {
       async (position) => {
         const { latitude, longitude } = position.coords
         try {
-          const res = await fetch(`https://photon.komoot.io/reverse?lon=${longitude}&lat=${latitude}`)
-          const data = await res.json()
-          if (data && data.features && data.features.length > 0) {
-            const p = data.features[0].properties
-            const parts = [p.name, p.street, p.suburb || p.district, p.city || p.locality, p.state].filter(Boolean)
-            const uniqueParts = parts.filter((v, i, a) => a.indexOf(v) === i)
-            const formatted = uniqueParts.join(", ")
-            setPickup(formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
-          } else {
-            const nomRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`)
-            const nomData = await nomRes.json()
-            if (nomData && nomData.display_name) {
-              const parts = nomData.display_name.split(",").slice(0, 3).map((s) => s.trim()).join(", ")
-              setPickup(parts)
-            } else {
-              setPickup(`Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
-            }
-          }
+          const formatted = await getAddress(latitude, longitude)
+          setPickup(formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
           setLocationStatus("Detected")
           setTimeout(() => setLocationStatus(""), 2500)
         } catch (err) {
@@ -474,9 +450,9 @@ export function TwoWheelerBookingHosurPage() {
         setIsDetectingLocation(false)
         setLocationStatus("")
         if (error.code === 1) {
-          alert("Location permission was denied. You can enter your pickup address manually.")
+          alert("Location permission was denied. Please enter your pickup address manually.")
         } else {
-          setPickup("Current Location (Sipcot Phase 1, Hosur)")
+          alert("GPS location unavailable. Please enter your pickup address manually.")
         }
       },
       { timeout: 10000, enableHighAccuracy: true }
@@ -487,7 +463,7 @@ export function TwoWheelerBookingHosurPage() {
   // hasn't resolved yet, so this page keeps working even if the backend is
   // briefly unreachable.
 
-  const HARDCODED_DETAILS_BY_SLUG = {
+  const VEHICLE_SUITABILITY_MAP = {
     "2-wheeler": {
       suitableFor: [
         "Small parcels & packages",
@@ -513,43 +489,6 @@ export function TwoWheelerBookingHosurPage() {
     }
   }
 
-  const STATIC_TWO_WHEELER_VEHICLES = [
-    {
-      id: "2-wheeler", name: "2 Wheeler", capacity: "20 kg", price: "₹48",
-      diagram: <TwoWheelerDimensionDiagram />,
-      details: {
-        name: "2 Wheeler Parcel Delivery", capacity: "20 kg capacity",
-        suitableFor: HARDCODED_DETAILS_BY_SLUG["2-wheeler"].suitableFor,
-        bestFor: HARDCODED_DETAILS_BY_SLUG["2-wheeler"].bestFor,
-      }
-    },
-    {
-      id: "2-wheeler-electric-express", name: "2 Wheeler Electric / Express", capacity: "20 kg", price: "₹55",
-      diagram: <TwoWheelerDimensionDiagram />,
-      details: {
-        name: "2 Wheeler Express (Zero Emission EV)", capacity: "20 kg capacity",
-        suitableFor: HARDCODED_DETAILS_BY_SLUG["2-wheeler-electric-express"].suitableFor,
-        bestFor: HARDCODED_DETAILS_BY_SLUG["2-wheeler-electric-express"].bestFor,
-      }
-    }
-  ]
-
-  const STATIC_HOSUR_AREAS = [
-    "Sipcot Phase 1", "Sipcot Phase 2", "Bagalur Road", "Mathigiri",
-    "Zuzuvadi", "Avalapalli", "Moranapalli", "Mookandapalli",
-    "Denkanikottai Road", "Rayakottai Road", "Thally Road", "Alasanatham",
-    "Railway Station Area", "Dinnur", "Kelamangalam Road", "Kamaraj Nagar"
-  ]
-
-  const STATIC_POPULAR_ROUTES = [
-    { to: "SIPCOT Phase 1 & 2", distance: "4 km", time: "12 mins", fare: "₹65" },
-    { to: "Bagalur Road", distance: "6 km", time: "15 mins", fare: "₹78" },
-    { to: "Attibele Border", distance: "8 km", time: "18 mins", fare: "₹95" },
-    { to: "Electronic City Phase 1", distance: "28 km", time: "45 mins", fare: "₹240" },
-    { to: "Bengaluru Central (Majestic)", distance: "40 km", time: "65 mins", fare: "₹340" },
-    { to: "Krishnagiri Town", distance: "55 km", time: "80 mins", fare: "₹450" }
-  ]
-
   // Adapt backend ServiceTier rows to the { id, name, capacity, price,
   // diagram, details } shape the rest of this page already renders.
   function tierToVehicle(tier) {
@@ -562,26 +501,24 @@ export function TwoWheelerBookingHosurPage() {
       details: {
         name: tier.name,
         capacity: `${tier.capacity_label} capacity`,
-        suitableFor: HARDCODED_DETAILS_BY_SLUG[tier.slug]?.suitableFor || [],
-        bestFor: HARDCODED_DETAILS_BY_SLUG[tier.slug]?.bestFor || tier.description,
+        suitableFor: VEHICLE_SUITABILITY_MAP[tier.slug]?.suitableFor || [],
+        bestFor: VEHICLE_SUITABILITY_MAP[tier.slug]?.bestFor || tier.description,
       },
       _tierId: tier.id,
     }
   }
 
-  const TWO_WHEELER_VEHICLES = fetchedTiers.length ? fetchedTiers.map(tierToVehicle) : STATIC_TWO_WHEELER_VEHICLES
+  const TWO_WHEELER_VEHICLES = fetchedTiers.map(tierToVehicle)
 
-  const HOSUR_AREAS = serviceAreas.length ? serviceAreas.map((a) => a.name) : STATIC_HOSUR_AREAS
+  const HOSUR_AREAS = serviceAreas.map((a) => a.name)
 
-  const POPULAR_ROUTES = fetchedLanes.length
-    ? fetchedLanes.map((lane) => ({
-        to: lane.destination_label,
-        distance: lane.distance_km ? `${Number(lane.distance_km)} km` : "",
-        fare: `₹${Number(lane.fare).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
-        time: lane.eta_label,
-        _laneId: lane.id,
-      }))
-    : STATIC_POPULAR_ROUTES
+  const POPULAR_ROUTES = fetchedLanes.map((lane) => ({
+    to: lane.destination_label,
+    distance: lane.distance_km ? `${Number(lane.distance_km)} km` : "",
+    fare: `₹${Number(lane.fare).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+    time: lane.eta_label,
+    _laneId: lane.id,
+  }))
 
   // FAQs tailored for 2 Wheeler
   const FAQS = [

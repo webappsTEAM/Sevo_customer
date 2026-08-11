@@ -64,15 +64,6 @@ def _get_fallback_employee_user():
 
 
 @database_sync_to_async
-def _get_fallback_company():
-    try:
-        from companies.models import Company
-        return Company.objects.first()
-    except Exception:
-        return None
-
-
-@database_sync_to_async
 def _get_user_company(user):
     try:
         if not user:

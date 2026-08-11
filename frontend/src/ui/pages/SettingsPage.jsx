@@ -30,7 +30,6 @@ const WorkspaceSection = lazy(() => import("./settings/WorkspaceSection.jsx"))
 const PrivacyDataSection = lazy(() => import("./settings/PrivacyDataSection.jsx"))
 const DangerZoneSection = lazy(() => import("./settings/DangerZoneSection.jsx"))
 const AccessControlSection = lazy(() => import("./settings/AccessControlSection.jsx"))
-const CatalogSettingsSection = lazy(() => import("./settings/CatalogSettingsSection.jsx"))
 const PayrollSettingsSection = lazy(() => import("./settings/PayrollSettingsSection.jsx").then(m => ({ default: m.PayrollSettingsSection })))
 const LocationsSettingsSection = lazy(() => import("./LocationsSettingsPage.jsx").then(m => ({ default: m.LocationsSettingsPage })))
 
@@ -167,13 +166,6 @@ const TABS = [
     to: routes.settings_data,
   },
   {
-    id: "catalog",
-    label: "Service Catalog",
-    subtitle: "Manage categories, services, pricing, and payment policies.",
-    icon: <Database size={15} />,
-    adminOnly: true,
-  },
-  {
     id: "rbac",
     label: "Access Control",
     subtitle: "Module visibility, data modification rights, and role-based permissions.",
@@ -305,7 +297,6 @@ export function SettingsPage({ section: sectionProp }) {
               {activeSection === "invoices" && <InvoicesSection />}
               {activeSection === "organization" && <WorkspaceSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "data" && <PrivacyDataSection showToast={showToast} SectionHeader={SectionHeader} />}
-              {activeSection === "catalog" && <CatalogSettingsSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "payroll" && <PayrollSettingsSection SectionHeader={SectionHeader} />}
               {activeSection === "location" && <LocationsSettingsSection />}
               {activeSection === "rbac" && <AccessControlSection />}

@@ -9,7 +9,7 @@ from rest_framework import serializers
 from employees.models import Employee
 from .models import (
     EmployeeJob, EmployeePerformance, JobCompletionProof,
-    ServiceFeedback, ServiceRequest, CatalogCategory, CatalogService,
+    ServiceFeedback, ServiceRequest, CatalogCategory, Service, Package, AddOn, CatalogChangeLog,
     WorkExtension, WorkExtensionItem, JobReschedule, SupplementalInvoice,
     RescheduleRequest, RescheduleAttachment, RescheduleStatus, RescheduleReason, TimeSlotChoices,
     RescheduleSuggestedSlot, RescheduleStatusHistory,
@@ -17,13 +17,25 @@ from .models import (
 )
 
 class CatalogServiceSerializer(serializers.ModelSerializer):
+    """v1 compat shape for the public /api/catalog/services/ endpoint, which
+    predates the Category->Service->Package hierarchy (see Package model
+    docstring). `category`/`price` are computed aliases onto the new model
+    so existing frontend consumers (BookingPage.jsx, ServiceRequestsPage.jsx)
+    keep working unchanged. Still live and actually consumed — do not remove."""
+    category = serializers.SerializerMethodField()
+    price = serializers.DecimalField(source="base_price", max_digits=10, decimal_places=2)
+
     class Meta:
-        model = CatalogService
-        fields = '__all__'
+        model = Package
+        fields = [
+            "id", "category", "name", "description", "price", "duration",
+            "image", "popular", "tag", "includes", "excludes", "payment_policy",
+        ]
+
+    def get_category(self, obj):
+        return obj.service.category_id
 
 class CatalogCategorySerializer(serializers.ModelSerializer):
-    services = CatalogServiceSerializer(many=True, read_only=True)
-    
     class Meta:
         model = CatalogCategory
         fields = '__all__'
@@ -66,6 +78,51 @@ class CatalogCategorySerializer(serializers.ModelSerializer):
         ret['desc'] = instance.description or ""
         ret['jobs'] = ret['jobs_count_str']
         return ret
+
+
+# ── Service Catalog v2 (Category -> Service -> Package -> AddOn) ──────────────
+# CatalogCategorySerializer above is reused as-is for v2 category CRUD — the
+# category model itself didn't change shape (just gained is_active/sort_order,
+# already covered by fields='__all__'), so a second serializer would be a
+# needless duplicate.
+
+class ServiceSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+
+    class Meta:
+        model = Service
+        fields = '__all__'
+
+
+class PackageSerializer(serializers.ModelSerializer):
+    service_name = serializers.CharField(source="service.name", read_only=True)
+    category_name = serializers.CharField(source="service.category.name", read_only=True)
+
+    class Meta:
+        model = Package
+        fields = '__all__'
+        read_only_fields = ['status', 'version']  # status changes via the dedicated transition endpoint only
+
+
+class AddOnSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source="package.name", read_only=True)
+
+    class Meta:
+        model = AddOn
+        fields = '__all__'
+
+
+class CatalogChangeLogSerializer(serializers.ModelSerializer):
+    changed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CatalogChangeLog
+        fields = '__all__'
+
+    def get_changed_by_name(self, obj):
+        if not obj.changed_by:
+            return "System"
+        return obj.changed_by.get_full_name() or obj.changed_by.email or str(obj.changed_by)
 
 
 # ── Public ────────────────────────────────────────────────────────────────────

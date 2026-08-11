@@ -338,9 +338,10 @@ function WorkOrderModal({ job, onClose }) {
   const sr = job.service_request || {}
   const [empPos, setEmpPos] = useState(null)
 
-  // Mock customer location based on ID string hash to be consistent
-  const custLat = 12.9716 + ((sr.id || 1) % 100) * 0.001
-  const custLng = 77.5946 + ((sr.id || 1) % 100) * 0.001
+  // Customer location from service request address
+  const custLat = sr.address_obj?.latitude || sr.latitude || null
+  const custLng = sr.address_obj?.longitude || sr.longitude || null
+  const hasCustCoords = custLat !== null && custLng !== null
 
   // Start live tracking if accepted or in_progress
   const isTracking = ["accepted", "in_progress"].includes(job.status)
@@ -395,29 +396,35 @@ function WorkOrderModal({ job, onClose }) {
         <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           {/* Map Section */}
           <div style={{ background: "white", borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0" }}>
-            <div style={{ height: 250, width: "100%", background: "#e2e8f0" }}>
-              <MapContainer center={[custLat, custLng]} zoom={13} style={{ height: "100%", width: "100%", zIndex: 1 }} zoomControl={false}>
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
-                <Marker position={[custLat, custLng]}>
-                  <Popup>Customer Location</Popup>
-                </Marker>
-                {empPos && isTracking && (
-                  <Marker position={empPos}>
-                    <Popup>Your Location</Popup>
+            <div style={{ height: 250, width: "100%", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {hasCustCoords ? (
+                <MapContainer center={[custLat, custLng]} zoom={13} style={{ height: "100%", width: "100%", zIndex: 1 }} zoomControl={false}>
+                  <TileLayer url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" attribution="&copy; Google Maps" />
+                  <Marker position={[custLat, custLng]}>
+                    <Popup>Customer Location</Popup>
                   </Marker>
-                )}
-                {empPos && isTracking && (
-                  <Polyline positions={[empPos, [custLat, custLng]]} color="#7C3AED" weight={4} dashArray="8 8" />
-                )}
-              </MapContainer>
+                  {empPos && isTracking && (
+                    <Marker position={empPos}>
+                      <Popup>Your Location</Popup>
+                    </Marker>
+                  )}
+                  {empPos && isTracking && (
+                    <Polyline positions={[empPos, [custLat, custLng]]} color="#7C3AED" weight={4} dashArray="8 8" />
+                  )}
+                </MapContainer>
+              ) : (
+                <div style={{ color: "#64748b", fontSize: "0.85rem", fontWeight: 700 }}>
+                  Customer map coordinates unavailable for this work order.
+                </div>
+              )}
             </div>
             <div style={{ padding: "1rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.75rem", fontWeight: 700, color: "#059669", marginBottom: 12 }}>
-                <MapPin size={14} /> AUTO-DETECTED LOCATION DETAILS
+                <MapPin size={14} /> LOCATION DETAILS
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                 <Field label="ADDRESS" value={sr.address || "—"} />
-                <Field label="LATITUDE / LONGITUDE" value={`${custLat.toFixed(6)} / ${custLng.toFixed(6)}`} />
+                <Field label="LATITUDE / LONGITUDE" value={hasCustCoords ? `${custLat.toFixed(6)} / ${custLng.toFixed(6)}` : "Unavailable"} />
               </div>
               {isTracking && (
                 <div style={{ marginTop: 12, padding: "10px 14px", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, color: "#059669", fontSize: "0.85rem", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>

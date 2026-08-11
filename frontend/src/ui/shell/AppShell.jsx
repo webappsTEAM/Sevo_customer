@@ -102,6 +102,21 @@ const ADMIN_NAV_ITEMS = [
       { label: "Location Settings", to: "/settings/location", icon: <Settings size={16} />, color: "#64748B" },
     ]
   },
+  {
+    label: "Service Catalog",
+    to: routes.catalog_dashboard,
+    icon: <Package size={20} />,
+    color: "#F59E0B",
+    adminOnly: true,
+    children: [
+      { label: "Dashboard", to: routes.catalog_dashboard, icon: <Home size={16} />, color: "#F59E0B" },
+      { label: "Categories", to: routes.catalog_categories, icon: <FolderOpen size={16} />, color: "#F59E0B" },
+      { label: "Services", to: routes.catalog_services, icon: <Wrench size={16} />, color: "#F59E0B" },
+      { label: "Packages", to: routes.catalog_packages, icon: <Package size={16} />, color: "#F59E0B" },
+      { label: "Add-ons", to: routes.catalog_addons, icon: <CheckSquare size={16} />, color: "#F59E0B" },
+      { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#F59E0B" },
+    ]
+  },
   { label: "Inventory", to: routes.inventory, icon: <Package size={20} />, color: "#8B5CF6" },
   {
     label: "Settings",
@@ -583,7 +598,7 @@ export function AppShell() {
               <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-blue-600 dark:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
                 {user.avatar_url ? (
                   <img
-                    src={user.avatar_url.includes("demo.localhost") ? "http://localhost:8000" + user.avatar_url.substring(user.avatar_url.indexOf('/media/')) : user.avatar_url}
+                    src={user.avatar_url.includes("demo.localhost") ? `${window.location.origin}${user.avatar_url.substring(user.avatar_url.indexOf('/media/'))}` : user.avatar_url}
                     alt="avatar"
                     className="w-full h-full object-cover rounded-xl"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
