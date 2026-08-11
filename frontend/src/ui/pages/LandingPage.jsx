@@ -1099,9 +1099,7 @@ export function LandingPage() {
     ? (BOOKING_CATEGORIES.find(c => 
         c.id === activeCategoryId || 
         c.slug === activeCategoryId || 
-        c.id === `${activeCategoryId}_cleaning` ||
-        c.id?.includes(activeCategoryId) || 
-        activeCategoryId?.includes(c.id)
+        c.id === `${activeCategoryId}_cleaning`
       ) || { id: activeCategoryId, name: activeCategoryId.replace(/_/g, " ") })
     : null
 
@@ -1172,7 +1170,7 @@ export function LandingPage() {
     );
   }, [query, allServicesCatalog]);
 
-  if (activeCategoryId && activeCategoryId !== "painting" && activeCategoryId !== "mason") {
+  if (activeCategoryId) {
     const displayLocationText = activeLocationLabel ||
       (typeof user?.last_known_location === "string" ? user?.last_known_location : user?.last_known_location?.label) ||
       (typeof user?.lastKnownLocation === "string" ? user?.lastKnownLocation : user?.lastKnownLocation?.label) ||

@@ -25,6 +25,8 @@ import { apiRequest } from "../../api/client.js"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { LocationPermissionHandler } from "../components/AddressPicker/index.js"
+import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
+import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 
@@ -662,11 +664,7 @@ export function AddAddressSearchModal({
         {/* Use current location option */}
         <button
           onClick={() => {
-            if (typeof onUseCurrentLocation === "function") {
-              onUseCurrentLocation()
-            } else {
-              setShowMapPicker(true)
-            }
+            setShowMapPicker(true)
           }}
           disabled={isGeoLoading}
           className="flex items-center gap-3 text-purple-700 hover:text-purple-800 font-extrabold text-xs py-2.5 px-1 rounded-xl transition-colors cursor-pointer group mb-3 hover:bg-purple-50/50"
@@ -6194,6 +6192,7 @@ function StepWorkflowCheckout({
   onBack
 }) {
   const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime)
+  const isSlotSelected = Boolean(selectedDate && selectedTime)
   const [avoidCalling, setAvoidCalling] = useState(true)
   const [couponCode, setCouponCode] = useState("")
   const [couponApplied, setCouponApplied] = useState(false)
@@ -11102,6 +11101,9 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Single Item Transport", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
     ],
     cleaning: [
+      { name: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&fit=crop", catId: "kitchen_cleaning" },
+      { name: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop", catId: "sofa_cleaning" },
+      { name: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", catId: "bathroom_cleaning" },
       { name: "Furnished Apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop" },
       { name: "Unfurnished Apartment", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
       { name: "Furnished Villa", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
@@ -11462,6 +11464,16 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const rightColumnClass = "w-full lg:w-[380px] bg-slate-50 border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between lg:sticky lg:top-24 h-fit space-y-5 shadow-sm shrink-0";
 
+  if (activeSubTab === "Kitchen Cleaning") {
+    return <KitchenCleaningModal category={{ id: "kitchen_cleaning", name: "Kitchen Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  }
+  if (activeSubTab === "Sofa Cleaning") {
+    return <SofaCleaningModal category={{ id: "sofa_cleaning", name: "Sofa Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  }
+  if (activeSubTab === "Bathroom Cleaning") {
+    return <BathroomCleaningModal category={{ id: "bathroom_cleaning", name: "Bathroom Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  }
+
   const contentMarkup = (
     <motion.div
       className={containerClass}
@@ -11509,6 +11521,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               <button
                 key={tab.name}
                 onClick={() => {
+                  if (tab.catId) {
+                    navigate(`?category=${tab.catId}`);
+                    return;
+                  }
                   setActiveSubTab(tab.name);
                   setSearchQuery("");
                 }}

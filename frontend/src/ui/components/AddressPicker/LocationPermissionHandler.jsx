@@ -58,8 +58,11 @@ export function LocationPermissionHandler({ onClose, onManualSearch, onLocationC
   const [screen, setScreen]             = useState("map")
   const [confirmedAddress, setConfirmedAddress] = useState(null)
 
-  // Cleanup on unmount
-  useEffect(() => () => clearTimeout(timeoutRef.current), [])
+  // Auto-trigger location detection on mount
+  useEffect(() => {
+    handleUseCurrentLocation()
+    return () => clearTimeout(timeoutRef.current)
+  }, [])
 
   // ── Trigger GPS ────────────────────────────────────────────────────────────
 
