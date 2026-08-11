@@ -49,6 +49,7 @@ from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
 from .services.fulfillment_service import process_item_fulfillment
 from .services.logistics_pricing import resolve_logistics_fare
+from .services.address_service import AddressService
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -2983,3 +2984,69 @@ class AdminRefundActionView(APIView):
             return AdminRefundRejectView().post(request, pk)
         return _standard_response(success=False, error={"code": "INVALID_ACTION", "message": "Invalid action."}, status_code=400)
 
+
+# ─── Customer Address Picker ───────────────────────────────────────────────────
+
+class CustomerReverseGeocodeView(APIView):
+    """
+    POST /api/customer/addresses/reverse-geocode/
+    Body: {latitude, longitude}
+
+    Resolves GPS coordinates to a structured address via Nominatim (OpenStreetMap).
+    Results are cached server-side for 1 hour keyed by coords rounded to 4 d.p.
+    (~11 m precision) to cut down repeated calls for small drags.
+
+    Auth: authenticated customers only.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+    parser_classes     = [JSONParser]
+
+    def post(self, request):
+        latitude  = request.data.get("latitude")
+        longitude = request.data.get("longitude")
+
+        # ── Input validation ───────────────────────────────────────────────────
+        if latitude is None or longitude is None:
+            return _standard_response(
+                success=False,
+                error={"code": "MISSING_COORDS",
+                       "message": "Both latitude and longitude are required."},
+                status_code=400,
+            )
+
+        try:
+            lat = float(latitude)
+            lng = float(longitude)
+        except (ValueError, TypeError):
+            return _standard_response(
+                success=False,
+                error={"code": "INVALID_COORDS",
+                       "message": "latitude and longitude must be numeric."},
+                status_code=400,
+            )
+
+        if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lng <= 180.0):
+            return _standard_response(
+                success=False,
+                error={"code": "OUT_OF_RANGE",
+                       "message": "Coordinates are out of valid range."},
+                status_code=400,
+            )
+
+        # ── Service call (caching lives inside AddressService) ─────────────────
+        result = AddressService.reverse_geocode(lat, lng)
+
+        if result is None:
+            return _standard_response(
+                success=False,
+                error={"code": "GEOCODE_FAILED",
+                       "message": "Couldn't resolve address for those coordinates. "
+                                  "Try adjusting the pin."},
+                status_code=200,   # non-blocking — let the client handle gracefully
+            )
+
+        return _standard_response(
+            success=True,
+            data=result,
+            meta={"cached": True},   # cache status is opaque to client
+        )

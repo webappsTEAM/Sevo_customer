@@ -305,7 +305,7 @@ def is_booking_refund_eligible(booking):
 
     from service_requests.models import RefundRequest, RefundStatus
     active_refunds = RefundRequest.objects.filter(booking=booking).exclude(
-        status__in=[RefundStatus.REJECTED, RefundStatus.CANCELLED]
+        status__in=[RefundStatus.REJECTED]
     )
     if active_refunds.exists():
         return False, "A refund request is already active or processed for this booking."

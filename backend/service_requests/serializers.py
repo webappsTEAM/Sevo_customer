@@ -226,7 +226,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             "status", "status_display", "priority", "priority_display",
             "payment_method", "payment_method_display",
             "payment_status", "payment_status_display",
-            "total_amount", "base_amount", "extension_amount", "transaction_id", "invoice_id",
+            "total_amount", "base_amount", "extension_amount", "cart_data", "transaction_id", "invoice_id",
             "assigned_employee", "start_otp", "task_status", "is_otp_verified", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
         )
 

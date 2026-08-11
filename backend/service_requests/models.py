@@ -933,6 +933,14 @@ class RefundRequest(models.Model):
         null=True,
         blank=True
     )
+    requested_by         = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="legacy_requested_refunds"
+    )
+    amount               = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
     paid_amount          = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
     refund_type          = models.CharField(max_length=20, choices=RefundType.choices, default=RefundType.FULL)
     requested_amount     = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
@@ -940,6 +948,7 @@ class RefundRequest(models.Model):
     reason               = models.CharField(max_length=50, choices=RefundReason.choices, default=RefundReason.POOR_QUALITY)
     additional_notes     = models.TextField(blank=True, default="")
     internal_notes       = models.TextField(blank=True, default="")
+    admin_notes          = models.TextField(blank=True, default="")
     status               = models.CharField(max_length=30, choices=RefundStatus.choices, default=RefundStatus.PENDING)
     info_requested_from  = models.CharField(max_length=20, choices=RefundInfoTarget.choices, null=True, blank=True)
     assigned_employee    = models.ForeignKey(
@@ -962,6 +971,8 @@ class RefundRequest(models.Model):
             stamp = datetime.date.today().strftime("%Y%m%d")
             rand_code = uuid.uuid4().hex[:4].upper()
             self.refund_id = f"RF-{stamp}-{rand_code}"
+        if not self.requested_by_id and self.customer_id:
+            self.requested_by_id = self.customer_id
         super().save(*args, **kwargs)
 
     def __str__(self):
