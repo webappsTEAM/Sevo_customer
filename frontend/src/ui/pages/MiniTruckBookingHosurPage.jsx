@@ -15,6 +15,7 @@ import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx
 import { useAuth } from "../../state/auth/useAuth.js"
 import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { getAddress } from "../../api/geocoding.js"
 
 const LOGISTICS_CITY = "hosur"
 
@@ -412,136 +413,11 @@ const TRUCK_DIAGRAM_BY_SLUG = {
   "pickup-8ft": <Pickup8ftDiagram />,
   "1-7-ton": <OnePointSevenTonDiagram />,
 }
+import { searchPlaces } from "../../services/locationService.js"
 
-/* ── Hosur & Nearby Location Suggestions Database ── */
-const HOSUR_LOCATIONS_DATABASE = [
-  // Hosur Central & Transit Landmarks
-  { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
-  { name: "Hosur Railway Station", subtitle: "Station Road, Hosur", category: "Hosur Central" },
-  { name: "Hosur Flower Market", subtitle: "Bagalur Road, Hosur", category: "Hosur Central" },
-  { name: "Hosur Cattle Farm", subtitle: "Mathigiri, Hosur", category: "Hosur Central" },
-  { name: "Hosur IT Park (ELCOT)", subtitle: "Ring Road, Hosur", category: "Hosur Central" },
-  { name: "Hosur Taluk Office", subtitle: "NH44, Hosur", category: "Hosur Central" },
-  { name: "Hosur Ring Road", subtitle: "Outer Ring Road, Hosur", category: "Hosur Central" },
-  { name: "Harita (Hosur)", subtitle: "TVS Motor Corridor, Hosur", category: "Hosur Area" },
-
-  // Hosur SIPCOT & Industrial Zones
-  { name: "SIPCOT Phase 1", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
-  { name: "SIPCOT Phase 2", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
-  { name: "SIPCOT Phase 3", subtitle: "Zuzuvadi, Hosur", category: "SIPCOT Industrial" },
-  { name: "SIPCOT Phase 4", subtitle: "Moranapalli, Hosur", category: "SIPCOT Industrial" },
-  { name: "Mookandapalli", subtitle: "Industrial Belt, Hosur", category: "Hosur Area" },
-  { name: "Moranapalli", subtitle: "Industrial Hub, Hosur", category: "Hosur Area" },
-  { name: "Ashok Leyland Plant 1 & 2", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
-  { name: "TVS Motor Factory", subtitle: "Harita, Hosur", category: "Hosur Industrial" },
-  { name: "Titan Industries", subtitle: "SIPCOT Phase 1, Hosur", category: "Hosur Industrial" },
-  { name: "Exide Industries", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
-
-  // Hosur Localities & Residential Belts
-  { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Zuzuvadi", subtitle: "Hosur Border, Tamil Nadu", category: "Hosur Area" },
-  { name: "Avalapalli Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Denkanikottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Rayakottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Thally Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Kelamangalam Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Alasanatham", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Dinnur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Kamaraj Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Shanthi Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Nethaji Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Chennathur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Dharga", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Poonapalli", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Bagalur Town", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
-  { name: "Berigai", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
-
-  // Nearby Border & Bengaluru Corridors
-  { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
-  { name: "Attibele Industrial Area", subtitle: "Anekal Taluk (~10 Kms)", category: "Near Hosur" },
-  { name: "Anekal Town", subtitle: "Karnataka (~18 Kms)", category: "Near Hosur" },
-  { name: "Chandapura Circle", subtitle: "Bengaluru Highway (~18 Kms)", category: "Bengaluru Hub" },
-  { name: "Bommasandra Industrial Area", subtitle: "Bengaluru (~22 Kms)", category: "Bengaluru Hub" },
-  { name: "Hebbagodi", subtitle: "Hosur Road, Bengaluru (~24 Kms)", category: "Bengaluru Hub" },
-  { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
-  { name: "Electronic City Phase 2", subtitle: "Bengaluru (~26 Kms)", category: "Bengaluru Hub" },
-  { name: "Jigani Industrial Area", subtitle: "Bengaluru (~25 Kms)", category: "Bengaluru Hub" },
-  { name: "Sarjapur Road", subtitle: "Bengaluru (~32 Kms)", category: "Bengaluru Hub" },
-  { name: "Silk Board Junction", subtitle: "Bengaluru (~35 Kms)", category: "Bengaluru Hub" },
-  { name: "Koramangala", subtitle: "Bengaluru (~38 Kms)", category: "Bengaluru Hub" },
-  { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
-  { name: "Whitefield", subtitle: "Bengaluru (~42 Kms)", category: "Bengaluru Hub" },
-  { name: "Kempegowda Airport (BLR)", subtitle: "Devanahalli (~75 Kms)", category: "Bengaluru Hub" },
-
-  // Long Distance Hubs from Hosur
-  { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
-  { name: "Krishnagiri Toll Plaza", subtitle: "NH44, Tamil Nadu", category: "Intercity Route" },
-  { name: "Dharmapuri", subtitle: "Tamil Nadu (85 Kms)", category: "Intercity Route" },
-  { name: "Salem Junction", subtitle: "Tamil Nadu (155 Kms)", category: "Intercity Route" },
-  { name: "Vellore Fort City", subtitle: "Tamil Nadu (140 Kms)", category: "Intercity Route" },
-  { name: "Tiruvannamalai", subtitle: "Tamil Nadu (170 Kms)", category: "Intercity Route" },
-  { name: "Chennai (Koyambedu / Port)", subtitle: "Tamil Nadu (310 Kms)", category: "Intercity Route" },
-  { name: "Coimbatore (Gandhipuram)", subtitle: "Tamil Nadu (310 Kms)", category: "Intercity Route" },
-  { name: "Erode Market", subtitle: "Tamil Nadu (205 Kms)", category: "Intercity Route" },
-  { name: "Tirupur Textile Hub", subtitle: "Tamil Nadu (255 Kms)", category: "Intercity Route" },
-  { name: "Madurai Central", subtitle: "Tamil Nadu (380 Kms)", category: "Intercity Route" }
-]
-
-function filterLocationSuggestions(searchText) {
-  if (!searchText || !searchText.trim()) {
-    // Default popular items when clicking empty field
-    return [
-      { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
-      { name: "SIPCOT Phase 1", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
-      { name: "SIPCOT Phase 2", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
-      { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-      { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-      { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
-      { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
-      { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
-      { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" }
-    ]
-  }
-
-  const query = searchText.trim().toLowerCase()
-  const exactStarts = []
-  const wordStarts = []
-  const containsMatches = []
-
-  HOSUR_LOCATIONS_DATABASE.forEach((item) => {
-    const nameLow = item.name.toLowerCase()
-    const subLow = item.subtitle.toLowerCase()
-    const catLow = item.category.toLowerCase()
-
-    if (nameLow.startsWith(query)) {
-      exactStarts.push(item)
-    } else if (
-      nameLow.split(/[\s,/-]+/).some((w) => w.startsWith(query)) ||
-      subLow.split(/[\s,/-]+/).some((w) => w.startsWith(query))
-    ) {
-      wordStarts.push(item)
-    } else if (
-      nameLow.includes(query) ||
-      subLow.includes(query) ||
-      catLow.includes(query)
-    ) {
-      containsMatches.push(item)
-    }
-  })
-
-  // Deduplicate and return top 9 matches
-  const combined = [...exactStarts, ...wordStarts, ...containsMatches]
-  const seen = new Set()
-  const result = []
-  for (const it of combined) {
-    if (!seen.has(it.name)) {
-      seen.add(it.name)
-      result.push(it)
-    }
-    if (result.length >= 9) break
-  }
-  return result
+async function filterLocationSuggestions(searchText) {
+  if (!searchText || !searchText.trim()) return []
+  return searchPlaces(searchText)
 }
 
 /* ── Mini Truck Booking in Hosur Page ── */
@@ -695,26 +571,8 @@ export function MiniTruckBookingHosurPage() {
       async (position) => {
         const { latitude, longitude } = position.coords
         try {
-          // Attempt reverse geocoding via photon
-          const res = await fetch(`https://photon.komoot.io/reverse?lon=${longitude}&lat=${latitude}`)
-          const data = await res.json()
-          if (data && data.features && data.features.length > 0) {
-            const p = data.features[0].properties
-            const parts = [p.name, p.street, p.suburb || p.district, p.city || p.locality, p.state].filter(Boolean)
-            const uniqueParts = parts.filter((v, i, a) => a.indexOf(v) === i)
-            const formatted = uniqueParts.join(", ")
-            setPickup(formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
-          } else {
-            // Fallback via OpenStreetMap Nominatim
-            const nomRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`)
-            const nomData = await nomRes.json()
-            if (nomData && nomData.display_name) {
-              const parts = nomData.display_name.split(",").slice(0, 3).map((s) => s.trim()).join(", ")
-              setPickup(parts)
-            } else {
-              setPickup(`Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
-            }
-          }
+          const formatted = await getAddress(latitude, longitude)
+          setPickup(formatted || `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`)
           setLocationStatus("Detected")
           setTimeout(() => setLocationStatus(""), 2500)
         } catch (err) {
@@ -731,10 +589,9 @@ export function MiniTruckBookingHosurPage() {
         setIsDetectingLocation(false)
         setLocationStatus("")
         if (error.code === 1) {
-          alert("Location permission was denied. You can enter your pickup address manually.")
+          alert("Location permission was denied. Please enter your pickup address manually.")
         } else {
-          // Fallback location for testing
-          setPickup("Current Location (Sipcot Phase 1, Hosur)")
+          alert("GPS location unavailable. Please enter your pickup address manually.")
         }
       },
       { timeout: 10000, enableHighAccuracy: true }
@@ -745,7 +602,7 @@ export function MiniTruckBookingHosurPage() {
   // hasn't resolved yet, so this page keeps working even if the backend is
   // briefly unreachable. When the fetch succeeds, the backend-sourced
   // truckTiers/truckLanes/serviceAreas below take over.
-  const HARDCODED_DETAILS_BY_SLUG = {
+  const VEHICLE_SUITABILITY_MAP = {
     "3-wheeler": {
       suitableFor: [
         "Groceries & provisions",
@@ -799,67 +656,6 @@ export function MiniTruckBookingHosurPage() {
     }
   }
 
-  const STATIC_LIGHT_VEHICLES = [
-    {
-      id: "3-wheeler", name: "3 Wheeler", capacity: "500kg", price: "₹160",
-      diagram: <ThreeWheelerDiagram />,
-      details: {
-        name: "3 Wheeler", capacity: "500 kg capacity",
-        suitableFor: HARDCODED_DETAILS_BY_SLUG["3-wheeler"].suitableFor,
-        bestFor: HARDCODED_DETAILS_BY_SLUG["3-wheeler"].bestFor,
-      }
-    },
-    {
-      id: "tata-ace", name: "Tata Ace", capacity: "750kg", price: "₹205",
-      diagram: <TataAceDiagram />,
-      details: {
-        name: "Tata Ace", capacity: "750 kg capacity",
-        suitableFor: HARDCODED_DETAILS_BY_SLUG["tata-ace"].suitableFor,
-        bestFor: HARDCODED_DETAILS_BY_SLUG["tata-ace"].bestFor,
-      }
-    }
-  ]
-
-  const STATIC_HEAVY_VEHICLES = [
-    {
-      id: "pickup-8ft", name: "Pickup 8ft", capacity: "1250 kg", price: "₹300",
-      diagram: <Pickup8ftDiagram />,
-      details: {
-        name: "Pickup 8ft", capacity: "1250 kg capacity",
-        suitableFor: HARDCODED_DETAILS_BY_SLUG["pickup-8ft"].suitableFor,
-        bestFor: HARDCODED_DETAILS_BY_SLUG["pickup-8ft"].bestFor,
-      }
-    },
-    {
-      id: "1-7-ton", name: "1.7 ton", capacity: "1700 kg", price: "₹380",
-      diagram: <OnePointSevenTonDiagram />,
-      details: {
-        name: "1.7 Ton", capacity: "1700 kg capacity",
-        suitableFor: HARDCODED_DETAILS_BY_SLUG["1-7-ton"].suitableFor,
-        bestFor: HARDCODED_DETAILS_BY_SLUG["1-7-ton"].bestFor,
-      }
-    }
-  ]
-
-  const STATIC_LONG_DISTANCE_ROUTES = [
-    { to: "Bengaluru", distance: "40 Kms", fare: "₹900", time: "~1.5 hrs" },
-    { to: "Krishnagiri", distance: "55 Kms", fare: "₹1200", time: "~1.2 hrs" },
-    { to: "Salem", distance: "155 Kms", fare: "₹3000", time: "~3.5 hrs" },
-    { to: "Chennai", distance: "310 Kms", fare: "₹6200", time: "~6.5 hrs" },
-    { to: "Coimbatore", distance: "310 Kms", fare: "₹6000", time: "~6.0 hrs" },
-    { to: "Dharmapuri", distance: "85 Kms", fare: "₹1800", time: "~2.0 hrs" },
-    { to: "Vellore", distance: "140 Kms", fare: "₹2800", time: "~3.0 hrs" },
-    { to: "Tiruvannamalai", distance: "170 Kms", fare: "₹3400", time: "~3.8 hrs" },
-    { to: "Madurai", distance: "380 Kms", fare: "₹7500", time: "~7.5 hrs" },
-  ]
-
-  const STATIC_HOSUR_AREAS = [
-    "Sipcot Phase 1", "Sipcot Phase 2", "Bagalur Road", "Mathigiri",
-    "Zuzuvadi", "Avalapalli", "Moranapalli", "Mookandapalli",
-    "Denkanikottai Road", "Rayakottai Road", "Thally Road", "Alasanatham",
-    "Railway Station Area", "Dinnur", "Kelamangalam Road", "Kamaraj Nagar"
-  ]
-
   // Adapt backend ServiceTier rows to the { id, name, capacity, price,
   // diagram, details } shape the rest of this page already renders.
   function tierToVehicle(tier) {
@@ -872,30 +668,25 @@ export function MiniTruckBookingHosurPage() {
       details: {
         name: tier.name,
         capacity: `${tier.capacity_label} capacity`,
-        suitableFor: HARDCODED_DETAILS_BY_SLUG[tier.slug]?.suitableFor || [],
-        bestFor: HARDCODED_DETAILS_BY_SLUG[tier.slug]?.bestFor || tier.description,
+        suitableFor: VEHICLE_SUITABILITY_MAP[tier.slug]?.suitableFor || [],
+        bestFor: VEHICLE_SUITABILITY_MAP[tier.slug]?.bestFor || tier.description,
       },
       _tierId: tier.id,
     }
   }
 
-  const backendLight = truckTiers.filter((t) => t.weight_class === "light").map(tierToVehicle)
-  const backendHeavy = truckTiers.filter((t) => t.weight_class === "heavy").map(tierToVehicle)
+  const LIGHT_VEHICLES = truckTiers.filter((t) => t.weight_class === "light").map(tierToVehicle)
+  const HEAVY_VEHICLES = truckTiers.filter((t) => t.weight_class === "heavy").map(tierToVehicle)
 
-  const LIGHT_VEHICLES = backendLight.length ? backendLight : STATIC_LIGHT_VEHICLES
-  const HEAVY_VEHICLES = backendHeavy.length ? backendHeavy : STATIC_HEAVY_VEHICLES
+  const LONG_DISTANCE_ROUTES = truckLanes.map((lane) => ({
+    to: lane.destination_label,
+    distance: lane.distance_km ? `${Number(lane.distance_km)} Kms` : "",
+    fare: `₹${Number(lane.fare).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+    time: lane.eta_label,
+    _laneId: lane.id,
+  }))
 
-  const LONG_DISTANCE_ROUTES = truckLanes.length
-    ? truckLanes.map((lane) => ({
-        to: lane.destination_label,
-        distance: lane.distance_km ? `${Number(lane.distance_km)} Kms` : "",
-        fare: `₹${Number(lane.fare).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
-        time: lane.eta_label,
-        _laneId: lane.id,
-      }))
-    : STATIC_LONG_DISTANCE_ROUTES
-
-  const HOSUR_AREAS = serviceAreas.length ? serviceAreas.map((a) => a.name) : STATIC_HOSUR_AREAS
+  const HOSUR_AREAS = serviceAreas.map((a) => a.name)
 
   // FAQs
   const FAQS = [
@@ -1748,7 +1539,7 @@ export function MiniTruckBookingHosurPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Drop:</span>
-                <span className="font-bold text-slate-800">{drop || (selectedRoute ? selectedRoute.to : "Bengaluru, Karnataka")}</span>
+                <span className="font-bold text-slate-800">{drop || (selectedRoute ? selectedRoute.to : "Not specified")}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Customer:</span>
@@ -1834,7 +1625,7 @@ export function MiniTruckBookingHosurPage() {
                 <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "—"}</p>
-                  <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? `${selectedRoute.to}, Tamil Nadu` : "Bengaluru, Karnataka")}</p>
+                  <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Not specified")}</p>
                 </div>
                 <button
                   onClick={() => setVehicleSelectorOpen(false)}

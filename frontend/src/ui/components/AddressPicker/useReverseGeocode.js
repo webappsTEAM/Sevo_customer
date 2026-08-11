@@ -39,35 +39,95 @@ export function useReverseGeocode(coords) {
     try {
       let resolvedData = null
 
-      // Try backend endpoint first
-      try {
-        const res = await apiRequest("/customer/addresses/reverse-geocode/", {
-          method: "POST",
-          json: { latitude: lat, longitude: lng },
-          signal,
-        })
-        if (res?.success && res.data) {
-          resolvedData = res.data
-        }
-      } catch (e) { }
+      const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
-      // Direct OpenStreetMap Nominatim fallback if backend didn't return data
-      if (!resolvedData && !signal.aborted) {
+      // 1. Direct Google Maps Geocoding API (highest accuracy when API key is provided)
+      if (googleApiKey && !signal.aborted) {
         try {
-          const nomRes = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`,
+          const gRes = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${googleApiKey}`,
             { signal }
           )
-          const nomData = await nomRes.json()
-          if (nomData && nomData.address) {
-            const a = nomData.address
-            const formatted = nomData.display_name || [a.road || a.suburb || a.neighbourhood, a.city || a.town || a.village, a.state, a.postcode].filter(Boolean).join(", ")
+          const gData = await gRes.json()
+          if (gData.status === "OK" && gData.results && gData.results.length > 0) {
+            const first = gData.results[0]
+            const comps = first.address_components || []
+
+            let streetNumber = ""
+            let route = ""
+            let sublocality = ""
+            let locality = ""
+            let city = ""
+            let state = ""
+            let pincode = ""
+            let country = ""
+
+            for (const c of comps) {
+              const types = c.types || []
+              if (types.includes("street_number")) streetNumber = c.long_name
+              if (types.includes("route")) route = c.long_name
+              if (types.includes("sublocality") || types.includes("sublocality_level_1")) sublocality = c.long_name
+              if (types.includes("locality")) city = c.long_name
+              if (types.includes("administrative_area_level_1")) state = c.long_name
+              if (types.includes("postal_code")) pincode = c.long_name
+              if (types.includes("country")) country = c.long_name
+            }
+
+            const cleanLoc = [streetNumber, route, sublocality].filter(Boolean).join(", ") || sublocality || route
+            
             resolvedData = {
-              formatted_address: formatted,
-              locality: a.suburb || a.neighbourhood || a.road || "",
-              city: a.city || a.town || a.village || "Bengaluru",
-              state: a.state || "Karnataka",
-              pincode: a.postcode || "",
+              formatted_address: first.formatted_address,
+              locality: cleanLoc || sublocality || "Current Location",
+              city: city || "",
+              state: state || "",
+              pincode: pincode || "",
+              country: country || "India",
+              latitude: lat,
+              longitude: lng,
+            }
+          }
+        } catch (e) { }
+      }
+
+      // 2. Try backend endpoint fallback
+      if (!resolvedData && !signal.aborted) {
+        try {
+          const res = await apiRequest("/customer/addresses/reverse-geocode/", {
+            method: "POST",
+            json: { latitude: lat, longitude: lng },
+            signal,
+          })
+          if (res?.success && res.data) {
+            resolvedData = res.data
+          }
+        } catch (e) { }
+      }
+
+      // 3. Direct Google Maps Geocoding API fallback (retry with full parsing)
+      if (!resolvedData && !signal.aborted && googleApiKey) {
+        try {
+          const gRes = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${googleApiKey}`,
+            { signal }
+          )
+          const gData = await gRes.json()
+          if (gData.status === "OK" && gData.results && gData.results.length > 0) {
+            const first = gData.results[0]
+            const comps = first.address_components || []
+            let city = "", state = "", pincode = "", sublocality = ""
+            for (const c of comps) {
+              const types = c.types || []
+              if (types.includes("sublocality") || types.includes("sublocality_level_1")) sublocality = c.long_name
+              if (types.includes("locality")) city = c.long_name
+              if (types.includes("administrative_area_level_1")) state = c.long_name
+              if (types.includes("postal_code")) pincode = c.long_name
+            }
+            resolvedData = {
+              formatted_address: first.formatted_address,
+              locality: sublocality || first.formatted_address.split(",")[0] || "Current Location",
+              city: city || "",
+              state: state || "",
+              pincode: pincode || "",
               latitude: lat,
               longitude: lng,
             }
@@ -83,8 +143,8 @@ export function useReverseGeocode(coords) {
         setAddress({
           formatted_address: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
           locality: `Current GPS Location`,
-          city: "Bengaluru",
-          state: "Karnataka",
+          city: "",
+          state: "",
           pincode: "",
           latitude: lat,
           longitude: lng,
@@ -95,8 +155,8 @@ export function useReverseGeocode(coords) {
       setAddress({
         formatted_address: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
         locality: "Current GPS Location",
-        city: "Bengaluru",
-        state: "Karnataka",
+        city: "",
+        state: "",
         pincode: "",
         latitude: lat,
         longitude: lng,

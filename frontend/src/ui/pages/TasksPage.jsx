@@ -2317,8 +2317,8 @@ const TaskCard = memo(({ task, onAction, busy, tasks }) => {
                             scrollWheelZoom={false}
                           >
                             <TileLayer
-                              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                              attribution="&copy; <a href=&quot;https://www.openstreetmap.org/copyright&quot;>OpenStreetMap</a> contributors"
+                              url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+                              attribution="&copy; Google Maps"
                             />
 
                             {/* Automatic bounds fitter for the mini-map to show both employee and client */}
@@ -4476,8 +4476,8 @@ function AssignTaskPanel({ employees, jobSites, availableEmployees, onAssigned, 
                     : null
                 } />
                 <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution="© OpenStreetMap"
+                  url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+                  attribution="&copy; Google Maps"
                 />
 
                 {/* 🔴 Client Pin */}

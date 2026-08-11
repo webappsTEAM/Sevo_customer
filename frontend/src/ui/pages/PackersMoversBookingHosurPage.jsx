@@ -202,97 +202,11 @@ const PACKERS_DIAGRAM_BY_SLUG = {
   "villa-office-relocation": <ThreeBhkVillaDiagram />,
 }
 
-const LOCATIONS_DATABASE = {
-  "HOSUR": [
-    { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
-    { name: "SIPCOT Phase 1", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
-    { name: "SIPCOT Phase 2", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
-    { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-    { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-    { name: "Avalapalli Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-    { name: "Zuzuvadi", subtitle: "Hosur Border, Tamil Nadu", category: "Hosur Area" },
-    { name: "Mookandapalli", subtitle: "Industrial Belt, Hosur", category: "Hosur Area" },
-    { name: "Moranapalli", subtitle: "Industrial Hub, Hosur", category: "Hosur Area" },
-    { name: "Denkanikottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-    { name: "Rayakottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-    { name: "Thally Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-    { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
-    { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
-    { name: "Electronic City Phase 2", subtitle: "Bengaluru (~26 Kms)", category: "Bengaluru Hub" },
-    { name: "Whitefield", subtitle: "Bengaluru (~42 Kms)", category: "Bengaluru Hub" },
-    { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
-    { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
-    { name: "Chennai (Koyambedu / Port)", subtitle: "Tamil Nadu (310 Kms)", category: "Intercity Route" },
-    { name: "Coimbatore (Gandhipuram)", subtitle: "Tamil Nadu (310 Kms)", category: "Intercity Route" }
-  ],
-  "BENGALURU": [
-    { name: "Koramangala", subtitle: "Bengaluru, Karnataka", category: "Bengaluru Central" },
-    { name: "Indiranagar", subtitle: "Bengaluru, Karnataka", category: "Bengaluru Central" },
-    { name: "Whitefield", subtitle: "Bengaluru, Karnataka", category: "Bengaluru IT Hub" },
-    { name: "Electronic City", subtitle: "Bengaluru, Karnataka", category: "Bengaluru IT Hub" },
-    { name: "HSR Layout", subtitle: "Bengaluru, Karnataka", category: "Bengaluru Central" },
-    { name: "Marathahalli", subtitle: "Bengaluru, Karnataka", category: "Bengaluru IT Hub" },
-    { name: "Jayanagar", subtitle: "Bengaluru, Karnataka", category: "Bengaluru South" },
-    { name: "JP Nagar", subtitle: "Bengaluru, Karnataka", category: "Bengaluru South" },
-    { name: "Bellandur", subtitle: "Bengaluru, Karnataka", category: "Bengaluru IT Hub" },
-    { name: "BTM Layout", subtitle: "Bengaluru, Karnataka", category: "Bengaluru South" },
-    { name: "Majestic", subtitle: "Bengaluru, Karnataka", category: "Bengaluru Central" },
-    { name: "Hosur (SIPCOT)", subtitle: "Tamil Nadu (~40 Kms)", category: "Intercity Route" }
-  ],
-  "CHENNAI": [
-    { name: "Anna Nagar", subtitle: "Chennai, Tamil Nadu", category: "Chennai Central" },
-    { name: "T Nagar", subtitle: "Chennai, Tamil Nadu", category: "Chennai Central" },
-    { name: "Velachery", subtitle: "Chennai, Tamil Nadu", category: "Chennai South" },
-    { name: "Adyar", subtitle: "Chennai, Tamil Nadu", category: "Chennai South" },
-    { name: "Tambaram", subtitle: "Chennai, Tamil Nadu", category: "Chennai South" },
-    { name: "OMR (Old Mahabalipuram Road)", subtitle: "Chennai, Tamil Nadu", category: "Chennai IT Corridor" },
-    { name: "Guindy", subtitle: "Chennai, Tamil Nadu", category: "Chennai Central" },
-    { name: "Porur", subtitle: "Chennai, Tamil Nadu", category: "Chennai West" },
-    { name: "Thiruvanmiyur", subtitle: "Chennai, Tamil Nadu", category: "Chennai South" },
-    { name: "Chromepet", subtitle: "Chennai, Tamil Nadu", category: "Chennai South" },
-    { name: "Koyambedu", subtitle: "Chennai, Tamil Nadu", category: "Chennai Central" }
-  ]
-}
+import { searchPlaces } from "../../services/locationService.js"
 
-function filterLocationSuggestions(searchText, city = "HOSUR") {
-  const cityLocations = LOCATIONS_DATABASE[city] || LOCATIONS_DATABASE["HOSUR"]
-  
-  if (!searchText || !searchText.trim()) {
-    return cityLocations.slice(0, 8)
-  }
-
-  const query = searchText.trim().toLowerCase()
-  const exactStarts = []
-  const wordStarts = []
-  const containsMatches = []
-
-  cityLocations.forEach((item) => {
-    const nameLow = item.name.toLowerCase()
-    const subLow = item.subtitle.toLowerCase()
-
-    if (nameLow.startsWith(query)) {
-      exactStarts.push(item)
-    } else if (
-      nameLow.split(/[\s,/-]+/).some((w) => w.startsWith(query)) ||
-      subLow.split(/[\s,/-]+/).some((w) => w.startsWith(query))
-    ) {
-      wordStarts.push(item)
-    } else if (nameLow.includes(query) || subLow.includes(query)) {
-      containsMatches.push(item)
-    }
-  })
-
-  const combined = [...exactStarts, ...wordStarts, ...containsMatches]
-  const seen = new Set()
-  const result = []
-  for (const it of combined) {
-    if (!seen.has(it.name)) {
-      seen.add(it.name)
-      result.push(it)
-    }
-    if (result.length >= 9) break
-  }
-  return result
+async function filterLocationSuggestions(searchText) {
+  if (!searchText || !searchText.trim()) return []
+  return searchPlaces(searchText)
 }
 
 /* ── Comprehensive Inventory Data ── */
@@ -662,66 +576,11 @@ export function PackersMoversBookingHosurPage() {
       (error) => {
         setIsDetectingLocation(false)
         setLocationStatus("")
-        setPickup("Current Location (Sipcot Phase 1, Hosur)")
+        alert("GPS location unavailable. Please enter your pickup address manually.")
       },
       { timeout: 10000, enableHighAccuracy: true }
     )
   }
-
-  // Static fallback — used only if the /api/logistics/ fetch above fails or
-  // hasn't resolved yet, so this page keeps working even if the backend is
-  // briefly unreachable.
-  const STATIC_PACKERS_PACKAGES = [
-    {
-      id: "packers_1bhk", name: "1 RK / 1 BHK Shifting", capacity: "Up to 750 kg", price: "₹1,499",
-      diagram: <OneBhkDiagram />,
-      details: {
-        name: "1 RK / 1 BHK Complete Relocation",
-        capacity: "Bed, mattress, wardrobe, 10-15 cartons, TV & basic kitchenware",
-        crew: "2 Professional Packers + Dedicated Closed Mini Truck",
-        materials: "Bubble wrap, corrugated boxes, stretch film & tape included",
-        baseFare: "₹1,499 (Includes packing, loading, transport within 10 km)"
-      }
-    },
-    {
-      id: "packers_2bhk", name: "2 BHK / 3 BHK Shifting", capacity: "Up to 1,800 kg", price: "₹2,999",
-      diagram: <TwoBhkDiagram />,
-      details: {
-        name: "2 BHK / 3 BHK Full Home Relocation",
-        capacity: "Sofa set, dining table, fridge, washing machine, 2 beds & 25+ boxes",
-        crew: "4 Experienced Movers & Packers + 14ft Covered Container Truck",
-        materials: "Multi-layer bubble wrapping, furniture blankets & heavy-duty cartons",
-        baseFare: "₹2,999 (Includes packing, dismantling, loading, transit & unloading)"
-      }
-    },
-    {
-      id: "packers_villa", name: "Villa / Office Relocation", capacity: "Custom Load", price: "₹4,499",
-      diagram: <ThreeBhkVillaDiagram />,
-      details: {
-        name: "Villa & Commercial Office Relocation",
-        capacity: "Large residential villas, corporate workstations, IT server equipment & machinery",
-        crew: "Dedicated Relocation Manager + 6 Crew Members + Multiple Fleet",
-        materials: "Wooden crating for fragile items, anti-static packing & transit insurance",
-        baseFare: "₹4,499 (Tailored comprehensive shifting package)"
-      }
-    }
-  ]
-
-  const STATIC_HOSUR_AREAS = [
-    "Sipcot Phase 1", "Sipcot Phase 2", "Bagalur Road", "Mathigiri",
-    "Zuzuvadi", "Avalapalli", "Moranapalli", "Mookandapalli",
-    "Denkanikottai Road", "Rayakottai Road", "Thally Road", "Alasanatham",
-    "Railway Station Area", "Dinnur", "Kelamangalam Road", "Kamaraj Nagar"
-  ]
-
-  const STATIC_POPULAR_ROUTES = [
-    { to: "Electronic City Phase 1 & 2", distance: "28 km", time: "Same Day", fare: "₹2,800" },
-    { to: "Whitefield / Bengaluru Hub", distance: "42 km", time: "Same Day", fare: "₹3,500" },
-    { to: "Bengaluru Central (Majestic)", distance: "40 km", time: "Same Day", fare: "₹3,200" },
-    { to: "Krishnagiri Town", distance: "55 km", time: "Same Day", fare: "₹4,200" },
-    { to: "Salem Junction", distance: "155 km", time: "1-2 Days", fare: "₹8,500" },
-    { to: "Chennai (Koyambedu / Port)", distance: "310 km", time: "1-2 Days", fare: "₹14,500" }
-  ]
 
   // Adapt backend ServiceTier rows to the { id, name, capacity, price,
   // diagram, details } shape the rest of this page already renders.
@@ -743,19 +602,17 @@ export function PackersMoversBookingHosurPage() {
     }
   }
 
-  const PACKERS_PACKAGES = fetchedTiers.length ? fetchedTiers.map(tierToPackage) : STATIC_PACKERS_PACKAGES
+  const PACKERS_PACKAGES = fetchedTiers.map(tierToPackage)
 
-  const HOSUR_AREAS = serviceAreas.length ? serviceAreas.map((a) => a.name) : STATIC_HOSUR_AREAS
+  const HOSUR_AREAS = serviceAreas.map((a) => a.name)
 
-  const POPULAR_ROUTES = fetchedLanes.length
-    ? fetchedLanes.map((lane) => ({
-        to: lane.destination_label,
-        distance: lane.distance_km ? `${Number(lane.distance_km)} km` : "",
-        fare: `₹${Number(lane.fare).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
-        time: lane.eta_label,
-        _laneId: lane.id,
-      }))
-    : STATIC_POPULAR_ROUTES
+  const POPULAR_ROUTES = fetchedLanes.map((lane) => ({
+    to: lane.destination_label,
+    distance: lane.distance_km ? `${Number(lane.distance_km)} km` : "",
+    fare: `₹${Number(lane.fare).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+    time: lane.eta_label,
+    _laneId: lane.id,
+  }))
 
   // FAQs
   const FAQS = [
@@ -1064,7 +921,7 @@ export function PackersMoversBookingHosurPage() {
                                 <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#FF425C] bg-white"></div>
                                 <input
                                   type="text"
-                                  placeholder={selectedCity === "BENGALURU" ? "Koramangala, Bengaluru, Karnataka" : selectedCity === "CHENNAI" ? "Anna Nagar, Chennai, Tamil Nadu" : "Hosur Bus Stand, Central Hosur"}
+                                  placeholder="Enter pickup address or landmark..."
                                   value={pickup}
                                   onFocus={() => { setShowPickupSuggestions(true); setShowDropSuggestions(false); }}
                                   onChange={(e) => { setPickup(e.target.value); setShowPickupSuggestions(true); }}
@@ -1097,7 +954,7 @@ export function PackersMoversBookingHosurPage() {
                                 <div className="absolute -left-[30px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-[2.5px] border-[#0B8860] bg-white"></div>
                                 <input
                                   type="text"
-                                  placeholder={selectedCity === "BENGALURU" ? "Indiranagar, Bengaluru, Karnataka" : selectedCity === "CHENNAI" ? "T Nagar, Chennai, Tamil Nadu" : "SIPCOT Phase 1, Industrial Area, Hosur"}
+                                  placeholder="Enter drop address or landmark..."
                                   value={drop}
                                   onFocus={() => { setShowDropSuggestions(true); setShowPickupSuggestions(false); }}
                                   onChange={(e) => { setDrop(e.target.value); setShowDropSuggestions(true); }}

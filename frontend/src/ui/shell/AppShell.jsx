@@ -583,7 +583,7 @@ export function AppShell() {
               <div className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-blue-600 dark:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
                 {user.avatar_url ? (
                   <img
-                    src={user.avatar_url.includes("demo.localhost") ? "http://localhost:8000" + user.avatar_url.substring(user.avatar_url.indexOf('/media/')) : user.avatar_url}
+                    src={user.avatar_url.includes("demo.localhost") ? `${window.location.origin}${user.avatar_url.substring(user.avatar_url.indexOf('/media/'))}` : user.avatar_url}
                     alt="avatar"
                     className="w-full h-full object-cover rounded-xl"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}

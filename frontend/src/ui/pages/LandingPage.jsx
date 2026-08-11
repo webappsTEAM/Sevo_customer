@@ -17,6 +17,7 @@ import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { apiUpdateCustomerLastLocation } from "../../api/authService.js"
+import { getAddress } from "../../api/geocoding.js"
 import { motion, AnimatePresence } from "framer-motion"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
@@ -1045,17 +1046,10 @@ export function LandingPage() {
           const lat = parseFloat(pos.coords.latitude.toFixed(6))
           const lng = parseFloat(pos.coords.longitude.toFixed(6))
           try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`)
-            const data = await res.json()
-            if (data && data.address) {
-              const a = data.address
-              const shortLocality = a.suburb || a.neighbourhood || a.road || a.residential || ""
-              const city = a.city || a.town || a.village || "Bengaluru"
-              const display = [shortLocality, city].filter(Boolean).join(", ") || (data.display_name ? data.display_name.split(",").slice(0, 2).join(", ") : "")
-              if (display) {
-                setActiveLocationLabel(display)
-                localStorage.setItem("calservice_user_location", display)
-              }
+            const display = await getAddress(lat, lng)
+            if (display) {
+              setActiveLocationLabel(display)
+              localStorage.setItem("calservice_user_location", display)
             }
           } catch (e) { }
         },
