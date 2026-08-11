@@ -163,7 +163,7 @@ export function LocationsSettingsPage() {
   }
 
   /* ── Google Maps API key ────────────────────────────────────── */
-  const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? ""
+  const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ""
 
   /* ── Load Google Maps JS SDK (once) ────────────────────────── */
   const autocompleteService = useRef(null)
@@ -198,32 +198,35 @@ export function LocationsSettingsPage() {
       setSearchResults([])
       return
     }
-    /* ── Nominatim Fallback function ───────────────────────────── */
-    const runNominatimFallback = () => {
+    /* ── Google Geocoding Fallback function ───────────────────────── */
+    const runGoogleGeocodingFallback = () => {
       let cancelled = false
       setSearching(true)
       fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(debouncedQuery)}&format=json&limit=8&addressdetails=1`,
-        { headers: { "Accept-Language": "en" } }
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(debouncedQuery)}&key=${GOOGLE_API_KEY}`
       )
         .then((r) => r.json())
         .then((data) => {
           if (cancelled) return
           setSearching(false)
-          setSearchResults(
-            data.map((d) => ({
-              id: d.place_id, placeId: null,
-              name: d.display_name.split(",")[0],
-              secondaryText: d.display_name.split(",").slice(1).join(",").trim(),
-              fullAddress: d.display_name,
-              lat: parseFloat(d.lat), lng: parseFloat(d.lon),
-            }))
-          )
-          setShowDropdown(true)
+          if (data.status === "OK" && data.results) {
+            setSearchResults(
+              data.results.map((d) => ({
+                id: d.place_id, placeId: d.place_id,
+                name: d.formatted_address.split(",")[0],
+                secondaryText: d.formatted_address.split(",").slice(1).join(",").trim(),
+                fullAddress: d.formatted_address,
+                lat: d.geometry.location.lat, lng: d.geometry.location.lng,
+              }))
+            )
+            setShowDropdown(true)
+          } else {
+            setSearchResults([])
+          }
         })
         .catch((err) => {
           if (cancelled) return
-          console.error("Nominatim search error:", err)
+          console.error("Google Geocoding search error:", err)
           setSearching(false)
           setSearchResults([])
         })
@@ -239,8 +242,8 @@ export function LocationsSettingsPage() {
           },
           (predictions, status) => {
             if (status !== window.google.maps.places.PlacesServiceStatus.OK || !predictions) {
-              console.warn("Google Places failed (Status:", status, ") — Using Nominatim fallback")
-              runNominatimFallback()
+              console.warn("Google Places failed (Status:", status, ") — Using Google Geocoding fallback")
+              runGoogleGeocodingFallback()
               return
             }
             setSearching(false)
@@ -260,13 +263,13 @@ export function LocationsSettingsPage() {
         )
       } catch (err) {
         console.error("Autocomplete error:", err)
-        runNominatimFallback()
+        runGoogleGeocodingFallback()
       }
       return
     }
 
-    /* ── If no Google key, run Nominatim directly ──────────────── */
-    return runNominatimFallback()
+    /* ── Run Google Geocoding fallback ──────────────────────────── */
+    return runGoogleGeocodingFallback()
   }, [debouncedQuery])
 
   /* ── Close dropdown on outside click ───────────────────────── */

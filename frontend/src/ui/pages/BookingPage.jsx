@@ -29,6 +29,7 @@ import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
+import { getAddress } from "../../api/geocoding.js";
 
 let BOOKING_CURRENCY_SYMBOL = "₹";
 
@@ -353,17 +354,32 @@ function SavedAddressesModal({
   currentAddress,
   onAddNewAddress
 }) {
-  const [addresses, setAddresses] = useState([
-    { id: "addr-1", title: "Home", text: "fff, Banaswadi, Bengaluru, Karnataka, India" },
-    { id: "addr-2", title: "Home", text: "5, Poonahally, Tamil Nadu, India" },
-    { id: "addr-3", title: "65yu6", text: "t6ytt, Jayamahal Main Rd, Nandi Durga Road Extension, Jayamahal, Bengaluru, Karnataka 560046, India" },
-    { id: "addr-4", title: "Home", text: "12, Bangalore Cantonment Railway Station, Cantonment Railway Quarters, Shivaji Nagar, Bengaluru, Karnataka, India" }
-  ])
+  const [addresses, setAddresses] = useState([])
+  const [selectedId, setSelectedId] = useState(null)
 
-  const [selectedId, setSelectedId] = useState(() => {
-    const found = addresses.find(a => a.text === currentAddress)
-    return found ? found.id : addresses[0].id
-  })
+  useEffect(() => {
+    async function loadSavedAddresses() {
+      try {
+        const res = await apiRequest("/customer/addresses/")
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const list = res.data.map(a => ({
+            id: String(a.id),
+            title: a.label || a.address_type || "Saved Address",
+            text: a.formatted_address || [a.locality, a.city, a.state].filter(Boolean).join(", ")
+          }))
+          setAddresses(list)
+          const found = list.find(a => a.text === currentAddress)
+          setSelectedId(found ? found.id : list[0].id)
+        } else {
+          setAddresses([])
+        }
+      } catch (err) {
+        console.warn("Failed to fetch saved addresses:", err)
+        setAddresses([])
+      }
+    }
+    loadSavedAddresses()
+  }, [currentAddress])
 
   const [menuOpenId, setMenuOpenId] = useState(null)
 
@@ -522,7 +538,21 @@ export function AddAddressSearchModal({
     loadSaved()
   }, [])
 
-  // Debounced geocoding search
+  // Helper: save a location selection to recents in localStorage
+  const saveToRecents = (title, details) => {
+    try {
+      const existing = JSON.parse(localStorage.getItem("calservices_recent_locations") || "[]")
+      const newEntry = { title, details }
+      // Remove duplicates, add to front, keep max 10
+      const filtered = existing.filter(e => e.details !== details)
+      const updated = [newEntry, ...filtered].slice(0, 10)
+      localStorage.setItem("calservices_recent_locations", JSON.stringify(updated))
+      setRecents(updated)
+    } catch (e) {}
+  }
+
+  // Debounced geocoding search via Google Places Autocomplete
+  const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY
   useEffect(() => {
     if (!query || query.length < 3) {
       setSearchResults([])
@@ -532,20 +562,33 @@ export function AddAddressSearchModal({
     setIsSearching(true)
     const delayDebounce = setTimeout(async () => {
       try {
-        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`)
-        const data = await res.json()
-        if (data && data.features) {
-          const formatted = data.features.map(f => {
-            const p = f.properties
-            const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ")
-            return {
-              title: p.name || display.split(',')[0],
-              details: display,
-              lat: f.geometry.coordinates[1],
-              lon: f.geometry.coordinates[0]
-            }
-          })
-          setSearchResults(formatted)
+        if (googleApiKey) {
+          // Use Google Places Autocomplete API
+          const gRes = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${googleApiKey}`
+          )
+          const gData = await gRes.json()
+          if (gData.status === "OK" && gData.results) {
+            const formatted = gData.results.slice(0, 5).map(result => {
+              const comps = result.address_components || []
+              let name = ""
+              for (const c of comps) {
+                if (c.types.includes("sublocality_level_1") || c.types.includes("sublocality") || c.types.includes("locality")) {
+                  name = c.long_name
+                  break
+                }
+              }
+              return {
+                title: name || result.formatted_address.split(",")[0],
+                details: result.formatted_address,
+                lat: result.geometry?.location?.lat,
+                lon: result.geometry?.location?.lng
+              }
+            })
+            setSearchResults(formatted)
+          } else {
+            setSearchResults([])
+          }
         } else {
           setSearchResults([])
         }
@@ -583,12 +626,7 @@ export function AddAddressSearchModal({
 
           if (!readableLocation) {
             try {
-              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`)
-              const data = await res.json()
-              if (data && data.address) {
-                const a = data.address
-                readableLocation = [a.road || a.suburb || a.neighbourhood, a.city || a.town || a.village, a.state].filter(Boolean).join(", ")
-              }
+              readableLocation = await getAddress(lat, lng)
             } catch (e) { }
           }
 
@@ -618,10 +656,17 @@ export function AddAddressSearchModal({
     )
   }
 
-  const recents = [
-    { title: "Banashankari", details: "Bengaluru, Karnataka, India" },
-    { title: "Bangalore Palace", details: "Palace Cross Road, Vasanth Nagar, Bengaluru, Karnataka, India" }
-  ]
+  // Load recent searches from localStorage (no hardcoded locations)
+  const [recents, setRecents] = useState(() => {
+    try {
+      const stored = localStorage.getItem("calservices_recent_locations")
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch (e) {}
+    return []
+  })
 
   return (
     <div className="fixed inset-0 z-[10002] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose}>
@@ -710,7 +755,7 @@ export function AddAddressSearchModal({
                   {searchResults.map((item, idx) => (
                     <div
                       key={idx}
-                      onClick={() => onSelectLocation(item.details)}
+                      onClick={() => { saveToRecents(item.title, item.details); onSelectLocation(item.details) }}
                       className="py-3 flex items-start gap-3 cursor-pointer hover:bg-slate-50 rounded-xl px-2 transition-colors"
                     >
                       <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
@@ -770,34 +815,36 @@ export function AddAddressSearchModal({
                 </div>
               ) : null}
 
-              {/* Recents Section */}
-              <div>
-                <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Recents</h4>
-                <div className="space-y-3">
-                  {recents.map((item, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => onSelectLocation(item.details)}
-                      className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
-                    >
-                      <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
-                        <Clock size={15} />
+              {/* Recents Section — only shown when user has actual recent searches */}
+              {recents.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Recents</h4>
+                  <div className="space-y-3">
+                    {recents.map((item, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => { saveToRecents(item.title, item.details); onSelectLocation(item.details) }}
+                        className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
+                          <Clock size={15} />
+                        </div>
+                        <div>
+                          <span className="text-xs font-black text-slate-900 block group-hover:text-purple-700 transition-colors">
+                            {item.title}
+                          </span>
+                          <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5">
+                            {item.details}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-xs font-black text-slate-900 block group-hover:text-purple-700 transition-colors">
-                          {item.title}
-                        </span>
-                        <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5">
-                          {item.details}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  <button className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
+                    View more
+                  </button>
                 </div>
-                <button className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
-                  View more
-                </button>
-              </div>
+              )}
             </>
           )}
         </div>
@@ -837,7 +884,7 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
   const [isUpdatingAddress, setIsUpdatingAddress] = useState(false)
   const [inlineError, setInlineError] = useState("")
   const [locationPayload, setLocationPayload] = useState(null)
-  const [mapCenter, setMapCenter] = useState(initialCoords ? [initialCoords.lat, initialCoords.lng] : [12.7409, 77.8253]) // Default fallback to Hosur
+  const [mapCenter, setMapCenter] = useState(initialCoords ? [initialCoords.lat, initialCoords.lng] : [12.9716, 77.5946])
   const [searchResults, setSearchResults] = useState([])
   const [mapObj, setMapObj] = useState(null)
   const isTyping = useRef(false)
@@ -845,22 +892,21 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
 
   // Center map on user's current location when modal opens and auto-fill address
   useEffect(() => {
-    if (!initialCoords && navigator.geolocation && mapObj) {
+    if (navigator.geolocation) {
       setIsFetching(true);
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
           setMapCenter([lat, lon]);
-          mapObj.flyTo([lat, lon], 15);
+          if (mapObj) {
+            mapObj.flyTo([lat, lon], 15);
+          }
 
           // Reverse geocode to get live street address immediately
           try {
-            const res = await fetch(`https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}`);
-            const data = await res.json();
-            if (data && data.features && data.features.length > 0) {
-              const p = data.features[0].properties;
-              const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+            const display = await getAddress(lat, lon);
+            if (display) {
               isTyping.current = false;
               setSearch(display);
             }
@@ -871,23 +917,21 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
         },
         (err) => {
           console.error("Geolocation failed", err);
-          setMapCenter([12.7409, 77.8253]);
-          mapObj.flyTo([12.7409, 77.8253], 14);
+          if (initialCoords && mapObj) {
+            setMapCenter([initialCoords.lat, initialCoords.lng]);
+            mapObj.flyTo([initialCoords.lat, initialCoords.lng], 15);
+          }
           setIsFetching(false);
-        }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
-    } else if (mapObj) {
-      if (initialCoords) {
-        setMapCenter([initialCoords.lat, initialCoords.lng]);
-        mapObj.flyTo([initialCoords.lat, initialCoords.lng], 15);
-      } else {
-        setMapCenter([12.7409, 77.8253]);
-        mapObj.flyTo([12.7409, 77.8253], 14);
-      }
+    } else if (initialCoords && mapObj) {
+      setMapCenter([initialCoords.lat, initialCoords.lng]);
+      mapObj.flyTo([initialCoords.lat, initialCoords.lng], 15);
     }
-  }, [mapObj, initialCoords])
+  }, [mapObj])
 
-  // Fetch location suggestions when typing (biased to Hosur coords)
+  // Fetch location suggestions when typing (dynamic search across all locations)
   useEffect(() => {
     if (!search || search.length < 3 || !isTyping.current) {
       if (!search) setSearchResults([])
@@ -897,7 +941,7 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
     setIsSearching(true)
     const delayDebounce = setTimeout(async () => {
       try {
-        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(search)}&limit=5&lon=77.8253&lat=12.7409`);
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(search)}&limit=5`);
         const data = await res.json();
         if (data && data.features) {
           const formatted = data.features.map(f => {
@@ -1075,8 +1119,8 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
                 zoomControl={false}
               >
                 <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; OpenStreetMap'
+                  url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+                  attribution="&copy; Google Maps"
                 />
                 <MapEvents />
               </MapContainer>
@@ -3351,15 +3395,9 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
           if (!line1) {
             try {
-              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en&zoom=18`)
-              const data = await res.json()
-              if (data && data.address) {
-                const a = data.address
-                const parts = [a.building, a.house_number, a.road, a.suburb, a.neighbourhood, a.residential].filter(Boolean)
-                line1 = parts.filter((v, i, a) => a.indexOf(v) === i).join(", ") || (data.display_name ? data.display_name.split(",")[0] : '')
-                city = a.city || a.town || a.village || a.county || city
-                state = a.state || state
-                pincode = a.postcode || pincode
+              const fullAddr = await getAddress(lat, lng)
+              if (fullAddr) {
+                line1 = fullAddr
               }
             } catch (e) {
               console.warn("Reverse geocode warning:", e)
@@ -3725,7 +3763,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 </button>
                               )
                               if (act === "view_invoice") return (
-                                <button key={act} onClick={() => window.open(`http://localhost:8000/api/booking/${b.id}/invoice/`, '_blank')} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <button key={act} onClick={() => window.open(`${API_BASE_URL}/booking/${b.id}/invoice/`, '_blank')} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <FileText size={14} /> Download Invoice
                                 </button>
                               )
@@ -6473,7 +6511,7 @@ function StepWorkflowCheckout({
                   </button>
                 </div>
                 <p className="text-xs font-bold text-slate-800 leading-snug">
-                  {formData.address || "fff, Banaswadi, Bengaluru, Karnataka, India"}
+                  {formData.address || "Select service address"}
                 </p>
               </div>
             </div>

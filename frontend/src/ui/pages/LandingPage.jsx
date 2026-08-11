@@ -17,6 +17,7 @@ import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { apiUpdateCustomerLastLocation } from "../../api/authService.js"
+import { getAddress } from "../../api/geocoding.js"
 import { motion, AnimatePresence } from "framer-motion"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
@@ -1041,32 +1042,26 @@ export function LandingPage() {
   })
 
   useEffect(() => {
-    if (!activeLocationLabel && navigator.geolocation) {
+    if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
+          const lat = parseFloat(pos.coords.latitude.toFixed(6))
+          const lng = parseFloat(pos.coords.longitude.toFixed(6))
           try {
-            const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
-            const data = await res.json();
-            if (data?.features?.[0]?.properties) {
-              const p = data.features[0].properties;
-              const display = [p.name, p.street, p.city, p.state].filter(Boolean).slice(0, 2).join(", ");
-              if (display) {
-                setActiveLocationLabel(display);
-                localStorage.setItem("calservice_user_location", display);
-              }
+            const display = await getAddress(lat, lng)
+            if (display) {
+              setActiveLocationLabel(display)
+              localStorage.setItem("calservice_user_location", display)
             }
-          } catch (e) {
-            setActiveLocationLabel("Hosur, Tamil Nadu");
-          }
+          } catch (e) { }
         },
-        () => {
-          if (!activeLocationLabel) setActiveLocationLabel("Hosur, Tamil Nadu");
-        }
-      );
-    } else if (!activeLocationLabel) {
-      setActiveLocationLabel("Hosur, Tamil Nadu");
+        (err) => {
+          console.warn("Live location detection warning:", err)
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      )
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     if (location.state?.openHomePestModal) setIsHomePestModalOpen(true)

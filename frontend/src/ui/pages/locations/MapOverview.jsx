@@ -697,8 +697,8 @@ export function MapOverview() {
             style={{ width: "100%", height: "100%" }}
           >
             <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+              attribution="&copy; Google Maps"
             />
             <OverviewMarkers locations={filtered} onSelect={setSelected} />
             <Legend />

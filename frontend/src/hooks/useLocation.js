@@ -22,31 +22,31 @@ export function calculateDistance(lat1, lon1, lat2, lon2) {
 export function getPosition(onProgress) {
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
-      resolve({ lat: 13.0827, lon: 80.2707, accuracy: 50 });
+      resolve({ lat: null, lon: null, accuracy: null, error: "Geolocation not supported" });
       return;
     }
-    let watchId = null, best = null
-    const cleanup = () => { if (watchId !== null) navigator.geolocation.clearWatch(watchId) }
+    let watchId = null, best = null;
+    const cleanup = () => { if (watchId !== null) navigator.geolocation.clearWatch(watchId); };
     const timer = setTimeout(() => {
       cleanup();
-      resolve(best || { lat: 13.0827, lon: 80.2707, accuracy: 50 });
-    }, 10000)
+      resolve(best || { lat: null, lon: null, accuracy: null, error: "Geolocation timeout" });
+    }, 10000);
 
     watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const fix = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: Math.round(pos.coords.accuracy) }
-        if (onProgress) onProgress(fix.accuracy)
-        if (!best || fix.accuracy < best.accuracy) best = fix
-        if (fix.accuracy <= TARGET_ACCURACY_M) { clearTimeout(timer); cleanup(); resolve(fix) }
+        const fix = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: Math.round(pos.coords.accuracy) };
+        if (onProgress) onProgress(fix.accuracy);
+        if (!best || fix.accuracy < best.accuracy) best = fix;
+        if (fix.accuracy <= TARGET_ACCURACY_M) { clearTimeout(timer); cleanup(); resolve(fix); }
       },
       (err) => {
         clearTimeout(timer);
         cleanup();
-        resolve(best || { lat: 13.0827, lon: 80.2707, accuracy: 50 });
+        resolve(best || { lat: null, lon: null, accuracy: null, error: err.message || "Geolocation error" });
       },
-      { enableHighAccuracy: false, maximumAge: 30000, timeout: 10000 }
-    )
-  })
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+    );
+  });
 }
 
 export function useLocationTracker(isClockedIn) {

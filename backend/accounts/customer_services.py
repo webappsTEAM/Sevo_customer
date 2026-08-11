@@ -40,6 +40,55 @@ def detect_customer_location(latitude: float, longitude: float, accuracy: float 
         except (ValueError, TypeError):
             pass
 
+    google_api_key = os.environ.get("VITE_GOOGLE_MAPS_KEY") or os.environ.get("GOOGLE_MAPS_API_KEY") or os.environ.get("VITE_GOOGLE_MAPS_API_KEY")
+    if google_api_key:
+        try:
+            g_url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={google_api_key}"
+            req = urllib.request.Request(g_url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                g_data = json.loads(resp.read())
+            
+            if g_data.get("status") == "OK" and g_data.get("results"):
+                first = g_data["results"][0]
+                comps = first.get("address_components", [])
+                
+                sublocality = ""
+                route = ""
+                city = ""
+                state = ""
+                pincode = ""
+                country = ""
+
+                for c in comps:
+                    types = c.get("types", [])
+                    if "sublocality" in types or "sublocality_level_1" in types:
+                        sublocality = c.get("long_name", "")
+                    if "route" in types:
+                        route = c.get("long_name", "")
+                    if "locality" in types:
+                        city = c.get("long_name", "")
+                    if "administrative_area_level_1" in types:
+                        state = c.get("long_name", "")
+                    if "postal_code" in types:
+                        pincode = c.get("long_name", "")
+                    if "country" in types:
+                        country = c.get("long_name", "")
+
+                area = ", ".join(filter(None, [sublocality, route])) or sublocality or route or "Current Location"
+                return {
+                    "latitude": lat,
+                    "longitude": lng,
+                    "accuracy": acc,
+                    "area": area,
+                    "city": city,
+                    "state": state,
+                    "country": country or "India",
+                    "pincode": pincode,
+                    "formatted_address": first.get("formatted_address", ""),
+                }
+        except Exception:
+            pass
+
     try:
         encoded = urllib.parse.urlencode({
             "lat": lat,
