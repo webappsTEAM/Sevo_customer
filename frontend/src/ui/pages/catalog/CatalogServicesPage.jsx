@@ -1,0 +1,956 @@
+import React, { useEffect, useState, useMemo } from "react"
+import {
+  Plus, Edit2, Trash2, ChevronDown, ChevronUp, Search,
+  Truck, Wrench, Wind, Sparkles, Palette, Hammer, Carrot,
+  Layers, Box, Tag, FolderOpen, Zap, Clock, Check,
+  Package as PackageIcon
+} from "lucide-react"
+import { apiRequest } from "../../../api/client.js"
+import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
+import { useToast, ToastBanner } from "./useToast.jsx"
+
+const EMPTY_SERVICE = {
+  name: "",
+  slug: "",
+  category: "",
+  description: "",
+  icon: "",
+  image: "",
+  is_active: true,
+  sort_order: 0
+}
+
+// Minimalist theme mapping for the 6 Core Specialized Pillars + Vegetables
+const CATEGORY_THEMES = {
+  goods_transports: {
+    icon: Truck,
+    bg: "bg-emerald-50/70 border-emerald-100 text-emerald-600",
+    badge: "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+  },
+  electrician_plumbing_carpentry: {
+    icon: Wrench,
+    bg: "bg-blue-50/70 border-blue-100 text-blue-600",
+    badge: "bg-blue-50 text-blue-700 border-blue-200/60"
+  },
+  ac_appliance: {
+    icon: Wind,
+    bg: "bg-sky-50/70 border-sky-100 text-sky-600",
+    badge: "bg-sky-50 text-sky-700 border-sky-200/60"
+  },
+  home_pest_control: {
+    icon: Sparkles,
+    bg: "bg-teal-50/70 border-teal-100 text-teal-600",
+    badge: "bg-teal-50 text-teal-700 border-teal-200/60"
+  },
+  paintings: {
+    icon: Palette,
+    bg: "bg-purple-50/70 border-purple-100 text-purple-600",
+    badge: "bg-purple-50 text-purple-700 border-purple-200/60"
+  },
+  mason: {
+    icon: Hammer,
+    bg: "bg-amber-50/70 border-amber-100 text-amber-600",
+    badge: "bg-amber-50 text-amber-700 border-amber-200/60"
+  },
+  vegetables_groceries: {
+    icon: Carrot,
+    bg: "bg-emerald-50/70 border-emerald-100 text-emerald-600",
+    badge: "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+  }
+}
+
+// Curated packages matching customer portal specifications
+const CURATED_PACKAGES_BY_SLUG = {
+  carpentry: [
+    {
+      id: "carp-lock-1",
+      categoryName: "Lock & Handle",
+      name: "Main Door Lock / Handle Installation",
+      tag: "Essential",
+      tagColor: "bg-blue-50 text-blue-700 border-blue-200/70",
+      price: "₹199",
+      duration: "30 mins",
+      description: "Mortise lock fitting, cylindrical lock replace, latch alignment, key smooth turn check.",
+      includes: ["Lock slot chisel & fit", "Latch strike plate alignment", "Key smooth test"]
+    },
+    {
+      id: "carp-furn-1",
+      categoryName: "Furniture Repair",
+      name: "Bed & Wardrobe Assembly / Repair",
+      tag: "Best Value",
+      tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
+      price: "₹399",
+      duration: "1 hr",
+      description: "Tighten loose joints, replace broken wooden slats, wardrobe door realignment, or new flatpack assembly.",
+      includes: ["Joint tightening & glueing", "Leveling check", "30-day warranty"]
+    },
+    {
+      id: "carp-door-1",
+      categoryName: "Doors & Windows",
+      name: "Cabinet Soft-Close Hinge Fix",
+      tag: "Popular",
+      tagColor: "bg-purple-50 text-purple-700 border-purple-200/70",
+      price: "₹249",
+      duration: "45 mins",
+      description: "Hydraulic soft-close hinge replacement, magnetic catch fitting, drawer channel smooth slide fix.",
+      includes: ["Hinge replacement", "Door gap alignment", "Magnetic catch fit"]
+    },
+    {
+      id: "carp-drill-1",
+      categoryName: "Drill & Hanging",
+      name: "Wall Shelf / TV Bracket Mounting",
+      tag: "Quick Drill",
+      tagColor: "bg-amber-50 text-amber-700 border-amber-200/70",
+      price: "₹249",
+      duration: "30 mins",
+      description: "Laser level drilling, rawl plug anchor insertion, heavy concealed bracket shelf fitting.",
+      includes: ["Laser leveling check", "Concealed bracket fitting", "Weight test"]
+    }
+  ],
+  electrician: [
+    {
+      id: "elec-sw-1",
+      categoryName: "Switches & Sockets",
+      name: "Switch / Socket Replacement",
+      tag: "Quick Fix",
+      tagColor: "bg-blue-50 text-blue-700 border-blue-200/70",
+      price: "₹149",
+      duration: "30 mins",
+      description: "Replacement or new fitting of modular switch, 6A/16A socket, or regulator.",
+      includes: ["Old socket removal & new fit", "Earth voltage verification", "30-day warranty"]
+    },
+    {
+      id: "elec-sw-2",
+      categoryName: "Switches & Sockets",
+      name: "Heavy Appliance Socket (16A/25A)",
+      tag: "Heavy Load",
+      tagColor: "bg-amber-50 text-amber-700 border-amber-200/70",
+      price: "₹249",
+      duration: "45 mins",
+      description: "High-grade 16A power socket installation for AC, Geyser, Washing Machine, or Oven.",
+      includes: ["Heavy wire stripping & terminal clamp", "MCB safety check"]
+    },
+    {
+      id: "elec-sw-3",
+      categoryName: "Switches & Sockets",
+      name: "Bedside Switchboard / 3-Pin Socket Fix",
+      tag: "Daily Fix",
+      tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
+      price: "₹199",
+      duration: "30 mins",
+      description: "Fix loose contact socket, burnt switch plate, or add new extension point.",
+      includes: ["Internal wire tightening", "Insulation sleeve fit", "Voltage load check"]
+    },
+    {
+      id: "elec-fan-1",
+      categoryName: "Fan & Lighting",
+      name: "Ceiling Fan Repair / Fitting",
+      tag: "Best Seller",
+      tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
+      price: "₹249",
+      duration: "45 mins",
+      description: "Ceiling fan installation, downrod assembly, canopy alignment & safety wire hook mounting.",
+      includes: ["New fan mounting & downrod fit", "Safety wire hook installation", "Speed & balance test"]
+    },
+    {
+      id: "elec-fan-2",
+      categoryName: "Fan & Lighting",
+      name: "Fan Regulator / Speed Switch Replacement",
+      tag: "Quick Fix",
+      tagColor: "bg-blue-50 text-blue-700 border-blue-200/70",
+      price: "₹149",
+      duration: "30 mins",
+      description: "Replace burnt or non-working step regulator knob to restore 5-speed fan control.",
+      includes: ["Modular regulator replace", "Terminal insulation check", "5-speed current test"]
+    },
+    {
+      id: "elec-mcb-1",
+      categoryName: "MCB & Wiring",
+      name: "MCB Fuse Breaker Replacement",
+      tag: "Safety Essential",
+      tagColor: "bg-rose-50 text-rose-700 border-rose-200/70",
+      price: "₹399",
+      duration: "45 mins",
+      description: "Single/Double pole MCB replacement to stop frequent tripping & electrical overload.",
+      includes: ["Tripping diagnosis", "Single/Double Pole MCB fit", "Distribution board check"]
+    },
+    {
+      id: "elec-inv-1",
+      categoryName: "Inverter & Heavy Appliance",
+      name: "Inverter & Battery Setup",
+      tag: "Heavy Power",
+      tagColor: "bg-indigo-50 text-indigo-700 border-indigo-200/70",
+      price: "₹499",
+      duration: "1 hr",
+      description: "Inverter wall connection, battery terminal grease, bypass switch setup & load division.",
+      includes: ["Heavy terminal wiring", "Distilled water top-up check", "Automatic switchover test"]
+    }
+  ],
+  plumber: [
+    {
+      id: "plum-tap-1",
+      categoryName: "Taps & Mixers",
+      name: "Tap & Faucet Repair / Fit",
+      tag: "Value",
+      tagColor: "bg-blue-50 text-blue-700 border-blue-200/70",
+      price: "₹149",
+      duration: "30 mins",
+      description: "Fix dripping taps, washer replacement, spindle fix, or install new sink/basin tap.",
+      includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"]
+    },
+    {
+      id: "plum-drain-1",
+      categoryName: "Drainage & Clog",
+      name: "Sink & Drain Pipe Unclogging",
+      tag: "Best Seller",
+      tagColor: "bg-amber-50 text-amber-700 border-amber-200/70",
+      price: "₹349",
+      duration: "45 mins",
+      description: "High-flex spring wire cleaning to clear food debris, grease, and hair clogs in waste pipes.",
+      includes: ["Spring wire clog removal", "Waste pipe trap cleaning", "Full flow test"]
+    },
+    {
+      id: "plum-toilet-1",
+      categoryName: "Toilet & Flush Tank",
+      name: "Flush Tank Syphon & Valve Repair",
+      tag: "Popular",
+      tagColor: "bg-purple-50 text-purple-700 border-purple-200/70",
+      price: "₹499",
+      duration: "1 hr",
+      description: "Fix continuous tank water leakage, syphon kit change, ball valve replacement, or flush button fix.",
+      includes: ["Syphon kit replacement", "Internal float valve fix", "Sanitary seal check"]
+    },
+    {
+      id: "plum-geyser-1",
+      categoryName: "Water Heater & Tank",
+      name: "Geyser Water Heater Installation",
+      tag: "Heavy Fit",
+      tagColor: "bg-indigo-50 text-indigo-700 border-indigo-200/70",
+      price: "₹799",
+      duration: "1.5 hrs",
+      description: "Wall fastener drilling, inlet/outlet braided pipe connection, safety valve fitting.",
+      includes: ["Heavy wall fastener mounting", "Braided pipe connection", "Heating & leak test"]
+    }
+  ],
+  truck: [
+    {
+      id: "trk-1",
+      categoryName: "Light Fleet",
+      name: "3 Wheeler (500kg)",
+      tag: "Light Load",
+      tagColor: "bg-blue-50 text-blue-700 border-blue-200/70",
+      price: "₹160",
+      duration: "15 mins",
+      description: "5ft x 6ft cargo bed, ideal for groceries, small appliances & up to 500kg parcels.",
+      includes: ["Verified driver", "Instant GPS tracking", "Loading assistance"]
+    },
+    {
+      id: "trk-2",
+      categoryName: "Light Fleet",
+      name: "Tata Ace (750kg)",
+      tag: "Best Seller",
+      tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
+      price: "₹205",
+      duration: "20 mins",
+      description: "6ft x 7ft bed, ideal for 1 BHK furniture, refrigerators & business stock up to 750kg.",
+      includes: ["Verified driver", "Tie-down ropes", "Doorstep pickup"]
+    },
+    {
+      id: "trk-3",
+      categoryName: "Heavy Fleet (above 750kg)",
+      name: "Pickup 8ft (1250 kg)",
+      tag: "Heavy Load",
+      tagColor: "bg-amber-50 text-amber-700 border-amber-200/70",
+      price: "₹300",
+      duration: "20 mins",
+      description: "5.5ft x 8ft covered bed, ideal for sofas, double beds & commercial inventory up to 1250kg.",
+      includes: ["Closed container", "Weather protection", "Transit safety"]
+    },
+    {
+      id: "trk-4",
+      categoryName: "Heavy Fleet (above 750kg)",
+      name: "1.7 ton (1700 kg)",
+      tag: "Max Capacity",
+      tagColor: "bg-purple-50 text-purple-700 border-purple-200/70",
+      price: "₹380",
+      duration: "30 mins",
+      description: "6.1ft x 9ft heavy Bolero bed for industrial machinery & large commercial loads up to 1700kg.",
+      includes: ["Heavy payload chassis", "Express transit", "Toll/E-way support"]
+    }
+  ]
+}
+
+export function CatalogServicesPage() {
+  const [categories, setCategories] = useState([])
+  const [services, setServices] = useState([])
+  const [dbPackages, setDbPackages] = useState([])
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState(new Set())
+  const [expandedServiceIds, setExpandedServiceIds] = useState(new Set(["carpentry"]))
+  const [searchQuery, setSearchQuery] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null)
+  const [toast, showToast] = useToast()
+
+  const loadCategories = async () => {
+    try {
+      const res = await apiRequest("/settings/catalog/v2/categories/")
+      if (res.success) setCategories(res.data)
+    } catch {
+      /* handled */
+    }
+  }
+
+  const loadServices = async () => {
+    setLoading(true)
+    try {
+      const [svcRes, pkgRes] = await Promise.all([
+        apiRequest("/settings/catalog/v2/services/"),
+        apiRequest("/settings/catalog/v2/packages/").catch(() => ({ success: false, data: [] }))
+      ])
+      if (svcRes.success) setServices(svcRes.data)
+      if (pkgRes.success) setDbPackages(pkgRes.data)
+    } catch {
+      showToast("Failed to load services", "error")
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadCategories()
+    loadServices()
+  }, [])
+
+  // Toggle category expansion
+  const toggleCategory = (catId) => {
+    setExpandedCategoryIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(catId)) {
+        next.delete(catId)
+      } else {
+        next.add(catId)
+      }
+      return next
+    })
+  }
+
+  // Toggle service packages drawer expansion
+  const toggleServicePackages = (serviceKey) => {
+    setExpandedServiceIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(serviceKey)) {
+        next.delete(serviceKey)
+      } else {
+        next.add(serviceKey)
+      }
+      return next
+    })
+  }
+
+  const expandAll = () => {
+    setExpandedCategoryIds(new Set(categories.map((c) => c.id)))
+  }
+
+  const collapseAll = () => {
+    setExpandedCategoryIds(new Set())
+  }
+
+  // Group services by category & filter out legacy duplicate rows
+  const servicesByCategory = useMemo(() => {
+    const map = {}
+    services.forEach((s) => {
+      const catId = s.category || s.category_id
+      if (!map[catId]) map[catId] = []
+
+      // In Electrician, Plumbing & Carpentry pillar: ensure ONLY Electrician, Plumber, Carpentry are listed
+      const catObj = categories.find((c) => c.id === catId)
+      if (catObj && catObj.slug === "electrician_plumbing_carpentry") {
+        if (["electrical", "plumbing", "carpentry-services"].includes(s.slug)) {
+          return
+        }
+      }
+
+      map[catId].push(s)
+    })
+    return map
+  }, [services, categories])
+
+  // Filtered categories based on search & filter
+  const filteredCategories = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return categories.filter((cat) => {
+      if (categoryFilter && String(cat.id) !== String(categoryFilter)) return false
+      if (!q) return true
+
+      const catMatch =
+        cat.name.toLowerCase().includes(q) || (cat.description && cat.description.toLowerCase().includes(q))
+      const catServices = servicesByCategory[cat.id] || []
+      const serviceMatch = catServices.some(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.slug.toLowerCase().includes(q) ||
+          (s.description && s.description.toLowerCase().includes(q))
+      )
+      return catMatch || serviceMatch
+    })
+  }, [categories, categoryFilter, searchQuery, servicesByCategory])
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    try {
+      const payload = { ...editing }
+      const res = editing.id
+        ? await apiRequest(`/settings/catalog/v2/services/${editing.id}/`, { method: "PUT", json: payload })
+        : await apiRequest("/settings/catalog/v2/services/", { method: "POST", json: payload })
+      if (res.success) {
+        showToast(editing.id ? "Service updated successfully" : "Service created successfully")
+        setEditing(null)
+        loadServices()
+        if (payload.category) {
+          setExpandedCategoryIds((prev) => new Set([...prev, Number(payload.category)]))
+        }
+      } else {
+        showToast(res.message || "Save failed", "error")
+      }
+    } catch {
+      showToast("Save failed", "error")
+    }
+  }
+
+  const handleDelete = async (svc) => {
+    if (!window.confirm(`Delete sub-service "${svc.name}"? This action will remove it from the catalog.`)) return
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/services/${svc.id}/`, { method: "DELETE" })
+      if (res.success) {
+        showToast("Service deleted")
+        loadServices()
+      } else {
+        showToast(res.message || "Delete blocked", "error")
+      }
+    } catch {
+      showToast("Delete failed", "error")
+    }
+  }
+
+  const categoryOptions = [
+    { value: "", label: "All Categories" },
+    ...categories.map((c) => ({ value: String(c.id), label: c.name }))
+  ]
+
+  const getPackagesForService = (svc) => {
+    const curated = CURATED_PACKAGES_BY_SLUG[svc.slug]
+    if (curated && curated.length > 0) return curated
+
+    const dbPkgs = dbPackages.filter((p) => p.service === svc.id || p.service_id === svc.id)
+    if (dbPkgs.length > 0) {
+      return dbPkgs.map((p) => ({
+        id: p.id,
+        categoryName: svc.name,
+        name: p.name,
+        tag: p.tag || (p.popular ? "Popular" : "Standard"),
+        tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
+        price: `₹${p.base_price}`,
+        duration: p.duration || "1 hr",
+        description: p.description,
+        includes: Array.isArray(p.includes) ? p.includes : [],
+        image: p.image || svc.image
+      }))
+    }
+    return []
+  }
+
+  return (
+    <div style={{ animation: "fadeUp 0.3s ease both" }} className="p-4 sm:p-6 max-w-5xl mx-auto font-sans text-slate-800">
+      <ToastBanner toast={toast} />
+
+      {/* ── Top Header Bar ── */}
+      <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200/80 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-medium mb-1.5 border border-emerald-200/60">
+              <Sparkles className="w-3 h-3" /> 6 Core Specialized Pillars + Vegetables
+            </div>
+            <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">
+              Services Catalog
+            </h1>
+            <p className="text-xs text-slate-500 font-normal mt-0.5">
+              Click the down arrow on any category pillar to view and customize its sub-services and packages.
+            </p>
+          </div>
+
+          {/* Add Service Button */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() =>
+                setEditing({
+                  ...EMPTY_SERVICE,
+                  category: categoryFilter || (categories[0]?.id ?? "")
+                })
+              }
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-sm transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" strokeWidth={2} />
+              <span>Add Service</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Search & Filter Bar */}
+        <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex flex-1 items-center gap-2.5 w-full sm:w-auto">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-sm">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search categories or sub-services..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-9 pl-8 pr-3 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-xs font-normal text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 outline-none transition-all"
+              />
+            </div>
+
+            {/* Category Filter */}
+            <div className="w-44 shrink-0 hidden sm:block">
+              <Select
+                options={categoryOptions}
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Expand / Collapse All */}
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <button
+              type="button"
+              onClick={expandAll}
+              className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              Expand All
+            </button>
+            <span className="text-slate-300">|</span>
+            <button
+              type="button"
+              onClick={collapseAll}
+              className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              Collapse All
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Categories Accordion List ── */}
+      {loading ? (
+        <div className="bg-white rounded-2xl p-10 text-center border border-slate-200/80 shadow-sm">
+          <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-600 rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-xs font-medium text-slate-500">Loading catalog pillars &amp; services…</p>
+        </div>
+      ) : filteredCategories.length === 0 ? (
+        <div className="bg-white rounded-2xl p-10 text-center border border-slate-200/80 shadow-sm">
+          <FolderOpen className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+          <h3 className="text-sm font-medium text-slate-800">No categories or services found</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Try refining your search query or category filter.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredCategories.map((cat) => {
+            const isExpanded = expandedCategoryIds.has(cat.id)
+            const catServices = servicesByCategory[cat.id] || []
+            const theme = CATEGORY_THEMES[cat.slug] || {
+              icon: Layers,
+              bg: "bg-slate-50 border-slate-100 text-slate-600",
+              badge: "bg-slate-50 text-slate-700 border-slate-200/60"
+            }
+            const IconComponent = theme.icon
+
+            return (
+              <div
+                key={cat.id}
+                className={`bg-white rounded-xl border transition-all overflow-hidden ${
+                  isExpanded
+                    ? "shadow-sm border-slate-300 ring-1 ring-slate-200/60"
+                    : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                {/* ── Main Category Header Row ── */}
+                <div
+                  onClick={() => toggleCategory(cat.id)}
+                  className="p-3.5 sm:p-4 flex items-center justify-between gap-3.5 cursor-pointer select-none hover:bg-slate-50/60 transition-colors"
+                >
+                  {/* Left Icon & Pillar Info */}
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${theme.bg} shadow-xs`}
+                    >
+                      <IconComponent className="w-5 h-5" strokeWidth={1.8} />
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm sm:text-base font-semibold text-slate-900 tracking-tight truncate">
+                          {cat.name}
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200/50">
+                          {catServices.length} {catServices.length === 1 ? "Sub-service" : "Sub-services"}
+                        </span>
+                        {cat.is_active && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Active Pillar
+                          </span>
+                        )}
+                      </div>
+                      {cat.description && (
+                        <p className="text-xs text-slate-500 font-normal mt-0.5 truncate max-w-xl">
+                          {cat.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Actions & Down Arrow */}
+                  <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditing({
+                          ...EMPTY_SERVICE,
+                          category: String(cat.id)
+                        })
+                      }
+                      className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-emerald-50/80 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Sub-Service</span>
+                    </button>
+
+                    {/* Down Arrow Chevron */}
+                    <button
+                      type="button"
+                      onClick={() => toggleCategory(cat.id)}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+                        isExpanded
+                          ? "bg-slate-100 text-slate-900"
+                          : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Sub-Services Expandable Panel ── */}
+                {isExpanded && (
+                  <div className="border-t border-slate-100 bg-slate-50/40 p-3.5 sm:p-4 space-y-2.5 animate-in fade-in duration-150">
+                    {catServices.length === 0 ? (
+                      <div className="text-center py-6 bg-white rounded-xl border border-dashed border-slate-200 p-4">
+                        <Box className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
+                        <p className="text-xs font-medium text-slate-600">No sub-services configured for {cat.name}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Add sub-services to display them in the customer booking flow.</p>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditing({
+                              ...EMPTY_SERVICE,
+                              category: String(cat.id)
+                            })
+                          }
+                          className="mt-2.5 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" /> Add First Sub-Service
+                        </button>
+                      </div>
+                    ) : (
+                      catServices.map((svc) => {
+                        const packages = getPackagesForService(svc)
+                        const hasPackages = packages.length > 0
+                        const isServiceExpanded = expandedServiceIds.has(svc.slug) || expandedServiceIds.has(String(svc.id))
+
+                        return (
+                          <div
+                            key={svc.id}
+                            className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden transition-all"
+                          >
+                            {/* Sub-Service Header Row */}
+                            <div className="p-3 sm:p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
+                              <div
+                                onClick={() => hasPackages && toggleServicePackages(svc.slug)}
+                                className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-emerald-50/80 text-emerald-700 flex items-center justify-center shrink-0 font-semibold text-xs border border-emerald-100/60">
+                                  {svc.name.charAt(0)}
+                                </div>
+
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold text-slate-800 text-xs sm:text-sm">
+                                      {svc.name}
+                                    </span>
+                                    <code className="text-[11px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono border border-slate-200/50">
+                                      {svc.slug}
+                                    </code>
+                                    {hasPackages && (
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60">
+                                        {packages.length} Packages / Options
+                                      </span>
+                                    )}
+                                  </div>
+                                  {svc.description && (
+                                    <p className="text-xs text-slate-400 font-normal mt-0.5 truncate max-w-xl">
+                                      {svc.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right Actions */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                {/* Status Pill */}
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                                    svc.is_active
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                                      : "bg-slate-100 text-slate-600 border border-slate-200/60"
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${
+                                      svc.is_active ? "bg-emerald-500" : "bg-slate-400"
+                                    }`}
+                                  />
+                                  {svc.is_active ? "Active" : "Inactive"}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setEditing(svc)}
+                                  title="Edit Service"
+                                  className="p-1 rounded-md hover:bg-emerald-50 text-slate-400 hover:text-emerald-700 transition-colors cursor-pointer"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(svc)}
+                                  title="Delete Service"
+                                  className="p-1 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+
+                                {hasPackages && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleServicePackages(svc.slug)}
+                                    className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer ml-0.5 ${
+                                      isServiceExpanded
+                                        ? "bg-slate-100 text-slate-800"
+                                        : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                                    }`}
+                                  >
+                                    {isServiceExpanded ? (
+                                      <ChevronUp className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <ChevronDown className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* ── Nested Packages / Offerings Grid ── */}
+                            {hasPackages && isServiceExpanded && (
+                              <div className="border-t border-slate-100 bg-slate-50/50 p-3.5 sm:p-4">
+                                <div className="flex items-center justify-between mb-2.5">
+                                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                    <PackageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                                    {svc.name} Packages &amp; Service Options
+                                  </h4>
+                                  <span className="text-[11px] text-slate-400 font-normal">
+                                    {packages.length} configured offerings
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {packages.map((pkg, idx) => (
+                                    <div
+                                      key={pkg.id || idx}
+                                      className="bg-white rounded-lg p-3.5 border border-slate-200/80 shadow-xs flex flex-col justify-between hover:border-emerald-300 transition-colors group"
+                                    >
+                                      <div>
+                                        {/* Header: Title, Category pill & Badge */}
+                                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                                          <div>
+                                            {pkg.categoryName && (
+                                              <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 inline-block mb-1">
+                                                {pkg.categoryName}
+                                              </span>
+                                            )}
+                                            <h5 className="text-xs font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                                              {pkg.name}
+                                            </h5>
+                                          </div>
+
+                                          {pkg.tag && (
+                                            <span
+                                              className={`text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${
+                                                pkg.tagColor || "bg-blue-50 text-blue-700 border-blue-200/70"
+                                              }`}
+                                            >
+                                              {pkg.tag}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* Description */}
+                                        <p className="text-xs text-slate-500 font-normal leading-relaxed mb-2.5">
+                                          {pkg.description}
+                                        </p>
+
+                                        {/* Price & Duration */}
+                                        <div className="flex items-center gap-2.5 text-xs font-medium text-slate-700 mb-2.5 pb-2.5 border-b border-slate-100">
+                                          <span className="text-xs font-semibold text-slate-900">
+                                            {pkg.price}
+                                          </span>
+                                          {pkg.duration && (
+                                            <span className="flex items-center gap-1 text-[11px] text-slate-400 font-normal">
+                                              <Clock className="w-3 h-3 text-slate-400" />
+                                              {pkg.duration}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* Inclusions checklist */}
+                                        {pkg.includes && pkg.includes.length > 0 && (
+                                          <ul className="space-y-1 text-xs text-slate-600 font-normal">
+                                            {pkg.includes.map((inc, i) => (
+                                              <li key={i} className="flex items-center gap-1.5">
+                                                <Check className="w-3 h-3 text-emerald-600 shrink-0 stroke-[2]" />
+                                                <span className="truncate">{inc}</span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Edit / New Service Modal ── */}
+      {editing && (
+        <Modal
+          title={editing.id ? `Edit Sub-Service: ${editing.name}` : "Create New Sub-Service"}
+          onClose={() => setEditing(null)}
+        >
+          <form onSubmit={handleSave} className="flex flex-col gap-3.5 font-sans text-left">
+            <Select
+              label="Parent Category Pillar"
+              required
+              options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
+              value={String(editing.category || "")}
+              onChange={(e) => setEditing({ ...editing, category: e.target.value })}
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <Input
+                label="Sub-Service Name"
+                required
+                placeholder="e.g. Truck, Plumber, Carpentry, Electrician"
+                value={editing.name}
+                onChange={(e) => {
+                  const val = e.target.value
+                  const autoSlug = !editing.id
+                    ? val.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+                    : editing.slug
+                  setEditing({ ...editing, name: val, slug: autoSlug })
+                }}
+              />
+              <Input
+                label="Slug Identifier"
+                required
+                placeholder="e.g. truck, plumber, carpentry, electrician"
+                value={editing.slug}
+                onChange={(e) => setEditing({ ...editing, slug: e.target.value })}
+              />
+            </div>
+
+            <TextArea
+              label="Short Description"
+              placeholder="Brief summary of this service shown in catalog & customer booking..."
+              value={editing.description || ""}
+              onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <Input
+                label="Icon Name"
+                placeholder="e.g. Truck, Wrench, Wind"
+                value={editing.icon || ""}
+                onChange={(e) => setEditing({ ...editing, icon: e.target.value })}
+              />
+              <Input
+                label="Image URL"
+                placeholder="e.g. /mockups/service_carpenter.png"
+                value={editing.image || ""}
+                onChange={(e) => setEditing({ ...editing, image: e.target.value })}
+              />
+              <Input
+                label="Display Sort Order"
+                type="number"
+                value={editing.sort_order ?? 0}
+                onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) })}
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                checked={!!editing.is_active}
+                onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })}
+                className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500"
+              />
+              <span>Active in Customer Portal</span>
+            </label>
+
+            <div className="flex gap-2.5 justify-end mt-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium shadow-sm transition-colors cursor-pointer"
+              >
+                {editing.id ? "Save Changes" : "Create Service"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  )
+}
