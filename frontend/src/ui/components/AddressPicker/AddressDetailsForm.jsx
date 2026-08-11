@@ -213,16 +213,17 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div style={s.root}>
+    <div style={s.overlay} onClick={onBack}>
+      <div style={s.modalBox} onClick={e => e.stopPropagation()}>
 
-      {/* Top bar */}
-      <div style={s.topBar}>
-        <button style={s.backBtn} onClick={onBack} id="adf-back-btn" disabled={saving}>
-          <ArrowLeft size={20} />
-        </button>
-        <span style={s.topBarTitle}>Enter Address Details</span>
-        <div style={{ width: 40 }} />
-      </div>
+        {/* Top bar */}
+        <div style={s.topBar}>
+          <button style={s.backBtn} onClick={onBack} id="adf-back-btn" disabled={saving}>
+            <ArrowLeft size={18} />
+          </button>
+          <span style={s.topBarTitle}>Enter Address Details</span>
+          <div style={{ width: 36 }} />
+        </div>
 
       {/* Read-only location summary */}
       <div style={s.locationSummary}>
@@ -466,6 +467,8 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
           )}
         </motion.button>
       </div>
+
+      </div>
     </div>
   )
 }
@@ -473,28 +476,37 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const s = {
-  root: {
+  overlay: {
     position: "fixed", inset: 0, zIndex: 10020,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    padding: "1rem",
+    background: "rgba(15, 23, 42, 0.6)",
+    backdropFilter: "blur(4px)",
+    fontFamily: "inherit",
+  },
+  modalBox: {
+    width: "100%", maxWidth: "580px", height: "640px", maxHeight: "90vh",
     display: "flex", flexDirection: "column",
-    background: "#f8fafc", fontFamily: "inherit",
-    overflowY: "hidden",
+    background: "#f8fafc", borderRadius: "24px", overflow: "hidden",
+    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+    position: "relative",
   },
   topBar: {
-    height: 56, flexShrink: 0,
+    height: 52, flexShrink: 0,
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "0 1rem",
+    padding: "0 1.25rem",
     background: "#fff",
     borderBottom: "1px solid #f1f5f9",
     zIndex: 10,
   },
   backBtn: {
-    width: 40, height: 40, borderRadius: "50%",
+    width: 36, height: 36, borderRadius: "50%",
     border: "1px solid #e2e8f0", background: "#f8fafc",
     display: "flex", alignItems: "center", justifyContent: "center",
     cursor: "pointer", color: "#334155",
   },
   topBarTitle: {
-    fontSize: "1rem", fontWeight: 800, color: "#0f172a",
+    fontSize: "0.95rem", fontWeight: 800, color: "#0f172a",
   },
   // ── Location summary ──
   locationSummary: {
