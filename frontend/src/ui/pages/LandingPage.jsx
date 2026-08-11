@@ -1039,32 +1039,33 @@ export function LandingPage() {
   })
 
   useEffect(() => {
-    if (!activeLocationLabel && navigator.geolocation) {
+    if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
+          const lat = parseFloat(pos.coords.latitude.toFixed(6))
+          const lng = parseFloat(pos.coords.longitude.toFixed(6))
           try {
-            const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
-            const data = await res.json();
-            if (data?.features?.[0]?.properties) {
-              const p = data.features[0].properties;
-              const display = [p.name, p.street, p.city, p.state].filter(Boolean).slice(0, 2).join(", ");
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`)
+            const data = await res.json()
+            if (data && data.address) {
+              const a = data.address
+              const shortLocality = a.suburb || a.neighbourhood || a.road || a.residential || ""
+              const city = a.city || a.town || a.village || "Bengaluru"
+              const display = [shortLocality, city].filter(Boolean).join(", ") || (data.display_name ? data.display_name.split(",").slice(0, 2).join(", ") : "")
               if (display) {
-                setActiveLocationLabel(display);
-                localStorage.setItem("calservice_user_location", display);
+                setActiveLocationLabel(display)
+                localStorage.setItem("calservice_user_location", display)
               }
             }
-          } catch (e) {
-            setActiveLocationLabel("Hosur, Tamil Nadu");
-          }
+          } catch (e) { }
         },
-        () => {
-          if (!activeLocationLabel) setActiveLocationLabel("Hosur, Tamil Nadu");
-        }
-      );
-    } else if (!activeLocationLabel) {
-      setActiveLocationLabel("Hosur, Tamil Nadu");
+        (err) => {
+          console.warn("Live location detection warning:", err)
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      )
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     if (location.state?.openHomePestModal) setIsHomePestModalOpen(true)

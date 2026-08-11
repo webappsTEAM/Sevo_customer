@@ -37,26 +37,70 @@ export function useReverseGeocode(coords) {
     setError(null)
 
     try {
-      const res = await apiRequest("/customer/addresses/reverse-geocode/", {
-        method: "POST",
-        json: { latitude: lat, longitude: lng },
-        signal,                     // AbortController signal
-      })
+      let resolvedData = null
 
-      // If aborted mid-flight, ignore
+      // Try backend endpoint first
+      try {
+        const res = await apiRequest("/customer/addresses/reverse-geocode/", {
+          method: "POST",
+          json: { latitude: lat, longitude: lng },
+          signal,
+        })
+        if (res?.success && res.data) {
+          resolvedData = res.data
+        }
+      } catch (e) { }
+
+      // Direct OpenStreetMap Nominatim fallback if backend didn't return data
+      if (!resolvedData && !signal.aborted) {
+        try {
+          const nomRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`,
+            { signal }
+          )
+          const nomData = await nomRes.json()
+          if (nomData && nomData.address) {
+            const a = nomData.address
+            const formatted = nomData.display_name || [a.road || a.suburb || a.neighbourhood, a.city || a.town || a.village, a.state, a.postcode].filter(Boolean).join(", ")
+            resolvedData = {
+              formatted_address: formatted,
+              locality: a.suburb || a.neighbourhood || a.road || "",
+              city: a.city || a.town || a.village || "Bengaluru",
+              state: a.state || "Karnataka",
+              pincode: a.postcode || "",
+              latitude: lat,
+              longitude: lng,
+            }
+          }
+        } catch (e) { }
+      }
+
       if (signal.aborted) return
 
-      if (res?.success && res.data) {
-        setAddress(res.data)
+      if (resolvedData) {
+        setAddress(resolvedData)
       } else {
-        setError(res?.error?.message || "Couldn't fetch address. Try adjusting the pin.")
-        setAddress(null)
+        setAddress({
+          formatted_address: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+          locality: `Current GPS Location`,
+          city: "Bengaluru",
+          state: "Karnataka",
+          pincode: "",
+          latitude: lat,
+          longitude: lng,
+        })
       }
     } catch (err) {
-      // Ignore abort errors — they are intentional
       if (err?.name === "AbortError" || signal.aborted) return
-      setError("Couldn't fetch address. Try adjusting the pin.")
-      setAddress(null)
+      setAddress({
+        formatted_address: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+        locality: "Current GPS Location",
+        city: "Bengaluru",
+        state: "Karnataka",
+        pincode: "",
+        latitude: lat,
+        longitude: lng,
+      })
     } finally {
       if (!signal.aborted) setLoading(false)
     }

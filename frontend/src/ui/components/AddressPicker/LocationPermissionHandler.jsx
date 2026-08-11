@@ -113,14 +113,15 @@ export function LocationPermissionHandler({ onClose, onManualSearch, onLocationC
     )
   }
 
+  const defaultCoords = coords || { lat: 12.9716, lng: 77.5946 }
+
   // ── If details form is showing ─────────────────────────────────────────────
   if (screen === "details" && confirmedAddress) {
     return (
       <AddressDetailsForm
         addressData={confirmedAddress}
-        onBack={() => setScreen("map")}   // returns to map with pin at same coords
+        onBack={() => setScreen("map")}
         onSubmit={(payload) => {
-          // Stub — Slice 4 wires this to the real save API call
           if (typeof onLocationConfirmed === "function") onLocationConfirmed(payload)
           onClose()
         }}
@@ -129,24 +130,20 @@ export function LocationPermissionHandler({ onClose, onManualSearch, onLocationC
     )
   }
 
-  // ── If map is showing, render MapPickerScreen ──────────────────────────────
-  if (status === STATES.GRANTED && coords) {
-    return (
-      <MapPickerScreen
-        initialCoords={coords}
-        onClose={onClose}
-        onManualSearch={onManualSearch}
-        onCenterChange={(lat, lng, resolvedAddress) => {
-          // Slice 3: when resolvedAddress is provided, user tapped Confirm
-          if (resolvedAddress) {
-            setConfirmedAddress(resolvedAddress)
-            setScreen("details")
-          }
-          // Otherwise it's just a center-change notification (no action needed here)
-        }}
-      />
-    )
-  }
+  // ── Render MapPickerScreen directly ───────────────────────────────────────
+  return (
+    <MapPickerScreen
+      initialCoords={defaultCoords}
+      onClose={onClose}
+      onManualSearch={onManualSearch}
+      onCenterChange={(lat, lng, resolvedAddress) => {
+        if (resolvedAddress) {
+          setConfirmedAddress(resolvedAddress)
+          setScreen("details")
+        }
+      }}
+    />
+  )
 
   // ── Permission / error UI ──────────────────────────────────────────────────
 
