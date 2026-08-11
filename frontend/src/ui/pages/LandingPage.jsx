@@ -1096,7 +1096,13 @@ export function LandingPage() {
   // popup right here, instead of navigating to the old BookingPage UI.
   const activeCategoryId = searchParams.get("category")
   const activeCategory = activeCategoryId
-    ? BOOKING_CATEGORIES.find(c => c.id === activeCategoryId)
+    ? (BOOKING_CATEGORIES.find(c => 
+        c.id === activeCategoryId || 
+        c.slug === activeCategoryId || 
+        c.id === `${activeCategoryId}_cleaning` ||
+        c.id?.includes(activeCategoryId) || 
+        activeCategoryId?.includes(c.id)
+      ) || { id: activeCategoryId, name: activeCategoryId.replace(/_/g, " ") })
     : null
 
   // Close popup on Escape key and prevent background scroll when open
@@ -1291,7 +1297,31 @@ export function LandingPage() {
           {/* Full Page View Wrapper */}
           <main className={`flex-1 max-w-7xl w-full mx-auto px-6 ${activeCategory ? "pt-4 pb-10" : "py-10"}`}>
             {activeCategory && (
-              (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
+              (activeCategory.id === "kitchen_cleaning" || activeCategory.slug === "kitchen_cleaning" || String(activeCategory.id) === "kitchen_cleaning" || activeCategory.name?.toLowerCase()?.includes("kitchen")) ? (
+                <KitchenCleaningModal
+                  category={activeCategory}
+                  cart={modalCart}
+                  setCart={setModalCart}
+                  onClose={handleCloseCategory}
+                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                />
+              ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
+                <SofaCleaningModal
+                  category={activeCategory}
+                  cart={modalCart}
+                  setCart={setModalCart}
+                  onClose={handleCloseCategory}
+                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                />
+              ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
+                <BathroomCleaningModal
+                  category={activeCategory}
+                  cart={modalCart}
+                  setCart={setModalCart}
+                  onClose={handleCloseCategory}
+                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                />
+              ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
                 <PaintingPackageModal
                   category={activeCategory}
                   cart={modalCart}
@@ -1560,41 +1590,89 @@ export function LandingPage() {
           <div className="mb-6">
             <h2 className="text-xl font-bold text-slate-900">Browse by Category</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => (
-              <button
-                key={label}
-                onClick={() => {
-                  if (label === "Goods & Transports") {
-                    setIsGoodsModalOpen(true)
-                  } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
-                    setIsElecModalOpen(true)
-                  } else if (label.includes("AC") || label.includes("Appliance")) {
-                    setIsAcModalOpen(true)
-                  } else if (label === "Home Services & Pest Control") {
-                    setIsHomePestModalOpen(true)
-                  } else {
-                    goToCategoryServices(serviceCategoryId)
-                  }
-                }}
-                className="group flex flex-col bg-white rounded-2xl border border-slate-100 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all"
-              >
-                {photo ? (
-                  <div className="h-24 w-full overflow-hidden">
-                    <img
-                      src={photo}
-                      alt={label}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                ) : (
-                  <div className="h-24 w-full bg-emerald-50 flex items-center justify-center">
-                    <Icon className="w-8 h-8 text-emerald-600" strokeWidth={1.5} />
-                  </div>
-                )}
-                <span className="text-xs font-semibold text-slate-700 leading-snug p-3">{label}</span>
-              </button>
-            ))}
+
+          {/* 3 Compact & Attractive Category Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl">
+            {/* Card 1: For You */}
+            <button
+              type="button"
+              onClick={() => setIsForYouModalOpen(true)}
+              className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-emerald-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+            >
+              <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
+                <img
+                  src="/mockups/category_for_you.png"
+                  alt="For You"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <span className="absolute top-2 left-2 bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                  ✦ For You
+                </span>
+              </div>
+              <div className="p-3">
+                <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors block">
+                  For You
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium mt-0.5 block">
+                  Curated services &amp; recommendations
+                </span>
+              </div>
+            </button>
+
+            {/* Card 2: Food and Health */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedFoodSubModule(null)
+                setIsFoodHealthModalOpen(true)
+              }}
+              className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-amber-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+            >
+              <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
+                <img
+                  src="/mockups/category_food_health.png"
+                  alt="Food and Health"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <span className="absolute top-2 left-2 bg-amber-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                  🥦 Groceries &amp; Veggies
+                </span>
+              </div>
+              <div className="p-3">
+                <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-amber-800 transition-colors block">
+                  Food and Health
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium mt-0.5 block">
+                  Groceries &amp; farm-fresh vegetables
+                </span>
+              </div>
+            </button>
+
+            {/* Card 3: Home, Repair & Transport Services */}
+            <button
+              type="button"
+              onClick={() => setIsHomeServicesCombinedModalOpen(true)}
+              className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-teal-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+            >
+              <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
+                <img
+                  src="/mockups/category_home_transport.png"
+                  alt="Home, Repair & Transport Services"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <span className="absolute top-2 left-2 bg-teal-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                  ⚡ 6 Services
+                </span>
+              </div>
+              <div className="p-3">
+                <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-teal-800 transition-colors block truncate">
+                  Home, Repair &amp; Transport Services
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium mt-0.5 block truncate">
+                  Cleaning, repairs, painting &amp; logistics
+                </span>
+              </div>
+            </button>
           </div>
         </section>
 
@@ -2242,7 +2320,31 @@ export function LandingPage() {
 
       <BkStyles />
       {activeCategory && (
-        (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
+        (activeCategory.id === "kitchen_cleaning" || activeCategory.slug === "kitchen_cleaning" || String(activeCategory.id) === "kitchen_cleaning" || activeCategory.name?.toLowerCase()?.includes("kitchen")) ? (
+          <KitchenCleaningModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            onClose={() => navigate("/home")}
+            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+          />
+        ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
+          <SofaCleaningModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            onClose={() => navigate("/home")}
+            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+          />
+        ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
+          <BathroomCleaningModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            onClose={() => navigate("/home")}
+            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+          />
+        ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
           <PaintingPackageModal
             category={activeCategory}
             cart={modalCart}
@@ -2271,95 +2373,7 @@ export function LandingPage() {
         )
       )}
 
-      <section className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-900">Browse by Category</h2>
-        </div>
 
-        {/* 3 Compact & Attractive Category Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl">
-          {/* Card 1: For You */}
-          <button
-            type="button"
-            onClick={() => setIsForYouModalOpen(true)}
-            className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-emerald-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-          >
-            <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
-              <img
-                src="/mockups/category_for_you.png"
-                alt="For You"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              <span className="absolute top-2 left-2 bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                ✦ For You
-              </span>
-            </div>
-            <div className="p-3">
-              <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors block">
-                For You
-              </span>
-              <span className="text-[11px] text-slate-500 font-medium mt-0.5 block">
-                Curated services &amp; recommendations
-              </span>
-            </div>
-          </button>
-
-          {/* Card 2: Food and Health */}
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedFoodSubModule(null)
-              setIsFoodHealthModalOpen(true)
-            }}
-            className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-amber-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-          >
-            <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
-              <img
-                src="/mockups/category_food_health.png"
-                alt="Food and Health"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              <span className="absolute top-2 left-2 bg-amber-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                🥦 Groceries &amp; Veggies
-              </span>
-            </div>
-            <div className="p-3">
-              <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-amber-800 transition-colors block">
-                Food and Health
-              </span>
-              <span className="text-[11px] text-slate-500 font-medium mt-0.5 block">
-                Groceries &amp; farm-fresh vegetables
-              </span>
-            </div>
-          </button>
-
-          {/* Card 3: Home, Repair & Transport Services */}
-          <button
-            type="button"
-            onClick={() => setIsHomeServicesCombinedModalOpen(true)}
-            className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-teal-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-          >
-            <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
-              <img
-                src="/mockups/category_home_transport.png"
-                alt="Home, Repair & Transport Services"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              <span className="absolute top-2 left-2 bg-teal-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                ⚡ 6 Services
-              </span>
-            </div>
-            <div className="p-3">
-              <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-teal-800 transition-colors block truncate">
-                Home, Repair &amp; Transport Services
-              </span>
-              <span className="text-[11px] text-slate-500 font-medium mt-0.5 block truncate">
-                Cleaning, repairs, painting &amp; logistics
-              </span>
-            </div>
-          </button>
-        </div>
-      </section>
 
       {/* ── Home Services & Pest Control Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
       {isHomePestModalOpen &&
