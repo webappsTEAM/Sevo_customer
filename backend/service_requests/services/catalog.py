@@ -1,0 +1,172 @@
+"""
+service_requests/services/catalog.py
+
+Business logic for the Service Catalog admin module
+(CatalogCategory -> Service -> Package -> AddOn). Views must go through these
+functions rather than calling serializer.save() directly, per CLAUDE.md:
+"Business logic: NEVER in views — always in a service function or model
+method" (the old views_catalog.py violated this; this module is where that
+stops for the catalog).
+
+Every mutation writes a CatalogChangeLog row via a local import wrapped in
+try/except, mirroring RescheduleStatusHistory's write-site convention in
+services/__init__.py — history-logging must never block the actual save.
+
+Callers must pass already-validated data (e.g. a DRF serializer's
+`validated_data`), not raw request.data — the equality checks in
+_apply_updates rely on values already being coerced to the model's real
+Python types (Decimal, list, etc.), not raw JSON strings.
+"""
+from django.core.exceptions import ValidationError
+
+from ..models import CatalogCategory, Service, Package, AddOn, CatalogChangeLog, PackageStatus
+
+# Fields whose change increments Package.version — the set Phase 2's booking
+# snapshot will compare against to detect a stale price.
+_VERSION_FIELDS = {"base_price", "offer_price", "name", "includes", "excludes"}
+
+_PACKAGE_TRANSITIONS = {
+    PackageStatus.DRAFT: {PackageStatus.ACTIVE},
+    PackageStatus.ACTIVE: {PackageStatus.INACTIVE, PackageStatus.ARCHIVED},
+    PackageStatus.INACTIVE: {PackageStatus.ACTIVE, PackageStatus.ARCHIVED},
+    PackageStatus.ARCHIVED: set(),
+}
+
+
+def _log(entity_type, entity_id, entity_name, action, actor, field_name="", old_value="", new_value="", reason=""):
+    try:
+        from ..models import CatalogChangeLog as _CatalogChangeLog
+        _CatalogChangeLog.objects.create(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            action=action,
+            field_name=field_name,
+            old_value="" if old_value in (None, "") else str(old_value),
+            new_value="" if new_value in (None, "") else str(new_value),
+            reason=reason or "",
+            changed_by=actor if (actor and hasattr(actor, "id")) else None,
+        )
+    except Exception:
+        pass
+
+
+def _apply_updates(instance, data, entity_type, actor, reason=None, version_fields=None):
+    """Diff `data` against `instance`, save changed fields, write one
+    CatalogChangeLog UPDATE row per changed field. Returns the saved instance."""
+    changed_fields = []
+    bump_version = False
+    for field_name, new_value in data.items():
+        if not hasattr(instance, field_name):
+            continue
+        old_value = getattr(instance, field_name)
+        if old_value == new_value:
+            continue
+        setattr(instance, field_name, new_value)
+        changed_fields.append(field_name)
+        _log(entity_type, instance.pk, str(instance), CatalogChangeLog.Action.UPDATE, actor,
+             field_name=field_name, old_value=old_value, new_value=new_value, reason=reason)
+        if version_fields and field_name in version_fields:
+            bump_version = True
+
+    if bump_version and hasattr(instance, "version"):
+        instance.version = instance.version + 1
+        changed_fields.append("version")
+
+    if changed_fields:
+        instance.save()
+    return instance
+
+
+# ── Category ──────────────────────────────────────────────────────────────
+
+def create_category(data, actor):
+    category = CatalogCategory.objects.create(**data)
+    _log(CatalogChangeLog.EntityType.CATEGORY, category.pk, category.name, CatalogChangeLog.Action.CREATE, actor)
+    return category
+
+
+def update_category(category, data, actor, reason=None):
+    return _apply_updates(category, data, CatalogChangeLog.EntityType.CATEGORY, actor, reason=reason)
+
+
+def delete_category(category):
+    if category.services.exists():
+        raise ValidationError({"detail": "Cannot delete a category that still has services. Move or delete its services first."})
+    category.delete()
+
+
+# ── Service ───────────────────────────────────────────────────────────────
+
+def create_service(data, actor):
+    service = Service.objects.create(**data)
+    _log(CatalogChangeLog.EntityType.SERVICE, service.pk, service.name, CatalogChangeLog.Action.CREATE, actor)
+    return service
+
+
+def update_service(service, data, actor, reason=None):
+    return _apply_updates(service, data, CatalogChangeLog.EntityType.SERVICE, actor, reason=reason)
+
+
+def delete_service(service):
+    if service.packages.exists():
+        raise ValidationError({"detail": "Cannot delete a service that still has packages. Move or delete its packages first."})
+    service.delete()
+
+
+# ── Package ───────────────────────────────────────────────────────────────
+
+def create_package(data, actor):
+    package = Package.objects.create(**data)
+    _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.CREATE, actor)
+    return package
+
+
+def update_package(package, data, actor, reason=None):
+    pkg = _apply_updates(package, data, CatalogChangeLog.EntityType.PACKAGE, actor, reason=reason, version_fields=_VERSION_FIELDS)
+    try:
+        from logistics.models import ServiceTier
+        tier = ServiceTier.objects.filter(slug=pkg.slug).first()
+        if not tier:
+            for t in ServiceTier.objects.all():
+                if t.slug in pkg.slug or pkg.slug in t.slug or t.name.lower() in pkg.name.lower():
+                    tier = t
+                    break
+        if tier:
+            price_to_sync = pkg.base_price if pkg.base_price is not None else pkg.offer_price
+            if price_to_sync is not None:
+                tier.starting_price = price_to_sync
+                tier.save(update_fields=["starting_price"])
+    except Exception:
+        pass
+    return pkg
+
+
+def transition_package_status(package, new_status, actor, reason=None):
+    if new_status not in PackageStatus.values:
+        raise ValidationError({"detail": f"Unknown status '{new_status}'."})
+    current = package.status
+    if new_status == current:
+        raise ValidationError({"detail": f"Package is already '{current}'."})
+    allowed = _PACKAGE_TRANSITIONS.get(current, set())
+    if new_status not in allowed:
+        raise ValidationError({
+            "detail": f"Invalid package transition from '{current}' to '{new_status}'. Allowed: {sorted(allowed) or 'none'}."
+        })
+    package.status = new_status
+    package.save(update_fields=["status", "updated_at"])
+    _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.STATUS_CHANGE, actor,
+         field_name="status", old_value=current, new_value=new_status, reason=reason)
+    return package
+
+
+# ── AddOn ─────────────────────────────────────────────────────────────────
+
+def create_addon(data, actor):
+    addon = AddOn.objects.create(**data)
+    _log(CatalogChangeLog.EntityType.ADDON, addon.pk, addon.name, CatalogChangeLog.Action.CREATE, actor)
+    return addon
+
+
+def update_addon(addon, data, actor, reason=None):
+    return _apply_updates(addon, data, CatalogChangeLog.EntityType.ADDON, actor, reason=reason)

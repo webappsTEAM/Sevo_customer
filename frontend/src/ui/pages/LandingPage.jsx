@@ -705,7 +705,7 @@ function getFoodItemPhoto(name = "", isGrocery = false) {
   if (n.includes("beetroot")) return "/mockups/veg/beetroot.jpg"
   if (n.includes("pumpkin") || n.includes("parangikkai") || n.includes("kaddu")) return "/mockups/veg/pumpkin.jpg"
   if (n.includes("mint") || n.includes("pudhina")) return "/mockups/veg/mint.jpg"
-  if (n.includes("basil") || n.includes("rosemary") || n.includes("herbs")) return "/mockups/veg/herbs.jpg"
+  if (n.includes("basil") || n.includes("rosemary") || n.includes("herbs")) return "/mockups/veg/rosemary.png"
   if (n.includes("turmeric") || n.includes("manjal") || n.includes("haldi")) return "/mockups/veg/turmeric.jpg"
   if (n.includes("amla") || n.includes("nellikai")) return "/mockups/veg/amla.jpg"
   if (n.includes("colocasia") || n.includes("seppankizhangu") || n.includes("arvi")) return "/mockups/veg/arvi.jpg"
@@ -889,7 +889,8 @@ const FOOD_HEALTH_SUB = [
     name: "Groceries",
     tagline: "Daily Essentials, Staples & Packaged Goods",
     graphic: GroceriesGraphic,
-    badge: "15-min Express Delivery",
+    photo: "/mockups/groceries_realistic.png",
+    badge: "Coming Soon",
     items: GROCERY_ITEMS,
   },
   {
@@ -897,6 +898,7 @@ const FOOD_HEALTH_SUB = [
     name: "Vegetables",
     tagline: "Farm-Fresh & 100% Organic Green Vegetables",
     graphic: VegetablesGraphic,
+    photo: "/mockups/vegetables_realistic.png",
     badge: "8-min Farm Delivery",
     items: VEGETABLE_ITEMS,
   },
@@ -1674,705 +1676,6 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* ── Home Services & Pest Control Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
-        {isHomePestModalOpen &&
-          typeof document !== "undefined" &&
-          createPortal(
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="homepest-modal-title"
-              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-              onClick={() => setIsHomePestModalOpen(false)}
-            >
-              <div
-                className="bg-white rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Close Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsHomePestModalOpen(false)}
-                  aria-label="Close popup"
-                  className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-white text-slate-900 hover:bg-slate-100 flex items-center justify-center shadow-md border border-slate-200 transition-colors z-50"
-                >
-                  <X className="w-4 h-4" strokeWidth={2.5} />
-                </button>
-
-                {/* Modal Title */}
-                <div className="text-left mb-6">
-                  <h3
-                    id="homepest-modal-title"
-                    className="text-lg sm:text-xl font-extrabold text-slate-900"
-                  >
-                    Cleaning &amp; Pest Control
-                  </h3>
-                </div>
-
-                {/* Cleaning Section */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                    Cleaning
-                  </h4>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {HOME_SERVICES_SUB.map((item) => (
-                      <button
-                        key={item.name}
-                        type="button"
-                        onClick={() => {
-                          setIsHomePestModalOpen(false)
-                          document.body.style.overflow = "unset"
-                          if (item.name === "Kitchen Cleaning") {
-                            navigate(`?category=kitchen_cleaning`)
-                          } else if (item.name === "Sofa Cleaning") {
-                            navigate(`?category=sofa_cleaning`)
-                          } else {
-                            navigate(`?category=${item.categoryId}`)
-                          }
-                        }}
-                        className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                      >
-                        <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                          <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                          {item.badge && (
-                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                              {item.badge}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                          {item.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Pest Control Section */}
-                <div>
-                  <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                    Pest Control
-                  </h4>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {PEST_CONTROL_SUB.map((item) => (
-                      <button
-                        key={item.name}
-                        type="button"
-                        onClick={() => {
-                          setIsHomePestModalOpen(false)
-                          document.body.style.overflow = "unset"
-                          navigate(`?category=${item.categoryId}`)
-                        }}
-                        className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                      >
-                        <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                          <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                          {item.badge && (
-                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                              {item.badge}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                          {item.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )}
-
-        {/* ── Goods & Transports Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
-        {isGoodsModalOpen &&
-          typeof document !== "undefined" &&
-          createPortal(
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="transport-modal-title"
-              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-              onClick={() => setIsGoodsModalOpen(false)}
-            >
-              <div
-                className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Close Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsGoodsModalOpen(false)}
-                  aria-label="Close popup"
-                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-
-                {/* Modal Title */}
-                <div className="text-center mb-6">
-                  <h3
-                    id="transport-modal-title"
-                    className="text-lg sm:text-xl font-extrabold text-slate-900"
-                  >
-                    Goods &amp; Transports
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Choose a transport type to get an instant estimate
-                  </p>
-                </div>
-
-                {/* Items Grid matching Image 2 with Landing Page Emerald styling */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-stretch">
-                  {/* Option 1: Truck */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsGoodsModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      navigate(routes.truck_booking_hosur)
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <TruckGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                      Truck
-                    </span>
-                  </button>
-
-                  {/* Option 2: Two Wheeler */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsGoodsModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      navigate(routes.two_wheeler_booking_hosur)
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <TwoWheelerGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                      Two Wheeler
-                    </span>
-                  </button>
-
-                  {/* Option 3: Packers & Movers */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsGoodsModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      navigate(routes.packers_movers_booking_hosur)
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <PackersMoversGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                      Packers &amp; Movers
-                    </span>
-                  </button>
-
-                  {/* Option 4: Get an Estimate card/button in Landing Page Emerald theme */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsGoodsModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      navigate(routes.truck_booking_hosur)
-                    }}
-                    className="group flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-[0.98] text-white shadow-lg shadow-emerald-600/25 transition-all text-left cursor-pointer min-h-[140px]"
-                  >
-                    <div>
-                      <p className="text-lg sm:text-xl font-extrabold leading-tight tracking-tight">
-                        Get an<br />Estimate
-                      </p>
-                      <p className="text-xs text-emerald-100 font-medium mt-2 opacity-95">
-                        (takes ~2 mins)
-                      </p>
-                    </div>
-                    <div className="pt-4 flex items-center">
-                      <ArrowRight className="w-6 h-6 text-white stroke-[2.5] group-hover:translate-x-1.5 transition-transform" />
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )}
-
-        {/* ── Electrician, Plumbing & Carpentry Sub-Category Modal Popup ── */}
-        {isElecModalOpen &&
-          typeof document !== "undefined" &&
-          createPortal(
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="elec-modal-title"
-              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-              onClick={() => setIsElecModalOpen(false)}
-            >
-              <div
-                className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Close Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsElecModalOpen(false)}
-                  aria-label="Close popup"
-                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-
-                {/* Modal Title */}
-                <div className="text-center mb-6">
-                  <h3
-                    id="elec-modal-title"
-                    className="text-lg sm:text-xl font-extrabold text-slate-900"
-                  >
-                    Electrician, Plumbing &amp; Carpentry
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Choose a service type to view related services
-                  </p>
-                </div>
-
-                {/* Items Grid for Electrician, Plumbing & Carpentry (3 options) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 items-stretch">
-                  {/* Option 1: Electrician */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsElecModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("electrical")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <ElectricianGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Electrician
-                    </span>
-                  </button>
-
-                  {/* Option 2: Plumber */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsElecModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("plumbing")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <PlumberGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Plumber
-                    </span>
-                  </button>
-
-                  {/* Option 3: Carpentry */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsElecModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("carpentry")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <CarpentryGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Carpentry
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )}
-
-        {/* ── AC & Appliance Sub-Category Modal Popup ── */}
-        {isAcModalOpen &&
-          typeof document !== "undefined" &&
-          createPortal(
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="ac-modal-title"
-              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-              onClick={() => setIsAcModalOpen(false)}
-            >
-              <div
-                className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Close Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsAcModalOpen(false)}
-                  aria-label="Close popup"
-                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-
-                {/* Modal Title */}
-                <div className="text-center mb-6">
-                  <h3
-                    id="ac-modal-title"
-                    className="text-lg sm:text-xl font-extrabold text-slate-900"
-                  >
-                    AC &amp; Appliance Repair
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Choose an appliance type to view related services
-                  </p>
-                </div>
-
-                {/* Items Grid for AC & Appliance Repair (5 options) */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 items-stretch">
-                  {/* Option 1: AC Service */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAcModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("hvac")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <AcGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Air Conditioner
-                    </span>
-                  </button>
-
-                  {/* Option 2: Refrigerator */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAcModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("appliance_repair")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <FridgeGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Refrigerator
-                    </span>
-                  </button>
-
-                  {/* Option 3: Washing Machine */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAcModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("appliance_repair")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <WashingMachineGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Washing Machine
-                    </span>
-                  </button>
-
-                  {/* Option 4: TV & Home Theatre */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAcModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("appliance_repair")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <TvGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      TV &amp; Display
-                    </span>
-                  </button>
-
-                  {/* Option 5: Microwave Oven */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAcModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("appliance_repair")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <MicrowaveGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Microwave Oven
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )}
-
-        {/* ── Trust strip ────────────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-6">
-          <div className="bg-slate-50 border border-slate-200 rounded-3xl grid sm:grid-cols-2 lg:grid-cols-5 gap-6 p-8">
-            {TRUST_STRIP.map(({ icon: Icon, title, body }, idx) => {
-              const iconColors = ["text-teal-600", "text-rose-500", "text-violet-600", "text-amber-500", "text-sky-500"]
-              return (
-                <div key={title} className="flex flex-col items-start gap-2">
-                  <Icon className={`w-6 h-6 ${iconColors[idx % iconColors.length]}`} strokeWidth={1.75} />
-                  <p className="text-sm font-bold text-slate-800 leading-snug">{title}</p>
-                  <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* ── Offers ─────────────────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-6 py-14 grid lg:grid-cols-[220px_1fr] gap-6 items-stretch">
-          <div className="bg-gradient-to-br from-teal-600 to-emerald-700 rounded-3xl p-6 flex flex-col justify-center">
-            <p className="text-lg font-extrabold text-white mb-1">Limited Time Offers!</p>
-            <p className="text-xs text-teal-100 mb-4">Great deals on services you love.</p>
-            <button onClick={goToBooking} className="bg-white text-teal-700 hover:bg-teal-50 text-xs font-bold px-4 py-2 rounded-full self-start transition-colors">
-              Explore Offers
-            </button>
-          </div>
-          <div className="grid sm:grid-cols-3 gap-4">
-            {[
-              { tag: "UPTO", big: "20% OFF", sub: "on Home Cleaning", bg: "bg-amber-50 hover:bg-amber-100", tag_color: "text-amber-600", link_color: "text-amber-700" },
-              { tag: "FLAT", big: "15% OFF", sub: "on Painting", bg: "bg-rose-50 hover:bg-rose-100", tag_color: "text-rose-600", link_color: "text-rose-700" },
-              { tag: "UPTO", big: "₹500 OFF", sub: "on AC Service", bg: "bg-violet-50 hover:bg-violet-100", tag_color: "text-violet-600", link_color: "text-violet-700" },
-            ].map((offer) => (
-              <button
-                key={offer.sub}
-                onClick={goToBooking}
-                className={`${offer.bg} rounded-3xl p-6 text-left hover:shadow-md transition-all`}
-              >
-                <p className={`text-[11px] font-bold tracking-wide ${offer.tag_color}`}>{offer.tag}</p>
-                <p className="text-2xl font-extrabold text-slate-900 mb-1">{offer.big}</p>
-                <p className="text-sm text-slate-600 mb-4">{offer.sub}</p>
-                <span className={`text-xs font-semibold ${offer.link_color}`}>Book Now &rarr;</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* ── How It Works ───────────────────────────────────── */}
-        <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-10">
-          <h2 className="text-xl font-bold text-slate-900 text-center mb-10">How It Works</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-8">
-            {STEPS.map(({ icon: Icon, title, body }, i) => {
-              const stepColors = [
-                { bg: "bg-teal-50", icon: "text-teal-600", badge: "bg-teal-600" },
-                { bg: "bg-rose-50", icon: "text-rose-500", badge: "bg-rose-500" },
-                { bg: "bg-violet-50", icon: "text-violet-600", badge: "bg-violet-600" },
-                { bg: "bg-amber-50", icon: "text-amber-500", badge: "bg-amber-500" },
-                { bg: "bg-sky-50", icon: "text-sky-500", badge: "bg-sky-500" },
-              ]
-              const c = stepColors[i % stepColors.length]
-              return (
-                <div key={title} className="flex flex-col items-center text-center gap-3">
-                  <div className="relative">
-                    <div className={`w-16 h-16 rounded-full ${c.bg} flex items-center justify-center`}>
-                      <Icon className={`w-7 h-7 ${c.icon}`} strokeWidth={1.75} />
-                    </div>
-                    <span className={`absolute -top-1 -left-1 w-5 h-5 rounded-full ${c.badge} text-white text-[10px] font-bold flex items-center justify-center`}>
-                      {i + 1}
-                    </span>
-                  </div>
-                  <p className="text-sm font-bold text-slate-800">{title}</p>
-                  <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* ── Stats ──────────────────────────────────────────── */}
-        <section className="bg-slate-800 py-10">
-          <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-5 gap-6 text-center text-white">
-            {STATS.map((s) => (
-              <div key={s.label}>
-                <p className="text-2xl font-extrabold">{s.value}</p>
-                <p className="text-xs text-slate-300">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Featured Professionals ─────────────────────────── */}
-        <section id="professionals" className="max-w-7xl mx-auto px-6 py-14">
-          <h2 className="text-xl font-bold text-slate-900 text-center mb-2">Featured Professionals</h2>
-          <p className="text-sm text-slate-500 text-center mb-10">Top-rated experts ready to help</p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-            {PROFESSIONALS.map((p) => (
-              <div key={p.name} className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
-                <img src={p.photo} alt={p.name} className="w-full h-36 object-cover" />
-                <div className="p-4">
-                  <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                  <p className="text-xs text-slate-500 mb-2">{p.role}</p>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="inline-flex items-center gap-1 font-semibold text-amber-500">
-                      <Star className="w-3.5 h-3.5 fill-current" /> {p.rating}
-                    </span>
-                    <span className="text-slate-400">{p.jobs}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Testimonials ───────────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">What Our Customers Say</h2>
-            <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">View all reviews &rarr;</a>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setTestimonialIdx((i) => (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)}
-              className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="grid sm:grid-cols-3 gap-5 flex-1">
-              {TESTIMONIALS.map((t, i) => (
-                <div key={t.name} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                      {t.initials}
-                    </span>
-                    <div className="flex gap-0.5 text-amber-400">
-                      {Array.from({ length: 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
-                    </div>
-                  </div>
-                  <p className="text-sm text-slate-600 mb-3 leading-relaxed">{t.text}</p>
-                  <p className="text-sm font-bold text-slate-800">&mdash; {t.name}</p>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setTestimonialIdx((i) => (i + 1) % TESTIMONIALS.length)}
-              className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex justify-center gap-1.5 mt-6">
-            {TESTIMONIALS.map((_, i) => (
-              <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === testimonialIdx ? "bg-teal-600" : "bg-slate-200"}`} />
-            ))}
-          </div>
-        </section>
-
-        {/* ── App download banner ────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-6 pb-14">
-          <div className="bg-gradient-to-r from-rose-500 to-amber-500 rounded-3xl px-8 py-7 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-white/25 flex items-center justify-center text-white shrink-0">
-                <Smartphone className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-white">Book on the go!</p>
-                <p className="text-lg font-extrabold text-white">Download the CalServices App</p>
-                <p className="text-xs text-rose-100">Faster booking, real-time tracking &amp; exclusive app offers.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Get it on Google Play</button>
-              <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Download on App Store</button>
-            </div>
-          </div>
-        </section>
-
-
-      <BkStyles />
-      {activeCategory && (
-        (activeCategory.id === "kitchen_cleaning" || activeCategory.slug === "kitchen_cleaning" || String(activeCategory.id) === "kitchen_cleaning" || activeCategory.name?.toLowerCase()?.includes("kitchen")) ? (
-          <KitchenCleaningModal
-            category={activeCategory}
-            cart={modalCart}
-            setCart={setModalCart}
-            onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-          />
-        ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
-          <SofaCleaningModal
-            category={activeCategory}
-            cart={modalCart}
-            setCart={setModalCart}
-            onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-          />
-        ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
-          <BathroomCleaningModal
-            category={activeCategory}
-            cart={modalCart}
-            setCart={setModalCart}
-            onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-          />
-        ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
-          <PaintingPackageModal
-            category={activeCategory}
-            cart={modalCart}
-            setCart={setModalCart}
-            onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-            onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
-          />
-        ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
-          <MasonPackageModal
-            category={activeCategory}
-            cart={modalCart}
-            setCart={setModalCart}
-            onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-            onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
-          />
-        ) : (
-          <CustomCleaningPackageModal
-            category={activeCategory}
-            cart={modalCart}
-            setCart={setModalCart}
-            onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-          />
-        )
-      )}
-
-
-
       {/* ── Home Services & Pest Control Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
       {isHomePestModalOpen &&
         typeof document !== "undefined" &&
@@ -2856,7 +2159,7 @@ export function LandingPage() {
             }}
           >
             <div
-              className={`bg-white rounded-3xl p-5 sm:p-7 w-full shadow-2xl border border-slate-100 relative max-h-[92vh] overflow-y-auto transition-all ${
+              className={`bg-white rounded-3xl w-full shadow-2xl border border-slate-100 relative flex flex-col max-h-[90vh] overflow-hidden transition-all ${
                 selectedFoodSubModule ? "max-w-5xl" : "max-w-xl"
               }`}
               onClick={(e) => e.stopPropagation()}
@@ -2872,88 +2175,16 @@ export function LandingPage() {
                   setVegCategoryFilter("All")
                 }}
                 aria-label="Close popup"
-                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-800 flex items-center justify-center transition-colors cursor-pointer z-20"
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-800 flex items-center justify-center transition-colors cursor-pointer z-40"
               >
                 <X className="w-5 h-5" />
               </button>
 
-              {!selectedFoodSubModule ? (
-                /* Sub-Modules Main View: Groceries & Vegetables (Compact & Attractive Emerald UI) */
-                <div>
-                  <div className="text-center mb-6">
-                    <h3
-                      id="food-health-modal-title"
-                      className="text-lg sm:text-xl font-extrabold text-slate-900"
-                    >
-                      Food and Health
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Choose a category to view items &amp; schedule fast delivery
-                    </p>
-                  </div>
-
-                  {/* 2 Compact & Attractive Sub-Module Cards */}
-                  <div className="grid grid-cols-2 gap-4 items-stretch max-w-lg mx-auto">
-                    {/* Option 1: Groceries */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedFoodSubModule(FOOD_HEALTH_SUB[0])
-                        setFoodOrderPlaced(false)
-                        setVegSearchQuery("")
-                        setVegCategoryFilter("All")
-                      }}
-                      className="group flex flex-col items-center justify-between p-4 sm:p-5 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/40 hover:shadow-md bg-white"
-                    >
-                      <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100 flex items-center justify-center p-2.5 group-hover:scale-105 transition-all shadow-2xs">
-                        <GroceriesGraphic className="w-full h-full" />
-                      </div>
-                      <div className="mt-3">
-                        <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block">
-                          Groceries
-                        </span>
-                        <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
-                          Daily Essentials &amp; Staples
-                        </span>
-                        <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/80 text-emerald-800 border border-emerald-200">
-                          ⚡ 15-min Delivery
-                        </span>
-                      </div>
-                    </button>
-
-                    {/* Option 2: Vegetables */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedFoodSubModule(FOOD_HEALTH_SUB[1])
-                        setFoodOrderPlaced(false)
-                        setVegSearchQuery("")
-                        setVegCategoryFilter("All")
-                      }}
-                      className="group flex flex-col items-center justify-between p-4 sm:p-5 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/40 hover:shadow-md bg-white"
-                    >
-                      <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100 flex items-center justify-center p-2.5 group-hover:scale-105 transition-all shadow-2xs">
-                        <VegetablesGraphic className="w-full h-full" />
-                      </div>
-                      <div className="mt-3">
-                        <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block">
-                          Vegetables
-                        </span>
-                        <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
-                          Farm-Fresh &amp; 100% Organic
-                        </span>
-                        <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/80 text-emerald-800 border border-emerald-200">
-                          🌱 8-min Farm Express
-                        </span>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Sub-Module Detail Catalog View */
-                <div>
+              {/* Pinned Modal Header (When viewing a sub-module detail) */}
+              {selectedFoodSubModule && (
+                <div className="px-5 sm:px-7 pt-5 sm:pt-6 pb-3 border-b border-slate-100 bg-white shrink-0">
                   {/* Back Link & Header */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pr-10">
                     <button
                       type="button"
                       onClick={() => {
@@ -2974,352 +2205,378 @@ export function LandingPage() {
                     </div>
                   </div>
 
-                  {/* Title and Search Row */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                    <div>
-                      <h4 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-                        {selectedFoodSubModule.name}
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                          {selectedFoodSubModule.items.length} items
-                        </span>
-                      </h4>
-                      <p className="text-xs text-slate-500 font-medium">
-                        {selectedFoodSubModule.tagline}
+                  {/* Title and Search Row (only for live catalogs, not Coming Soon) */}
+                  {selectedFoodSubModule.id !== "groceries" && (
+                    <>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                            {selectedFoodSubModule.name}
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                              {selectedFoodSubModule.items.length} items
+                            </span>
+                          </h4>
+                          <p className="text-xs text-slate-500 font-medium">
+                            {selectedFoodSubModule.tagline}
+                          </p>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="relative min-w-[240px]">
+                          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={vegSearchQuery}
+                            onChange={(e) => setVegSearchQuery(e.target.value)}
+                            placeholder={`Search ${selectedFoodSubModule.name.toLowerCase()} (e.g. Onion, Tomato)...`}
+                            className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 focus:border-emerald-500 focus:outline-none bg-slate-50/50"
+                          />
+                          {vegSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setVegSearchQuery("")}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Category Filter Pills (if vegetables) */}
+                      {selectedFoodSubModule.id === "vegetables" && (
+                        <div className="flex items-center gap-2 overflow-x-auto pt-3 no-scrollbar">
+                          {["All", "Daily Essentials", "Herbs & Leafy", "Gourds & Roots", "Organic & Exotic", "Herbs & Seasoning"].map((cat) => (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => setVegCategoryFilter(cat)}
+                              className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                                vegCategoryFilter === cat
+                                  ? "bg-emerald-600 text-white shadow-xs"
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                              }`}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Scrollable Body Container (Optimized for smooth 60fps scrolling) */}
+              <div
+                className="flex-1 overflow-y-auto p-5 sm:p-7 overscroll-contain"
+                style={{
+                  overscrollBehavior: "contain",
+                  WebkitOverflowScrolling: "touch",
+                  willChange: "scroll-position",
+                  transform: "translateZ(0)",
+                }}
+              >
+                {!selectedFoodSubModule ? (
+                  /* Sub-Modules Main View: Groceries & Vegetables (Compact & Attractive Emerald UI) */
+                  <div>
+                    <div className="text-center mb-6">
+                      <h3
+                        id="food-health-modal-title"
+                        className="text-lg sm:text-xl font-extrabold text-slate-900"
+                      >
+                        Food and Health
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Choose a category to view items &amp; schedule fast delivery
                       </p>
                     </div>
 
-                    {/* Search Bar */}
-                    <div className="relative min-w-[240px]">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={vegSearchQuery}
-                        onChange={(e) => setVegSearchQuery(e.target.value)}
-                        placeholder={`Search ${selectedFoodSubModule.name.toLowerCase()} (e.g. Onion, Tomato)...`}
-                        className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 focus:border-emerald-500 focus:outline-none bg-slate-50/50"
-                      />
-                      {vegSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setVegSearchQuery("")}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                    {/* 2 Compact & Attractive Sub-Module Cards */}
+                    <div className="grid grid-cols-2 gap-4 items-stretch max-w-lg mx-auto">
+                      {/* Option 1: Groceries (Coming Soon) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFoodSubModule(FOOD_HEALTH_SUB[0])
+                          setFoodOrderPlaced(false)
+                          setVegSearchQuery("")
+                          setVegCategoryFilter("All")
+                        }}
+                        className="group flex flex-col items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:border-amber-400 hover:bg-amber-50/20 hover:shadow-md bg-white relative"
+                      >
+                        <div className="w-full aspect-square max-w-[125px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100/80 overflow-hidden flex items-center justify-center p-1 group-hover:scale-105 transition-all shadow-2xs relative">
+                          <img
+                            src="/mockups/groceries_realistic.png"
+                            alt="Groceries"
+                            className="w-full h-full object-cover rounded-xl"
+                          />
+                          <div className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-xs">
+                            Coming Soon
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-amber-800 transition-colors block">
+                            Groceries
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
+                            Daily Essentials &amp; Staples
+                          </span>
+                          <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                            ⏳ Coming Soon
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* Option 2: Vegetables */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFoodSubModule(FOOD_HEALTH_SUB[1])
+                          setFoodOrderPlaced(false)
+                          setVegSearchQuery("")
+                          setVegCategoryFilter("All")
+                        }}
+                        className="group flex flex-col items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 hover:shadow-md bg-white"
+                      >
+                        <div className="w-full aspect-square max-w-[125px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100/80 overflow-hidden flex items-center justify-center p-1 group-hover:scale-105 transition-all shadow-2xs">
+                          <img
+                            src="/mockups/vegetables_realistic.png"
+                            alt="Vegetables"
+                            className="w-full h-full object-cover rounded-xl"
+                          />
+                        </div>
+                        <div className="mt-3">
+                          <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block">
+                            Vegetables
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
+                            Farm-Fresh &amp; 100% Organic
+                          </span>
+                          <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/80 text-emerald-800 border border-emerald-200">
+                            🌱 8-min Farm Express
+                          </span>
+                        </div>
+                      </button>
                     </div>
                   </div>
-
-                  {/* Category Filter Pills (if vegetables or groceries) */}
-                  {selectedFoodSubModule.id === "vegetables" && (
-                    <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-4 no-scrollbar">
-                      {["All", "Daily Essentials", "Herbs & Leafy", "Gourds & Roots", "Organic & Exotic", "Herbs & Seasoning"].map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setVegCategoryFilter(cat)}
-                          className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                            vegCategoryFilter === cat
-                              ? "bg-emerald-600 text-white shadow-xs"
-                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {foodOrderPlaced ? (
-                    <div className="p-8 rounded-3xl bg-gradient-to-b from-emerald-50 to-teal-50 border-2 border-emerald-200 text-center my-6">
-                      <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-600/30">
-                        <Check className="w-8 h-8 stroke-[3]" />
-                      </div>
-                      <h5 className="text-xl font-extrabold text-emerald-950">
-                        Order Confirmed Successfully!
-                      </h5>
-                      <p className="text-xs sm:text-sm text-emerald-800 font-medium mt-1.5 max-w-md mx-auto">
-                        Your fresh {selectedFoodSubModule.name.toLowerCase()} order has been placed. Our Hosur delivery partner is packing and dispatching your items within 8-10 minutes.
-                      </p>
-                      <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-emerald-800 text-xs font-bold border border-emerald-200">
-                        <span>📍 Delivery to:</span> Hosur Central &bull; ⏱ ETA: 8-12 mins
-                      </div>
-                      <div className="mt-6">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFoodCart({})
-                            setFoodOrderPlaced(false)
-                            setSelectedFoodSubModule(null)
-                          }}
-                          className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 cursor-pointer shadow-md transition-all"
-                        >
-                          Back to Home
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Products Grid matching Quick Commerce Layout */}
-                      {selectedFoodSubModule.items.filter((item) => {
-                        const q = vegSearchQuery.toLowerCase()
-                        const matchesSearch =
-                          !vegSearchQuery ||
-                          item.name.toLowerCase().includes(q) ||
-                          (item.category && item.category.toLowerCase().includes(q))
-                        const matchesCat =
-                          vegCategoryFilter === "All" || item.category === vegCategoryFilter
-                        return matchesSearch && matchesCat
-                      }).length === 0 ? (
-                        <div className="py-12 text-center">
-                          <p className="text-sm font-bold text-slate-500">No items found matching your search.</p>
+                ) : (
+                  /* Sub-Module Detail Catalog View */
+                  <div>
+                    {selectedFoodSubModule.id === "groceries" ? (
+                      <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-b from-amber-50/60 to-orange-50/20 border-2 border-amber-200/70 text-center my-4">
+                        <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl overflow-hidden mx-auto mb-4 border-2 border-amber-200 shadow-lg">
+                          <img
+                            src="/mockups/groceries_realistic.png"
+                            alt="Groceries Coming Soon"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-extrabold mb-3 border border-amber-300 shadow-2xs">
+                          <span>⏳</span> Coming Soon to Hosur
+                        </div>
+                        <h4 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                          Groceries Delivery is Coming Soon!
+                        </h4>
+                        <p className="text-xs sm:text-sm text-slate-600 font-medium mt-2 max-w-md mx-auto leading-relaxed">
+                          We are currently expanding our express fulfillment network in Hosur to deliver packaged staples, daily essentials, and dairy directly to your doorstep.
+                        </p>
+                        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                           <button
                             type="button"
                             onClick={() => {
+                              setSelectedFoodSubModule(FOOD_HEALTH_SUB[1])
+                              setFoodOrderPlaced(false)
                               setVegSearchQuery("")
                               setVegCategoryFilter("All")
                             }}
-                            className="mt-2 text-xs font-bold text-emerald-600 hover:underline"
+                            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm transition-all shadow-md cursor-pointer flex items-center gap-2"
                           >
-                            Clear filters
+                            <span>Order Fresh Vegetables</span>
+                            <span>&rarr;</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedFoodSubModule(null)
+                              setFoodOrderPlaced(false)
+                            }}
+                            className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm transition-all border border-slate-200 cursor-pointer"
+                          >
+                            Back to Categories
                           </button>
                         </div>
-                      ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-3.5 mb-6">
-                          {selectedFoodSubModule.items
-                            .filter((item) => {
-                              const q = vegSearchQuery.toLowerCase()
-                              const matchesSearch =
-                                !vegSearchQuery ||
-                                item.name.toLowerCase().includes(q) ||
-                                (item.category && item.category.toLowerCase().includes(q))
-                              const matchesCat =
-                                vegCategoryFilter === "All" || item.category === vegCategoryFilter
-                              return matchesSearch && matchesCat
-                            })
-                            .map((item, idx) => {
-                              const hasOptions = item.options && item.options.length > 0
-                              const count = hasOptions
-                                ? item.options.reduce((sum, opt) => sum + (foodCart[`${item.name} (${opt.unit})`] || 0), 0)
-                                : (foodCart[item.name] || 0)
-                              return (
-                                <div
-                                  key={idx}
-                                  className="group rounded-2xl border border-slate-200/90 bg-white hover:border-emerald-500 hover:shadow-lg flex flex-col justify-between transition-all duration-200 overflow-hidden"
-                                >
-                                  <div>
-                                    {/* Real Studio Photographic Product Image */}
-                                    <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
-                                      <img
-                                        src={getFoodItemPhoto(item.name, selectedFoodSubModule.id === "groceries")}
-                                        alt={item.name}
-                                        className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-300"
-                                        onError={(e) => {
-                                          e.target.onerror = null
-                                          e.target.src = "/mockups/category_food_health.png"
-                                        }}
-                                        loading="lazy"
-                                      />
-                                    </div>
-
-                                    {/* 8 MINS Delivery Pill */}
-                                    <div className="px-3 pt-2.5 flex items-center text-[10px] font-bold text-slate-400 gap-1">
-                                      <Clock className="w-3 h-3 text-slate-400" />
-                                      <span>{item.delivery || "8 MINS"}</span>
-                                    </div>
-
-                                    {/* Name and Weight / Options Pill */}
-                                    <h5 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-2 min-h-[34px] px-3 mt-1 leading-snug group-hover:text-emerald-700 transition-colors">
-                                      {item.name}
-                                    </h5>
-                                    {hasOptions ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => setVariantModalItem(item)}
-                                        className="mx-3 mt-1 px-2 py-0.5 rounded-md bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-500 flex items-center justify-between text-[10px] font-bold text-slate-700 transition-all cursor-pointer"
-                                      >
-                                        <span>{item.unit}</span>
-                                        <span className="text-emerald-700 font-extrabold flex items-center gap-0.5">
-                                          2 Options <ChevronDown className="w-2.5 h-2.5" />
-                                        </span>
-                                      </button>
-                                    ) : (
-                                      <p className="text-[11px] font-semibold text-slate-400 px-3 mt-0.5">
-                                        {item.unit}
-                                      </p>
-                                    )}
-                                  </div>
-
-                                  {/* Price and Add / Quantity Row */}
-                                  <div className="px-3 pb-3 pt-2 mt-3 border-t border-slate-100 flex items-center justify-between gap-1">
-                                    <div className="flex flex-col">
-                                      <span className="text-xs sm:text-sm font-black text-slate-900 leading-none">
-                                        ₹{item.price}
-                                      </span>
-                                      {item.mrp && (
-                                        <span className="text-[10px] line-through text-slate-400 font-semibold mt-0.5">
-                                          ₹{item.mrp}
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    {/* ADD or Counter Button */}
-                                    {hasOptions ? (
-                                      count > 0 ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => setVariantModalItem(item)}
-                                          className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1 text-xs font-black shadow-xs cursor-pointer active:scale-95 transition-all"
-                                        >
-                                          <span>{count} added</span>
-                                          <ChevronDown className="w-3 h-3" />
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => setVariantModalItem(item)}
-                                          className="px-3 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white flex items-center gap-1"
-                                        >
-                                          <span>ADD</span>
-                                          <ChevronDown className="w-2.5 h-2.5" />
-                                        </button>
-                                      )
-                                    ) : count > 0 ? (
-                                      <div className="flex items-center bg-emerald-600 text-white rounded-lg px-1.5 py-1 shadow-xs">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setFoodCart((prev) => ({
-                                              ...prev,
-                                              [item.name]: Math.max(0, (prev[item.name] || 0) - 1),
-                                            }))
-                                          }
-                                          className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
-                                        >
-                                          -
-                                        </button>
-                                        <span className="text-xs font-extrabold min-w-[14px] text-center px-0.5">
-                                          {count}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setFoodCart((prev) => ({
-                                              ...prev,
-                                              [item.name]: (prev[item.name] || 0) + 1,
-                                            }))
-                                          }
-                                          className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
-                                        >
-                                          +
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setFoodCart((prev) => ({
-                                            ...prev,
-                                            [item.name]: 1,
-                                          }))
-                                        }
-                                        className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white"
-                                      >
-                                        ADD
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
+                      </div>
+                    ) : foodOrderPlaced ? (
+                      <div className="p-8 rounded-3xl bg-gradient-to-b from-emerald-50 to-teal-50 border-2 border-emerald-200 text-center my-6">
+                        <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-600/30">
+                          <Check className="w-8 h-8 stroke-[3]" />
                         </div>
-                      )}
-
-                      {/* Quick Pack/Weight Options Modal matching User Screenshot */}
-                      {variantModalItem && (
-                        <div
-                          className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
-                          onClick={() => setVariantModalItem(null)}
-                        >
-                          <div
-                            className="relative bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150"
-                            onClick={(e) => e.stopPropagation()}
+                        <h5 className="text-xl font-extrabold text-emerald-950">
+                          Order Confirmed Successfully!
+                        </h5>
+                        <p className="text-xs sm:text-sm text-emerald-800 font-medium mt-1.5 max-w-md mx-auto">
+                          Your fresh {selectedFoodSubModule.name.toLowerCase()} order has been placed. Our Hosur delivery partner is packing and dispatching your items within 8-10 minutes.
+                        </p>
+                        <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-emerald-800 text-xs font-bold border border-emerald-200">
+                          <span>📍 Delivery to:</span> Hosur Central &bull; ⏱ ETA: 8-12 mins
+                        </div>
+                        <div className="mt-6">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFoodCart({})
+                              setFoodOrderPlaced(false)
+                              setSelectedFoodSubModule(null)
+                            }}
+                            className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 cursor-pointer shadow-md transition-all"
                           >
-                            {/* Floating Close Button on top */}
+                            Back to Home
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Products Grid matching Quick Commerce Layout */}
+                        {selectedFoodSubModule.items.filter((item) => {
+                          const q = vegSearchQuery.toLowerCase()
+                          const matchesSearch =
+                            !vegSearchQuery ||
+                            item.name.toLowerCase().includes(q) ||
+                            (item.category && item.category.toLowerCase().includes(q))
+                          const matchesCat =
+                            vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                          return matchesSearch && matchesCat
+                        }).length === 0 ? (
+                          <div className="py-12 text-center">
+                            <p className="text-sm font-bold text-slate-500">No items found matching your search.</p>
                             <button
                               type="button"
-                              onClick={() => setVariantModalItem(null)}
-                              className="absolute -top-4 right-1/2 translate-x-1/2 sm:translate-x-0 sm:right-3 sm:-top-4 w-9 h-9 rounded-full bg-slate-900 text-white hover:bg-slate-800 flex items-center justify-center shadow-lg transition-transform hover:scale-105 cursor-pointer z-10"
+                              onClick={() => {
+                                setVegSearchQuery("")
+                                setVegCategoryFilter("All")
+                              }}
+                              className="mt-2 text-xs font-bold text-emerald-600 hover:underline"
                             >
-                              <X className="w-4 h-4" />
+                              Clear filters
                             </button>
-
-                            {/* Modal Header */}
-                            <h4 className="text-base sm:text-lg font-black text-slate-900 mb-4 pr-6">
-                              {variantModalItem.name}
-                            </h4>
-
-                            {/* Options List */}
-                            <div className="space-y-3">
-                              {variantModalItem.options?.map((opt, oIdx) => {
-                                const cartKey = `${variantModalItem.name} (${opt.unit})`
-                                const optCount = foodCart[cartKey] || 0
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-3.5 mb-2">
+                            {selectedFoodSubModule.items
+                              .filter((item) => {
+                                const q = vegSearchQuery.toLowerCase()
+                                const matchesSearch =
+                                  !vegSearchQuery ||
+                                  item.name.toLowerCase().includes(q) ||
+                                  (item.category && item.category.toLowerCase().includes(q))
+                                const matchesCat =
+                                  vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                                return matchesSearch && matchesCat
+                              })
+                              .map((item, idx) => {
+                                const hasOptions = item.options && item.options.length > 0
+                                const count = hasOptions
+                                  ? item.options.reduce((sum, opt) => sum + (foodCart[`${item.name} (${opt.unit})`] || 0), 0)
+                                  : (foodCart[item.name] || 0)
                                 return (
                                   <div
-                                    key={oIdx}
-                                    className="bg-white rounded-2xl border border-slate-200/90 p-3 flex items-center justify-between gap-3 shadow-xs hover:border-emerald-500 transition-all"
+                                    key={idx}
+                                    className="group rounded-2xl border border-slate-200/90 bg-white hover:border-emerald-500 hover:shadow-md flex flex-col justify-between transition-shadow duration-150 overflow-hidden"
+                                    style={{
+                                      contentVisibility: "auto",
+                                      containIntrinsicSize: "0 230px",
+                                    }}
                                   >
-                                    {/* Left: Product Thumbnail */}
-                                    <div className="w-14 h-14 rounded-xl bg-[#f5f1eb] overflow-hidden shrink-0">
-                                      <img
-                                        src={getFoodItemPhoto(variantModalItem.name, false)}
-                                        alt={variantModalItem.name}
-                                        className="w-full h-full object-cover"
-                                      />
+                                    <div>
+                                      {/* Real Studio Photographic Product Image */}
+                                      <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
+                                        <img
+                                          src={getFoodItemPhoto(item.name, selectedFoodSubModule.id === "groceries")}
+                                          alt={item.name}
+                                          loading="lazy"
+                                          decoding="async"
+                                          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                          onError={(e) => {
+                                            e.target.onerror = null
+                                            e.target.src = "/mockups/category_food_health.png"
+                                          }}
+                                        />
+                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-white px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
+                                          <Clock className="w-2.5 h-2.5 text-emerald-600" />
+                                          <span>{item.delivery || "8 MINS"}</span>
+                                        </div>
+                                      </div>
+
+                                      {/* Details */}
+                                      <div className="p-2.5">
+                                        <h5 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight min-h-[30px]" title={item.name}>
+                                          {item.name}
+                                        </h5>
+                                        <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
+                                          {item.unit}
+                                        </p>
+                                      </div>
                                     </div>
 
-                                    {/* Middle: Unit & Price */}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-bold text-slate-800">
-                                        {opt.unit}
-                                      </p>
-                                      <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span className="text-sm font-black text-slate-900">
-                                          ₹{opt.price}
-                                        </span>
-                                        {opt.mrp && (
-                                          <span className="text-xs line-through text-slate-400 font-semibold">
-                                            ₹{opt.mrp}
+                                    {/* Price and Add CTA */}
+                                    <div className="p-2.5 pt-0 flex items-center justify-between gap-1.5 mt-auto">
+                                      <div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                                            ₹{item.price}
+                                          </span>
+                                        </div>
+                                        {item.mrp && (
+                                          <span className="text-[10px] text-slate-400 line-through">
+                                            ₹{item.mrp}
                                           </span>
                                         )}
                                       </div>
-                                    </div>
 
-                                    {/* Right: Add / Counter Button */}
-                                    <div>
-                                      {optCount > 0 ? (
-                                        <div className="flex items-center bg-emerald-600 text-white rounded-lg px-2 py-1 shadow-xs">
+                                      {hasOptions ? (
+                                        count > 0 ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => setVariantModalItem(item)}
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-extrabold text-[11px] shadow-xs flex items-center gap-1 cursor-pointer"
+                                          >
+                                            <span>{count} in Cart</span>
+                                            <ChevronDown className="w-2.5 h-2.5" />
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => setVariantModalItem(item)}
+                                            className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white flex items-center gap-1"
+                                          >
+                                            <span>ADD</span>
+                                            <ChevronDown className="w-2.5 h-2.5" />
+                                          </button>
+                                        )
+                                      ) : count > 0 ? (
+                                        <div className="flex items-center bg-emerald-600 text-white rounded-lg px-1.5 py-1 shadow-xs">
                                           <button
                                             type="button"
                                             onClick={() =>
                                               setFoodCart((prev) => ({
                                                 ...prev,
-                                                [cartKey]: Math.max(0, (prev[cartKey] || 0) - 1),
+                                                [item.name]: Math.max(0, (prev[item.name] || 0) - 1),
                                               }))
                                             }
                                             className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
                                           >
                                             -
                                           </button>
-                                          <span className="text-xs font-extrabold min-w-[16px] text-center px-1">
-                                            {optCount}
+                                          <span className="text-xs font-extrabold min-w-[14px] text-center px-0.5">
+                                            {count}
                                           </span>
                                           <button
                                             type="button"
                                             onClick={() =>
                                               setFoodCart((prev) => ({
                                                 ...prev,
-                                                [cartKey]: (prev[cartKey] || 0) + 1,
+                                                [item.name]: (prev[item.name] || 0) + 1,
                                               }))
                                             }
                                             className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
@@ -3333,10 +2590,10 @@ export function LandingPage() {
                                           onClick={() =>
                                             setFoodCart((prev) => ({
                                               ...prev,
-                                              [cartKey]: 1,
+                                              [item.name]: 1,
                                             }))
                                           }
-                                          className="px-4 py-1.5 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-xs transition-all cursor-pointer active:scale-95 bg-white"
+                                          className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white"
                                         >
                                           ADD
                                         </button>
@@ -3345,131 +2602,247 @@ export function LandingPage() {
                                   </div>
                                 )
                               })}
+                          </div>
+                        )}
+
+                        {/* Quick Pack/Weight Options Modal */}
+                        {variantModalItem && (
+                          <div
+                            className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+                            onClick={() => setVariantModalItem(null)}
+                          >
+                            <div
+                              className="relative bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {/* Floating Close Button on top */}
+                              <button
+                                type="button"
+                                onClick={() => setVariantModalItem(null)}
+                                className="absolute -top-4 right-1/2 translate-x-1/2 sm:translate-x-0 sm:right-3 sm:-top-4 w-9 h-9 rounded-full bg-slate-900 text-white hover:bg-slate-800 flex items-center justify-center shadow-lg transition-transform hover:scale-105 cursor-pointer z-10"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+
+                              {/* Modal Header */}
+                              <h4 className="text-base sm:text-lg font-black text-slate-900 mb-4 pr-6">
+                                {variantModalItem.name}
+                              </h4>
+
+                              {/* Options List */}
+                              <div className="space-y-3">
+                                {variantModalItem.options?.map((opt, oIdx) => {
+                                  const cartKey = `${variantModalItem.name} (${opt.unit})`
+                                  const optCount = foodCart[cartKey] || 0
+                                  return (
+                                    <div
+                                      key={oIdx}
+                                      className="bg-white rounded-2xl border border-slate-200/90 p-3 flex items-center justify-between gap-3 shadow-xs hover:border-emerald-500 transition-all"
+                                    >
+                                      {/* Left: Product Thumbnail */}
+                                      <div className="w-14 h-14 rounded-xl bg-[#f5f1eb] overflow-hidden shrink-0">
+                                        <img
+                                          src={getFoodItemPhoto(variantModalItem.name, false)}
+                                          alt={variantModalItem.name}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      </div>
+
+                                      {/* Middle: Unit & Price */}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-bold text-slate-800">
+                                          {opt.unit}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                          <span className="text-xs sm:text-sm font-black text-slate-900">
+                                            ₹{opt.price}
+                                          </span>
+                                          {opt.mrp && (
+                                            <span className="text-[10px] text-slate-400 line-through">
+                                              ₹{opt.mrp}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Right: Add/Quantity Control */}
+                                      <div className="shrink-0">
+                                        {optCount > 0 ? (
+                                          <div className="flex items-center bg-emerald-600 text-white rounded-lg px-1.5 py-1 shadow-xs">
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setFoodCart((prev) => ({
+                                                  ...prev,
+                                                  [cartKey]: Math.max(0, (prev[cartKey] || 0) - 1),
+                                                }))
+                                              }
+                                              className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                            >
+                                              -
+                                            </button>
+                                            <span className="text-xs font-extrabold min-w-[14px] text-center px-0.5">
+                                              {optCount}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setFoodCart((prev) => ({
+                                                  ...prev,
+                                                  [cartKey]: (prev[cartKey] || 0) + 1,
+                                                }))
+                                              }
+                                              className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                            >
+                                              +
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setFoodCart((prev) => ({
+                                                ...prev,
+                                                [cartKey]: 1,
+                                              }))
+                                            }
+                                            className="px-4 py-1.5 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-xs transition-all cursor-pointer active:scale-95 bg-white"
+                                          >
+                                            ADD
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
 
-                      {/* Sticky Order Action Bar */}
-                      <div className="sticky bottom-0 bg-white/95 backdrop-blur-md pt-3 pb-1 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                        <div className="text-xs text-slate-600 font-semibold">
-                          {Object.values(foodCart).reduce((a, b) => a + b, 0) > 0 ? (
-                            <div className="flex items-center gap-2">
-                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-extrabold text-xs">
-                                {Object.values(foodCart).reduce((a, b) => a + b, 0)} items in cart
-                              </span>
-                              <span className="text-slate-800 font-bold">
-                                Total: ₹
-                                {Object.entries(foodCart).reduce((sum, [nameWithUnit, qty]) => {
-                                  if (qty <= 0) return sum
-                                  let matchedPrice = 0
-                                  if (selectedFoodSubModule?.items) {
-                                    for (const it of selectedFoodSubModule.items) {
-                                      if (it.options) {
-                                        for (const opt of it.options) {
-                                          if (`${it.name} (${opt.unit})` === nameWithUnit) {
-                                            matchedPrice = opt.price
-                                            break
-                                          }
-                                        }
-                                      }
-                                      if (matchedPrice) break
-                                      if (it.name === nameWithUnit) {
-                                        matchedPrice = it.price
-                                        break
-                                      }
+              {/* Pinned Fixed Bottom Action Bar */}
+              {selectedFoodSubModule && selectedFoodSubModule.id !== "groceries" && !foodOrderPlaced && (
+                <div className="px-5 sm:px-7 py-3.5 bg-white border-t border-slate-200 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] rounded-b-3xl">
+                  <div className="text-xs text-slate-600 font-semibold">
+                    {Object.values(foodCart).reduce((a, b) => a + b, 0) > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-extrabold text-xs">
+                          {Object.values(foodCart).reduce((a, b) => a + b, 0)} items in cart
+                        </span>
+                        <span className="text-slate-800 font-bold">
+                          Total: ₹
+                          {Object.entries(foodCart).reduce((sum, [nameWithUnit, qty]) => {
+                            if (qty <= 0) return sum
+                            let matchedPrice = 0
+                            if (selectedFoodSubModule?.items) {
+                              for (const it of selectedFoodSubModule.items) {
+                                if (it.options) {
+                                  for (const opt of it.options) {
+                                    if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                      matchedPrice = opt.price
+                                      break
                                     }
-                                  }
-                                  return sum + matchedPrice * qty
-                                }, 0)}
-                              </span>
-                            </div>
-                          ) : (
-                            <span>Select vegetables above for instant Hosur door delivery</span>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
-                          onClick={() => {
-                            const itemsList = []
-                            Object.entries(foodCart).forEach(([nameWithUnit, qty]) => {
-                              if (qty <= 0) return
-                              let matchedItem = null
-                              let unit = "1 unit"
-                              let price = 0
-                              let mrp = 0
-                              let baseName = nameWithUnit
-
-                              if (selectedFoodSubModule?.items) {
-                                for (const it of selectedFoodSubModule.items) {
-                                  if (it.options) {
-                                    for (const opt of it.options) {
-                                      if (`${it.name} (${opt.unit})` === nameWithUnit) {
-                                        matchedItem = it
-                                        unit = opt.unit
-                                        price = opt.price
-                                        mrp = opt.mrp || Math.round(opt.price * 1.2)
-                                        baseName = it.name
-                                        break
-                                      }
-                                    }
-                                  }
-                                  if (matchedItem) break
-                                  if (it.name === nameWithUnit) {
-                                    matchedItem = it
-                                    unit = it.unit
-                                    price = it.price
-                                    mrp = it.mrp || Math.round(it.price * 1.2)
-                                    baseName = it.name
-                                    break
                                   }
                                 }
+                                if (matchedPrice) break
+                                if (it.name === nameWithUnit) {
+                                  matchedPrice = it.price
+                                  break
+                                }
                               }
-
-                              itemsList.push({
-                                id: `veg_${nameWithUnit.replace(/[^a-zA-Z0-9]/g, "_")}`,
-                                name: baseName,
-                                displayName: nameWithUnit,
-                                unit: unit,
-                                price: price || 30,
-                                mrp: mrp || (price ? Math.round(price * 1.2) : 36),
-                                quantity: qty,
-                                image: getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
-                                serviceType: "vegetables_quick_delivery",
-                                deliveryMins: "15-25 mins",
-                              })
-                            })
-
-                            if (itemsList.length === 0) return
-
-                            setSelectedFoodSubModule(null)
-                            navigate(routes.booking_checkout, {
-                              state: {
-                                category: {
-                                  id: "vegetables_quick_delivery",
-                                  name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
-                                  isQuickCommerce: true,
-                                  deliveryTime: "15-25 mins",
-                                },
-                                cart: itemsList,
-                                isQuickCommerce: true,
-                              }
-                            })
-                          }}
-                          className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
-                            Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                              ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
-                              : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                          }`}
-                        >
-                          <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
+                            }
+                            return sum + matchedPrice * qty
+                          }, 0)}
+                        </span>
                       </div>
-                    </>
-                  )}
+                    ) : (
+                      <span>Select vegetables above for instant Hosur door delivery</span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
+                    onClick={() => {
+                      const itemsList = []
+                      Object.entries(foodCart).forEach(([nameWithUnit, qty]) => {
+                        if (qty <= 0) return
+                        let matchedItem = null
+                        let unit = "1 unit"
+                        let price = 0
+                        let mrp = 0
+                        let baseName = nameWithUnit
+
+                        if (selectedFoodSubModule?.items) {
+                          for (const it of selectedFoodSubModule.items) {
+                            if (it.options) {
+                              for (const opt of it.options) {
+                                if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                  matchedItem = it
+                                  unit = opt.unit
+                                  price = opt.price
+                                  mrp = opt.mrp || Math.round(opt.price * 1.2)
+                                  baseName = it.name
+                                  break
+                                }
+                              }
+                            }
+                            if (matchedItem) break
+                            if (it.name === nameWithUnit) {
+                              matchedItem = it
+                              unit = it.unit
+                              price = it.price
+                              mrp = it.mrp || Math.round(it.price * 1.2)
+                              baseName = it.name
+                              break
+                            }
+                          }
+                        }
+
+                        itemsList.push({
+                          id: `veg_${nameWithUnit.replace(/[^a-zA-Z0-9]/g, "_")}`,
+                          name: baseName,
+                          displayName: nameWithUnit,
+                          unit: unit,
+                          price: price || 30,
+                          mrp: mrp || (price ? Math.round(price * 1.2) : 36),
+                          quantity: qty,
+                          image: getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
+                          serviceType: "vegetables_quick_delivery",
+                          deliveryMins: "15-25 mins",
+                        })
+                      })
+
+                      if (itemsList.length === 0) return
+
+                      setSelectedFoodSubModule(null)
+                      navigate(routes.booking_checkout, {
+                        state: {
+                          category: {
+                            id: "vegetables_quick_delivery",
+                            name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
+                            isQuickCommerce: true,
+                            deliveryTime: "15-25 mins",
+                          },
+                          cart: itemsList,
+                          isQuickCommerce: true,
+                        }
+                      })
+                    }}
+                    className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
+                      Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                        ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    }`}
+                  >
+                    <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               )}
             </div>
@@ -3923,25 +3296,15 @@ export function LandingPage() {
           onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
         />
       ) : (
-        <PackageModal
+        <CustomCleaningPackageModal
           category={activeCategory}
           cart={modalCart}
           setCart={setModalCart}
-          packagesData={{}}
           onClose={() => navigate("/home")}
           onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
         />
       )
     )}
-
-    <CustomerEntryFlowModal
-      isOpen={showCustomerEntryModal}
-      onClose={() => setShowCustomerEntryModal(false)}
-      onComplete={() => {
-        setShowCustomerEntryModal(false)
-        if (typeof refreshMe === "function") refreshMe()
-      }}
-    />
 
       <CustomerEntryFlowModal
         isOpen={showCustomerEntryModal}

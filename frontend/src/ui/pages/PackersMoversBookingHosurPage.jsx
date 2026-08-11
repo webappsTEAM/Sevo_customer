@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import {
-  MapPin, ChevronDown, ChevronUp, ArrowRight, ShieldCheck,
+  MapPin, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowRight, ShieldCheck,
   Clock, Package, Boxes, X, Sparkles, Navigation, Truck,
   CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed,
   User, Mail, MessageSquare, AlertCircle, Home, Bike, Check,
@@ -254,6 +254,72 @@ const LOCATIONS_DATABASE = {
   ]
 }
 
+const INTERCITY_CITIES = [
+  { name: "Bengaluru", state: "Karnataka", subtitle: "Karnataka (~40 Kms from Hosur)" },
+  { name: "Chennai", state: "Tamil Nadu", subtitle: "Tamil Nadu (~310 Kms from Hosur)" },
+  { name: "Coimbatore", state: "Tamil Nadu", subtitle: "Tamil Nadu (~310 Kms from Hosur)" },
+  { name: "Dharmapuri", state: "Tamil Nadu", subtitle: "Tamil Nadu (~90 Kms from Hosur)" },
+  { name: "Madurai", state: "Tamil Nadu", subtitle: "Tamil Nadu (~410 Kms from Hosur)" },
+  { name: "Hosur", state: "Tamil Nadu", subtitle: "Tamil Nadu (Origin Hub)" },
+  { name: "Salem", state: "Tamil Nadu", subtitle: "Tamil Nadu (~150 Kms from Hosur)" },
+  { name: "Krishnagiri", state: "Tamil Nadu", subtitle: "Tamil Nadu (~50 Kms from Hosur)" },
+  { name: "Tiruchirappalli (Trichy)", state: "Tamil Nadu", subtitle: "Tamil Nadu (~290 Kms from Hosur)" },
+  { name: "Tirupur", state: "Tamil Nadu", subtitle: "Tamil Nadu (~265 Kms from Hosur)" },
+  { name: "Erode", state: "Tamil Nadu", subtitle: "Tamil Nadu (~210 Kms from Hosur)" },
+  { name: "Vellore", state: "Tamil Nadu", subtitle: "Tamil Nadu (~180 Kms from Hosur)" },
+  { name: "Mysore", state: "Karnataka", subtitle: "Karnataka (~185 Kms from Hosur)" },
+  { name: "Hyderabad", state: "Telangana", subtitle: "Telangana (~610 Kms from Hosur)" },
+  { name: "Kochi", state: "Kerala", subtitle: "Kerala (~500 Kms from Hosur)" },
+  { name: "Puducherry", state: "Pondicherry", subtitle: "Pondicherry (~260 Kms from Hosur)" },
+]
+
+function filterIntercitySuggestions(searchText, excludeCityName = "") {
+  const excludeNormalized = (excludeCityName || "").trim().toLowerCase()
+  const availableCities = INTERCITY_CITIES.filter((item) => {
+    if (!excludeNormalized) return true
+    const itemNorm = item.name.toLowerCase()
+    return itemNorm !== excludeNormalized && !excludeNormalized.includes(itemNorm) && !itemNorm.includes(excludeNormalized)
+  })
+
+  if (!searchText || !searchText.trim()) {
+    return availableCities.slice(0, 8)
+  }
+
+  const query = searchText.trim().toLowerCase()
+  const exactStarts = []
+  const wordStarts = []
+  const containsMatches = []
+
+  availableCities.forEach((item) => {
+    const nameLow = item.name.toLowerCase()
+    const stateLow = (item.state || "").toLowerCase()
+    const subLow = (item.subtitle || "").toLowerCase()
+
+    if (nameLow.startsWith(query)) {
+      exactStarts.push(item)
+    } else if (
+      nameLow.split(/[\s,/-]+/).some((w) => w.startsWith(query)) ||
+      stateLow.startsWith(query)
+    ) {
+      wordStarts.push(item)
+    } else if (nameLow.includes(query) || stateLow.includes(query) || subLow.includes(query)) {
+      containsMatches.push(item)
+    }
+  })
+
+  const combined = [...exactStarts, ...wordStarts, ...containsMatches]
+  const seen = new Set()
+  const result = []
+  for (const it of combined) {
+    if (!seen.has(it.name)) {
+      seen.add(it.name)
+      result.push(it)
+    }
+    if (result.length >= 8) break
+  }
+  return result
+}
+
 function filterLocationSuggestions(searchText, city = "HOSUR") {
   const cityLocations = LOCATIONS_DATABASE[city] || LOCATIONS_DATABASE["HOSUR"]
   
@@ -456,6 +522,271 @@ const SHIFTING_SLOTS = {
   "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
 }
 
+/* ── Enhanced Custom Shifting Date Picker ── */
+function CustomShiftingDatePicker({ value, onChange, placeholder = "Select Shifting Date" }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const wrapperRef = useRef(null)
+
+  const initialDate = value ? new Date(value + "T00:00:00") : new Date()
+  const [viewYear, setViewYear] = useState(isNaN(initialDate.getTime()) ? new Date().getFullYear() : initialDate.getFullYear())
+  const [viewMonth, setViewMonth] = useState(isNaN(initialDate.getTime()) ? new Date().getMonth() : initialDate.getMonth())
+
+  useEffect(() => {
+    if (value) {
+      const d = new Date(value + "T00:00:00")
+      if (!isNaN(d.getTime())) {
+        setViewYear(d.getFullYear())
+        setViewMonth(d.getMonth())
+      }
+    }
+  }, [value])
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setIsOpen(false)
+      }
+    }
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setIsOpen(false)
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [])
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ]
+  const dayNames = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const selectedDateObj = value ? new Date(value + "T00:00:00") : null
+
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const firstDayIndex = new Date(viewYear, viewMonth, 1).getDay()
+
+  const handlePrevMonth = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11)
+      setViewYear((prev) => prev - 1)
+    } else {
+      setViewMonth((prev) => prev - 1)
+    }
+  }
+
+  const handleNextMonth = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0)
+      setViewYear((prev) => prev + 1)
+    } else {
+      setViewMonth((prev) => prev + 1)
+    }
+  }
+
+  const formatDateString = (y, m, d) => {
+    const mm = String(m + 1).padStart(2, "0")
+    const dd = String(d).padStart(2, "0")
+    return `${y}-${mm}-${dd}`
+  }
+
+  const handleSelectDay = (day) => {
+    const formatted = formatDateString(viewYear, viewMonth, day)
+    onChange(formatted)
+    setIsOpen(false)
+  }
+
+  const setQuickDate = (daysFromToday) => {
+    const target = new Date()
+    target.setDate(target.getDate() + daysFromToday)
+    const formatted = formatDateString(target.getFullYear(), target.getMonth(), target.getDate())
+    onChange(formatted)
+    setViewYear(target.getFullYear())
+    setViewMonth(target.getMonth())
+    setIsOpen(false)
+  }
+
+  const formatDisplay = (val) => {
+    if (!val) return ""
+    try {
+      const d = new Date(val + "T00:00:00")
+      if (isNaN(d.getTime())) return val
+      return d.toLocaleDateString("en-IN", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    } catch {
+      return val
+    }
+  }
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      {/* Trigger Input Card */}
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full h-[54px] px-4 rounded-xl border bg-white flex items-center justify-between cursor-pointer transition-all ${
+          isOpen
+            ? "border-[#0B8860] ring-2 ring-[#0B8860]/20 shadow-sm"
+            : "border-[#E0E0E0] hover:border-slate-400"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#0B8860] flex items-center justify-center shrink-0">
+            <Calendar className="w-4 h-4" />
+          </div>
+          <span className={`text-[15px] font-medium ${value ? "text-[#333333] font-semibold" : "text-[#999999]"}`}>
+            {value ? formatDisplay(value) : placeholder}
+          </span>
+        </div>
+        <div className="text-slate-400">
+          {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </div>
+      </div>
+
+      {/* Enhanced Calendar Popover (Positioned upwards to ensure 100% full visibility) */}
+      {isOpen && (
+        <div className="absolute left-0 bottom-full mb-2 w-full sm:w-[320px] bg-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.22)] border border-slate-200/90 p-4 z-[100] animate-in fade-in zoom-in-95 duration-150">
+          {/* Quick Selection Shortcuts */}
+          <div className="flex items-center gap-1.5 pb-3 mb-3 border-b border-slate-100 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setQuickDate(0)}
+              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-emerald-100 hover:text-emerald-800 text-slate-700 transition-colors cursor-pointer shrink-0"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickDate(1)}
+              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-emerald-100 hover:text-emerald-800 text-slate-700 transition-colors cursor-pointer shrink-0"
+            >
+              Tomorrow
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date()
+                const distToSat = (6 - now.getDay() + 7) % 7 || 7
+                setQuickDate(distToSat)
+              }}
+              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-emerald-100 hover:text-emerald-800 text-slate-700 transition-colors cursor-pointer shrink-0"
+            >
+              Weekend
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickDate(7)}
+              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-emerald-100 hover:text-emerald-800 text-slate-700 transition-colors cursor-pointer shrink-0"
+            >
+              +1 Week
+            </button>
+          </div>
+
+          {/* Month & Year Navigation */}
+          <div className="flex items-center justify-between mb-3 px-1">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <h4 className="text-sm font-extrabold text-slate-900">
+              {monthNames[viewMonth]} {viewYear}
+            </h4>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Day Names Header */}
+          <div className="grid grid-cols-7 gap-1 text-center mb-1">
+            {dayNames.map((d, i) => (
+              <span key={i} className="text-[11px] font-bold text-slate-400 py-1">
+                {d}
+              </span>
+            ))}
+          </div>
+
+          {/* Days Grid */}
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {Array.from({ length: firstDayIndex }).map((_, i) => (
+              <div key={`empty-${i}`} className="w-8 h-8" />
+            ))}
+
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1
+              const dateForDay = new Date(viewYear, viewMonth, day)
+              dateForDay.setHours(0, 0, 0, 0)
+              const isPast = dateForDay < today
+              const isSelected =
+                selectedDateObj &&
+                selectedDateObj.getFullYear() === viewYear &&
+                selectedDateObj.getMonth() === viewMonth &&
+                selectedDateObj.getDate() === day
+              const isToday = dateForDay.getTime() === today.getTime()
+
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  disabled={isPast}
+                  onClick={() => handleSelectDay(day)}
+                  className={`w-8 h-8 mx-auto text-xs rounded-xl flex items-center justify-center font-bold transition-all ${
+                    isPast
+                      ? "text-slate-300 cursor-not-allowed"
+                      : isSelected
+                      ? "bg-[#0B8860] text-white shadow-md shadow-emerald-700/25 scale-105 cursor-pointer font-extrabold"
+                      : isToday
+                      ? "border border-[#0B8860] text-[#0B8860] hover:bg-emerald-50 cursor-pointer"
+                      : "text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  }`}
+                >
+                  {day}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("")
+                setIsOpen(false)
+              }}
+              className="text-slate-500 hover:text-slate-800 font-bold hover:underline cursor-pointer"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickDate(0)}
+              className="text-[#0B8860] font-bold hover:underline cursor-pointer"
+            >
+              Select Today
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ── Packers & Movers Booking Hosur Page (Image 2 Uniform UI) ── */
 export function PackersMoversBookingHosurPage() {
   const navigate = useNavigate()
@@ -616,8 +947,12 @@ export function PackersMoversBookingHosurPage() {
     }
   }, [])
 
-  const pickupSuggestions = filterLocationSuggestions(pickup, selectedCity)
-  const dropSuggestions = filterLocationSuggestions(drop, selectedCity)
+  const pickupSuggestions = relocationType === "Between Cities"
+    ? filterIntercitySuggestions(pickup, drop)
+    : filterLocationSuggestions(pickup, selectedCity)
+  const dropSuggestions = relocationType === "Between Cities"
+    ? filterIntercitySuggestions(drop, pickup)
+    : filterLocationSuggestions(drop, selectedCity)
 
   // Live location detection
   const handleFetchLiveLocation = (e) => {
@@ -779,6 +1114,10 @@ export function PackersMoversBookingHosurPage() {
 
   const handleGetEstimate = (e) => {
     if (e) e.preventDefault()
+    if (relocationType === "Between Cities" && pickup && drop && pickup.trim().toLowerCase() === drop.trim().toLowerCase()) {
+      alert("Source and Destination cities cannot be the same for Between Cities relocation. Please choose different cities.")
+      return
+    }
     setInventoryBuilderOpen(true)
     setStepperStep(2)
     if (!selectedPackage) setSelectedPackage(PACKERS_PACKAGES[0])
@@ -936,7 +1275,7 @@ export function PackersMoversBookingHosurPage() {
 
       {/* ── Hero Section (Vertical Form Style) ────────────────────── */}
       <section 
-        className="relative pt-10 pb-12 sm:pt-16 sm:pb-20 overflow-hidden border-b border-slate-200/50 bg-cover bg-center bg-no-repeat"
+        className="relative pt-10 pb-12 sm:pt-16 sm:pb-20 overflow-visible border-b border-slate-200/50 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url('/hero_packers_bg.png')` }}
       >
         
@@ -976,11 +1315,11 @@ export function PackersMoversBookingHosurPage() {
           </div>
 
           {/* Right Column: Vertical Form Card */}
-          <div className="w-full max-w-[440px] shrink-0 mt-4 md:mt-0 relative z-10 font-sans antialiased">
-            <div className="bg-white rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.08)] overflow-hidden flex flex-col border border-slate-100">
+          <div className="w-full max-w-[440px] shrink-0 mt-4 md:mt-0 relative z-20 font-sans antialiased">
+            <div className="bg-white rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.08)] overflow-visible flex flex-col border border-slate-100 relative">
               
               {/* Top Area (Soft Emerald) */}
-              <div className="bg-[#ecfdf5] pt-8 pb-6 px-6 relative">
+              <div className="bg-[#ecfdf5] pt-8 pb-6 px-6 relative rounded-t-2xl">
                 <div className="relative z-10">
                   <h3 className="text-[24px] font-bold text-[#333333] mb-6 tracking-tight leading-snug">
                     Where are you going to relocate?
@@ -1015,7 +1354,7 @@ export function PackersMoversBookingHosurPage() {
               </div>
 
               {/* Form Body */}
-              <div className="px-6 py-6 bg-white flex-1 z-10">
+              <div className="px-6 py-6 bg-white flex-1 z-10 rounded-b-2xl overflow-visible">
                 <form onSubmit={handleGetEstimate} className="space-y-5">
                   
                   {relocationType === "Within City" && (
@@ -1150,7 +1489,7 @@ export function PackersMoversBookingHosurPage() {
                                 />
                                 {/* Suggestions */}
                                 {showPickupSuggestions && (
-                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
+                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
                                     {pickupSuggestions.map((loc, idx) => (
                                       <button
                                         key={idx}
@@ -1158,11 +1497,18 @@ export function PackersMoversBookingHosurPage() {
                                         onMouseDown={(e) => {
                                           e.preventDefault()
                                           setPickup(loc.name)
+                                          if (relocationType === "Between Cities" && drop && drop.trim().toLowerCase() === loc.name.toLowerCase()) {
+                                            setDrop("")
+                                          }
                                           setShowPickupSuggestions(false)
                                         }}
-                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
+                                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer flex items-center justify-between"
                                       >
-                                        {loc.name}
+                                        <div>
+                                          <div className="font-bold text-slate-800">{loc.name}</div>
+                                          {loc.subtitle && <div className="text-[11px] text-slate-400 font-normal">{loc.subtitle}</div>}
+                                        </div>
+                                        {loc.state && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">{loc.state}</span>}
                                       </button>
                                     ))}
                                   </div>
@@ -1183,7 +1529,7 @@ export function PackersMoversBookingHosurPage() {
                                 />
                                 {/* Suggestions */}
                                 {showDropSuggestions && (
-                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
+                                  <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
                                     {dropSuggestions.map((loc, idx) => (
                                       <button
                                         key={idx}
@@ -1191,11 +1537,18 @@ export function PackersMoversBookingHosurPage() {
                                         onMouseDown={(e) => {
                                           e.preventDefault()
                                           setDrop(loc.name)
+                                          if (relocationType === "Between Cities" && pickup && pickup.trim().toLowerCase() === loc.name.toLowerCase()) {
+                                            setPickup("")
+                                          }
                                           setShowDropSuggestions(false)
                                         }}
-                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
+                                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer flex items-center justify-between"
                                       >
-                                        {loc.name}
+                                        <div>
+                                          <div className="font-bold text-slate-800">{loc.name}</div>
+                                          {loc.subtitle && <div className="text-[11px] text-slate-400 font-normal">{loc.subtitle}</div>}
+                                        </div>
+                                        {loc.state && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">{loc.state}</span>}
                                       </button>
                                     ))}
                                   </div>
@@ -1206,14 +1559,11 @@ export function PackersMoversBookingHosurPage() {
 
                           <div>
                             <label className="block text-[13px] font-semibold text-[#484848] mb-3">Select Shifting Date</label>
-                            <div className="relative">
-                              <input
-                                type="date"
-                                value={shiftingDateBetween}
-                                onChange={(e) => setShiftingDateBetween(e.target.value)}
-                                className="w-full h-[54px] px-4 rounded-xl border border-[#E0E0E0] bg-white text-[15px] text-[#333333] focus:border-[#0B8860] focus:ring-1 focus:ring-[#0B8860] outline-none transition-colors placeholder:text-[#999999]"
-                              />
-                            </div>
+                            <CustomShiftingDatePicker
+                              value={shiftingDateBetween}
+                              onChange={setShiftingDateBetween}
+                              placeholder="Select Shifting Date"
+                            />
                             <div className="mt-3 flex items-center gap-2">
                               <input
                                 type="checkbox"

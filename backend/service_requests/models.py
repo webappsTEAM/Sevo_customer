@@ -587,6 +587,19 @@ class EmployeePerformance(models.Model):
 
 
 # ── Catalog models (seeded by seed_catalog.py) ────────────────────────────────
+#
+# Hierarchy: CatalogCategory → Service → Package → AddOn.
+#
+# `Package` is the historical `CatalogService` model, renamed. It used to hang
+# directly off CatalogCategory with one price per row; `Service` is the
+# grouping layer inserted between them so one Service (e.g. "AC Services")
+# can offer multiple priced Packages (e.g. "AC General Service" ₹599, "AC
+# Deep Cleaning" ₹999). See migrations 0022-0024 for the rename + backfill.
+#
+# Deliberately no `company`/tenant FK on any of these — per TL direction this
+# is one CalServices platform providing all services directly, not a
+# vendor/company-scoped marketplace catalog (same reasoning already applied
+# to `logistics` app models).
 class CatalogCategory(models.Model):
     name        = models.CharField(max_length=100)
     slug        = models.SlugField(unique=True)
@@ -595,32 +608,135 @@ class CatalogCategory(models.Model):
     description = models.TextField(blank=True)
     rating      = models.CharField(max_length=10, blank=True, default="4.8")
     jobs_count_str = models.CharField(max_length=20, blank=True, default="10K+")
+    is_active   = models.BooleanField(default=True)
+    sort_order  = models.PositiveIntegerField(default=0)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["sort_order", "name"]
 
     def __str__(self):
         return self.name
 
 
-class CatalogService(models.Model):
-    category    = models.ForeignKey(CatalogCategory, on_delete=models.CASCADE, related_name="services")
+class Service(models.Model):
+    """Groups one or more bookable Packages under a Category, e.g. 'AC Services'."""
+    category    = models.ForeignKey(CatalogCategory, on_delete=models.PROTECT, related_name="services")
     name        = models.CharField(max_length=200)
+    slug        = models.SlugField(unique=True)
     description = models.TextField(blank=True)
-    price       = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    duration    = models.CharField(max_length=50, blank=True)
+    icon        = models.CharField(max_length=200, blank=True)
     image       = models.CharField(max_length=500, blank=True)
-    popular     = models.BooleanField(default=False)
-    tag         = models.CharField(max_length=50, blank=True)
-    includes    = models.JSONField(default=list, blank=True)
-    excludes    = models.JSONField(default=list, blank=True)
     is_active   = models.BooleanField(default=True)
+    sort_order  = models.PositiveIntegerField(default=0)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["category__sort_order", "category__name", "sort_order", "name"]
 
     def __str__(self):
         return f"{self.category.name} / {self.name}"
+
+
+class PackageStatus(models.TextChoices):
+    DRAFT    = "DRAFT",    "Draft"
+    ACTIVE   = "ACTIVE",   "Active"
+    INACTIVE = "INACTIVE", "Inactive"
+    ARCHIVED = "ARCHIVED", "Archived"
+
+
+class PaymentPolicy(models.TextChoices):
+    ONLINE_ONLY = "ONLINE_ONLY", "Online Only"
+    BOTH        = "BOTH",        "Online + COD"
+    COD_ONLY    = "COD_ONLY",    "COD Only"
+
+
+class Package(models.Model):
+    """A single bookable, priced option under a Service (was `CatalogService`)."""
+    service        = models.ForeignKey(Service, on_delete=models.PROTECT, related_name="packages")
+    name           = models.CharField(max_length=200)
+    slug           = models.SlugField(unique=True)
+    description    = models.TextField(blank=True)
+    base_price     = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    offer_price    = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    duration       = models.CharField(max_length=50, blank=True)
+    image          = models.CharField(max_length=500, blank=True)
+    popular        = models.BooleanField(default=False)
+    tag            = models.CharField(max_length=50, blank=True)
+    includes       = models.JSONField(default=list, blank=True)
+    excludes       = models.JSONField(default=list, blank=True)
+    payment_policy = models.CharField(max_length=20, choices=PaymentPolicy.choices, default=PaymentPolicy.BOTH)
+    status         = models.CharField(max_length=20, choices=PackageStatus.choices, default=PackageStatus.DRAFT)
+    version        = models.PositiveIntegerField(default=1)
+    created_at     = models.DateTimeField(auto_now_add=True)
+    updated_at     = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["service__category__sort_order", "service__name", "name"]
+
+    def __str__(self):
+        return f"{self.service.category.name} / {self.service.name} / {self.name}"
+
+
+class AddOn(models.Model):
+    """Optional extra scoped to one specific Package (e.g. 'Gas Top-up' on 'AC General Service')."""
+    package     = models.ForeignKey(Package, on_delete=models.CASCADE, related_name="addons")
+    name        = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    price       = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    image       = models.CharField(max_length=500, blank=True)
+    is_active   = models.BooleanField(default=True)
+    sort_order  = models.PositiveIntegerField(default=0)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["package__name", "sort_order", "name"]
+
+    def __str__(self):
+        return f"{self.package.name} / {self.name}"
+
+
+class CatalogChangeLog(models.Model):
+    """Audit trail for admin edits across the catalog hierarchy. Soft reference
+    (entity_type + entity_id) rather than a hard FK, since one log model covers
+    four different entity types and this codebase has no GenericForeignKey
+    precedent to introduce for that — matches compliance.AuditLog's convention
+    of a soft reference instead."""
+
+    class EntityType(models.TextChoices):
+        CATEGORY = "CATEGORY", "Category"
+        SERVICE  = "SERVICE",  "Service"
+        PACKAGE  = "PACKAGE",  "Package"
+        ADDON    = "ADDON",    "Add-on"
+
+    class Action(models.TextChoices):
+        CREATE        = "CREATE",        "Created"
+        UPDATE        = "UPDATE",        "Updated"
+        STATUS_CHANGE = "STATUS_CHANGE", "Status Changed"
+
+    entity_type = models.CharField(max_length=20, choices=EntityType.choices)
+    entity_id   = models.PositiveIntegerField(db_index=True)
+    entity_name = models.CharField(max_length=200, blank=True, default="")
+    action      = models.CharField(max_length=20, choices=Action.choices)
+    field_name  = models.CharField(max_length=100, blank=True, default="")
+    old_value   = models.TextField(blank=True, default="")
+    new_value   = models.TextField(blank=True, default="")
+    reason      = models.TextField(blank=True, default="")
+    changed_by  = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="catalog_change_actions",
+    )
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["entity_type", "entity_id"])]
+
+    def __str__(self):
+        return f"{self.get_action_display()} {self.entity_type} #{self.entity_id} ({self.field_name})"
 
 
 # ─── Slice 2: Reschedule ──────────────────────────────────────────────────────

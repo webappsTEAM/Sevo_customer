@@ -624,14 +624,14 @@ export function MiniTruckBookingHosurPage() {
     async function loadCatalog() {
       try {
         const [tiers, lanes, areas] = await Promise.all([
-          fetchServiceTiers("truck", LOGISTICS_CITY),
-          fetchLanes("truck", LOGISTICS_CITY),
+          fetchServiceTiers("mini_truck", LOGISTICS_CITY),
+          fetchLanes("mini_truck", LOGISTICS_CITY),
           fetchServiceAreas(LOGISTICS_CITY),
         ])
         if (cancelled) return
-        setTruckTiers(tiers)
-        setTruckLanes(lanes)
-        setServiceAreas(areas)
+        if (Array.isArray(tiers) && tiers.length) setTruckTiers(tiers)
+        if (Array.isArray(lanes) && lanes.length) setTruckLanes(lanes)
+        if (Array.isArray(areas) && areas.length) setServiceAreas(areas)
       } catch (err) {
         console.warn("Failed to load logistics catalog, falling back to static data:", err)
       } finally {
@@ -879,8 +879,12 @@ export function MiniTruckBookingHosurPage() {
     }
   }
 
-  const backendLight = truckTiers.filter((t) => t.weight_class === "light").map(tierToVehicle)
-  const backendHeavy = truckTiers.filter((t) => t.weight_class === "heavy").map(tierToVehicle)
+  const backendLight = truckTiers
+    .filter((t) => t.weight_class === "light" && !t.slug.includes("2-wheeler") && t.category !== "two_wheeler")
+    .map(tierToVehicle)
+  const backendHeavy = truckTiers
+    .filter((t) => t.weight_class === "heavy" && !t.slug.includes("2-wheeler") && t.category !== "two_wheeler")
+    .map(tierToVehicle)
 
   const LIGHT_VEHICLES = backendLight.length ? backendLight : STATIC_LIGHT_VEHICLES
   const HEAVY_VEHICLES = backendHeavy.length ? backendHeavy : STATIC_HEAVY_VEHICLES

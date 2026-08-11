@@ -149,6 +149,25 @@ const TrainingRecordsPage = lazy(() =>
   import("./pages/EmployeeSubPages.jsx").then(m => ({ default: m.TrainingRecordsPage }))
 )
 
+const CatalogDashboardPage = lazy(() =>
+  import("./pages/catalog/CatalogDashboardPage.jsx").then(m => ({ default: m.CatalogDashboardPage }))
+)
+const CatalogCategoriesPage = lazy(() =>
+  import("./pages/catalog/CatalogCategoriesPage.jsx").then(m => ({ default: m.CatalogCategoriesPage }))
+)
+const CatalogServicesPage = lazy(() =>
+  import("./pages/catalog/CatalogServicesPage.jsx").then(m => ({ default: m.CatalogServicesPage }))
+)
+const CatalogPackagesPage = lazy(() =>
+  import("./pages/catalog/CatalogPackagesPage.jsx").then(m => ({ default: m.CatalogPackagesPage }))
+)
+const CatalogAddOnsPage = lazy(() =>
+  import("./pages/catalog/CatalogAddOnsPage.jsx").then(m => ({ default: m.CatalogAddOnsPage }))
+)
+const CatalogChangeLogPage = lazy(() =>
+  import("./pages/catalog/CatalogChangeLogPage.jsx").then(m => ({ default: m.CatalogChangeLogPage }))
+)
+
 const BookingPage = lazy(() =>
   import("./pages/BookingPage.jsx").then(m => ({ default: m.BookingPage }))
 )
@@ -429,6 +448,12 @@ export function App() {
               <Route path={routes.employees_rejected} element={<RejectedEmployeesPage />} />
               <Route path={routes.employees_documents} element={<DocumentVaultPage />} />
               <Route path={routes.employees_training} element={<TrainingRecordsPage />} />
+              <Route path={routes.catalog_dashboard} element={<CatalogDashboardPage />} />
+              <Route path={routes.catalog_categories} element={<CatalogCategoriesPage />} />
+              <Route path={routes.catalog_services} element={<CatalogServicesPage />} />
+              <Route path={routes.catalog_packages} element={<CatalogPackagesPage />} />
+              <Route path={routes.catalog_addons} element={<CatalogAddOnsPage />} />
+              <Route path={routes.catalog_change_log} element={<CatalogChangeLogPage />} />
               <Route path={routes.admin_service_requests} element={<ServiceRequestsPage />} />
               <Route path={routes.admin_feedback} element={<FeedbackManagementPage />} />
               <Route path="/customers/list" element={<ServiceRequestsPage />} />

@@ -72,4 +72,10 @@ export const routes = {
   two_wheeler_booking: "/two-wheelers",
   packers_movers_booking_hosur: "/packers-and-movers/hosur",
   packers_movers_booking: "/packers-and-movers",
+  catalog_dashboard: "/catalog",
+  catalog_categories: "/catalog/categories",
+  catalog_services: "/catalog/services",
+  catalog_packages: "/catalog/packages",
+  catalog_addons: "/catalog/addons",
+  catalog_change_log: "/catalog/change-log",
 }
