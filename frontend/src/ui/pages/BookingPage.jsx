@@ -27,6 +27,10 @@ import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx
 import { LocationPermissionHandler } from "../components/AddressPicker/index.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
+import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
+import { CockroachControlModal } from "./CockroachControlModal.jsx"
+import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
+import { createPortal } from "react-dom";
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 
@@ -11092,35 +11096,37 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Demolition & Breaking", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
     ],
     pest_control: [
-      { name: "Termite Control", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-      { name: "Cockroach & Ant Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Bed Bug Treatment", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      { name: "Cockroach & Termite Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Ants & Bed Bugs Control", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
     ],
     goods_transport: [
       { name: "House Shifting", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
       { name: "Single Item Transport", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
     ],
     cleaning: [
-      { name: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&fit=crop", catId: "kitchen_cleaning" },
-      { name: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop", catId: "sofa_cleaning" },
-      { name: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", catId: "bathroom_cleaning" },
-      { name: "Furnished Apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop" },
-      { name: "Unfurnished Apartment", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
-      { name: "Furnished Villa", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
-      { name: "Unfurnished Villa", image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop" },
-      { name: "Book by Room", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
-      { name: "Mini Services", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      { name: "Full apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop" },
+      { name: "Full bungalow/duplex", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
+      { name: "Home cleaning", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" }
     ]
   };
 
   const subCategories = CATEGORY_SUBCATEGORIES[normalizedKey] || CATEGORY_SUBCATEGORIES.cleaning;
 
-  const [activeSubTab, setActiveSubTab] = useState(subCategories[0]?.name || "Furnished Apartment");
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialSubtab = urlParams.get("subtab") || subCategories[0]?.name || "Furnished Apartment";
+  const [activeSubTab, setActiveSubTab] = useState(initialSubtab);
 
   // Keep activeSubTab in sync if normalizedKey changes
   useEffect(() => {
     if (subCategories && subCategories.length > 0) {
-      setActiveSubTab(subCategories[0].name);
+      const urlParams = new URLSearchParams(window.location.search);
+      const subtabParam = urlParams.get("subtab");
+      const matched = subCategories.find(c => c.name === subtabParam);
+      if (matched) {
+        setActiveSubTab(matched.name);
+      } else {
+        setActiveSubTab(subCategories[0].name);
+      }
     }
   }, [normalizedKey]);
 
@@ -11472,6 +11478,15 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   }
   if (activeSubTab === "Bathroom Cleaning") {
     return <BathroomCleaningModal category={{ id: "bathroom_cleaning", name: "Bathroom Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  }
+  if (activeSubTab === "Full apartment" || activeSubTab === "Full bungalow/duplex" || activeSubTab === "Home cleaning") {
+    return <FullHouseCleaningModal activeSubTab={activeSubTab} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  }
+  if (activeSubTab === "Cockroach & Termite Control") {
+    return <CockroachControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  }
+  if (activeSubTab === "Ants & Bed Bugs Control") {
+    return <AntsBedBugsControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
 
   const contentMarkup = (
@@ -15463,8 +15478,11 @@ const FULL_KITCHEN_PACKAGES = [
 const APPLIANCE_SERVICES = [
   {
     id: "fridge-clean",
-    name: "Refrigerator Cleaning",
-    price: 799,
+    name: "Fridge cleaning",
+    rating: "4.83",
+    reviews: "167K reviews",
+    price: 399,
+    options: "5 options",
     duration: "1.5 hrs",
     image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=600&q=80&fit=crop",
     includes: [
@@ -15475,9 +15493,11 @@ const APPLIANCE_SERVICES = [
   },
   {
     id: "microwave-clean",
-    name: "Microwave Oven Cleaning",
-    price: 399,
-    duration: "45 mins",
+    name: "Microwave cleaning",
+    rating: "4.82",
+    reviews: "37K reviews",
+    price: 199,
+    duration: "15 mins",
     image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
     includes: [
       "Interior & exterior cleaning",
@@ -15488,8 +15508,10 @@ const APPLIANCE_SERVICES = [
   {
     id: "chimney-clean",
     name: "Chimney Cleaning",
-    price: 999,
-    duration: "1.5 hrs",
+    rating: "4.84",
+    reviews: "238K reviews",
+    price: 399,
+    duration: "45 mins",
     image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
     includes: [
       "Filter & exterior cleaning",
@@ -15498,9 +15520,25 @@ const APPLIANCE_SERVICES = [
     ]
   },
   {
-    id: "stove-clean",
-    name: "Gas Stove / Hob Cleaning",
+    id: "chimney-stove-clean",
+    name: "Chimney & stove cleaning",
+    rating: "4.79",
+    reviews: "89K reviews",
     price: 499,
+    duration: "1 hr 10 mins",
+    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    includes: [
+      "Stovetops, burners, mesh & filter cleaning with steam",
+      "Includes motor cleaning, repair & automatic chimney cleaning"
+    ]
+  },
+  {
+    id: "stove-clean",
+    name: "Gas stove cleaning",
+    rating: "4.80",
+    reviews: "32K reviews",
+    price: 99,
+    options: "3 options",
     duration: "45 mins",
     image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
     includes: [
@@ -15544,6 +15582,45 @@ const APPLIANCE_SERVICES = [
       "Fan cover / grill cleaning",
       "Dust and grease removal"
     ]
+  },
+  {
+    id: "air-fryer-clean",
+    name: "Air fryer cleaning",
+    rating: "4.81",
+    reviews: "7K reviews",
+    price: 199,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?w=600&q=80&fit=crop",
+    includes: [
+      "Wet wiping of interior to remove oil stains & odour",
+      "Cleaning of tray to remove food spills"
+    ]
+  },
+  {
+    id: "otg-clean",
+    name: "OTG cleaning",
+    rating: "4.80",
+    reviews: "8K reviews",
+    price: 399,
+    duration: "50 mins",
+    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=600&q=80&fit=crop",
+    includes: [
+      "Cleaning of interior to remove food crumbs & spills",
+      "Exterior & back panel cleaning to remove oil & grease"
+    ]
+  },
+  {
+    id: "sandwich-clean",
+    name: "Sandwich Maker/Griller cleaning",
+    rating: "4.82",
+    reviews: "5K reviews",
+    price: 99,
+    duration: "15 mins",
+    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=600&q=80&fit=crop",
+    includes: [
+      "Deep cleaning of plates to remove stuck food & char marks",
+      "Exterior wipe to remove oil, grease & food stains"
+    ]
   }
 ];
 
@@ -15582,6 +15659,114 @@ const QUICK_EXTRA_SERVICES = [
       "Accessible glass surface cleaning",
       "Window frame & sill wiping",
       "Dust and dirt removal"
+    ]
+  },
+  {
+    id: "quick-fan-clean",
+    name: "Fan Cleaning",
+    price: 89,
+    duration: "15 mins",
+    image: "/mockups/ceiling_fan.png",
+    includes: [
+      "Dusting and wiping of fan blades",
+      "Cleaning of fan canopy and motor body",
+      "Removal of grease, stains, and dirt buildup"
+    ]
+  },
+  {
+    id: "quick-utensils-removal",
+    name: "Utensils Removal & Replacement",
+    price: 409,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1590794056226-79ef3a8147e1?w=300&q=80&fit=crop",
+    includes: [
+      "Removal of all utensils from cabinets",
+      "Dusting and wiping cabinet shelves",
+      "Arranging utensils back in cabinets"
+    ]
+  },
+  {
+    id: "quick-sink-under-sink",
+    name: "Sink & Under Sink Cleaning",
+    price: 79,
+    duration: "20 mins",
+    image: "/mockups/drain_clean.png",
+    includes: [
+      "Deep scrub & sanitization of kitchen sink",
+      "Wiping and disinfecting under-sink area",
+      "Removal of waste, odors, and food particles"
+    ]
+  },
+  {
+    id: "quick-dining-table",
+    name: "Dining Table Cleaning",
+    price: 449,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    includes: [
+      "Surface cleaning & sanitation",
+      "Removal of food stains & greasy layers",
+      "Wiping & drying of tabletop"
+    ]
+  },
+  {
+    id: "quick-kitchen-window",
+    name: "Kitchen Window Cleaning",
+    price: 269,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Glass panes dusting and wet wiping",
+      "Window frames, sill, and tracks cleaning",
+      "Removal of oil fumes and grease residue"
+    ]
+  },
+  {
+    id: "quick-balcony-upto-4ft",
+    name: "Balcony Cleaning: Upto 4 ft Width",
+    price: 399,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    includes: [
+      "Balcony floor washing & scrubbing",
+      "Dusting of railing and windows",
+      "Clearance of cobwebs and dust bunnies"
+    ]
+  },
+  {
+    id: "quick-balcony-above-4ft",
+    name: "Balcony Cleaning: Above 4 ft Width",
+    price: 549,
+    duration: "50 mins",
+    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    includes: [
+      "Deep floor scrubbing & balcony washing",
+      "Railing, windows, and mesh cleaning",
+      "Thorough dust and dirt clearance"
+    ]
+  },
+  {
+    id: "quick-window-upto-4x4",
+    name: "Window Cleaning (Upto 4 Ft X 4 Ft)",
+    price: 199,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=300&q=80&fit=crop",
+    includes: [
+      "Glass panes cleaning inside and outside",
+      "Window frame and channel dusting",
+      "Dirt and rain stain removal"
+    ]
+  },
+  {
+    id: "quick-window-above-4x4",
+    name: "Window Cleaning (Above 4 Ft X 4 Ft)",
+    price: 449,
+    duration: "1 hr",
+    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=300&q=80&fit=crop",
+    includes: [
+      "Detailed cleaning of large glass panes",
+      "Frame, sill, and channel deep cleaning",
+      "Removal of spider webs and outdoor dust"
     ]
   }
 ];
@@ -15662,6 +15847,55 @@ const SERVICE_DETAIL_DATA = {
       { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
     ]
   },
+  "air-fryer-clean": {
+    tools: [
+      "Food-safe interior sanitizers",
+      "Microfiber cloths",
+      "Detail cleaning brushes"
+    ],
+    ready: [
+      "Keep the air fryer accessible and unplugged",
+      "Ensure power outlet is nearby for testing"
+    ],
+    reviews: [
+      { name: "Meera V.", rating: "5.0", text: '"Very neat cleaning. The tray oil and food residues were completely washed."' }
+    ],
+    faqs: [
+      { q: "Is the cleaner safe for non-stick coating?", a: "Yes, we use non-abrasive soft sponges and mild, food-safe cleaners that protect the non-stick coating." }
+    ]
+  },
+  "otg-clean": {
+    tools: [
+      "OTG safe degreasers",
+      "Microfiber cleaning cloths",
+      "Crevice cleaning brushes"
+    ],
+    ready: [
+      "Unplug the OTG and keep it accessible",
+      "Empty any trays or racks inside"
+    ],
+    reviews: [
+      { name: "Siddharth N.", rating: "4.9", text: '"Removed all grease stains from the glass door and walls. Excellent OTG service!"' }
+    ],
+    faqs: [
+      { q: "Will this clean the heating elements?", a: "We clean around heating elements carefully to avoid damage, removing grease from the oven interior walls, glass door, and trays." }
+    ]
+  },
+  "sandwich-clean": {
+    tools: [
+      "Food-safe surface wipes",
+      "Detangled cleaning brushes"
+    ],
+    ready: [
+      "Keep the sandwich maker/griller accessible and unplugged"
+    ],
+    reviews: [
+      { name: "Deepa K.", rating: "4.8", text: '"Quick and efficient. Removed the dark stuck food particles from the grill plates."' }
+    ],
+    faqs: [
+      { q: "Will this clean stuck cheese?", a: "Yes, we use safe scrapers and warm chemical wipes to dissolve and remove cheese and char residues." }
+    ]
+  },
   "microwave-clean": {
     tools: [
       "Appliance-safe cleaning products",
@@ -15704,6 +15938,25 @@ const SERVICE_DETAIL_DATA = {
       { q: "Will you clean the chimney filter?", a: "Yes, the chimney filter will be cleaned." },
       { q: "Will you remove grease and oil?", a: "Yes, visible grease and oil buildup will be cleaned." },
       { q: "Do you repair the chimney?", a: "No, repair and replacement work are not included." }
+    ]
+  },
+  "chimney-stove-clean": {
+    tools: [
+      "Heavy duty degreasers",
+      "Steam cleaning machines",
+      "Microfiber cloths",
+      "Filter scrubbing brushes"
+    ],
+    ready: [
+      "Clear the stovetop and surrounding counter space",
+      "Provide access to a power point and water supply"
+    ],
+    reviews: [
+      { name: "Harish L.", rating: "4.9", text: '"Both chimney and gas stove are super clean now. Great service combo!"' },
+      { name: "Ruchi A.", rating: "4.8", text: '"Deep grease stains were completely steam cleaned. Highly professional."' }
+    ],
+    faqs: [
+      { q: "What does this include?", a: "This includes deep steam cleaning of both the chimney (filters/baffle/housing) and the gas stove (hob/burners/knobs)." }
     ]
   },
   "stove-clean": {
@@ -15830,6 +16083,156 @@ const SERVICE_DETAIL_DATA = {
       { q: "Will you clean the outside of the window?", a: "Only safely accessible exterior areas will be cleaned." },
       { q: "Will you remove paint or cement stains?", a: "No. Heavy paint, cement or permanent stains may require specialized cleaning." }
     ]
+  },
+  "quick-fan-clean": {
+    tools: [
+      "Microfiber cloths",
+      "All-purpose cleaning spray",
+      "Sturdy step ladder"
+    ],
+    ready: [
+      "Keep the space below the fan clear",
+      "Ensure the fan switch is turned off"
+    ],
+    reviews: [
+      { name: "Amit S.", rating: "4.9", text: '"The fan was covered in sticky kitchen grease, but they got it completely clean."' },
+      { name: "Neha P.", rating: "4.8", text: '"Fast and efficient fan cleaning service."' }
+    ],
+    faqs: [
+      { q: "Does this include repair?", a: "No, this is only a cleaning service. No repairs are done." },
+      { q: "Will my floor get dirty?", a: "Our professionals use dust-drop cloths to protect your floor." }
+    ]
+  },
+  "quick-utensils-removal": {
+    tools: [
+      "Clean baskets",
+      "Microfiber dusting cloths",
+      "Sanitizing cabinet spray"
+    ],
+    ready: [
+      "Ensure cabinets are unlocked and accessible"
+    ],
+    reviews: [
+      { name: "Suresh K.", rating: "5.0", text: '"Extremely helpful! Wiped my cabinets thoroughly and rearranged everything."' },
+      { name: "Deepa M.", rating: "4.8", text: '"Very polite worker. Sorted out my cluttered cabinet beautifully."' }
+    ],
+    faqs: [
+      { q: "Will you wash the utensils?", a: "Utensil washing is not included. We only remove, wipe, and reorganize." },
+      { q: "How do you rearrange?", a: "We rearrange them neatly in their original cabinet spaces." }
+    ]
+  },
+  "quick-sink-under-sink": {
+    tools: [
+      "Scrubbing brushes",
+      "Disinfectant sanitizers",
+      "Odour removal sprays"
+    ],
+    ready: [
+      "Clear any vessels from the sink before the professional arrives"
+    ],
+    reviews: [
+      { name: "Kunal T.", rating: "4.9", text: '"The sink shines like new, and the under-sink smell is totally gone."' },
+      { name: "Ritu G.", rating: "4.8", text: '"Great scrubbing work on the hard water stains in the sink."' }
+    ],
+    faqs: [
+      { q: "Do you clean the drain pipe?", a: "We clean the external sink drain area and visible parts. We do not do plumbing repairs or unclogging." }
+    ]
+  },
+  "quick-dining-table": {
+    tools: [
+      "Food-safe table cleaner",
+      "Polishing cloth"
+    ],
+    ready: [
+      "Clear dishes and table mats before service"
+    ],
+    reviews: [
+      { name: "Arjun V.", rating: "5.0", text: '"Got rid of sticky grease stains on the glass tabletop. Super clean!"' }
+    ],
+    faqs: [
+      { q: "Will you polish wooden tables?", a: "We do standard cleaning and gentle wiping. Specialized wood polishing is not included." }
+    ]
+  },
+  "quick-kitchen-window": {
+    tools: [
+      "Glass squeegee",
+      "Grease-cutting window spray",
+      "Track cleaning brush"
+    ],
+    ready: [
+      "Clear the window sill and counter space below the window"
+    ],
+    reviews: [
+      { name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' }
+    ],
+    faqs: [
+      { q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." }
+    ]
+  },
+  "quick-balcony-upto-4ft": {
+    tools: [
+      "Heavy duty floor brush",
+      "High-pressure water source if available",
+      "Balcony cleaning detergent"
+    ],
+    ready: [
+      "Clear planters or light furniture from the balcony floor",
+      "Provide access to a water tap"
+    ],
+    reviews: [
+      { name: "Sneha L.", rating: "5.0", text: '"Balcony floor is sparkling clean. They washed off all the pigeon droppings."' }
+    ],
+    faqs: [
+      { q: "Do you clean the balcony roof?", a: "No, roof or ceiling cleaning is not included in this quick package." }
+    ]
+  },
+  "quick-balcony-above-4ft": {
+    tools: [
+      "Scrubbing brushes & wipers",
+      "Balcony floor wash detergent",
+      "Cobweb removal brush"
+    ],
+    ready: [
+      "Clear all furniture and items from the balcony"
+    ],
+    reviews: [
+      { name: "Manish P.", rating: "4.9", text: '"Very thorough washing. Highly recommend for large balconies."' }
+    ],
+    faqs: [
+      { q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." }
+    ]
+  },
+  "quick-window-upto-4x4": {
+    tools: [
+      "Glass cleaners",
+      "Squeegee and wipers",
+      "Microfiber cloths"
+    ],
+    ready: [
+      "Clear any window decorations or blinds if possible"
+    ],
+    reviews: [
+      { name: "Preeti R.", rating: "4.8", text: '"Quick window cleaning. Spotless glass."' }
+    ],
+    faqs: [
+      { q: "Will you clean both sides?", a: "Yes, if the exterior side is safely accessible from inside." }
+    ]
+  },
+  "quick-window-above-4x4": {
+    tools: [
+      "Glass cleaning sprays",
+      "Extension poles",
+      "Frame scrubbing brushes"
+    ],
+    ready: [
+      "Provide clear access to the window area"
+    ],
+    reviews: [
+      { name: "Rohan D.", rating: "4.9", text: '"Cleaned our large living room window perfectly. Professional work."' }
+    ],
+    faqs: [
+      { q: "Is exterior cleaning included?", a: "Exterior glass is cleaned as long as it does not pose a safety risk to the cleaner." }
+    ]
   }
 };
 
@@ -15840,6 +16243,17 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   const [isBasicExpanded, setIsBasicExpanded] = useState(false);
   const [isDeepExpanded, setIsDeepExpanded] = useState(false);
   const [activeFaq, setActiveFaq] = useState(null);
+
+  useEffect(() => {
+    if (selectedServiceDetails) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedServiceDetails]);
 
   const addItemToCart = (id, name, price, duration) => {
     setCart(prev => {
@@ -15928,12 +16342,12 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             </h3>
           </div>
 
-          <div className="space-y-0 divide-y divide-slate-100">
+          <div className="space-y-4">
             {activeServices.map((service, idx) => {
               const count = getCount(service.id);
               const isFirst = idx === 0 && !searchQuery;
               return (
-                <div key={service.id} className="py-5 px-4 sm:px-5">
+                <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all">
                   {/* First item image hero */}
                   {isFirst && (
                     <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4">
@@ -15949,8 +16363,16 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                     <div className="flex-1">
                       <h4 className="text-sm font-black text-slate-900 mb-1">{service.name}</h4>
 
+                      {service.rating && activeTab !== "appliance" && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
+                          <Star className="text-violet-600 fill-violet-600" size={11} />
+                          <span className="text-slate-800">{service.rating}</span>
+                          <span className="text-slate-400 font-normal">({service.reviews})</span>
+                        </div>
+                      )}
+
                       <p className="text-xs font-bold text-slate-800">
-                        {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
+                        {service.options && activeTab !== "appliance" ? `Starts at ₹${service.price}` : `₹${service.price}`}
                         <span className="text-slate-400 font-normal ml-2">• {service.duration}</span>
                       </p>
                       {activeTab !== "addons" && (
@@ -16016,7 +16438,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                       >
                         View details
                       </button>
-                      {service.options && (
+                      {service.options && activeTab !== "appliance" && (
                         <p className="text-[11px] text-slate-400 mt-1">{service.options}</p>
                       )}
                     </div>
@@ -16111,31 +16533,30 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
         </div>
       </div>
 
-      {selectedServiceDetails && (
-        <div className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans">
+      {selectedServiceDetails && createPortal(
+        <div 
+          onClick={() => setSelectedServiceDetails(null)}
+          className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
+          >
             {/* Close button */}
             <button
               onClick={() => setSelectedServiceDetails(null)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors"
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors border-none"
             >
               <X size={16} />
             </button>
 
-            {/* Header: split hero image + promo card */}
-            <div className="flex h-36 border-b border-slate-100 shrink-0">
-              <div className="w-[60%] h-full bg-slate-100">
-                <img
-                  src={selectedServiceDetails.image}
-                  alt={selectedServiceDetails.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-[40%] bg-amber-50/70 p-4 flex flex-col justify-center text-left border-l border-amber-100/50">
-                <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-0.5">FLAT 10% OFF</span>
-                <span className="text-[10px] text-slate-600 font-bold leading-tight mb-2">For New Users</span>
-                <span className="text-[9px] font-bold text-slate-500 bg-white border border-amber-200 rounded px-1.5 py-0.5 w-fit uppercase tracking-tight">CODE: NEWCLEAN10</span>
-              </div>
+            {/* Header image */}
+            <div className="h-36 border-b border-slate-100 shrink-0">
+              <img
+                src={selectedServiceDetails.image}
+                alt={selectedServiceDetails.name}
+                className="w-full h-full object-cover"
+              />
             </div>
 
             {/* Scrollable Content */}
@@ -16293,7 +16714,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

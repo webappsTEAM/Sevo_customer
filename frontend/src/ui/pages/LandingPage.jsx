@@ -930,8 +930,7 @@ const HOME_SERVICES_SUB = [
 ]
 
 const PEST_CONTROL_SUB = [
-  { name: "Cockroach Control", graphic: CockroachControlGraphic, categoryId: "pest_control" },
-  { name: "Termite Control", graphic: TermiteControlGraphic, categoryId: "pest_control" },
+  { name: "Cockroach & Termite Control", graphic: CockroachControlGraphic, categoryId: "pest_control" },
   { name: "Ants & Bed Bugs Control", graphic: AntBedBugControlGraphic, categoryId: "pest_control" },
 ]
 
@@ -1727,7 +1726,7 @@ export function LandingPage() {
                           } else if (item.name === "Sofa Cleaning") {
                             navigate(`?category=sofa_cleaning`)
                           } else {
-                            navigate(`?category=${item.categoryId}`)
+                            navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
                           }
                         }}
                         className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
@@ -1761,7 +1760,7 @@ export function LandingPage() {
                         onClick={() => {
                           setIsHomePestModalOpen(false)
                           document.body.style.overflow = "unset"
-                          navigate(`?category=${item.categoryId}`)
+                          navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
                         }}
                         className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
                       >
@@ -2426,7 +2425,7 @@ export function LandingPage() {
                         } else if (item.name === "Sofa Cleaning") {
                           navigate(`?category=sofa_cleaning`)
                         } else {
-                          navigate(`?category=${item.categoryId}`)
+                          navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
                         }
                       }}
                       className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
@@ -2460,7 +2459,7 @@ export function LandingPage() {
                       onClick={() => {
                         setIsHomePestModalOpen(false)
                         document.body.style.overflow = "unset"
-                        navigate(`?category=${item.categoryId}`)
+                        navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
                       }}
                       className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
                     >
