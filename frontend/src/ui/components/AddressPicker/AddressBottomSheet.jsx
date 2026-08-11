@@ -19,19 +19,11 @@ export function AddressBottomSheet({ address, loading, error, onConfirm, onManua
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
           setSavedAddresses(res.data)
         } else {
-          // Default demo saved addresses matching reference UI
-          setSavedAddresses([
-            { id: "s-1", label: "Home", address_line1: "530, 21st Cross Road, Sector 3", locality: "HSR Layout", city: "Bengaluru", pincode: "560102" },
-            { id: "s-2", label: "Work", address_line1: "RMZ Ecospace, Building B", locality: "Bellandur", city: "Bengaluru", pincode: "560103" },
-            { id: "s-3", label: "Parents", address_line1: "#45, 2nd Main", locality: "Indiranagar", city: "Bengaluru", pincode: "560008" },
-          ])
+          // No saved addresses from API
+          setSavedAddresses([])
         }
       } catch (e) {
-        setSavedAddresses([
-          { id: "s-1", label: "Home", address_line1: "530, 21st Cross Road, Sector 3", locality: "HSR Layout", city: "Bengaluru", pincode: "560102" },
-          { id: "s-2", label: "Work", address_line1: "RMZ Ecospace, Building B", locality: "Bellandur", city: "Bengaluru", pincode: "560103" },
-          { id: "s-3", label: "Parents", address_line1: "#45, 2nd Main", locality: "Indiranagar", city: "Bengaluru", pincode: "560008" },
-        ])
+        setSavedAddresses([])
       }
     }
     loadSaved()
@@ -41,24 +33,37 @@ export function AddressBottomSheet({ address, loading, error, onConfirm, onManua
   const confirmEnabled = (hasAddress || selectedSavedId) && !loading && !error
 
   // Format clean primary & secondary location display
-  let cleanPrimary = "530, 21st Cross Road"
-  let cleanSecondary = "Sector 3, HSR Layout, Bengaluru - 560102"
+  let cleanPrimary = "Detecting location..."
+  let cleanSecondary = "Fetching address details..."
 
   if (hasAddress) {
     const rawParts = (address.formatted_address || "")
       .split(",")
       .map(s => s.trim())
       .filter(Boolean)
-      .filter(s => !/bengaluru south|bengaluru urban|bengaluru city|bangalore south|karnataka|india|560\d{3}/i.test(s))
+      // Filter out administrative noise (state, country, district labels)
+      .filter(s => !/\b(india)\b/i.test(s))
 
     if (rawParts.length >= 2) {
       cleanPrimary = rawParts.slice(0, 2).join(", ")
-      cleanSecondary = `${rawParts.slice(2).join(", ")}, ${address.city || "Bengaluru"}${address.pincode ? ` - ${address.pincode}` : ""}`
+      const tail = rawParts.slice(2).filter(Boolean).join(", ")
+      const cityPart = address.city || ""
+      const pieces = [tail, cityPart].filter(Boolean).join(", ")
+      cleanSecondary = pieces + (address.pincode ? ` - ${address.pincode}` : "")
     } else if (rawParts.length === 1) {
       cleanPrimary = rawParts[0]
-      cleanSecondary = `${address.locality || "HSR Layout"}, ${address.city || "Bengaluru"}${address.pincode ? ` - ${address.pincode}` : ""}`
+      const locPart = address.locality || ""
+      const cityPart = address.city || ""
+      const pieces = [locPart, cityPart].filter(Boolean).join(", ")
+      cleanSecondary = pieces + (address.pincode ? ` - ${address.pincode}` : "")
     } else {
       cleanPrimary = address.formatted_address
+      cleanSecondary = ""
+    }
+
+    // Ensure we don't show empty secondary
+    if (!cleanSecondary.trim()) {
+      cleanSecondary = [address.locality, address.city, address.state].filter(Boolean).join(", ")
     }
   }
 
@@ -131,7 +136,7 @@ export function AddressBottomSheet({ address, loading, error, onConfirm, onManua
             <div style={styles.savedList}>
               {savedAddresses.map((item) => {
                 const isSelected = selectedSavedId === item.id
-                const displayStr = `${item.address_line1}, ${item.locality || ""}, ${item.city || "Bengaluru"}${item.pincode ? ` - ${item.pincode}` : ""}`
+                const displayStr = [item.address_line1, item.locality, item.city].filter(Boolean).join(", ") + (item.pincode ? ` - ${item.pincode}` : "")
                 
                 let Icon = Home
                 if (item.label?.toLowerCase() === "work") Icon = Briefcase

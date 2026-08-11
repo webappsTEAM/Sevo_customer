@@ -271,8 +271,8 @@ export function DrawableMap({
       maxZoom={22}
     >
       <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+        attribution="&copy; Google Maps"
         maxNativeZoom={19}
         maxZoom={22}
       />

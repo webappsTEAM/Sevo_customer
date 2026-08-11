@@ -10,7 +10,7 @@
  *    place/POI name  area/zone       city   state           pincode
  */
 
-const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? ""
+const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ""
 
 // ---------------------------------------------------------------------------
 // Helpers

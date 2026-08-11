@@ -108,12 +108,12 @@ export function LocationPermissionHandler({ onClose, onManualSearch, onLocationC
       {
         enableHighAccuracy: true,
         timeout: GEO_TIMEOUT_MS - 500,  // let our timer fire first on extreme hang
-        maximumAge: 60_000,             // accept a 1-min cached fix (faster UX)
+        maximumAge: 0,                  // force fresh live location fix from device GPS
       }
     )
   }
 
-  const defaultCoords = coords || { lat: 12.9716, lng: 77.5946 }
+  const defaultCoords = coords
 
   // ── If details form is showing ─────────────────────────────────────────────
   if (screen === "details" && confirmedAddress) {
@@ -130,22 +130,24 @@ export function LocationPermissionHandler({ onClose, onManualSearch, onLocationC
     )
   }
 
-  // ── Render MapPickerScreen directly ───────────────────────────────────────
-  return (
-    <MapPickerScreen
-      initialCoords={defaultCoords}
-      onClose={onClose}
-      onManualSearch={onManualSearch}
-      onCenterChange={(lat, lng, resolvedAddress) => {
-        if (resolvedAddress) {
-          setConfirmedAddress(resolvedAddress)
-          setScreen("details")
-        }
-      }}
-    />
-  )
+  // ── Render MapPickerScreen ONLY when we have real GPS coords ──────────────
+  if (status === STATES.GRANTED && defaultCoords) {
+    return (
+      <MapPickerScreen
+        initialCoords={defaultCoords}
+        onClose={onClose}
+        onManualSearch={onManualSearch}
+        onCenterChange={(lat, lng, resolvedAddress) => {
+          if (resolvedAddress) {
+            setConfirmedAddress(resolvedAddress)
+            setScreen("details")
+          }
+        }}
+      />
+    )
+  }
 
-  // ── Permission / error UI ──────────────────────────────────────────────────
+  // ── Permission / Loading / Error UI ────────────────────────────────────────
 
   const isErrorState = [
     STATES.DENIED, STATES.UNAVAILABLE, STATES.ERROR, STATES.TIMEOUT,

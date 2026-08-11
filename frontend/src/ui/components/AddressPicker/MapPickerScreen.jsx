@@ -197,43 +197,38 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
   const [mapReady, setMapReady]           = useState(false)
   const [pinLifted, setPinLifted]         = useState(false)
   const [isDragging, setIsDragging]       = useState(false)
-  const [currentCenter, setCurrentCenter] = useState(initialCoords)
+  const [currentCenter, setCurrentCenter] = useState(initialCoords || { lat: 12.9716, lng: 77.5946 })
   const mapRef                            = useRef(null)
 
   // ── Slice 2: reverse geocoding ──────────────────────────────────────────
   // currentCenter drives geocoding; initial GPS coords fire on first render
   const { address, loading: geoLoading, error: geoError } = useReverseGeocode(currentCenter)
 
-  // ── "Re-center on me" / Live GPS fetch ──────────────────────────────────────────
+  // ── "Re-center on me" / Live GPS fetch (for the re-center button) ──────
   const handleRecenter = useCallback(() => {
-    if (!navigator.geolocation) {
-      if (initialCoords && mapRef.current) {
-        mapRef.current.setView([initialCoords.lat, initialCoords.lng], 17, { animate: true })
-        setCurrentCenter(initialCoords)
-      }
-      return
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = parseFloat(pos.coords.latitude.toFixed(6))
+          const lng = parseFloat(pos.coords.longitude.toFixed(6))
+          setCurrentCenter({ lat, lng })
+          if (mapRef.current) {
+            mapRef.current.setView([lat, lng], 17, { animate: true })
+          }
+        },
+        (err) => {
+          console.warn("Geolocation positioning error:", err)
+          if (initialCoords && mapRef.current) {
+            mapRef.current.setView([initialCoords.lat, initialCoords.lng], 17, { animate: true })
+            setCurrentCenter(initialCoords)
+          }
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      )
     }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = parseFloat(pos.coords.latitude.toFixed(6))
-        const lng = parseFloat(pos.coords.longitude.toFixed(6))
-        setCurrentCenter({ lat, lng })
-        if (mapRef.current) {
-          mapRef.current.setView([lat, lng], 17, { animate: true })
-        }
-      },
-      (err) => {
-        if (initialCoords && mapRef.current) {
-          mapRef.current.setView([initialCoords.lat, initialCoords.lng], 17, { animate: true })
-          setCurrentCenter(initialCoords)
-        }
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-    )
   }, [initialCoords])
 
-  // Automatically request live GPS position on mount
+  // Automatically request live GPS location on mount to ensure pin points to current position
   useEffect(() => {
     handleRecenter()
   }, [handleRecenter])
@@ -270,7 +265,7 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
             <div style={screenStyles.searchPill}>
               <MapPin size={16} style={{ color: "#ff5200" }} />
               <span style={screenStyles.searchPillText}>
-                {address?.city ? `${address.city}, ${address.state || "Karnataka"}` : "Bengaluru, Karnataka"}
+                {address?.city ? [address.city, address.state].filter(Boolean).join(", ") : (address?.formatted_address ? address.formatted_address.split(",").slice(0, 2).join(", ") : "Detecting Location...")}
               </span>
               <button
                 style={screenStyles.changeBtn}
@@ -313,7 +308,7 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
 
           {/* Leaflet map */}
           <MapContainer
-            center={[initialCoords.lat, initialCoords.lng]}
+            center={[currentCenter?.lat || 12.9716, currentCenter?.lng || 77.5946]}
             zoom={17}
             style={{ width: "100%", height: "100%" }}
             zoomControl={false}
@@ -323,8 +318,8 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
             whenReady={() => setMapReady(true)}
           >
             <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution="&copy; OpenStreetMap contributors"
+              url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+              attribution="&copy; Google Maps"
               maxZoom={19}
             />
             <MapCenterSetter coords={currentCenter} />

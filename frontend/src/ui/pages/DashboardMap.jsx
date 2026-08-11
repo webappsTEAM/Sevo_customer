@@ -84,8 +84,8 @@ export default function DashboardMap({ locationSummary }) {
     >
       <FitBounds locations={locationSummary} />
       <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
-        attribution='&copy; OSM &copy; CARTO'
+        url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+        attribution="&copy; Google Maps"
       />
       {locationSummary.map((loc) => (
         <Marker

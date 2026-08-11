@@ -93,14 +93,13 @@ async function getDescriptor(imageSrc) {
     // Handle relative URLs returned by backend or demo.localhost URLs
     let finalSrc = imageSrc
     if (imageSrc && typeof imageSrc === "string") {
+      const apiBase = (import.meta.env.VITE_API_BASE_URL || window.location.origin).replace(/\/api\/?$/, "")
       if (imageSrc.includes("demo.localhost")) {
         const idx = imageSrc.indexOf("/media/")
         if (idx !== -1) {
-          const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1").replace(/\/api\/v1\/?$/, "")
           finalSrc = apiBase + imageSrc.substring(idx)
         }
       } else if (imageSrc.startsWith("/")) {
-        const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1").replace(/\/api\/v1\/?$/, "")
         finalSrc = apiBase + imageSrc
       }
     }
