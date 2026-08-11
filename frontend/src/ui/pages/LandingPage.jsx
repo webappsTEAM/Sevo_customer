@@ -1016,7 +1016,7 @@ export function LandingPage() {
   const [query, setQuery] = useState("")
   const [testimonialIdx, setTestimonialIdx] = useState(0)
   const location = useLocation()
-  const [modalCart, setModalCart] = useState(location.state?.cart || [])
+  const [modalCart, setModalCart] = useState(() => (location.state?.cart || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")))
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
@@ -1074,6 +1074,7 @@ export function LandingPage() {
   }, [location.state])
 
   const handleCloseCategory = () => {
+    setModalCart(prev => prev.filter(c => !c.id.includes("mason") && !c.id.includes("paint")));
     const rawCatKey = (activeCategory?.id || activeCategory?.slug || activeCategoryId || "").toLowerCase()
     if (["hvac", "ac", "appliance"].some(k => rawCatKey.includes(k))) {
       navigate("/home", { state: { openAcModal: true } })
@@ -1081,10 +1082,16 @@ export function LandingPage() {
       navigate("/home", { state: { openElecModal: true } })
     } else if (["goods", "transport"].some(k => rawCatKey.includes(k))) {
       navigate("/home", { state: { openGoodsModal: true } })
+    } else if (["painting", "mason"].some(k => rawCatKey.includes(k))) {
+      navigate("/home")
     } else {
       navigate("/home", { state: { openHomePestModal: true } })
     }
   }
+
+  const cleanConsultationItems = (cartArray) => {
+    return (cartArray || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason"));
+  };
 
   const goToBooking = () => navigate(routes.booking)
   const goToLogin = () => setShowCustomerEntryModal(true)
@@ -1293,7 +1300,7 @@ export function LandingPage() {
           </header>
 
           {/* Full Page View Wrapper */}
-          <main className={`flex-1 max-w-7xl w-full mx-auto px-6 ${activeCategory ? "pt-4 pb-10" : "py-10"}`}>
+          <main className={`flex-1 max-w-7xl w-full mx-auto px-6 ${activeCategory ? "pt-4 pb-0" : "py-10"}`}>
             {activeCategory && (
               (activeCategory.id === "kitchen_cleaning" || activeCategory.slug === "kitchen_cleaning" || String(activeCategory.id) === "kitchen_cleaning" || activeCategory.name?.toLowerCase()?.includes("kitchen")) ? (
                 <KitchenCleaningModal
@@ -1301,7 +1308,7 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
                 />
               ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
                 <SofaCleaningModal
@@ -1309,7 +1316,7 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
                 />
               ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
                 <BathroomCleaningModal
@@ -1317,7 +1324,7 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
                 />
               ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
                 <PaintingPackageModal
@@ -1325,17 +1332,16 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-                  onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
-                />
-              ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
-                <MasonPackageModal
-                  category={activeCategory}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-                  onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
+                  onCheckout={(customCart) => {
+                    const finalCart = customCart || modalCart;
+                    setModalCart(cleanConsultationItems(finalCart));
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                  }}
+                  onGetEstimate={(customCart) => {
+                    const finalCart = customCart || modalCart;
+                    setModalCart(cleanConsultationItems(finalCart));
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+                  }}
                 />
               ) : (
                 <CustomCleaningPackageModal
@@ -1344,52 +1350,15 @@ export function LandingPage() {
                   setCart={setModalCart}
                   isFullPage={true}
                   onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onCheckout={(customCart) => {
+                    const finalCart = customCart || modalCart;
+                    setModalCart(cleanConsultationItems(finalCart));
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                  }}
                 />
               )
             )}
           </main>
-
-          {/* Footer */}
-          <footer className="bg-slate-50 border-t border-slate-100 py-12">
-            <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white font-black flex items-center justify-center">C</div>
-                  <span className="font-extrabold text-slate-800 text-base">CalServices</span>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
-                  Your trusted partner for professional home services. Quality service, transparent pricing, and trusted professionals.
-                </p>
-                <div className="flex gap-3 mt-4 text-slate-400">
-                  <FacebookMark className="w-4 h-4" />
-                  <InstagramMark className="w-4 h-4" />
-                  <YoutubeMark className="w-4 h-4" />
-                  <TwitterMark className="w-4 h-4" />
-                </div>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800 mb-3">Services</p>
-                <ul className="space-y-2 text-xs text-slate-500">
-                  {CATEGORIES.slice(0, 4).map((c) => <li key={c.label}>{c.label}</li>)}
-                </ul>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800 mb-3">Company</p>
-                <ul className="space-y-2 text-xs text-slate-500">
-                  <li>About Us</li><li>Careers</li><li>Blog</li><li>Become a Partner</li>
-                </ul>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800 mb-3">Need Help?</p>
-                <ul className="space-y-2 text-xs text-slate-500">
-                  <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-emerald-600" /> +91 98765 43210</li>
-                  <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-emerald-600" /> support@calservices.com</li>
-                  <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-emerald-600" /> Mon &ndash; Sun (8 AM &ndash; 8 PM)</li>
-                </ul>
-              </div>
-            </div>
-          </footer>
         </div>
         <BkStyles />
 
@@ -2324,7 +2293,7 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
           />
         ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
           <SofaCleaningModal
@@ -2332,7 +2301,7 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
           />
         ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
           <BathroomCleaningModal
@@ -2340,7 +2309,7 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
           />
         ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
           <PaintingPackageModal
@@ -2348,25 +2317,29 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-            onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
-          />
-        ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
-          <MasonPackageModal
-            category={activeCategory}
-            cart={modalCart}
-            setCart={setModalCart}
-            onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-            onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
+            onCheckout={(customCart) => {
+              const finalCart = customCart || modalCart;
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+            }}
+            onGetEstimate={(customCart) => {
+              const finalCart = customCart || modalCart;
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+            }}
           />
         ) : (
+
           <CustomCleaningPackageModal
             category={activeCategory}
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onCheckout={(customCart) => {
+              const finalCart = customCart || modalCart;
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+            }}
           />
         )
       )}
@@ -3894,7 +3867,7 @@ export function LandingPage() {
           cart={modalCart}
           setCart={setModalCart}
           onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+          onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
         />
       ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
         <BathroomCleaningModal
@@ -3902,7 +3875,7 @@ export function LandingPage() {
           cart={modalCart}
           setCart={setModalCart}
           onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+          onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
         />
       ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
         <PaintingPackageModal
@@ -3910,26 +3883,30 @@ export function LandingPage() {
           cart={modalCart}
           setCart={setModalCart}
           onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-          onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
-        />
-      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
-        <MasonPackageModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-          onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
+          onCheckout={(customCart) => {
+            const finalCart = customCart || modalCart;
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+          }}
+          onGetEstimate={(customCart) => {
+            const finalCart = customCart || modalCart;
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+          }}
         />
       ) : (
+
         <PackageModal
           category={activeCategory}
           cart={modalCart}
           setCart={setModalCart}
           packagesData={{}}
           onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+          onCheckout={(customCart) => {
+            const finalCart = customCart || modalCart;
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+          }}
         />
       )
     )}
@@ -3963,7 +3940,7 @@ export function LandingPage() {
       </AnimatePresence>
 
       {/* Urban Company Style Floating Bottom Cart Bar */}
-      {modalCart && modalCart.length > 0 && (
+      {modalCart && modalCart.length > 0 && !activeCategory && !isGoodsModalOpen && !isElecModalOpen && !isAcModalOpen && !isHomePestModalOpen && !isForYouModalOpen && !isFoodHealthModalOpen && !isHomeServicesCombinedModalOpen && (
         <motion.div
           initial={{ y: 50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}

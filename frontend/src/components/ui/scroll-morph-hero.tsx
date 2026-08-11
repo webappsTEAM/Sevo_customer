@@ -1,408 +1,108 @@
-"use client";
+import React from "react";
+import { motion } from "framer-motion";
+import { Shield, Users, Clock, Map } from "lucide-react";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import { motion, useTransform, useSpring, useMotionValue } from "framer-motion";
-
-// --- Types ---
-export type AnimationPhase = "scatter" | "line" | "circle" | "bottom-strip";
-
-interface FlipCardProps {
-    src: string;
-    index: number;
-    total: number;
-    phase: AnimationPhase;
-    target: { x: number; y: number; rotation: number; scale: number; opacity: number };
-    onClick?: () => void;
-}
-
-// --- FlipCard Component ---
-const IMG_WIDTH = 60;  // Reduced from 100
-const IMG_HEIGHT = 85; // Reduced from 140
-
-function FlipCard({
-    src,
-    index,
-    total,
-    phase,
-    target,
-    onClick,
-}: FlipCardProps) {
+export default function IntroAnimation() {
     return (
-        <motion.div
-            // Smoothly animate to the coordinates defined by the parent
-            animate={{
-                x: target.x,
-                y: target.y,
-                rotate: target.rotation,
-                scale: target.scale,
-                opacity: target.opacity,
-            }}
-            transition={{
-                type: "spring",
-                stiffness: 40,
-                damping: 15,
-            }}
+        <div className="w-full h-full min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white flex flex-col justify-between p-12 relative overflow-hidden font-sans select-none">
+            {/* Grid overlay */}
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20 pointer-events-none" />
 
-            // Initial style
-            style={{
-                position: "absolute",
-                width: IMG_WIDTH,
-                height: IMG_HEIGHT,
-                transformStyle: "preserve-3d", // Essential for the 3D hover effect
-                perspective: "1000px",
-            }}
-            onClick={onClick}
-            className="cursor-pointer group"
-        >
-            <motion.div
-                className="relative h-full w-full"
-                style={{ transformStyle: "preserve-3d" }}
-                transition={{ duration: 0.6, type: "spring", stiffness: 260, damping: 20 }}
-                whileHover={{ rotateY: 180 }}
-            >
-                {/* Front Face */}
-                <div
-                    className="absolute inset-0 h-full w-full overflow-hidden rounded-xl shadow-lg bg-gray-200"
-                    style={{ backfaceVisibility: "hidden" }}
-                >
-                    <img
-                        src={src}
-                        alt={`hero-${index}`}
-                        className="h-full w-full object-cover"
-                        draggable={false}
-                    />
-                    <div className="absolute inset-0 bg-black/10 transition-colors group-hover:bg-transparent" />
+            {/* Glowing background blobs */}
+            <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: '6s' }} />
+            <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-emerald-500/5 blur-[100px] pointer-events-none animate-pulse" style={{ animationDuration: '8s' }} />
+
+            {/* Top header */}
+            <div className="relative z-10">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white font-black flex items-center justify-center text-lg shadow-lg shadow-indigo-600/30">C</div>
+                  <span className="text-xl font-extrabold tracking-tight text-white font-display">CalServices Admin</span>
                 </div>
+            </div>
 
-                {/* Back Face */}
-                <div
-                    className="absolute inset-0 h-full w-full overflow-hidden rounded-xl shadow-lg bg-gray-900 flex flex-col items-center justify-center p-4 border border-gray-700"
-                    style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+            {/* Center mockup card with 3D perspective */}
+            <div className="relative z-10 flex-1 flex items-center justify-center py-8">
+                <motion.div 
+                    initial={{ opacity: 0, y: 30, rotateX: 12, rotateY: -15, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, rotateX: 8, rotateY: -10, scale: 1 }}
+                    transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+                    style={{ transformStyle: "preserve-3d", perspective: 1000 }}
+                    className="w-full max-w-md bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 shadow-2xl shadow-slate-950/50 relative group"
                 >
-                    <div className="text-center">
-                        <p className="text-[8px] font-bold text-blue-400 uppercase tracking-widest mb-1">View</p>
-                        <p className="text-xs font-medium text-white">Details</p>
+                    {/* Perspective shadow */}
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-3xl blur opacity-30 group-hover:opacity-45 transition duration-1000 group-hover:duration-200 z-0" />
+                    
+                    <div className="relative z-10 space-y-6">
+                        {/* Title & badge */}
+                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+                            <div>
+                                <h3 className="text-sm font-black text-slate-100 font-display">Workforce Overview</h3>
+                                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Real-time Dashboard Metrics</p>
+                            </div>
+                            <span className="text-[9px] font-mono font-bold px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full uppercase tracking-wider">
+                                Live
+                            </span>
+                        </div>
+
+                        {/* Chart bar rows */}
+                        <div className="space-y-3.5">
+                            {[
+                                { label: "Operations Efficiency", value: "94.2%", width: "94.2%", color: "from-indigo-500 to-indigo-600" },
+                                { label: "Schedule Adherence", value: "88.7%", width: "88.7%", color: "from-blue-500 to-blue-600" },
+                                { label: "Labor Compliance Rate", value: "100%", width: "100%", color: "from-emerald-500 to-emerald-600" },
+                            ].map((row, i) => (
+                                <div key={i} className="space-y-1.5">
+                                    <div className="flex justify-between text-[11px] font-bold text-slate-300">
+                                        <span>{row.label}</span>
+                                        <span className="font-mono text-white">{row.value}</span>
+                                    </div>
+                                    <div className="w-full bg-slate-850 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                                        <motion.div 
+                                            initial={{ width: 0 }}
+                                            animate={{ width: row.width }}
+                                            transition={{ duration: 1.5, delay: 0.2 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+                                            className={`h-full bg-gradient-to-r ${row.color} rounded-full`}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Mini statistics grid */}
+                        <div className="grid grid-cols-3 gap-3 border-t border-slate-800/80 pt-5">
+                            {[
+                                { value: "3.4k", label: "Active Jobs" },
+                                { value: "98.2%", label: "Satisfaction" },
+                                { value: "12m", label: "Avg Dispatch" }
+                            ].map((stat, i) => (
+                                <div key={i} className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-2.5 text-center">
+                                    <div className="text-xs font-mono font-black text-white">{stat.value}</div>
+                                    <div className="text-[8px] font-bold text-slate-500 uppercase mt-0.5 tracking-wider">{stat.label}</div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
-            </motion.div>
-        </motion.div>
-    );
-}
+                </motion.div>
+            </div>
 
-// --- Main Hero Component ---
-const TOTAL_IMAGES = 20;
-const MAX_SCROLL = 3000; // Virtual scroll range
-
-// Unsplash Images
-const IMAGES = [
-    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=300&q=80",
-    "https://images.unsplash.com/photo-1519710164239-da123dc03ef4?w=300&q=80",
-    "https://images.unsplash.com/photo-1497366216548-37526070297c?w=300&q=80",
-    "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=300&q=80",
-    "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=300&q=80",
-    "https://images.unsplash.com/photo-1506765515384-028b60a970df?w=300&q=80",
-    "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=300&q=80",
-    "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=300&q=80",
-    "https://images.unsplash.com/photo-1500485035595-cbe6f645feb1?w=300&q=80",
-    "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=300&q=80",
-    "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=300&q=80",
-    "https://images.unsplash.com/photo-1518020382113-a7e8fc38eac9?w=300&q=80",
-    "https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?w=300&q=80",
-    "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=300&q=80",
-    "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=300&q=80",
-    "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?w=300&q=80",
-    "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=300&q=80",
-    "https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?w=300&q=80",
-    "https://images.unsplash.com/photo-1523961131990-5ea7c61b2107?w=300&q=80",
-    "https://images.unsplash.com/photo-1496568816309-51d7c20e3b21?w=300&q=80",
-];
-
-// Helper for linear interpolation
-const lerp = (start: number, end: number, t: number) => start * (1 - t) + end * t;
-
-interface IntroAnimationProps {
-    cards?: any[];
-    onSelectCard?: (card: any) => void;
-}
-
-export default function IntroAnimation({
-    cards = IMAGES,
-    onSelectCard,
-}: IntroAnimationProps) {
-    const [introPhase, setIntroPhase] = useState<AnimationPhase>("scatter");
-    const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    // --- Container Size ---
-    useEffect(() => {
-        if (!containerRef.current) return;
-
-        const handleResize = (entries: ResizeObserverEntry[]) => {
-            for (const entry of entries) {
-                setContainerSize({
-                    width: entry.contentRect.width,
-                    height: entry.contentRect.height,
-                });
-            }
-        };
-
-        const observer = new ResizeObserver(handleResize);
-        observer.observe(containerRef.current);
-
-        // Initial set
-        setContainerSize({
-            width: containerRef.current.offsetWidth,
-            height: containerRef.current.offsetHeight,
-        });
-
-        return () => observer.disconnect();
-    }, []);
-
-    // --- Virtual Scroll Logic ---
-    const virtualScroll = useMotionValue(0);
-    const scrollRef = useRef(0); // Keep track of scroll value without re-renders
-
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        const handleWheel = (e: WheelEvent) => {
-            // Prevent default to stop browser overscroll/bounce
-            e.preventDefault();
-
-            const newScroll = Math.min(Math.max(scrollRef.current + e.deltaY, 0), MAX_SCROLL);
-            scrollRef.current = newScroll;
-            virtualScroll.set(newScroll);
-        };
-
-        // Touch support
-        let touchStartY = 0;
-        const handleTouchStart = (e: TouchEvent) => {
-            touchStartY = e.touches[0].clientY;
-        };
-        const handleTouchMove = (e: TouchEvent) => {
-            const touchY = e.touches[0].clientY;
-            const deltaY = touchStartY - touchY;
-            touchStartY = touchY;
-
-            const newScroll = Math.min(Math.max(scrollRef.current + deltaY, 0), MAX_SCROLL);
-            scrollRef.current = newScroll;
-            virtualScroll.set(newScroll);
-        };
-
-        // Attach listeners to container instead of window for portability
-        container.addEventListener("wheel", handleWheel, { passive: false });
-        container.addEventListener("touchstart", handleTouchStart, { passive: false });
-        container.addEventListener("touchmove", handleTouchMove, { passive: false });
-
-        return () => {
-            container.removeEventListener("wheel", handleWheel);
-            container.removeEventListener("touchstart", handleTouchStart);
-            container.removeEventListener("touchmove", handleTouchMove);
-        };
-    }, [virtualScroll]);
-
-    // 1. Morph Progress: 0 (Circle) -> 1 (Bottom Arc)
-    // Happens between scroll 0 and 600
-    const morphProgress = useTransform(virtualScroll, [0, 600], [0, 1]);
-    const smoothMorph = useSpring(morphProgress, { stiffness: 40, damping: 20 });
-
-    // 2. Scroll Rotation (Shuffling): Starts after morph (e.g., > 600)
-    // Rotates the bottom arc as user continues scrolling
-    const scrollRotate = useTransform(virtualScroll, [600, 3000], [0, 360]);
-    const smoothScrollRotate = useSpring(scrollRotate, { stiffness: 40, damping: 20 });
-
-    // --- Mouse Parallax ---
-    const mouseX = useMotionValue(0);
-    const smoothMouseX = useSpring(mouseX, { stiffness: 30, damping: 20 });
-
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        const handleMouseMove = (e: MouseEvent) => {
-            const rect = container.getBoundingClientRect();
-            const relativeX = e.clientX - rect.left;
-
-            // Normalize -1 to 1
-            const normalizedX = (relativeX / rect.width) * 2 - 1;
-            // Move +/- 100px
-            mouseX.set(normalizedX * 100);
-        };
-        container.addEventListener("mousemove", handleMouseMove);
-        return () => container.removeEventListener("mousemove", handleMouseMove);
-    }, [mouseX]);
-
-    // --- Intro Sequence ---
-    useEffect(() => {
-        const timer1 = setTimeout(() => setIntroPhase("line"), 500);
-        const timer2 = setTimeout(() => setIntroPhase("circle"), 2500);
-        return () => { clearTimeout(timer1); clearTimeout(timer2); };
-    }, []);
-
-    // --- Random Scatter Positions ---
-    const scatterPositions = useMemo(() => {
-        return Array.from({ length: TOTAL_IMAGES }).map(() => ({
-            x: (Math.random() - 0.5) * 1500,
-            y: (Math.random() - 0.5) * 1000,
-            rotation: (Math.random() - 0.5) * 180,
-            scale: 0.6,
-            opacity: 0,
-        }));
-    }, []);
-
-    // --- Render Loop (Manual Calculation for Morph) ---
-    const [morphValue, setMorphValue] = useState(0);
-    const [rotateValue, setRotateValue] = useState(0);
-    const [parallaxValue, setParallaxValue] = useState(0);
-
-    useEffect(() => {
-        const unsubscribeMorph = smoothMorph.on("change", setMorphValue);
-        const unsubscribeRotate = smoothScrollRotate.on("change", setRotateValue);
-        const unsubscribeParallax = smoothMouseX.on("change", setParallaxValue);
-        return () => {
-            unsubscribeMorph();
-            unsubscribeRotate();
-            unsubscribeParallax();
-        };
-    }, [smoothMorph, smoothScrollRotate, smoothMouseX]);
-
-    // --- Content Opacity ---
-    // Fade in content when arc is formed (morphValue > 0.8)
-    const contentOpacity = useTransform(smoothMorph, [0.8, 1], [0, 1]);
-    const contentY = useTransform(smoothMorph, [0.8, 1], [20, 0]);
-
-    return (
-        <div ref={containerRef} className="relative w-full h-full bg-[#FAFAFA] overflow-hidden select-none">
-            {/* Container */}
-            <div className="flex h-full w-full flex-col items-center justify-center perspective-1000 relative z-10">
-
-                {/* Intro Text (Fades out) */}
-                <div className="absolute z-0 flex flex-col items-center justify-center text-center pointer-events-none top-1/2 -translate-y-1/2">
-                    <motion.h1
-                        initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-                        animate={introPhase === "circle" && morphValue < 0.5 ? { opacity: 1 - morphValue * 2, y: 0, filter: "blur(0px)" } : { opacity: 0, filter: "blur(10px)" }}
-                        transition={{ duration: 1 }}
-                        className="text-2xl font-medium tracking-tight text-gray-800 md:text-3xl lg:text-4xl font-display font-bold px-4 max-w-xs md:max-w-lg mx-auto leading-tight"
-                    >
-                        Powering the Future <br /> of Workforce Intelligence
-                    </motion.h1>
-                    <motion.p
-                        initial={{ opacity: 0 }}
-                        animate={introPhase === "circle" && morphValue < 0.5 ? { opacity: 0.5 - morphValue } : { opacity: 0 }}
-                        transition={{ duration: 1, delay: 0.2 }}
-                        className="mt-4 text-[9px] font-bold tracking-[0.2em] text-gray-500 font-mono"
-                    >
-                        POWERED BY CALDIM
-                    </motion.p>
-                </div>
-
-                {/* Arc Active Content (Fades in on scroll) */}
-                {morphValue > 0.05 && (
-                    <motion.div
-                        style={{ opacity: contentOpacity, y: contentY }}
-                        className="absolute top-[20%] z-10 flex flex-col items-center justify-center text-center pointer-events-none px-4"
-                    >
-                        <h2 className="text-2xl md:text-4xl font-semibold text-gray-900 tracking-tight mb-3 font-display font-black">
-                            Workforce Time & Dispatch
-                        </h2>
-                        <p className="text-xs md:text-sm text-gray-600 max-w-md leading-relaxed font-body">
-                            Real-time GPS tracking, smart scheduling, automated timesheets, <br className="hidden md:block" />
-                            and compliant payroll workflows built to elevate workforce operations.
-                        </p>
-                    </motion.div>
-                )}
-
-                {/* Main Container */}
-                <div className="relative flex items-center justify-center w-full h-full">
-                    {Array.from({ length: TOTAL_IMAGES }).map((_, i) => {
-                        const card = cards && cards.length > 0 ? cards[i % cards.length] : IMAGES[i % IMAGES.length];
-                        const src = typeof card === "string" ? card : card.src;
-
-                        let target = { x: 0, y: 0, rotation: 0, scale: 1, opacity: 1 };
-
-                        // 1. Intro Phases (Scatter -> Line)
-                        if (introPhase === "scatter") {
-                            target = scatterPositions[i];
-                        } else if (introPhase === "line") {
-                            const lineSpacing = 70; // Adjusted for smaller images (60px width + 10px gap)
-                            const lineTotalWidth = TOTAL_IMAGES * lineSpacing;
-                            const lineX = i * lineSpacing - lineTotalWidth / 2;
-                            target = { x: lineX, y: 0, rotation: 0, scale: 1, opacity: 1 };
-                        } else {
-                            // 2. Circle Phase & Morph Logic
-
-                            // Responsive Calculations
-                            const isMobile = containerSize.width < 768;
-                            const minDimension = Math.min(containerSize.width, containerSize.height);
-
-                            // A. Calculate Circle Position
-                            const circleRadius = Math.min(minDimension * 0.35, 300);
-
-                            const circleAngle = (i / TOTAL_IMAGES) * 360;
-                            const circleRad = (circleAngle * Math.PI) / 180;
-                            const circlePos = {
-                                x: Math.cos(circleRad) * circleRadius,
-                                y: Math.sin(circleRad) * circleRadius,
-                                rotation: circleAngle + 90,
-                            };
-
-                            // B. Calculate Bottom Arc Position
-                            // "Rainbow" Arch: Convex up. Center is highest point.
-
-                            // Radius:
-                            const baseRadius = Math.min(containerSize.width, containerSize.height * 1.5);
-                            const arcRadius = baseRadius * (isMobile ? 1.4 : 1.1);
-
-                            // Position:
-                            const arcApexY = containerSize.height * (isMobile ? 0.15 : 0.25);
-                            const arcCenterY = arcApexY + arcRadius;
-
-                            // Spread angle:
-                            const spreadAngle = isMobile ? 80 : 95;
-                            const startAngle = -90 - (spreadAngle / 2);
-                            const step = spreadAngle / (TOTAL_IMAGES - 1);
-
-                            // Let's interpret rotateValue (0 to 360) as a progress 0 to 1
-                            const scrollProgress = Math.min(Math.max(rotateValue / 360, 0), 1);
-
-                            // Calculate bounded rotation:
-                            const maxRotation = spreadAngle * 0.8; // Don't go all the way, keep last item visible
-                            const boundedRotation = -scrollProgress * maxRotation;
-
-                            const currentArcAngle = startAngle + (i * step) + boundedRotation;
-                            const arcRad = (currentArcAngle * Math.PI) / 180;
-
-                            const arcPos = {
-                                x: Math.cos(arcRad) * arcRadius + parallaxValue,
-                                y: Math.sin(arcRad) * arcRadius + arcCenterY,
-                                rotation: currentArcAngle + 90,
-                                scale: isMobile ? 1.4 : 1.8, // Increased scale for active state
-                            };
-
-                            // C. Interpolate (Morph)
-                            target = {
-                                x: lerp(circlePos.x, arcPos.x, morphValue),
-                                y: lerp(circlePos.y, arcPos.y, morphValue),
-                                rotation: lerp(circlePos.rotation, arcPos.rotation, morphValue),
-                                scale: lerp(1, arcPos.scale, morphValue),
-                                opacity: 1,
-                            };
-                        }
-
-                        return (
-                            <FlipCard
-                                key={i}
-                                src={src}
-                                index={i}
-                                total={TOTAL_IMAGES}
-                                phase={introPhase} // Pass intro phase for initial animations
-                                target={target}
-                                onClick={() => onSelectCard?.(card)}
-                            />
-                        );
-                    })}
-                </div>
+            {/* Bottom info section */}
+            <div className="relative z-10 grid grid-cols-2 gap-6 max-w-lg">
+                {[
+                    { icon: <Map className="text-indigo-400" size={16} />, title: "Dispatch Tracking", desc: "Interactive mapping & geofence rules." },
+                    { icon: <Clock className="text-indigo-400" size={16} />, title: "Time Intelligence", desc: "Selfie check-ins & automated timesheets." },
+                    { icon: <Users className="text-indigo-400" size={16} />, title: "Staff Scheduling", desc: "Drag-and-drop shift planning calendars." },
+                    { icon: <Shield className="text-indigo-400" size={16} />, title: "Enterprise Compliance", desc: "Audit trails & multi-tier permissions." }
+                ].map((item, i) => (
+                    <div key={i} className="flex gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0">
+                            {item.icon}
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-black text-slate-200 font-display">{item.title}</h4>
+                            <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed font-semibold">{item.desc}</p>
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react"
 import { useSearchParams, useLocation, useNavigate } from "react-router-dom"
+import { createPortal } from "react-dom"
 import { useGoogleLogin } from "@react-oauth/google"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -1611,7 +1612,7 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
   const dateScrollRef = useRef()
   const canContinue = selectedDate && selectedTime
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const taxFee = totalPrice === 0 ? 49 : 99
+  const taxFee = totalPrice === 0 ? 49 : (totalPrice === 49 || (cart && cart.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
   const grandTotal = totalPrice + taxFee
 
   // Urban time slots: Morning / Afternoon / Evening
@@ -1746,7 +1747,7 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
               <span>Item total</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{totalPrice.toLocaleString()}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}>
-              <span>Taxes & Fee</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span>
+              <span>Taxes & Fee (incl. GST)</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span>
             </div>
           </div>
           <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2198,7 +2199,7 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
   const UC_TIME_FORMATS = (t) => { if (!t) return ''; const [h] = t.split(':').map(Number); const ampm = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:00 ${ampm}` }
   const displayTime = UC_TIME_FORMATS(time)
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (pkg?.price || 0)
-  const taxFee = totalPrice === 0 ? 49 : 99
+  const taxFee = totalPrice === 0 ? 49 : (totalPrice === 49 || (cart && cart.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
   const discount = couponApplied ? Math.floor(totalPrice * 0.1) : 0
   const tipAmount = tip === 'custom' ? (parseInt(customTip) || 0) : (tip || 0)
   const grandTotal = totalPrice + taxFee - discount + tipAmount
@@ -2356,7 +2357,7 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
           {/* Price Breakdown */}
           <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}><span>Item total</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{totalPrice.toLocaleString()}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: discount > 0 ? 6 : 0 }}><span>Taxes & Fee</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: discount > 0 ? 6 : 0 }}><span>Taxes & Fee (incl. GST)</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span></div>
             {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#10B981', marginBottom: tipAmount > 0 ? 6 : 0 }}><span>Coupon discount</span><span style={{ fontWeight: 700 }}>-₹{discount}</span></div>}
             {tipAmount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}><span>Tip</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{tipAmount}</span></div>}
           </div>
@@ -5769,9 +5770,8 @@ function QuickCommerceCartCheckout({
                           setSelectedAddressId(addr.id)
                           setIsAddressScreenOpen(false)
                         }}
-                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-xs ${
-                          isSelected ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200/90 hover:border-slate-300"
-                        }`}
+                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-xs ${isSelected ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200/90 hover:border-slate-300"
+                          }`}
                       >
                         <div className="flex items-start gap-3">
                           <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
@@ -5836,9 +5836,8 @@ function QuickCommerceCartCheckout({
                           key={t}
                           type="button"
                           onClick={() => setNewAddressType(t)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${
-                            newAddressType === t ? "bg-emerald-600 text-white border-emerald-600" : "bg-slate-50 text-slate-700 border-slate-200"
-                          }`}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${newAddressType === t ? "bg-emerald-600 text-white border-emerald-600" : "bg-slate-50 text-slate-700 border-slate-200"
+                            }`}
                         >
                           {t}
                         </button>
@@ -5895,7 +5894,7 @@ function QuickCommerceCartCheckout({
               type="button"
               onClick={() => {
                 if (navigator.share) {
-                  navigator.share({ title: "My Vegetables Cart", url: window.location.href }).catch(() => {})
+                  navigator.share({ title: "My Vegetables Cart", url: window.location.href }).catch(() => { })
                 }
               }}
               className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 cursor-pointer bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200/60 transition-colors"
@@ -6084,11 +6083,10 @@ function QuickCommerceCartCheckout({
                           setIsCustomTipOpen(t.val === "custom")
                         }
                       }}
-                      className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                        isSelected
+                      className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${isSelected
                           ? "bg-emerald-50 border-emerald-600 text-emerald-800 shadow-2xs"
                           : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
-                      }`}
+                        }`}
                     >
                       <span>{t.icon}</span>
                       <span>{t.label}</span>
@@ -6235,8 +6233,8 @@ function StepWorkflowCheckout({
 
   const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const origTotal = Math.round(itemTotal * 1.1)
-  const discount = couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 100
-  const taxFee = itemTotal === 0 ? 49 : 99
+  const discount = couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 0
+  const taxFee = itemTotal === 0 ? 49 : (itemTotal === 49 || (items && items.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
   const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
   const grandTotal = Math.max(0, itemTotal + taxFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
 
@@ -6762,7 +6760,7 @@ function StepWorkflowCheckout({
               </div>
 
               <div className="flex justify-between text-slate-600">
-                <span>Taxes and Fee</span>
+                <span>Taxes and Fee (incl. GST)</span>
                 <span className="font-bold text-slate-800">₹{taxFee}</span>
               </div>
 
@@ -6774,7 +6772,10 @@ function StepWorkflowCheckout({
               )}
 
               <div className="border-t border-slate-100 pt-2 flex justify-between font-black text-slate-900 text-sm">
-                <span>Total amount</span>
+                <div>
+                  <div>Total amount</div>
+                  <div className="text-[10px] text-slate-400 font-semibold mt-0.5">Inclusive of all taxes & GST</div>
+                </div>
                 <span>₹{grandTotal.toLocaleString("en-IN")}</span>
               </div>
 
@@ -6922,6 +6923,11 @@ export function BookingPage() {
   const [successData, setSuccessData] = useState(null)
   const [category, setCategory] = useState(incomingCategory || null)
   const [cart, setCart] = useState(incomingCart || [])
+
+  // Scroll to the top of the page when checkout page mounts or step changes
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [step]);
 
   // When customer removes all items (- button), automatically move back to home services selection side (/home)
   useEffect(() => {
@@ -7423,7 +7429,7 @@ export function BookingPage() {
                   if (activeCat) {
                     setShowPackageModal(true);
                   } else {
-                    navigate(routes.landing, { state: { cart } });
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
                   }
                 }}
               />
@@ -7447,7 +7453,7 @@ export function BookingPage() {
             className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
             onClick={() => {
               setShowSubCategoryChoiceModal(false);
-              navigate(routes.landing, { state: { cart } });
+              navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
             }}
           >
             <motion.div
@@ -7460,7 +7466,7 @@ export function BookingPage() {
               <button
                 onClick={() => {
                   setShowSubCategoryChoiceModal(false);
-                  navigate(routes.landing, { state: { cart } });
+                  navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
                 }}
                 className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer"
               >
@@ -7552,28 +7558,12 @@ export function BookingPage() {
               setCart={setCart}
               onClose={() => {
                 setShowPackageModal(false);
-                navigate(routes.landing, { state: { cart } });
+                navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
               }}
               onCheckout={() => { setShowPackageModal(false); setStep(3); }}
               onGetEstimate={() => {
                 setShowLocPicker(true);
               }}
-            />
-          ) : (category.id === "mason" || category.slug === "mason" || String(category.id) === "mason" || category.name?.toLowerCase() === "mason") ? (
-            <MasonPackageModal
-              category={category}
-              cart={cart}
-              setCart={setCart}
-              onClose={() => {
-                setShowPackageModal(false);
-                navigate(routes.landing, { state: { cart } });
-              }}
-              onCheckout={() => { setShowPackageModal(false); setStep(3); }}
-              onGetEstimate={() => {
-                setShowLocPicker(true);
-              }}
-              setPhotoFile={setPhotoFile}
-              setPhotoPreview={setPhotoPreview}
             />
           ) : (
             <PackageModal
@@ -7583,7 +7573,7 @@ export function BookingPage() {
               packagesData={packagesData}
               onClose={() => {
                 setShowPackageModal(false);
-                navigate(routes.landing, { state: { cart } });
+                navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
               }}
               onCheckout={() => { setShowPackageModal(false); setStep(3); }}
             />
@@ -8446,7 +8436,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
               {/* Middle Column - Service Choices Cards */}
               <div className="uc-paint-middle-col">
                 <div className="uc-paint-choices">
-                  
+
 
 
                   <h3 className="uc-paint-section-title">Painting choices for your home</h3>
@@ -8498,10 +8488,28 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                               <button
                                 className="uc-paint-action-btn"
                                 onClick={() => {
+                                  const cartId = `serv-paint-estimate-${service.id}`;
+                                  let updatedCart = [...cart];
+                                  const existing = updatedCart.find(c => c.id === cartId);
+                                  if (!existing) {
+                                    const newItem = {
+                                      id: cartId,
+                                      name: `${service.name} (Site Consultation)`,
+                                      price: 49,
+                                      quantity: 1,
+                                      categoryName: "Painting"
+                                    };
+                                    updatedCart.push(newItem);
+                                    setCart(prev => {
+                                      const hasIt = prev.some(c => c.id === cartId);
+                                      if (hasIt) return prev;
+                                      return [...prev, newItem];
+                                    });
+                                  }
                                   if (onGetEstimate) {
-                                    onGetEstimate();
+                                    onGetEstimate(updatedCart);
                                   } else {
-                                    onCheckout();
+                                    onCheckout(updatedCart);
                                   }
                                 }}
                                 style={{ padding: '0.5rem 1.4rem', fontSize: '0.8rem' }}
@@ -8988,19 +8996,19 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                   const w1 = (r1 / total) * 100;
 
                   const serviceId = activeDetailService.id;
-                  
+
                   // Define category-specific data
                   let startingRateText = "";
                   let subtitleText = "Final price depends on area, paint type & site inspection";
                   let viewListText = "View Price List →";
                   let hideListText = "Hide Price List ↑";
                   let tableHeaderType = "Paint Type";
-                  
+
                   let priceList = [];
                   let paintTypes = [];
                   let chooseTypeTitle = "🎨 Choose Paint Type";
                   let chooseTypePlaceholder = "Select a painting area above to choose paint types & see exact price estimate.";
-                  
+
                   if (serviceId === "paint-interior") {
                     startingRateText = "Starting from ₹7/sq.ft";
                     subtitleText = "Final price depends on area, paint type & site inspection";
@@ -9179,7 +9187,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                 <div style={{ fontSize: '0.9rem', fontWeight: 900, color: '#0f172a' }}>💰 {startingRateText}</div>
                                 <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>{subtitleText}</div>
                               </div>
-                              <button 
+                              <button
                                 onClick={() => setShowPriceList(!showPriceList)}
                                 style={{
                                   background: 'none', border: 'none', color: '#7C3AED', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px'
@@ -9296,7 +9304,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                   {paintTypes.map(paint => {
                                     const isSelected = selectedPaintType === paint.id;
                                     return (
-                                      <div 
+                                      <div
                                         key={paint.id}
                                         onClick={() => setSelectedPaintType(paint.id)}
                                         style={{
@@ -9507,7 +9515,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                   const isExpanded = expandedFaq === idx;
                                   return (
                                     <div key={idx} style={{ border: '1.5px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
-                                      <div 
+                                      <div
                                         onClick={() => setExpandedFaq(isExpanded ? null : idx)}
                                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none' }}
                                       >
@@ -9533,11 +9541,32 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                       <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #f1f5f9', background: '#ffffff', flexShrink: 0 }}>
                         <button
                           onClick={() => {
+                            const service = activeDetailService;
                             setActiveDetailService(null);
-                            if (onGetEstimate) {
-                              onGetEstimate();
-                            } else {
-                              onCheckout();
+                            if (service) {
+                              const cartId = `serv-paint-estimate-${service.id}`;
+                              let updatedCart = [...cart];
+                              const existing = updatedCart.find(c => c.id === cartId);
+                              if (!existing) {
+                                const newItem = {
+                                  id: cartId,
+                                  name: `${service.name} (Site Consultation)`,
+                                  price: 49,
+                                  quantity: 1,
+                                  categoryName: "Painting"
+                                };
+                                updatedCart.push(newItem);
+                                setCart(prev => {
+                                  const hasIt = prev.some(c => c.id === cartId);
+                                  if (hasIt) return prev;
+                                  return [...prev, newItem];
+                                });
+                              }
+                              if (onGetEstimate) {
+                                onGetEstimate(updatedCart);
+                              } else {
+                                onCheckout(updatedCart);
+                              }
                             }
                           }}
                           style={{
@@ -9682,6 +9711,148 @@ const MASON_DETAILS_EXTRA = {
     faqs: [
       { q: "Do you install a lintel support?", a: "Yes, we always insert or cast a concrete lintel beam above the opening to prevent wall settlement." },
       { q: "Can you resize an existing window?", a: "Yes, we can enlarge or reduce window/door cutouts and replaster the frame edges." }
+    ]
+  },
+  "mason-brick-1": {
+    benefits: ["Verified Masons", "Sturdy Alignment", "Premium Mortar", "1-Year Warranty"],
+    excludes: ["Plastering (available separately)", "Painting and structural slab work"],
+    steps: ["Site Layout Measurement", "Mortar Mixing", "Brick Alignment Laying", "Level Inspection", "Water Curing"],
+    reviews: [
+      { name: "Rajesh Kumar", rating: 5, comment: "Excellent brickwork! The wall alignment is absolutely perfect and strong." },
+      { name: "Anitha R.", rating: 4.8, comment: "Very professional mason team. Completed the new brick boundary wall on time." }
+    ],
+    faqs: [
+      { q: "What materials are included in the pricing?", a: "The rate covers layout, brick alignment, mortar preparation, and brick laying. Bricks, cement, and sand can be arranged by us or provided by you." },
+      { q: "How long does curing take?", a: "We recommend water curing for at least 7 to 10 days to reach peak compressive strength." }
+    ]
+  },
+  "mason-brick-2": {
+    benefits: ["Lightweight Blocks", "High Insulation", "Fast Construction", "Level Verification"],
+    excludes: ["Foundation excavation", "Plastering (available separately)"],
+    steps: ["Site Prep & Leveling", "Adhesive Mortar Mix", "Block Laying", "Alignment Check", "Joint Reinforcement"],
+    reviews: [
+      { name: "Vikram Singh", rating: 4.7, comment: "Sturdy block wall. Extremely fast execution and clean mortar joint application." },
+      { name: "Suresh P.", rating: 4.9, comment: "High quality solid block laying. Very satisfied with the durability." }
+    ],
+    faqs: [
+      { q: "Do you use solid or hollow blocks?", a: "We construct using solid or hollow concrete blocks based on structural needs and your preference." },
+      { q: "Is reinforcing mesh used between block layers?", a: "Yes, we apply joint reinforcement steel mesh or wire every 3-4 courses for stability." }
+    ]
+  },
+  "mason-brick-3": {
+    benefits: ["Quick Fixes", "Solid Bond", "Structure Check", "Seamless Joint"],
+    excludes: ["Full wall reconstruction", "Paint finishing"],
+    steps: ["Damage Area Survey", "Loose Mortar Scraping", "Brick/Block Realignment", "Bonding Paste Prep", "Joint Mortar Filling"],
+    reviews: [
+      { name: "Amit Shah", rating: 4.8, comment: "Repaired the crack in our compound block wall. Very sturdy results." }
+    ],
+    faqs: [
+      { q: "Can you fix load bearing wall cracks?", a: "We patch surface and joint cracks. If there is a deep structural load failure, we recommend a full civil engineer audit." }
+    ]
+  },
+  "mason-plast-1": {
+    benefits: ["Smooth Sand Finish", "Crack Repair Check", "Sponge Finish", "Flat Verticals"],
+    excludes: ["Wall putty application", "Painting"],
+    steps: ["Surface Wetting", "Slurry Coat Application", "Cement-Sand Plastering", "Screeding & Leveling", "Sponge Finishes"],
+    reviews: [
+      { name: "Manjunath", rating: 5, comment: "Super smooth plaster finish. The painters had a very easy time painting over it." },
+      { name: "Priya D.", rating: 4.8, comment: "Excellent double-coat plastering. Verticals are perfectly straight." }
+    ],
+    faqs: [
+      { q: "What mix ratio of cement-sand is used?", a: "We use a standard 1:4 or 1:6 ratio depending on whether it is an interior wall or exterior wall." },
+      { q: "Does the pricing include curing?", a: "The initial curing instruction is guided by us; active daily curing needs to be watered for 7 days." }
+    ]
+  },
+  "mason-plast-2": {
+    benefits: ["Hollow Repair", "Flawless Patching", "Strong Bonding", "Flush Leveling"],
+    excludes: ["Complete wall skimming", "Putty coat painting"],
+    steps: ["Hollow Area Tapping Test", "Loose Plaster Chiseling", "Bonding Slurry Coat", "Patch Plaster Laying", "Flush Trowel Finish"],
+    reviews: [
+      { name: "Karthik R.", rating: 4.9, comment: "Repaired a peeling plaster patch behind our kitchen. Very smooth leveling." }
+    ],
+    faqs: [
+      { q: "How do you treat damp plaster?", a: "We scrape the damp areas, apply an anti-efflorescence solution, and then apply waterproof patch plaster." }
+    ]
+  },
+  "mason-plast-3": {
+    benefits: ["Crack Arrest", "Flexible Seal", "Waterproof Barrier", "Smooth Texture"],
+    excludes: ["Deep foundation settlement fixes", "External structural beams reinforcement"],
+    steps: ["V-Groove Crack Chiseling", "Dust Blowing & Wetting", "Non-Shrink Polymer Injection", "Mesh Bridging Setup", "Sand Cement Plaster Patching"],
+    reviews: [
+      { name: "Arun Kumar", rating: 5, comment: "Excellent crack repair. The cracks haven't reopened after 6 months." }
+    ],
+    faqs: [
+      { q: "Why do wall cracks happen?", a: "Usually due to minor plaster thermal expansion or initial building settlement. We bridge and seal them to prevent water seepage." }
+    ]
+  },
+  "mason-part-1": {
+    benefits: ["Space Optimization", "Anchor Setup", "Room Division", "Solid Separation"],
+    excludes: ["Painting and electrical wiring"],
+    steps: ["Boundary Marking", "Layout Anchor Drill", "Block/Brick Construction", "Level Checks", "Smooth Plaster Finish"],
+    reviews: [
+      { name: "Jeeva K.", rating: 4.9, comment: "Split our large hall into two rooms. Professional partitions and clean cleanup." },
+      { name: "Sneha G.", rating: 4.8, comment: "Sturdy bricks wall partition. Perfect bedroom partition solution." }
+    ],
+    faqs: [
+      { q: "Does this include doors/windows framing?", a: "We make cutouts and level the borders. Door/window frames and glass fittings are separate." },
+      { q: "How long does a room partition take?", a: "Typically 2 to 3 days including brickwork, lintel casting, plastering, and initial setup." }
+    ]
+  },
+  "mason-part-2": {
+    benefits: ["Space Division", "Speedy Execution", "Lightweight Load", "Accurate Leveling"],
+    excludes: ["Door frame fitting", "Electrical conduits channelling"],
+    steps: ["Chalkline Layout Marking", "Bottom Mortar Bed Set", "Adhesive block laying", "Anchor L-Clamp Fixing", "Joint Finishing & Plaster"],
+    reviews: [
+      { name: "Preethi M.", rating: 4.8, comment: "Very fast room partition using block masonry. Neat joints." }
+    ],
+    faqs: [
+      { q: "Are block partitions soundproof?", a: "AAC block partition walls have excellent sound insulation of around 38-44 dB, which is perfect for bedrooms." }
+    ]
+  },
+  "mason-part-3": {
+    benefits: ["Decorative Split", "Open Feel", "Coping Slab Top", "Neat Plumb Work"],
+    excludes: ["Counter granite slabs fitting", "Under-counter wood cabinets"],
+    steps: ["Layout height marking", "Counter brick layout work", "Reinforced coping casting", "Sides plastering", "Curing guidance"],
+    reviews: [
+      { name: "Nirmal J.", rating: 4.9, comment: "Built a gorgeous half-wall for our breakfast counter partition. Very neat." }
+    ],
+    faqs: [
+      { q: "Can we install granite top on this half-wall?", a: "Yes, we construct the masonry structure and cast a level concrete top slab, ready for your granite installation." }
+    ]
+  },
+  "mason-demo-1": {
+    benefits: ["Controlled Breaking", "Rotary Hammer Drills", "Safety Pillar Props", "Debris Bagging"],
+    excludes: ["Permit collection fees", "Rebuilding walls"],
+    steps: ["Safety Prop Setup", "Utility Shutdown Check", "Wall Chipping/Demolition", "Debris Packing", "Premises Clearing"],
+    reviews: [
+      { name: "Hasan M.", rating: 4.8, comment: "Demolished the kitchen dividing wall safely. Supported the slab first." },
+      { name: "Prakash L.", rating: 4.9, comment: "Fast and professional debris removal. Site was left fully clean." }
+    ],
+    faqs: [
+      { q: "Is wall breaking safe for the building?", a: "We evaluate structural layout and only demolish non-load-bearing brick partitions." },
+      { q: "How do you handle debris disposal?", a: "We pack and transport debris away from your premises to authorized dump zones." }
+    ]
+  },
+  "mason-demo-2": {
+    benefits: ["Safe Disassembly", "No Structural Impact", "Site Cleanup", "Dust Protection"],
+    excludes: ["Floor tiles relaying where partition stood"],
+    steps: ["Room Cover Protection", "Joint Chisel Detaching", "Block-by-block Breaking", "Floor Base Scraping", "Debris Dispatching"],
+    reviews: [
+      { name: "Kishore S.", rating: 5, comment: "Removed a concrete block partition wall. Quick, safe and zero mess left behind." }
+    ],
+    faqs: [
+      { q: "Does partition removal damage adjacent walls?", a: "We use controlled hand chiseling at the joints to ensure adjacent walls remain undamaged." }
+    ]
+  },
+  "mason-demo-3": {
+    benefits: ["Accurate Cutout", "Lintel Beam Insert", "Neat Border Plaster", "Load Protection"],
+    excludes: ["Actual window frame fitting", "Glass installations"],
+    steps: ["Opening Layout Marking", "Top Lintel Support Slotting", "Lintel Concrete Pouring", "Wall Cutting/Breaking", "Plaster Edge Repair"],
+    reviews: [
+      { name: "Subash B.", rating: 4.9, comment: "Created a new double door opening in our living room wall. Excellent lintel casting." }
+    ],
+    faqs: [
+      { q: "Why is a lintel cast during wall cutout?", a: "The lintel holds the load of the brick wall above the cutout opening to prevent cracks or collapse." }
     ]
   }
 };
@@ -10009,8 +10180,8 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     })
     : MASON_SERVICES.filter(s => s.catId === activeTab);
 
-  const totalQuantity = cart.filter(c => c.id.startsWith("mason-")).reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = cart.filter(c => c.id.startsWith("mason-")).reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const totalQuantity = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   return (
     <div className="uc-paint-overlay" onClick={onClose}>
@@ -10866,11 +11037,11 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                               <div style={{
                                 width: '22px', height: '22px', borderRadius: '50%',
-                                background: stepColors[i % stepColors.length], 
+                                background: stepColors[i % stepColors.length],
                                 display: 'flex', alignItems: 'center',
-                                justifyContent: 'center', fontSize: '0.7rem', fontWeight: 900, 
+                                justifyContent: 'center', fontSize: '0.7rem', fontWeight: 900,
                                 color: stepTextColors[i % stepTextColors.length],
-                                border: `1.5px solid ${stepBorders[i % stepBorders.length]}`, 
+                                border: `1.5px solid ${stepBorders[i % stepBorders.length]}`,
                                 boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
                                 zIndex: 2
                               }}>
@@ -10989,7 +11160,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                             const isExpanded = expandedFaq === idx;
                             return (
                               <div key={idx} style={{ border: '1.5px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
-                                <div 
+                                <div
                                   onClick={() => setExpandedFaq(isExpanded ? null : idx)}
                                   style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none' }}
                                 >
@@ -11088,8 +11259,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Brick & Block Work", image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop" },
       { name: "Plastering & Wall Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
       { name: "Wall & Partition Construction", image: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=300&q=80&fit=crop" },
-      { name: "House Construction", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
-      { name: "Demolition & Breaking", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
+      { name: "Wall Breaking & Demolition", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
     ],
     pest_control: [
       { name: "Termite Control", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
@@ -11113,16 +11283,22 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     ]
   };
 
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const subCategories = CATEGORY_SUBCATEGORIES[normalizedKey] || CATEGORY_SUBCATEGORIES.cleaning;
 
-  const [activeSubTab, setActiveSubTab] = useState(subCategories[0]?.name || "Furnished Apartment");
+  const [activeSubTab, setActiveSubTab] = useState(() => searchParams.get("subTab") || subCategories[0]?.name || "Furnished Apartment");
 
-  // Keep activeSubTab in sync if normalizedKey changes
+  // Keep activeSubTab in sync if normalizedKey changes or URL subTab updates
   useEffect(() => {
-    if (subCategories && subCategories.length > 0) {
+    const currentSubTabInUrl = searchParams.get("subTab");
+    const tabExists = subCategories.some(t => t.name === currentSubTabInUrl);
+    if (tabExists) {
+      setActiveSubTab(currentSubTabInUrl);
+    } else if (subCategories && subCategories.length > 0) {
       setActiveSubTab(subCategories[0].name);
     }
-  }, [normalizedKey]);
+  }, [normalizedKey, searchParams, subCategories]);
 
   const [bhkSelections, setBhkSelections] = useState({
     essential: 3,
@@ -11132,6 +11308,24 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [isVipJoined, setIsVipJoined] = useState(false);
   const [isCouponApplied, setIsCouponApplied] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedPlans, setExpandedPlans] = useState({});
+  const [selectedMasonDetail, setSelectedMasonDetail] = useState(null);
+  const [activeFaq, setActiveFaq] = useState(null);
+
+  // Disable background page scrolling when detailed modal is open
+  useEffect(() => {
+    if (selectedMasonDetail) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    };
+  }, [selectedMasonDetail]);
 
   const getBhkPrice = (tabName, planId, bhk) => {
     const bhkIdx = bhk - 1;
@@ -11406,20 +11600,144 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     },
     mason: {
       "Brick & Block Work": [
-        { id: "mason-brick-1", name: "Red Brick Wall Construction", price: 1499, duration: "3 hrs", badge: "Popular", badgeColor: "bg-orange-50 text-orange-700 border-orange-100", description: "Standard red clay brick masonry work with high-grade cement mortar mix.", includes: ["Red brick supply & laying", "Cement mortar alignment", "Curing guidance"], image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop" },
-        { id: "mason-brick-2", name: "AAC Concrete Block Masonry", price: 1799, duration: "3 hrs", badge: "Lightweight", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Autoclaved Aerated Concrete block laying with thin-bed adhesive mortar.", includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        {
+          id: "mason-brick-1",
+          name: "Brick Wall Construction",
+          price: 1499,
+          duration: "3 hrs",
+          badge: "Popular",
+          badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
+          description: "High-quality red clay brick masonry work with standard cement-mortar mix.",
+          includes: ["Red brick supply & laying", "Mortar alignment check", "Curing guidance"],
+          image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop"
+        },
+        {
+          id: "mason-brick-2",
+          name: "Block Wall Construction",
+          price: 1799,
+          duration: "3 hrs",
+          badge: "Lightweight",
+          badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
+          description: "AAC concrete block laying using thin-bed adhesive mortar for fast execution.",
+          includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"],
+          image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop"
+        },
+        {
+          id: "mason-brick-3",
+          name: "Brick/Block Wall Repair",
+          price: 899,
+          duration: "2 hrs",
+          badge: "Quick Fix",
+          badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+          description: "Replacing damaged bricks/blocks, repairing loose mortar joints, and strengthening structure.",
+          includes: ["Damaged brick removal", "Mortar joint repointing", "Joint bonding agent application"],
+          image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop"
+        }
       ],
       "Plastering & Wall Repair": [
-        { id: "mason-plast-1", name: "Internal Wall Plastering & Patching", price: 899, duration: "2 hrs", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Smooth sand-cement plaster application, crack repair, and sponge finish.", includes: ["Crack v-groove carving", "Plaster patch application", "Smooth trowel finish"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        {
+          id: "mason-plast-1",
+          name: "Wall Plastering",
+          price: 999,
+          duration: "2.5 hrs",
+          badge: "Best Seller",
+          badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
+          description: "Smooth sand-cement plaster application for internal or external brick walls.",
+          includes: ["Surface preparation & wetting", "Base slurry application", "Sponge finish styling"],
+          image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop"
+        },
+        {
+          id: "mason-plast-2",
+          name: "Plaster Repair",
+          price: 699,
+          duration: "1.5 hrs",
+          badge: "Fix-it",
+          badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
+          description: "Patching hollow/peeling plaster surfaces and restoring wall strength.",
+          includes: ["Hollow plaster scraping", "Cement paste bonding", "Patch trowel leveling"],
+          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop"
+        },
+        {
+          id: "mason-plast-3",
+          name: "Crack Repair",
+          price: 499,
+          duration: "1 hr",
+          badge: "Preventive",
+          badgeColor: "bg-rose-50 text-rose-700 border-rose-100",
+          description: "V-groove wall cracking repairs using polymer-modified mortar or specialized sealant.",
+          includes: ["Crack cleanout chiseling", "Polymer filler injection", "Surface smoothing"],
+          image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop"
+        }
       ],
       "Wall & Partition Construction": [
-        { id: "mason-part-1", name: "Room Partition Wall Build", price: 2499, duration: "4 hrs", badge: "Structural", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Half-brick or AAC block partition wall creation with door frame insertion cutout.", includes: ["Foundation course anchoring", "Block partition build", "Lintel beam support"], image: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=300&q=80&fit=crop" }
+        {
+          id: "mason-part-1",
+          name: "New Partition Wall",
+          price: 2499,
+          duration: "4 hrs",
+          badge: "Structural",
+          badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
+          description: "Heavy brick masonry partition wall built with proper top ceiling anchors.",
+          includes: ["Foundation course anchoring", "Brick partition build", "Lintel support casting"],
+          image: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=300&q=80&fit=crop"
+        },
+        {
+          id: "mason-part-2",
+          name: "Room Partition",
+          price: 2199,
+          duration: "3.5 hrs",
+          badge: "Fast Build",
+          badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
+          description: "Autoclaved lightweight concrete block partition wall to divide living space.",
+          includes: ["Space layout leveling", "Block joint gluing", "Wall perimeter sealing"],
+          image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop"
+        },
+        {
+          id: "mason-part-3",
+          name: "Half-Wall Construction",
+          price: 1299,
+          duration: "2 hrs",
+          badge: "Decorative",
+          badgeColor: "bg-teal-50 text-teal-700 border-teal-100",
+          description: "Low-height counter/half-brick walls for open kitchen partitions or balcony boundaries.",
+          includes: ["Layout leveling scan", "Counter brick layout work", "Top coping concrete slab"],
+          image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop"
+        }
       ],
-      "House Construction": [
-        { id: "mason-house-1", name: "Civil Structure & Renovation Consultation", price: 999, duration: "1.5 hrs", badge: "Expert Consult", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "On-site civil engineer assessment for home extensions, RCC slab, or foundation work.", includes: ["On-site structural evaluation", "BOQ & material estimate", "Consultation report"], image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" }
-      ],
-      "Demolition & Breaking": [
-        { id: "mason-demo-1", name: "Wall Demolition & Tile Chipping", price: 1299, duration: "2 hrs", badge: "Heavy Duty", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Controlled wall breaking with rotary hammer drill, safety props, and debris bagging.", includes: ["Rotary breaker demotion", "Safety prop support", "Debris clearing"], image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
+      "Wall Breaking & Demolition": [
+        {
+          id: "mason-demo-1",
+          name: "Wall Breaking",
+          price: 1299,
+          duration: "2 hrs",
+          badge: "Heavy Duty",
+          badgeColor: "bg-rose-50 text-rose-700 border-rose-100",
+          description: "Controlled brick or concrete block wall demolition using rotary hammer breakers.",
+          includes: ["Rotary breaker breaking", "Safety prop supporting", "Debris bagging"],
+          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop"
+        },
+        {
+          id: "mason-demo-2",
+          name: "Partition Removal",
+          price: 999,
+          duration: "1.5 hrs",
+          badge: "Clean Cut",
+          badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
+          description: "Disassembling soft or lightweight concrete partitions without structural damage.",
+          includes: ["Anchor detaching", "Block breaking", "Debris removal packing"],
+          image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop"
+        },
+        {
+          id: "mason-demo-3",
+          name: "Door/Window Opening",
+          price: 1899,
+          duration: "3 hrs",
+          badge: "Expert Cut",
+          badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
+          description: "Chiseling and structural lintel casting to create a door or window opening cutout.",
+          includes: ["Lintel support insert", "Controlled wall cutting", "Smooth border plastering"],
+          image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop"
+        }
       ]
     },
     pest_control: {
@@ -11451,8 +11769,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   };
 
   const wrapperClass = isFullPage
-    ? "w-full text-slate-700 bg-white min-h-screen"
-    : "fixed inset-0 z-[9999] bg-white overflow-y-auto text-slate-700 w-full min-h-screen flex flex-col";
+    ? "w-full text-slate-700 bg-white min-h-screen flex flex-col justify-between"
+    : `fixed inset-0 z-[9999] bg-white text-slate-700 w-full min-h-screen flex flex-col ${selectedMasonDetail ? "overflow-hidden" : "overflow-y-auto"}`;
 
   const containerClass = isFullPage
     ? "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4"
@@ -11483,19 +11801,18 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       transition={{ duration: 0.25 }}
       onClick={e => e.stopPropagation()}
     >
-      {/* Modal / Cover Header + Subcategory Tabs — sticky on scroll */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md pb-2 border-b border-slate-100">
-        <div className="py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
+      <div className="bg-white pb-1.5 border-b border-slate-100">
+        <div className="py-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white">
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
                 if (typeof onClose === 'function') onClose();
               }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
-              <ChevronLeft size={16} /> Back to Services
+              <ChevronLeft size={14} /> Back to Services
             </button>
-            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
               {category.name}
             </h2>
           </div>
@@ -11504,17 +11821,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           <div className="flex items-center gap-3">
             {!isFullPage && (
               <button
-                className="w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
                 onClick={onClose}
               >
-                <X size={18} />
+                <X size={15} />
               </button>
             )}
           </div>
         </div>
 
         {/* Subservice Flex Selector */}
-        <div className="flex overflow-x-auto gap-6 pb-3 pt-2 justify-start scrollbar-none">
+        <div className="flex overflow-x-auto gap-4 pb-2 pt-1 justify-start scrollbar-none">
           {subCategories.map(tab => {
             const isSelected = activeSubTab === tab.name;
             return (
@@ -11527,8 +11844,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   }
                   setActiveSubTab(tab.name);
                   setSearchQuery("");
+                  const params = new URLSearchParams(window.location.search);
+                  params.set("subTab", tab.name);
+                  navigate(`?${params.toString()}`, { replace: true });
                 }}
-                className="flex flex-col items-center justify-center p-1.5 transition-all cursor-pointer text-center bg-transparent w-[80px] shrink-0 group"
+                className="flex flex-col items-center justify-center p-1 transition-all cursor-pointer text-center bg-transparent w-[68px] shrink-0 group"
               >
                 <img
                   src={tab.image}
@@ -11537,12 +11857,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     e.target.onerror = null;
                     e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
                   }}
-                  className={`w-14 h-14 object-cover rounded-2xl mb-1.5 transition-all duration-200 ${isSelected
-                    ? "scale-[1.08] shadow-md border-2 border-slate-800"
+                  className={`w-10 h-10 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected
+                    ? "scale-[1.08] shadow-sm border-2 border-slate-800"
                     : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
                     }`}
                 />
-                <span className={`text-[11px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-900 font-black" : "text-slate-600 font-bold"
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-900 font-black" : "text-slate-600 font-bold"
                   }`}>
                   {tab.name}
                 </span>
@@ -11782,75 +12102,180 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
             {normalizedKey !== "cleaning" &&
               currentOtherPlans
                 .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase()))
-                .map(p => {
+                .map((p, idx) => {
                   const cartId = `serv-${normalizedKey}-${p.id}`;
                   const count = getCartItemCount(cartId);
+                  const isFirst = normalizedKey === "mason" && idx === 0 && !searchQuery;
 
                   return (
                     <div
                       key={p.id}
-                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-5 hover:shadow-md transition-shadow relative"
+                      className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative"
                     >
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
-                          {p.badge && (
-                            <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${p.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
-                              {p.badge}
-                            </span>
-                          )}
-                        </div>
-
-                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
-
-                        {/* Price & Duration */}
-                        <div className="flex items-center gap-3 text-xs pt-1">
-                          <span className="text-base font-black text-slate-900">₹{p.price.toLocaleString("en-IN")}</span>
-                          <span className="text-slate-300">•</span>
-                          <span className="text-slate-500 font-semibold">{p.duration}</span>
-                        </div>
-
-                        {/* Includes checklist */}
-                        {p.includes && p.includes.length > 0 && (
-                          <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
-                            {p.includes.map(inc => (
-                              <li key={inc} className="flex items-start gap-2">
-                                <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                <span>{inc}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-
-                      {/* Right side image & floating ADD button */}
-                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
-                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      {isFirst && (
+                        <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/50">
                           <img
                             src={p.image}
                             alt={p.name}
+                            className="w-full h-full object-cover object-center"
                             onError={(e) => {
                               e.target.onerror = null;
-                              e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
+                              e.target.src = "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=600&q=80&fit=crop";
                             }}
-                            className="w-full h-full object-cover"
                           />
-                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
-                            {count > 0 ? (
-                              <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
-                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
-                                <span>{count}</span>
-                                <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}>+</button>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col md:flex-row justify-between gap-5">
+                        <div className="flex-1 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base">{p.name}</h4>
+                            {p.badge && (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${p.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
+                                {p.badge}
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-xs text-slate-500 leading-relaxed max-w-xl">{p.description}</p>
+
+                          {/* Price & Duration */}
+                          <div className="flex flex-col gap-1 text-xs pt-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base font-black text-slate-900">
+                                {normalizedKey === "mason" ? `Starts at ₹${p.price.toLocaleString("en-IN")}` : `₹${p.price.toLocaleString("en-IN")}`}
+                              </span>
+                              {normalizedKey !== "mason" && (
+                                <>
+                                  <span className="text-slate-300">•</span>
+                                  <span className="text-slate-500 font-semibold">{p.duration}</span>
+                                </>
+                              )}
+                            </div>
+                            {normalizedKey === "mason" && (
+                              <div className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-100/60 rounded px-1.5 py-0.5 w-fit">
+                                Consultation & Visit Charge: ₹49
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Includes checklist */}
+                          {p.includes && p.includes.length > 0 && (
+                            normalizedKey === "mason" ? (
+                              <div className="mt-3 space-y-1.5 pl-0.5">
+                                {(() => {
+                                  const isExpanded = expandedPlans[p.id];
+                                  const displayIncludes = !isExpanded ? p.includes.slice(0, 3) : p.includes;
+                                  return (
+                                    <>
+                                      {displayIncludes.map((inc, i) => {
+                                        const isLastOfThree = !isExpanded && i === 2 && p.includes.length > 3;
+                                        return (
+                                          <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                                            <span className="leading-relaxed">
+                                              {inc}
+                                              {isLastOfThree && (
+                                                <span
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setExpandedPlans(prev => ({ ...prev, [p.id]: true }));
+                                                  }}
+                                                  className="text-emerald-600 font-extrabold cursor-pointer hover:underline ml-1"
+                                                >
+                                                  read more
+                                                </span>
+                                              )}
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                      {isExpanded && (
+                                        <div className="text-left mt-1">
+                                          <span
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setExpandedPlans(prev => ({ ...prev, [p.id]: false }));
+                                            }}
+                                            className="text-emerald-600 font-extrabold cursor-pointer hover:underline text-xs block"
+                                          >
+                                            read less
+                                          </span>
+                                        </div>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                               </div>
                             ) : (
+                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100">
+                                {p.includes.map(inc => (
+                                  <li key={inc} className="flex items-start gap-2">
+                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                    <span>{inc}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )
+                          )}
+
+                          {normalizedKey === "mason" && (
+                             <div className="flex items-center gap-3 mt-3">
                               <button
-                                className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
-                                onClick={() => addItemToCart(cartId, p.name, p.price, p.duration)}
+                                onClick={() => setSelectedMasonDetail(p)}
+                                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
                               >
-                                <ShoppingCart size={11} className="shrink-0" />
-                                <span>Add</span>
+                                View details
                               </button>
-                            )}
+                              <button
+                                onClick={() => {
+                                  let updatedCart = [...cart];
+                                  if (getCartItemCount(cartId) === 0) {
+                                    const newItem = { id: cartId, name: p.name + " (Site Consultation)", price: 49, quantity: 1 };
+                                    updatedCart.push(newItem);
+                                    addItemToCart(cartId, p.name + " (Site Consultation)", 49, "");
+                                  }
+                                  if (typeof onCheckout === "function") {
+                                    onCheckout(updatedCart);
+                                  }
+                                }}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] px-3.5 py-1.5 rounded-lg shadow-sm hover:shadow transition-all uppercase tracking-wider cursor-pointer"
+                              >
+                                Book Consultation
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Right side image & floating ADD button */}
+                        <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
+                          <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                            <img
+                              src={p.image}
+                              alt={p.name}
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
+                              }}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
+                              {count > 0 ? (
+                                <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                  <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                  <span>{count}</span>
+                                  <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, p.name + " (Site Consultation)", 49, "")}>+</button>
+                                </div>
+                              ) : (
+                                <button
+                                  className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
+                                  onClick={() => addItemToCart(cartId, p.name + " (Site Consultation)", 49, "")}
+                                >
+                                  <ShoppingCart size={11} className="shrink-0" />
+                                  <span>Add</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -11863,39 +12288,118 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         {/* Right Column: Checkout, VIP banner & Order Summary */}
         <div className={rightColumnClass}>
           <div className="space-y-4">
+            {/* Why Choose Us Box (Only for Mason category) */}
+            {normalizedKey === "mason" && (
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-sm text-left">
+                <h4 className="text-xs font-black text-emerald-800 uppercase tracking-widest mb-3">
+                  Why choose us?
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    {
+                      title: "Trained Masons",
+                      bg: "bg-indigo-50",
+                      icon: (
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="#4f46e5" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                      )
+                    },
+                    {
+                      title: "Accurate Estimate",
+                      bg: "bg-teal-50",
+                      icon: (
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="#0d9488" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m9 11 3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+                        </svg>
+                      )
+                    },
+                    {
+                      title: "Premium Materials",
+                      bg: "bg-pink-50",
+                      icon: (
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="#db2777" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                        </svg>
+                      )
+                    },
+                    {
+                      title: "Alignment Check",
+                      bg: "bg-amber-50",
+                      icon: (
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="#ea580c" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          <path d="m9 12 2 2 4-4" />
+                        </svg>
+                      )
+                    },
+                    {
+                      title: "Site Cleanup",
+                      bg: "bg-blue-50",
+                      icon: (
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="#2563eb" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )
+                    },
+                    {
+                      title: "Service Warranty",
+                      bg: "bg-emerald-50",
+                      icon: (
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="#059669" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        </svg>
+                      )
+                    }
+                  ].map((item, idx) => (
+                    <div key={idx} className="bg-white border border-slate-100 rounded-xl p-2 flex flex-col items-center justify-center text-center gap-1 shadow-2xs">
+                      <div className={`w-7 h-7 rounded-full ${item.bg} flex items-center justify-center`}>
+                        {item.icon}
+                      </div>
+                      <span className="text-[8px] font-black text-slate-800 uppercase tracking-tight leading-tight">
+                        {item.title}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Order Summary box */}
-            <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
-              <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
-                <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
-                <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
+            <div className="bg-white border border-slate-200/60 rounded-2xl p-3 shadow-sm space-y-2">
+              <div className="border-b border-slate-100 pb-1.5 flex justify-between items-center">
+                <h5 className="font-extrabold text-[10px] text-slate-800 uppercase tracking-wide">Order Summary</h5>
+                <span className="text-[9px] font-bold text-slate-400">{cart.length} items</span>
               </div>
 
               {cart.length > 0 ? (
-                <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1 scrollbar-thin">
                   {cart.map(item => (
-                    <div key={item.id} className="flex justify-between items-start text-xs gap-2">
+                    <div key={item.id} className="flex justify-between items-start text-[11px] gap-2">
                       <div className="flex-1">
                         <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">{item.duration}</span>
+                        {item.duration && <span className="text-[9px] text-slate-400 block mt-0.5">{item.duration}</span>}
                       </div>
                       <div className="text-right flex items-center gap-2">
                         <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
-                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
-                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600 cursor-pointer">-</button>
-                          <span>{item.quantity}</span>
-                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-600 cursor-pointer">+</button>
+                        <div className="flex items-center gap-1.5 bg-white border border-emerald-500/80 rounded px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 shadow-3xs">
+                          <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-950 font-extrabold cursor-pointer px-0.5">−</button>
+                          <span className="text-slate-800 font-extrabold min-w-[6px] text-center">{item.quantity}</span>
+                          <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration)} className="hover:text-emerald-950 font-extrabold cursor-pointer px-0.5">+</button>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-slate-400 text-xs">
+                <div className="text-center py-4 text-slate-400 text-[10px]">
                   No services added. Select from the packages on the left.
                 </div>
               )}
 
-              <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
+              <div className="border-t border-slate-100 pt-2 space-y-1.5 text-[11px]">
                 {cart.length > 0 && (
                   <>
                     <div className="flex justify-between text-slate-500">
@@ -11948,6 +12452,410 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   return (
     <div className={wrapperClass} onClick={onClose}>
       {contentMarkup}
+
+      {/* Footers Section - Rendered full width outside of max-w container using CSS breakout */}
+      <div
+        className="uc-paint-footer-section mt-12 w-screen shrink-0"
+        style={{
+          position: "relative",
+          left: "50%",
+          right: "50%",
+          marginLeft: "-50vw",
+          marginRight: "-50vw",
+          width: "100vw"
+        }}
+      >
+        {/* App Banner */}
+        <div className="uc-paint-container">
+          <div className="uc-paint-app-banner">
+            <div className="uc-paint-app-banner-left">
+              <div className="uc-paint-app-banner-icon">
+                <Smartphone size={24} style={{ color: "#ffffff" }} />
+              </div>
+              <div className="uc-paint-app-banner-text">
+                <span className="uc-paint-app-banner-tag">Book on the go!</span>
+                <h4 className="uc-paint-app-banner-title">Download the CalServices App</h4>
+                <p className="uc-paint-app-banner-desc">Faster booking, real-time tracking & exclusive app offers.</p>
+              </div>
+            </div>
+            <div className="uc-paint-app-banner-right">
+              <button className="uc-paint-store-btn">Get it on Google Play</button>
+              <button className="uc-paint-store-btn" style={{ marginLeft: '1rem' }}>Download on App Store</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Links Footer */}
+        <div className="uc-paint-main-footer">
+          <div className="uc-paint-container uc-paint-main-footer-inner">
+            {/* Col 1 */}
+            <div className="uc-paint-footer-col">
+              <div className="uc-paint-footer-logo-row">
+                <CalTrackLogo size={24} />
+                <span className="uc-paint-footer-brand">CalServices</span>
+              </div>
+              <p className="uc-paint-footer-brand-desc">
+                Your trusted partner for all home services. Quality you can count on.
+              </p>
+              <div className="uc-paint-footer-socials">
+                <span className="uc-paint-social-icon"><FacebookMark style={{ width: 16, height: 16 }} /></span>
+                <span className="uc-paint-social-icon"><InstagramMark style={{ width: 16, height: 16 }} /></span>
+                <span className="uc-paint-social-icon"><YoutubeMark style={{ width: 16, height: 16 }} /></span>
+                <span className="uc-paint-social-icon"><TwitterMark style={{ width: 16, height: 16 }} /></span>
+              </div>
+            </div>
+
+            {/* Col 2 */}
+            <div className="uc-paint-footer-col">
+              <h5 className="uc-paint-footer-col-title">Services</h5>
+              <ul className="uc-paint-footer-links">
+                <li>Home Services & Pest Control</li>
+                <li>Paintings</li>
+                <li>Mason</li>
+                <li>AC & Appliance</li>
+              </ul>
+            </div>
+
+            {/* Col 3 */}
+            <div className="uc-paint-footer-col">
+              <h5 className="uc-paint-footer-col-title">Company</h5>
+              <ul className="uc-paint-footer-links">
+                <li>About Us</li>
+                <li>Careers</li>
+                <li>Blog</li>
+                <li>Become a Partner</li>
+              </ul>
+            </div>
+
+            {/* Col 4 */}
+            <div className="uc-paint-footer-col">
+              <h5 className="uc-paint-footer-col-title">Need Help?</h5>
+              <ul className="uc-paint-footer-contact">
+                <li>
+                  <Phone size={14} />
+                  <span>+91 98765 43210</span>
+                </li>
+                <li>
+                  <Mail size={14} />
+                  <span>support@calservices.com</span>
+                </li>
+                <li>
+                  <Clock size={14} />
+                  <span>Mon - Sun (8 AM - 8 PM)</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {selectedMasonDetail && typeof document !== "undefined" && createPortal(
+        <div
+          onClick={() => setSelectedMasonDetail(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10000,
+            backgroundColor: "rgba(0, 0, 0, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.5rem"
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              backgroundColor: "#ffffff",
+              borderRadius: "24px",
+              width: "100%",
+              maxWidth: "512px",
+              maxHeight: "calc(100vh - 48px)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+              position: "relative"
+            }}
+            className="font-sans text-slate-800"
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setSelectedMasonDetail(null)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Header: simple full-width hero image (removed split promo/offer card) */}
+            <div className="w-full h-36 border-b border-slate-100 shrink-0 bg-slate-100">
+              <img
+                src={selectedMasonDetail.image}
+                alt={selectedMasonDetail.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-left">
+              {/* Title, rating and add wrap */}
+              <div className="border-b border-slate-100 pb-5">
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">{selectedMasonDetail.name}</h3>
+
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
+                  <Star className="text-amber-500 fill-amber-500" size={12} />
+                  <span className="text-slate-800">4.82</span>
+                  <span className="text-slate-400 font-normal underline">(1.2K reviews)</span>
+                </div>
+
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
+                  <div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Consultation Fee</div>
+                    <div className="text-base font-black text-slate-900 mt-0.5">
+                      ₹49
+                    </div>
+                    <div className="text-[9px] font-semibold text-slate-400">
+                      Starts at ₹{selectedMasonDetail.price}
+                    </div>
+                  </div>
+
+                  {/* Add button inside details modal */}
+                  <div className="w-24">
+                    {getCartItemCount(`serv-mason-${selectedMasonDetail.id}`) > 0 ? (
+                      <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
+                        <button onClick={() => removeItemFromCart(`serv-mason-${selectedMasonDetail.id}`)} className="hover:text-emerald-900 cursor-pointer">-</button>
+                        <span>{getCartItemCount(`serv-mason-${selectedMasonDetail.id}`)}</span>
+                        <button onClick={() => addItemToCart(`serv-mason-${selectedMasonDetail.id}`, selectedMasonDetail.name + " (Site Consultation)", 49, "")} className="hover:text-emerald-900 cursor-pointer">+</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addItemToCart(`serv-mason-${selectedMasonDetail.id}`, selectedMasonDetail.name + " (Site Consultation)", 49, "")}
+                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2.5 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <ShoppingCart size={13} /> Add
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 bg-blue-50/50 border border-blue-100/60 rounded-xl p-3 text-[10px] text-blue-700 leading-normal flex items-start gap-2">
+                  <span className="text-blue-500 font-extrabold text-xs mt-0.5">ℹ</span>
+                  <span>
+                    A nominal consultation and visiting charge of <strong>₹49</strong> applies for inspection and estimate calculation. This amount will be fully adjusted in your final service invoice once the mason inspects the site and provides the final quote.
+                  </span>
+                </div>
+              </div>
+
+              {/* Painting detailed view details layout (what's included, what's not included, benefits, dynamic timeline steps, ratings stats, reviews, and FAQs) */}
+              {(() => {
+                const extra = MASON_DETAILS_EXTRA[selectedMasonDetail.id] || { reviews: [], faqs: [], benefits: [], excludes: [], steps: [] };
+                const rating = 4.8;
+                const totalReviewsCount = 1200;
+
+                const r5 = 1056; // 88%
+                const r4 = 96;   // 8%
+                const r3 = 24;   // 2%
+                const r2 = 12;   // 1%
+                const r1 = 12;   // 1%
+
+                const w5 = (r5 / totalReviewsCount) * 100;
+                const w4 = (r4 / totalReviewsCount) * 100;
+                const w3 = (r3 / totalReviewsCount) * 100;
+                const w2 = (r2 / totalReviewsCount) * 100;
+                const w1 = (r1 / totalReviewsCount) * 100;
+
+                return (
+                  <div className="flex flex-col gap-6">
+                    {/* QUICK BENEFITS */}
+                    {extra.benefits && extra.benefits.length > 0 && (
+                      <div className="grid grid-cols-4 gap-2">
+                        {extra.benefits.map((benefit, i) => {
+                          const benefitStyles = [
+                            { icon: <User size={14} className="text-indigo-600" />, bgClass: "bg-indigo-50 border-indigo-100 text-indigo-600" },
+                            { icon: <Award size={14} className="text-amber-600" />, bgClass: "bg-amber-50 border-amber-100 text-amber-600" },
+                            { icon: <Sparkles size={14} className="text-sky-600" />, bgClass: "bg-sky-50 border-sky-100 text-sky-600" },
+                            { icon: <ShieldCheck size={14} className="text-emerald-600" />, bgClass: "bg-emerald-50 border-emerald-100 text-emerald-600" }
+                          ];
+                          const style = benefitStyles[i % benefitStyles.length];
+
+                          return (
+                            <div key={i} className="flex flex-col items-center p-2 bg-slate-50 border border-slate-200/50 rounded-xl text-center gap-1.5 shadow-2xs">
+                              <div className={`w-8 h-8 rounded-full ${style.bgClass} border flex items-center justify-center shadow-3xs shrink-0`}>
+                                {style.icon}
+                              </div>
+                              <span className="text-[9px] font-extrabold text-slate-600 leading-tight">{benefit}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* WHAT'S INCLUDED */}
+                    <div className="text-left pt-2 border-t border-slate-100">
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-2">What's Included</h4>
+                      <ul className="list-disc pl-4 text-xs text-slate-600 space-y-1.5">
+                        {selectedMasonDetail.includes.map((inc, i) => (
+                          <li key={i} className="leading-relaxed">{inc}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* WHAT'S NOT INCLUDED */}
+                    {extra.excludes && extra.excludes.length > 0 && (
+                      <div className="text-left pt-2 border-t border-slate-100">
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-2">What's Not Included</h4>
+                        <ul className="list-disc pl-4 text-xs text-slate-500 space-y-1.5">
+                          {extra.excludes.map((exc, i) => (
+                            <li key={i} className="leading-relaxed">{exc}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* HOW IT WORKS */}
+                    {extra.steps && extra.steps.length > 0 && (
+                      <div className="text-left pt-2 border-t border-slate-100">
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4">How it works</h4>
+                        <div className="flex flex-col relative pl-1">
+                          {extra.steps.map((stepTitle, i, arr) => {
+                            const stepColors = [
+                              "bg-blue-600 border-blue-600",
+                              "bg-amber-500 border-amber-500",
+                              "bg-purple-600 border-purple-600",
+                              "bg-rose-500 border-rose-500",
+                              "bg-emerald-600 border-emerald-600"
+                            ];
+                            const stepColorClass = stepColors[i % stepColors.length];
+
+                            return (
+                              <div key={i} className={`flex gap-3 relative ${i < arr.length - 1 ? 'pb-5' : ''}`}>
+                                {i < arr.length - 1 && (
+                                  <div className="absolute left-[11px] top-[24px] bottom-0 w-px border-l border-dashed border-slate-300" />
+                                )}
+                                <div className={`w-6 h-6 rounded-full ${stepColorClass} border flex items-center justify-center z-10 shrink-0 text-[10px] font-black text-white shadow-sm`}>
+                                  {i + 1}
+                                </div>
+                                <div className="flex flex-col justify-center">
+                                  <span className="text-xs font-bold text-slate-800">{stepTitle}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* RATINGS & REVIEWS STATS BOX */}
+                    <div className="text-left pt-2 border-t border-slate-100">
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3">Ratings & Reviews</h4>
+                      <div className="flex items-center gap-5 p-4 border border-slate-200/60 rounded-2xl bg-white shadow-3xs">
+                        <div className="flex flex-col items-center min-w-[70px]">
+                          <span className="text-3xl font-black text-slate-800 leading-none">{rating.toFixed(2)}</span>
+                          <span className="text-[9px] text-slate-500 font-extrabold mt-1.5 uppercase tracking-wider">avg rating</span>
+                        </div>
+                        <div className="flex-1 flex flex-col gap-1.5">
+                          {[
+                            { star: 5, count: r5, width: w5 },
+                            { star: 4, count: r4, width: w4 },
+                            { star: 3, count: r3, width: w3 },
+                            { star: 2, count: r2, width: w2 },
+                            { star: 1, count: r1, width: w1 },
+                          ].map(row => (
+                            <div key={row.star} className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                              <span className="min-w-[20px] flex items-center gap-0.5 text-slate-400">
+                                <Star size={10} className="fill-slate-400 text-slate-400" /> {row.star}
+                              </span>
+                              <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
+                                <div style={{ width: `${row.width}%` }} className="h-full bg-slate-700 rounded-full" />
+                              </div>
+                              <span className="min-w-[30px] text-right text-[9px] text-slate-400">{row.count.toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Customer Reviews List */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                {(() => {
+                  const extra = MASON_DETAILS_EXTRA[selectedMasonDetail.id] || { reviews: [], faqs: [] };
+                  return extra.reviews.map((rev, idx) => (
+                    <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-800">{rev.name}</span>
+                        <div className="flex items-center gap-1 text-[10px] font-extrabold text-indigo-600">
+                          <Star className="fill-indigo-600 text-indigo-600" size={12} />
+                          <span>{rev.rating}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed italic">
+                        "{rev.comment || rev.text}"
+                      </p>
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              {/* Frequently Asked Questions */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
+                <div className="space-y-2">
+                  {(() => {
+                    const extra = MASON_DETAILS_EXTRA[selectedMasonDetail.id] || { faqs: [] };
+                    return extra.faqs.map((faq, idx) => {
+                      const isFaqOpen = activeFaq === idx;
+                      return (
+                        <div key={idx} className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
+                          <button
+                            onClick={() => setActiveFaq(isFaqOpen ? null : idx)}
+                            className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50"
+                          >
+                            <span className={isFaqOpen ? "text-emerald-600 font-bold" : "text-slate-700"}>{faq.q}</span>
+                            <span className={isFaqOpen ? "text-emerald-600 text-sm font-bold ml-2 shrink-0" : "text-slate-400 text-sm font-bold ml-2 shrink-0"}>{isFaqOpen ? "−" : "+"}</span>
+                          </button>
+                          {isFaqOpen && (
+                            <div className="px-3 pb-3 pt-1 text-xs text-slate-500 leading-relaxed border-t border-slate-50 bg-slate-50/20">
+                              {faq.a}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Sticky Footer */}
+            <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate max-w-[200px]">{selectedMasonDetail.name}</div>
+              <button
+                onClick={() => {
+                  const cartId = `serv-mason-${selectedMasonDetail.id}`;
+                  let updatedCart = [...cart];
+                  if (getCartItemCount(cartId) === 0) {
+                    const newItem = { id: cartId, name: selectedMasonDetail.name + " (Site Consultation)", price: 49, quantity: 1 };
+                    updatedCart.push(newItem);
+                    addItemToCart(cartId, selectedMasonDetail.name + " (Site Consultation)", 49, "");
+                  }
+                  setSelectedMasonDetail(null);
+                  if (typeof onCheckout === "function") {
+                    onCheckout(updatedCart);
+                  }
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer"
+              >
+                Proceed
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -15959,10 +16867,10 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                             const isBasic = service.id === "occ-basic";
                             const isDeep = service.id === "occ-deep";
                             const isExpanded = isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true);
-                            const displayIncludes = (isBasic || isDeep) && !isExpanded 
-                              ? service.includes.slice(0, 3) 
+                            const displayIncludes = (isBasic || isDeep) && !isExpanded
+                              ? service.includes.slice(0, 3)
                               : service.includes;
-                            
+
                             return (
                               <>
                                 {displayIncludes.map((item, i) => {
@@ -15975,7 +16883,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                                         {isLastOfThree && (
                                           <>
                                             {" "}
-                                            <span 
+                                            <span
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 if (isBasic) setIsBasicExpanded(true);
@@ -15993,7 +16901,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                                 })}
                                 {(isBasic || isDeep) && isExpanded && (
                                   <div className="text-left mt-1 pl-3">
-                                    <span 
+                                    <span
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (isBasic) setIsBasicExpanded(false);
