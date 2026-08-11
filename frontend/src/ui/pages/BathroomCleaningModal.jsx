@@ -1,164 +1,272 @@
-import React, { useState } from "react";
-import { ChevronLeft, Search, ShoppingCart, Star, Check } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { ChevronLeft, Search, ShoppingCart, Star, Check, X } from "lucide-react";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const BATHROOM_SUB_TABS = [
-  { id: "weekly", name: "Weekly Plans", image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=150&q=80&fit=crop" },
-  { id: "deals", name: "Bundle Deals", image: "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=150&q=80&fit=crop" },
-  { id: "onetime", name: "One Time Service", image: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=150&q=80&fit=crop" },
-  { id: "addons", name: "Add-on Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" }
+  { id: "packages", name: "Full Clean", image: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=150&q=80&fit=crop" },
+  { id: "minis", name: "Mini Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" }
 ];
 
 const BATHROOM_SERVICES = {
-  weekly: [
+  packages: [
     {
-      id: "bath-weekly-sub",
-      name: "Weekly Bathroom Refresh Subscription",
-      description: "Best for regular upkeep between deep cleans",
-      rating: "4.75",
-      reviews: "797K reviews",
-      price: 215,
-      options: "Starts at",
-      duration: "30 mins",
-      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-      includes: [
-        "Perfect for routine maintenance",
-        "Dedicated professional cleans the same bathroom every time"
-      ]
-    }
-  ],
-  deals: [
-    {
-      id: "bath-intense-2",
-      name: "Deep Scrub Cleaning (Twin Bathrooms)",
-      description: "Heavy duty cleaning for 2 bathrooms",
-      rating: "4.80",
-      reviews: "6.5M reviews",
-      price: 918,
-      duration: "2 hrs",
-      tag: "₹459 per bathroom",
-      image: "/mockups/bath_2.png",
-      includes: [
-        "Floor & tile descaling with motorized scrubber"
-      ]
-    },
-    {
-      id: "bath-intense-3",
-      name: "Deep Scrub Cleaning (Triple Bathrooms)",
-      description: "Heavy duty cleaning for 3 bathrooms",
-      rating: "4.80",
-      reviews: "6.5M reviews",
-      price: 1347,
-      duration: "3 hrs",
-      tag: "₹449 per bathroom",
-      image: "/mockups/bath_3.png",
-      includes: [
-        "Floor & tile descaling with motorized scrubber"
-      ]
-    },
-    {
-      id: "bath-intense-fans",
-      name: "Twin Bathroom & Fan Deep Clean",
-      description: "Pack of 2 bathrooms and 2 fans",
-      rating: "4.80",
-      reviews: "6.6M reviews",
-      price: 1116,
-      duration: "2 hrs 20 mins",
-      image: "/mockups/bath_fan.png",
-      includes: [
-        "Complete deep cleaning for 2 bathrooms and 2 ceiling exhaust fans"
-      ]
-    }
-  ],
-  onetime: [
-    {
-      id: "bath-standard",
-      name: "Standard Bathroom Deep Clean",
-      description: "Recommended for deep-cleaning and tough stains",
-      rating: "4.80",
-      reviews: "6.9M reviews",
-      price: 499,
+      id: "bath-deep-clean",
+      name: "One-Time Deep Bathroom Cleaning",
+      description: "Deep cleaning of toilet, basin, floor and tiles. Removes soap marks, dirt and common stains.",
+      highlight: "Recommended for deep cleaning & tough stains",
+      rating: "4.82",
+      reviews: "1.5M reviews",
+      price: 549,
       options: "Starts at",
       duration: "60 mins",
       image: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=300&q=80&fit=crop",
       includes: [
-        "Comprehensive floor and wall tile machine scrubbing",
-        "Ideal for removing hard water stains and deep grime"
+        "Deep cleaning of toilet, basin, floor and tiles",
+        "Removes soap marks, dirt and common stains",
+        "Detailed cleaning of shower, taps and bathroom corners"
+      ]
+    },
+    {
+      id: "bath-intense-clean",
+      name: "Intense Bathroom Cleaning",
+      description: "Extra scrubbing for floors, tiles and bathroom fixtures. Removes stubborn dirt, soap buildup.",
+      rating: "4.82",
+      reviews: "1.5M reviews",
+      price: 499,
+      options: "Starts at",
+      duration: "60 mins",
+      image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=300&q=80&fit=crop",
+      includes: [
+        "Extra scrubbing for floors, tiles and bathroom fixtures",
+        "Removes stubborn dirt, soap buildup and common stains",
+        "Detailed cleaning of hard-to-reach bathroom areas"
       ]
     }
   ],
-  addons: [
+  minis: [
     {
-      id: "bath-exhaust",
-      name: "Exhaust Fan Refresh",
+      id: "bath-move-in",
+      name: "Move-In Bathroom Cleaning",
+      description: "Extra machine scrubbing for bathroom floors and tiles.",
+      highlight: "Recommended before moving into a new or unused bathroom",
+      rating: "4.82",
+      reviews: "1.5M reviews",
+      price: 579,
+      options: "Starts at",
+      duration: "1 hr 30 mins",
+      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+      includes: []
+    },
+    {
+      id: "bath-exhaust-fan",
+      name: "Bathroom Exhaust Fan Cleaning",
+      description: "Removes dust from the exhaust fan and outer cover. Suitable as an add-on.",
       rating: "4.79",
-      reviews: "112K reviews",
+      reviews: "113K reviews",
       price: 89,
       duration: "15 mins",
       image: "/mockups/exhaust_fan.png",
-      includes: ["Extra fan cleaning (one already included in standard service)"]
-    },
-    {
-      id: "bath-washbasin",
-      name: "Washbasin Polishing",
-      rating: "4.83",
-      reviews: "328K reviews",
-      price: 89,
-      duration: "10 mins",
-      image: "/mockups/washbasin.png",
-      includes: ["Standalone basin cleaning (included in full service)"]
-    },
-    {
-      id: "bath-ceiling-fan",
-      name: "Ceiling Fan Dusting",
-      rating: "4.83",
-      reviews: "615K reviews",
-      price: 99,
-      duration: "10 mins",
-      image: "/mockups/ceiling_fan.png",
-      includes: ["Not covered in standard bathroom clean"]
-    },
-    {
-      id: "bath-door",
-      name: "Bathroom Door Wash",
-      rating: "4.78",
-      reviews: "40K reviews",
-      price: 89,
-      duration: "10 mins",
-      image: "/mockups/bath_door.png",
-      includes: ["Extra door (one included per standard clean)"]
-    },
-    {
-      id: "bath-mirror",
-      name: "Mirror Stain Removal",
-      rating: "4.83",
-      reviews: "47K reviews",
-      price: 59,
-      duration: "10 mins",
-      image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop",
-      includes: ["Extra mirror (one included per standard clean)"]
-    },
-    {
-      id: "bath-drain",
-      name: "Drain cleaning",
-      rating: "5.00",
-      reviews: "12 reviews",
-      price: 59,
-      options: "Starts at",
-      duration: "10 mins",
-      image: "/mockups/drain_clean.png",
       includes: [
-        "Unclogs floor drains to eliminate standing water and odors",
-        "Available as a separate add-on"
+        "Removes dust from the exhaust fan and outer cover",
+        "Helps keep the fan clean and free from surface buildup",
+        "Suitable as an add-on to bathroom cleaning"
       ]
     }
   ]
 };
 
+const SERVICE_DETAILS_CONTENT = {
+  "bath-deep-clean": {
+    covered: [
+      "Toilet deep cleaning",
+      "Wash basin cleaning",
+      "Floor scrubbing",
+      "Wall tile cleaning",
+      "Shower and tap cleaning",
+      "Mirror cleaning",
+      "Soap and dirt buildup removal",
+      "Corner and edge cleaning"
+    ],
+    tools: [
+      "Bathroom-safe cleaners",
+      "Tile cleaning solution",
+      "Toilet cleaning products",
+      "Scrubbing brushes",
+      "Microfiber cloths"
+    ],
+    ready: [
+      "Keep the bathroom accessible",
+      "Remove toiletries and personal items",
+      "Keep water supply available",
+      "Keep fragile items safely away"
+    ],
+    faqs: [
+      { q: "Does this include toilet cleaning?", a: "Yes. Toilet cleaning is included in the deep-cleaning service." },
+      { q: "Will you clean bathroom tiles?", a: "Yes. Accessible floor and wall tiles are cleaned." },
+      { q: "Can I book more than one bathroom?", a: "Yes. Select the required number of bathrooms." },
+      { q: "Can I add exhaust fan cleaning?", a: "Yes. Exhaust fan cleaning can be added separately." }
+    ],
+    bathroomRates: [
+      { label: "1 Bathroom", price: 549 },
+      { label: "2 Bathrooms", price: 918 },
+      { label: "3 Bathrooms", price: 1347 },
+      { label: "4 Bathrooms", price: 1776 },
+      { label: "5 Bathrooms", price: 2205 }
+    ],
+    frequencies: ["One-Time", "Once a week", "Twice a week", "Three times a week"],
+    addons: [
+      { id: "addon-exhaust", name: "Bathroom Exhaust Fan Cleaning", price: 89 },
+      { id: "addon-toilet", name: "Extra Toilet Cleaning", price: 99 },
+      { id: "addon-window", name: "Bathroom Window Cleaning", price: 99 },
+      { id: "addon-drain", name: "Drain Cleaning", price: 99 }
+    ]
+  },
+  "bath-intense-clean": {
+    covered: [
+      "Deep toilet cleaning",
+      "Wash basin and tap cleaning",
+      "Floor and wall tile scrubbing",
+      "Shower area cleaning",
+      "Soap buildup removal",
+      "Common hard-water stain treatment",
+      "Corner and edge cleaning",
+      "Mirror cleaning"
+    ],
+    tools: [
+      "Deep bathroom cleaning solutions",
+      "Tile-safe cleaners",
+      "Stain treatment products",
+      "Scrubbing brushes",
+      "Microfiber cloths"
+    ],
+    ready: [
+      "Continuous water supply",
+      "Bathroom accessible for cleaning",
+      "Personal items kept away",
+      "Fragile items safely stored"
+    ],
+    faqs: [
+      { q: "What is the difference between Deep and Intense Cleaning?", a: "Intense cleaning includes more detailed scrubbing for stubborn dirt, buildup and hard-to-reach areas." },
+      { q: "Can I select multiple bathrooms?", a: "Yes. You can select up to 5 bathrooms." },
+      { q: "Can I choose weekly cleaning?", a: "Yes. You can select once, twice or three times a week." },
+      { q: "Are cleaning products provided?", a: "Yes. Our team brings the required cleaning products and tools." }
+    ],
+    bathroomRates: [
+      { label: "1 Bathroom", price: 499 },
+      { label: "2 Bathrooms", price: 918 },
+      { label: "3 Bathrooms", price: 1347 },
+      { label: "4 Bathrooms", price: 1776 },
+      { label: "5 Bathrooms", price: 2205 }
+    ],
+    frequencies: ["One-Time", "Once a week", "Twice a week", "Three times a week"],
+    addons: [
+      { id: "addon-exhaust", name: "Bathroom Exhaust Fan Cleaning", price: 89 },
+      { id: "addon-toilet", name: "Extra Toilet Cleaning", price: 99 },
+      { id: "addon-window", name: "Bathroom Window Cleaning", price: 99 },
+      { id: "addon-drain", name: "Drain Cleaning", price: 99 }
+    ]
+  },
+  "bath-move-in": {
+    covered: [
+      "Complete bathroom floor cleaning",
+      "Machine scrubbing of tiles",
+      "Toilet and basin cleaning",
+      "Shower and tap cleaning",
+      "Mirror cleaning",
+      "Corner and edge cleaning",
+      "Soap and dirt buildup removal",
+      "Basic drain-area cleaning"
+    ],
+    tools: [
+      "Floor scrubbing machine",
+      "Bathroom-safe cleaning products",
+      "Tile cleaning solution",
+      "Scrubbing brushes",
+      "Microfiber cloths"
+    ],
+    ready: [
+      "Bathroom should be empty",
+      "Keep water supply available",
+      "Keep power connection available",
+      "Provide easy access to the bathroom"
+    ],
+    faqs: [
+      { q: "Is this suitable for a new bathroom?", a: "Yes. It is suitable for new, unused or recently renovated bathrooms." },
+      { q: "Does it include machine scrubbing?", a: "Yes. Machine scrubbing of accessible floors and tiles is included." },
+      { q: "Can I book multiple bathrooms?", a: "Yes. Select the required number of bathrooms." },
+      { q: "Is this a recurring service?", a: "No. Move-In Cleaning is normally booked as a one-time service." }
+    ],
+    bathroomRates: [
+      { label: "1 Bathroom", price: 579 },
+      { label: "2 Bathrooms", price: 1158 },
+      { label: "3 Bathrooms", price: 1737 },
+      { label: "4 Bathrooms", price: 2316 },
+      { label: "5 Bathrooms", price: 2895 }
+    ],
+    addons: [
+      { id: "addon-exhaust", name: "Bathroom Exhaust Fan Cleaning", price: 89 },
+      { id: "addon-window", name: "Bathroom Window Cleaning", price: 99 },
+      { id: "addon-toilet", name: "Extra Toilet Cleaning", price: 99 },
+      { id: "addon-drain", name: "Drain Cleaning", price: 99 }
+    ]
+  },
+  "bath-exhaust-fan": {
+    covered: [
+      "Dust removal from exhaust fan",
+      "Cleaning of outer fan cover",
+      "Surface cleaning of fan blades",
+      "Removal of visible dirt and buildup"
+    ],
+    tools: [
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Dusting tools",
+      "Mild surface cleaner"
+    ],
+    ready: [
+      "Fan should be accessible",
+      "Switch off the fan before cleaning",
+      "Keep nearby area clear",
+      "Provide safe access to the fan"
+    ],
+    faqs: [
+      { q: "Will you remove the exhaust fan from the wall?", a: "No. Standard cleaning is done without removing the fan." },
+      { q: "Will you clean the fan blades?", a: "Yes. Accessible fan blades are cleaned." },
+      { q: "Can I book more than one exhaust fan?", a: "Yes. Select the required number of fans." },
+      { q: "Is electrical repair included?", a: "No. Electrical repair or motor replacement is not included." }
+    ],
+    bathroomRates: [
+      { label: "1 Fan", price: 89 },
+      { label: "2 Fans", price: 178 },
+      { label: "3 Fans", price: 267 },
+      { label: "4 Fans", price: 356 }
+    ]
+  }
+};
+
 export function BathroomCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
-  const [activeTab, setActiveTab] = useState("weekly");
+  const [activeTab, setActiveTab] = useState("packages");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
+  const [activeFaq, setActiveFaq] = useState(null);
+
+  // States for selected options in the detail modal view
+  const [selectedRateIdx, setSelectedRateIdx] = useState(0);
+  const [selectedFreq, setSelectedFreq] = useState("One-Time");
+  const [selectedAddons, setSelectedAddons] = useState([]); // Array of addon objects
+
+  useEffect(() => {
+    if (selectedServiceDetails) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedServiceDetails]);
 
   const addItemToCart = (id, name, price, duration) => {
     setCart(prev => {
@@ -166,6 +274,12 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
       if (existing) return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
       return [...prev, { id, name, price, duration, quantity: 1 }];
     });
+  };
+
+  const addCustomizedItemToCart = (baseId, name, price, duration, detailsString) => {
+    const uniqueId = `${baseId}-${Date.now()}`;
+    const cartName = `${name} (${detailsString})`;
+    setCart(prev => [...prev, { id: uniqueId, name: cartName, price, duration, quantity: 1 }]);
   };
 
   const removeItemFromCart = (id) => {
@@ -189,10 +303,45 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   const getSectionTitle = () => {
-    if (activeTab === "weekly") return "WEEKLY PACKAGES";
-    if (activeTab === "deals") return "VALUE DEALS";
-    if (activeTab === "onetime") return "ONE TIME SERVICE";
+    if (activeTab === "packages") return "FULL BATHROOM CLEANING";
     return "MINI SERVICES";
+  };
+
+  const handleOpenDetails = (service) => {
+    setSelectedServiceDetails(service);
+    setSelectedRateIdx(0);
+    setSelectedFreq("One-Time");
+    setSelectedAddons([]);
+    setActiveFaq(null);
+  };
+
+  // Calculate current price in modal dynamically
+  const getModalPrice = () => {
+    if (!selectedServiceDetails) return 0;
+    const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+    const basePrice = details.bathroomRates ? details.bathroomRates[selectedRateIdx]?.price || selectedServiceDetails.price : selectedServiceDetails.price;
+    const addonsPrice = selectedAddons.reduce((sum, addon) => sum + addon.price, 0);
+    return basePrice + addonsPrice;
+  };
+
+  const handleProceedFromModal = () => {
+    if (!selectedServiceDetails) return;
+    const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+    const rateObj = details.bathroomRates ? details.bathroomRates[selectedRateIdx] : null;
+    const basePrice = rateObj ? rateObj.price : selectedServiceDetails.price;
+    const addonsPrice = selectedAddons.reduce((sum, addon) => sum + addon.price, 0);
+    const totalPrice = basePrice + addonsPrice;
+
+    let detailsParts = [];
+    if (rateObj) detailsParts.push(rateObj.label);
+    if (details.frequencies && selectedFreq !== "One-Time") detailsParts.push(selectedFreq);
+    if (selectedAddons.length > 0) {
+      detailsParts.push(`${selectedAddons.length} Add-ons`);
+    }
+
+    const detailsString = detailsParts.join(", ") || "Standard";
+    addCustomizedItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, totalPrice, selectedServiceDetails.duration, detailsString);
+    setSelectedServiceDetails(null);
   };
 
   return (
@@ -223,7 +372,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
           </div>
         </div>
 
-        {/* Sub-tabs exactly styled like Sofa Cleaning */}
+        {/* Sub-tabs exactly styled like Sofa/Kitchen Cleaning */}
         <div className="flex gap-5 pb-3 pt-4 px-6 border-b border-slate-100 justify-start bg-white">
           {BATHROOM_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
@@ -268,16 +417,13 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 <div key={service.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 relative transition-all hover:shadow-md">
                   <div className="flex flex-col sm:flex-row gap-5">
                     <div className="flex-1 order-2 sm:order-1">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <Star className="text-yellow-500 fill-yellow-500" size={16} />
-                        <h4 className="text-base font-black text-slate-900">{service.name}</h4>
-                      </div>
+                      <h4 className="text-base font-black text-slate-900 mb-1.5">{service.name}</h4>
 
                       {service.description && (
-                        <p className="text-xs text-slate-500 mb-3">{service.description}</p>
+                        <p className="text-xs text-slate-500 mb-2">{service.description}</p>
                       )}
 
-                      <div className="flex items-center gap-2 mb-4">
+                      <div className="flex items-center gap-2 mb-2">
                         <div className="text-sm font-extrabold text-slate-900">
                           {service.options && <span className="text-slate-500 font-medium text-xs mr-1">{service.options}</span>}
                           ₹{service.price}
@@ -286,21 +432,25 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                         <span className="text-xs font-semibold text-slate-600">{service.duration}</span>
                       </div>
 
+                      {service.highlight && (
+                        <p className="text-xs font-bold text-slate-800 mb-3">{service.highlight}</p>
+                      )}
+
                       <div className="space-y-2 mb-4">
                         {service.includes.map((item, i) => (
                           <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                            <Check className="text-emerald-500 mt-0.5 shrink-0" size={14} />
+                            <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
                             <span>{item}</span>
                           </div>
                         ))}
                       </div>
 
-                      {service.tag && (
-                        <div className="mt-2 text-[11px] font-bold text-emerald-600 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block"></span>
-                          {service.tag}
-                        </div>
-                      )}
+                      <button
+                        onClick={() => handleOpenDetails(service)}
+                        className="text-xs font-semibold text-blue-600 mt-2 hover:underline cursor-pointer"
+                      >
+                        View details
+                      </button>
                     </div>
 
                     <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
@@ -308,20 +458,12 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                         <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
                       </div>
                       <div className="w-24 z-10">
-                        {count > 0 ? (
-                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-sm font-bold text-emerald-700 shadow-md">
-                            <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
-                            <span>{count}</span>
-                            <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-emerald-900">+</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)}
-                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
-                          >
-                            <ShoppingCart size={14} /> Add
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleOpenDetails(service)}
+                          className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                        >
+                          <ShoppingCart size={14} /> Add
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -355,6 +497,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                     </div>
                     <div className="text-right flex items-center gap-2">
                       <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
+                      <button onClick={() => removeItemFromCart(item.id)} className="text-red-500 hover:text-red-700 font-bold ml-1">×</button>
                     </div>
                   </div>
                 ))}
@@ -376,7 +519,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               <button
                 disabled={cart.length === 0}
                 onClick={onCheckout}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-white/60 disabled:cursor-not-allowed text-white font-extrabold rounded-xl text-center text-xs uppercase tracking-wider shadow-sm transition-all"
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-white/60 disabled:cursor-not-allowed text-white font-extrabold rounded-xl text-center text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
               >
                 Proceed to Schedule
               </button>
@@ -384,6 +527,262 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
           </div>
         </div>
       </div>
+
+      {/* View Details Drawer/Modal */}
+      {selectedServiceDetails && createPortal(
+        <div 
+          onClick={() => setSelectedServiceDetails(null)}
+          className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setSelectedServiceDetails(null)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors cursor-pointer border-none"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Header: image hero */}
+            <div className="h-36 border-b border-slate-100 shrink-0">
+              <img
+                src={selectedServiceDetails.image}
+                alt={selectedServiceDetails.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
+              {/* Title and Rating */}
+              <div className="border-b border-slate-100 pb-5">
+                <h3 className="text-base font-extrabold text-slate-900 mb-1">{selectedServiceDetails.name}</h3>
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-2">
+                  <Star className="text-yellow-500 fill-yellow-500" size={12} />
+                  <span className="text-slate-800">{selectedServiceDetails.rating || "4.82"}</span>
+                  <span className="text-slate-400 font-normal underline">({selectedServiceDetails.reviews || "1.5M reviews"})</span>
+                </div>
+                <p className="text-xs text-slate-500 font-bold">Starts at ₹{selectedServiceDetails.price} • {selectedServiceDetails.duration}</p>
+              </div>
+
+              {/* Requirements selection section */}
+              {(() => {
+                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+                return (
+                  <div className="space-y-5">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">Select Requirements</h4>
+                    
+                    {/* 1. Select Number of Bathrooms/Fans */}
+                    {details.bathroomRates && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-800 block">
+                          {selectedServiceDetails.id === "bath-exhaust-fan" ? "Select Number of Exhaust Fans" : "Select Number of Bathrooms"}
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {details.bathroomRates.map((rate, idx) => {
+                            const isChosen = selectedRateIdx === idx;
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => setSelectedRateIdx(idx)}
+                                className={`px-3 py-2 text-xs font-bold border rounded-xl transition-all cursor-pointer ${
+                                  isChosen 
+                                    ? "border-emerald-600 bg-emerald-50/50 text-emerald-800" 
+                                    : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                                }`}
+                              >
+                                <div>{rate.label}</div>
+                                <div className="text-[10px] text-slate-400 mt-0.5">₹{rate.price}</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2. Select Frequency of Cleaning */}
+                    {details.frequencies && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-800 block">Select Frequency of Cleaning</label>
+                        <div className="flex flex-wrap gap-2">
+                          {details.frequencies.map((freq, idx) => {
+                            const isChosen = selectedFreq === freq;
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => setSelectedFreq(freq)}
+                                className={`px-4 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer ${
+                                  isChosen
+                                    ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
+                                    : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                                }`}
+                              >
+                                {freq}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. Select Add-ons */}
+                    {details.addons && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-800 block">Select Add-ons</label>
+                        <div className="space-y-2">
+                          {details.addons.map((addon) => {
+                            const isSelected = selectedAddons.some(a => a.id === addon.id);
+                            return (
+                              <div
+                                key={addon.id}
+                                className={`flex justify-between items-center p-3 border rounded-xl transition-all ${
+                                  isSelected ? "border-emerald-600 bg-emerald-50/30" : "border-slate-100"
+                                }`}
+                              >
+                                <span className="text-xs font-medium text-slate-700">{addon.name}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs font-bold text-slate-900">₹{addon.price}/visit</span>
+                                  <button
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        setSelectedAddons(prev => prev.filter(a => a.id !== addon.id));
+                                      } else {
+                                        setSelectedAddons(prev => [...prev, addon]);
+                                      }
+                                    }}
+                                    className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer border ${
+                                      isSelected
+                                        ? "bg-emerald-600 border-emerald-600 text-white"
+                                        : "bg-white border-slate-200 text-emerald-600 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {isSelected ? "✓" : "+"}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* What is Covered */}
+              {(() => {
+                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+                const covered = details.covered || [];
+                if (covered.length === 0) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What Is Covered</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {covered.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Tools & Products We Use */}
+              {(() => {
+                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+                const tools = details.tools || [];
+                if (tools.length === 0) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
+                    <div className="space-y-2">
+                      {tools.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                          <span className="leading-relaxed">{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* What You Need to Keep Ready */}
+              {(() => {
+                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+                const ready = details.ready || [];
+                if (ready.length === 0) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
+                    <div className="space-y-2">
+                      {ready.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                          <span className="leading-relaxed">{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Frequently Asked Questions */}
+              {(() => {
+                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+                const faqs = details.faqs || [];
+                if (faqs.length === 0) return null;
+                return (
+                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
+                    <div className="space-y-2">
+                      {faqs.map((faq, idx) => {
+                        const isFaqOpen = activeFaq === idx;
+                        return (
+                          <div key={idx} className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
+                            <button
+                              onClick={() => setActiveFaq(isFaqOpen ? null : idx)}
+                              className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50 border-none outline-none"
+                            >
+                              <span className={isFaqOpen ? "text-emerald-600 font-bold" : "text-slate-700"}>{faq.q}</span>
+                              <span className={isFaqOpen ? "text-emerald-600 text-sm font-bold ml-2 shrink-0" : "text-slate-400 text-sm font-bold ml-2 shrink-0"}>{isFaqOpen ? "−" : "+"}</span>
+                            </button>
+                            {isFaqOpen && (
+                              <div className="px-3 pb-3 pt-1 text-xs text-slate-500 leading-relaxed border-t border-slate-50 bg-slate-50/20">
+                                {faq.a}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Sticky Footer */}
+            <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
+              <div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Price</div>
+                <div className="text-base font-black text-slate-900">₹{getModalPrice()}</div>
+              </div>
+              <button
+                onClick={handleProceedFromModal}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer border-none"
+              >
+                Proceed
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
