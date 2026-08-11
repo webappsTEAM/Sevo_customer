@@ -202,9 +202,161 @@ const PACKERS_DIAGRAM_BY_SLUG = {
   "villa-office-relocation": <ThreeBhkVillaDiagram />,
 }
 
-async function filterLocationSuggestions(searchText) {
-  if (!searchText || !searchText.trim()) return []
-  return searchPlaces(searchText)
+const INTERCITY_CITIES = [
+  { name: "Bengaluru", state: "Karnataka", subtitle: "Karnataka (~40 Kms from Hosur)" },
+  { name: "Chennai", state: "Tamil Nadu", subtitle: "Tamil Nadu (~310 Kms from Hosur)" },
+  { name: "Coimbatore", state: "Tamil Nadu", subtitle: "Tamil Nadu (~310 Kms from Hosur)" },
+  { name: "Dharmapuri", state: "Tamil Nadu", subtitle: "Tamil Nadu (~90 Kms from Hosur)" },
+  { name: "Madurai", state: "Tamil Nadu", subtitle: "Tamil Nadu (~410 Kms from Hosur)" },
+  { name: "Hosur", state: "Tamil Nadu", subtitle: "Tamil Nadu (Origin Hub)" },
+  { name: "Salem", state: "Tamil Nadu", subtitle: "Tamil Nadu (~150 Kms from Hosur)" },
+  { name: "Krishnagiri", state: "Tamil Nadu", subtitle: "Tamil Nadu (~50 Kms from Hosur)" },
+  { name: "Tiruchirappalli (Trichy)", state: "Tamil Nadu", subtitle: "Tamil Nadu (~290 Kms from Hosur)" },
+  { name: "Tirupur", state: "Tamil Nadu", subtitle: "Tamil Nadu (~265 Kms from Hosur)" },
+  { name: "Erode", state: "Tamil Nadu", subtitle: "Tamil Nadu (~210 Kms from Hosur)" },
+  { name: "Vellore", state: "Tamil Nadu", subtitle: "Tamil Nadu (~180 Kms from Hosur)" },
+  { name: "Mysore", state: "Karnataka", subtitle: "Karnataka (~185 Kms from Hosur)" },
+  { name: "Hyderabad", state: "Telangana", subtitle: "Telangana (~610 Kms from Hosur)" },
+  { name: "Kochi", state: "Kerala", subtitle: "Kerala (~500 Kms from Hosur)" },
+  { name: "Puducherry", state: "Pondicherry", subtitle: "Pondicherry (~260 Kms from Hosur)" },
+]
+
+function filterIntercitySuggestions(searchText, excludeCityName = "") {
+  const excludeNormalized = (excludeCityName || "").trim().toLowerCase()
+  const availableCities = INTERCITY_CITIES.filter((item) => {
+    if (!excludeNormalized) return true
+    const itemNorm = item.name.toLowerCase()
+    return itemNorm !== excludeNormalized && !excludeNormalized.includes(itemNorm) && !itemNorm.includes(excludeNormalized)
+  })
+
+  if (!searchText || !searchText.trim()) {
+    return availableCities.slice(0, 8)
+  }
+
+  const query = searchText.trim().toLowerCase()
+  const exactStarts = []
+  const wordStarts = []
+  const containsMatches = []
+
+  availableCities.forEach((item) => {
+    const nameLow = item.name.toLowerCase()
+    const stateLow = (item.state || "").toLowerCase()
+    const subLow = (item.subtitle || "").toLowerCase()
+
+    if (nameLow.startsWith(query)) {
+      exactStarts.push(item)
+    } else if (
+      nameLow.split(/[\s,/-]+/).some((w) => w.startsWith(query)) ||
+      stateLow.startsWith(query)
+    ) {
+      wordStarts.push(item)
+    } else if (nameLow.includes(query) || stateLow.includes(query) || subLow.includes(query)) {
+      containsMatches.push(item)
+    }
+  })
+
+  const combined = [...exactStarts, ...wordStarts, ...containsMatches]
+  const seen = new Set()
+  const result = []
+  for (const it of combined) {
+    if (!seen.has(it.name)) {
+      seen.add(it.name)
+      result.push(it)
+    }
+    if (result.length >= 8) break
+  }
+  return result
+}
+
+const HOSUR_LOCATIONS_DATABASE = [
+  { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
+  { name: "Hosur Railway Station", subtitle: "Station Road, Hosur", category: "Hosur Central" },
+  { name: "Hosur Flower Market", subtitle: "Bagalur Road, Hosur", category: "Hosur Central" },
+  { name: "Hosur Cattle Farm", subtitle: "Mathigiri, Hosur", category: "Hosur Central" },
+  { name: "Hosur IT Park (ELCOT)", subtitle: "Ring Road, Hosur", category: "Hosur Central" },
+  { name: "Hosur Taluk Office", subtitle: "NH44, Hosur", category: "Hosur Central" },
+  { name: "Hosur Ring Road", subtitle: "Outer Ring Road, Hosur", category: "Hosur Central" },
+  { name: "Harita (Hosur)", subtitle: "TVS Motor Corridor, Hosur", category: "Hosur Area" },
+  { name: "SIPCOT Phase 1", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
+  { name: "SIPCOT Phase 2", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
+  { name: "SIPCOT Phase 3", subtitle: "Zuzuvadi, Hosur", category: "SIPCOT Industrial" },
+  { name: "SIPCOT Phase 4", subtitle: "Moranapalli, Hosur", category: "SIPCOT Industrial" },
+  { name: "Mookandapalli", subtitle: "Industrial Belt, Hosur", category: "Hosur Area" },
+  { name: "Moranapalli", subtitle: "Industrial Hub, Hosur", category: "Hosur Area" },
+  { name: "Ashok Leyland Plant 1 & 2", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
+  { name: "TVS Motor Factory", subtitle: "Harita, Hosur", category: "Hosur Industrial" },
+  { name: "Titan Industries", subtitle: "SIPCOT Phase 1, Hosur", category: "Hosur Industrial" },
+  { name: "Exide Industries", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
+  { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Zuzuvadi", subtitle: "Hosur Border, Tamil Nadu", category: "Hosur Area" },
+  { name: "Avalapalli Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Denkanikottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Rayakottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Thally Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Kelamangalam Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Alasanatham", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Dinnur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Kamaraj Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Shanthi Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Nethaji Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Chennathur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Dharga", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Poonapalli", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Bagalur Town", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
+  { name: "Berigai", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
+  { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
+  { name: "Attibele Industrial Area", subtitle: "Anekal Taluk (~10 Kms)", category: "Near Hosur" },
+  { name: "Anekal Town", subtitle: "Karnataka (~18 Kms)", category: "Near Hosur" },
+  { name: "Chandapura Circle", subtitle: "Bengaluru Highway (~18 Kms)", category: "Bengaluru Hub" },
+  { name: "Bommasandra Industrial Area", subtitle: "Bengaluru (~22 Kms)", category: "Bengaluru Hub" },
+  { name: "Hebbagodi", subtitle: "Hosur Road, Bengaluru (~24 Kms)", category: "Bengaluru Hub" },
+  { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
+  { name: "Electronic City Phase 2", subtitle: "Bengaluru (~26 Kms)", category: "Bengaluru Hub" },
+  { name: "Jigani Industrial Area", subtitle: "Bengaluru (~25 Kms)", category: "Bengaluru Hub" },
+  { name: "Sarjapur Road", subtitle: "Bengaluru (~32 Kms)", category: "Bengaluru Hub" },
+  { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
+  { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
+]
+
+function filterLocationSuggestions(searchText, city = "HOSUR") {
+  if (!searchText || !searchText.trim()) {
+    return HOSUR_LOCATIONS_DATABASE.slice(0, 8)
+  }
+
+  const query = searchText.trim().toLowerCase()
+  const exactStarts = []
+  const wordStarts = []
+  const containsMatches = []
+
+  HOSUR_LOCATIONS_DATABASE.forEach((item) => {
+    const nameLow = item.name.toLowerCase()
+    const subLow = item.subtitle.toLowerCase()
+    const catLow = item.category.toLowerCase()
+
+    if (nameLow.startsWith(query)) {
+      exactStarts.push(item)
+    } else if (
+      nameLow.split(/[\s,/-]+/).some((w) => w.startsWith(query)) ||
+      subLow.split(/[\s,/-]+/).some((w) => w.startsWith(query))
+    ) {
+      wordStarts.push(item)
+    } else if (nameLow.includes(query) || subLow.includes(query) || catLow.includes(query)) {
+      containsMatches.push(item)
+    }
+  })
+
+  const combined = [...exactStarts, ...wordStarts, ...containsMatches]
+  const seen = new Set()
+  const result = []
+  for (const it of combined) {
+    if (!seen.has(it.name)) {
+      seen.add(it.name)
+      result.push(it)
+    }
+    if (result.length >= 9) break
+  }
+  return result
 }
 
 /* ── Comprehensive Inventory Data ── */

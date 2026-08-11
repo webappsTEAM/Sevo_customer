@@ -413,11 +413,104 @@ const TRUCK_DIAGRAM_BY_SLUG = {
   "pickup-8ft": <Pickup8ftDiagram />,
   "1-7-ton": <OnePointSevenTonDiagram />,
 }
-import { searchPlaces } from "../../services/locationService.js"
+const HOSUR_LOCATIONS_DATABASE = [
+  { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
+  { name: "Hosur Railway Station", subtitle: "Station Road, Hosur", category: "Hosur Central" },
+  { name: "Hosur Flower Market", subtitle: "Bagalur Road, Hosur", category: "Hosur Central" },
+  { name: "Hosur Cattle Farm", subtitle: "Mathigiri, Hosur", category: "Hosur Central" },
+  { name: "Hosur IT Park (ELCOT)", subtitle: "Ring Road, Hosur", category: "Hosur Central" },
+  { name: "Hosur Taluk Office", subtitle: "NH44, Hosur", category: "Hosur Central" },
+  { name: "Hosur Ring Road", subtitle: "Outer Ring Road, Hosur", category: "Hosur Central" },
+  { name: "Harita (Hosur)", subtitle: "TVS Motor Corridor, Hosur", category: "Hosur Area" },
+  { name: "SIPCOT Phase 1", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
+  { name: "SIPCOT Phase 2", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
+  { name: "SIPCOT Phase 3", subtitle: "Zuzuvadi, Hosur", category: "SIPCOT Industrial" },
+  { name: "SIPCOT Phase 4", subtitle: "Moranapalli, Hosur", category: "SIPCOT Industrial" },
+  { name: "Mookandapalli", subtitle: "Industrial Belt, Hosur", category: "Hosur Area" },
+  { name: "Moranapalli", subtitle: "Industrial Hub, Hosur", category: "Hosur Area" },
+  { name: "Ashok Leyland Plant 1 & 2", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
+  { name: "TVS Motor Factory", subtitle: "Harita, Hosur", category: "Hosur Industrial" },
+  { name: "Titan Industries", subtitle: "SIPCOT Phase 1, Hosur", category: "Hosur Industrial" },
+  { name: "Exide Industries", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
+  { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Zuzuvadi", subtitle: "Hosur Border, Tamil Nadu", category: "Hosur Area" },
+  { name: "Avalapalli Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Denkanikottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Rayakottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Thally Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Kelamangalam Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Alasanatham", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Dinnur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Kamaraj Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Shanthi Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Nethaji Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Chennathur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Dharga", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Poonapalli", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+  { name: "Bagalur Town", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
+  { name: "Berigai", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
+  { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
+  { name: "Attibele Industrial Area", subtitle: "Anekal Taluk (~10 Kms)", category: "Near Hosur" },
+  { name: "Anekal Town", subtitle: "Karnataka (~18 Kms)", category: "Near Hosur" },
+  { name: "Chandapura Circle", subtitle: "Bengaluru Highway (~18 Kms)", category: "Bengaluru Hub" },
+  { name: "Bommasandra Industrial Area", subtitle: "Bengaluru (~22 Kms)", category: "Bengaluru Hub" },
+  { name: "Hebbagodi", subtitle: "Hosur Road, Bengaluru (~24 Kms)", category: "Bengaluru Hub" },
+  { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
+  { name: "Electronic City Phase 2", subtitle: "Bengaluru (~26 Kms)", category: "Bengaluru Hub" },
+  { name: "Jigani Industrial Area", subtitle: "Bengaluru (~25 Kms)", category: "Bengaluru Hub" },
+  { name: "Sarjapur Road", subtitle: "Bengaluru (~32 Kms)", category: "Bengaluru Hub" },
+  { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
+  { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
+]
 
-async function filterLocationSuggestions(searchText) {
-  if (!searchText || !searchText.trim()) return []
-  return searchPlaces(searchText)
+function filterLocationSuggestions(searchText) {
+  if (!searchText || !searchText.trim()) {
+    return [
+      { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
+      { name: "SIPCOT Phase 1", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
+      { name: "SIPCOT Phase 2", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
+      { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
+      { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
+      { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
+      { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
+      { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
+    ]
+  }
+
+  const query = searchText.trim().toLowerCase()
+  const exactStarts = []
+  const wordStarts = []
+  const containsMatches = []
+
+  HOSUR_LOCATIONS_DATABASE.forEach((item) => {
+    const nameLow = item.name.toLowerCase()
+    const subLow = item.subtitle.toLowerCase()
+    const catLow = item.category.toLowerCase()
+
+    if (nameLow.startsWith(query)) {
+      exactStarts.push(item)
+    } else if (
+      nameLow.split(/[\s,/-]+/).some((w) => w.startsWith(query)) ||
+      subLow.split(/[\s,/-]+/).some((w) => w.startsWith(query))
+    ) {
+      wordStarts.push(item)
+    } else if (nameLow.includes(query) || subLow.includes(query) || catLow.includes(query)) {
+      containsMatches.push(item)
+    }
+  })
+
+  const combined = [...exactStarts, ...wordStarts, ...containsMatches]
+  const seen = new Set()
+  const result = []
+  for (const it of combined) {
+    if (!seen.has(it.name)) {
+      seen.add(it.name)
+      result.push(it)
+    }
+    if (result.length >= 9) break
+  }
+  return result
 }
 
 /* ── Mini Truck Booking in Hosur Page ── */
