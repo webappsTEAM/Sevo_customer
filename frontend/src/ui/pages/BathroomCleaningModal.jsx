@@ -6,20 +6,20 @@ const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const BATHROOM_SUB_TABS = [
   { id: "packages", name: "Full Clean", image: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=150&q=80&fit=crop" },
-  { id: "minis", name: "Mini Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" }
+  { id: "minis", name: "Quick Extra Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" },
+  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=150&q=80&fit=crop" }
 ];
 
 const BATHROOM_SERVICES = {
   packages: [
     {
       id: "bath-deep-clean",
-      name: "One-Time Deep Bathroom Cleaning",
+      name: "Deep Bathroom Cleaning (machine)",
       description: "Deep cleaning of toilet, basin, floor and tiles. Removes soap marks, dirt and common stains.",
       highlight: "Recommended for deep cleaning & tough stains",
       rating: "4.82",
       reviews: "1.5M reviews",
-      price: 549,
-      options: "Starts at",
+      price: 499,
       duration: "60 mins",
       image: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=300&q=80&fit=crop",
       includes: [
@@ -30,12 +30,11 @@ const BATHROOM_SERVICES = {
     },
     {
       id: "bath-intense-clean",
-      name: "Intense Bathroom Cleaning",
+      name: "Deep Bathroom Cleaning (Hands-on)",
       description: "Extra scrubbing for floors, tiles and bathroom fixtures. Removes stubborn dirt, soap buildup.",
       rating: "4.82",
       reviews: "1.5M reviews",
-      price: 499,
-      options: "Starts at",
+      price: 300,
       duration: "60 mins",
       image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=300&q=80&fit=crop",
       includes: [
@@ -46,19 +45,6 @@ const BATHROOM_SERVICES = {
     }
   ],
   minis: [
-    {
-      id: "bath-move-in",
-      name: "Move-In Bathroom Cleaning",
-      description: "Extra machine scrubbing for bathroom floors and tiles.",
-      highlight: "Recommended before moving into a new or unused bathroom",
-      rating: "4.82",
-      reviews: "1.5M reviews",
-      price: 579,
-      options: "Starts at",
-      duration: "1 hr 30 mins",
-      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-      includes: []
-    },
     {
       id: "bath-exhaust-fan",
       name: "Bathroom Exhaust Fan Cleaning",
@@ -73,11 +59,176 @@ const BATHROOM_SERVICES = {
         "Helps keep the fan clean and free from surface buildup",
         "Suitable as an add-on to bathroom cleaning"
       ]
+    },
+    {
+      id: "bath-washbasin-add",
+      name: "Washbasin cleaning (additional)",
+      description: "Additional washbasin cleaning for extra bathroom convenience.",
+      rating: "4.83",
+      reviews: "331K reviews",
+      price: 89,
+      duration: "10 mins",
+      image: "/mockups/washbasin.png",
+      includes: [
+        "Washbasin surface cleaning & sanitization",
+        "Tap cleaning and polishing"
+      ]
+    },
+    {
+      id: "bath-ceiling-fan",
+      name: "Ceiling fan cleaning",
+      description: "Not covered in standard bathroom services.",
+      rating: "4.83",
+      reviews: "616K reviews",
+      price: 99,
+      duration: "10 mins",
+      image: "/mockups/ceiling_fan.png",
+      includes: [
+        "Ceiling fan dusting and blade wipe"
+      ]
+    },
+    {
+      id: "bath-door-add",
+      name: "Door cleaning (additional)",
+      description: "Additional bathroom door cleaning.",
+      rating: "4.78",
+      reviews: "41K reviews",
+      price: 89,
+      duration: "10 mins",
+      image: "/mockups/bath_door.png",
+      includes: [
+        "Door panel wipe and handle sanitization"
+      ]
+    },
+    {
+      id: "bath-mirror-add",
+      name: "Mirror cleaning (additional)",
+      description: "Additional mirror cleaning for a crystal-clear reflection.",
+      rating: "4.83",
+      reviews: "48K reviews",
+      price: 59,
+      duration: "10 mins",
+      image: "/mockups/bath_2.png",
+      includes: [
+        "Mirror glass cleaning and smudge removal"
+      ]
+    },
+    {
+      id: "bath-drain-clean",
+      name: "Drain Cleaning",
+      description: "Detailed bathroom drain block clearing and sanitization.",
+      rating: "5.00",
+      reviews: "17 reviews",
+      price: 59,
+      duration: "15 mins",
+      image: "/mockups/drain_clean.png",
+      includes: [
+        "Drain block clearance and sanitization"
+      ]
+    }
+  ],
+  subscription: [
+    {
+      id: "sub-bath-machine",
+      name: "Bathroom Cleaning (machine)",
+      description: "Convenient weekly machine scrubbing and deep cleaning subscription.",
+      rating: "4.92",
+      reviews: "250K reviews",
+      price: 350,
+      duration: "1 hr",
+      image: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=300&q=80&fit=crop",
+      includes: [
+        "Machine scrubbing of floors and wall tiles",
+        "Deep sanitation of toilet and washbasin",
+        "Polishing of chrome fixtures and mirror dusting"
+      ]
+    },
+    {
+      id: "sub-bath-hands-on",
+      name: "Bathroom Cleaning (hands on)",
+      description: "Thorough hands-on scrubbing and sanitation weekly subscription.",
+      rating: "4.88",
+      reviews: "180K reviews",
+      price: 215,
+      duration: "1 hr",
+      image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=300&q=80&fit=crop",
+      includes: [
+        "Thorough hands-on scrubbing of tiles and corners",
+        "Sanitization of toilet bowl, sink, and taps",
+        "Wiping of glass panels, door handles, and mirror shine"
+      ]
     }
   ]
 };
 
 const SERVICE_DETAILS_CONTENT = {
+  "sub-bath-machine": {
+    tools: [
+      "Floor scrubbing machine",
+      "Specialized degreasing cleaner",
+      "Toilet sanitizers",
+      "Microfiber cloths"
+    ],
+    ready: [
+      "Clear all shampoo bottles and toiletries",
+      "Ensure access to power supply and water"
+    ],
+    faqs: [
+      { q: "Can I pause my subscription?", a: "Yes, you can pause or reschedule visits directly from your dashboard." }
+    ],
+    bathroomRates: [
+      { label: "1 Bathroom", price: 350 },
+      { label: "2 Bathrooms", price: 700 },
+      { label: "3 Bathrooms", price: 1050 },
+      { label: "4 Bathrooms", price: 1400 },
+      { label: "5 Bathrooms", price: 1750 },
+      { label: "6 Bathrooms", price: 2100 }
+    ],
+    isSubscription: true
+  },
+  "sub-bath-hands-on": {
+    tools: [
+      "Detailing scrubs and pads",
+      "Eco-friendly bathroom cleaner",
+      "Sanitizing spray",
+      "Glass cleaners"
+    ],
+    ready: [
+      "Clear all toiletries from shelf surfaces"
+    ],
+    faqs: [
+      { q: "Is machine scrubbing included?", a: "No, this is a detailed hands-on manual scrubbing service." }
+    ],
+    bathroomRates: [
+      { label: "1 Bathroom", price: 215 },
+      { label: "2 Bathrooms", price: 430 },
+      { label: "3 Bathrooms", price: 645 },
+      { label: "4 Bathrooms", price: 860 },
+      { label: "5 Bathrooms", price: 1075 },
+      { label: "6 Bathrooms", price: 1290 }
+    ],
+    isSubscription: true
+  },
+  "bath-washbasin-add": {
+    tools: ["Washbasin cleaner", "Microfiber cloth"],
+    ready: ["Ensure basin is clear of toiletries"]
+  },
+  "bath-ceiling-fan": {
+    tools: ["Fan duster", "Microfiber cloth"],
+    ready: ["Keep fan space clear"]
+  },
+  "bath-door-add": {
+    tools: ["Wood/panel safe cleaner", "Soft cloth"],
+    ready: []
+  },
+  "bath-mirror-add": {
+    tools: ["Glass cleaner", "Microfiber cloth"],
+    ready: []
+  },
+  "bath-drain-clean": {
+    tools: ["Drain cleaners", "Sewer brushes"],
+    ready: []
+  },
   "bath-deep-clean": {
     covered: [
       "Toilet deep cleaning",
@@ -109,18 +260,12 @@ const SERVICE_DETAILS_CONTENT = {
       { q: "Can I add exhaust fan cleaning?", a: "Yes. Exhaust fan cleaning can be added separately." }
     ],
     bathroomRates: [
-      { label: "1 Bathroom", price: 549 },
-      { label: "2 Bathrooms", price: 918 },
-      { label: "3 Bathrooms", price: 1347 },
-      { label: "4 Bathrooms", price: 1776 },
-      { label: "5 Bathrooms", price: 2205 }
-    ],
-    frequencies: ["One-Time", "Once a week", "Twice a week", "Three times a week"],
-    addons: [
-      { id: "addon-exhaust", name: "Bathroom Exhaust Fan Cleaning", price: 89 },
-      { id: "addon-toilet", name: "Extra Toilet Cleaning", price: 99 },
-      { id: "addon-window", name: "Bathroom Window Cleaning", price: 99 },
-      { id: "addon-drain", name: "Drain Cleaning", price: 99 }
+      { label: "1 Bathroom", price: 499 },
+      { label: "2 Bathrooms", price: 998 },
+      { label: "3 Bathrooms", price: 1497 },
+      { label: "4 Bathrooms", price: 1996 },
+      { label: "5 Bathrooms", price: 2495 },
+      { label: "6 Bathrooms", price: 2994 }
     ]
   },
   "bath-intense-clean": {
@@ -154,18 +299,12 @@ const SERVICE_DETAILS_CONTENT = {
       { q: "Are cleaning products provided?", a: "Yes. Our team brings the required cleaning products and tools." }
     ],
     bathroomRates: [
-      { label: "1 Bathroom", price: 499 },
-      { label: "2 Bathrooms", price: 918 },
-      { label: "3 Bathrooms", price: 1347 },
-      { label: "4 Bathrooms", price: 1776 },
-      { label: "5 Bathrooms", price: 2205 }
-    ],
-    frequencies: ["One-Time", "Once a week", "Twice a week", "Three times a week"],
-    addons: [
-      { id: "addon-exhaust", name: "Bathroom Exhaust Fan Cleaning", price: 89 },
-      { id: "addon-toilet", name: "Extra Toilet Cleaning", price: 99 },
-      { id: "addon-window", name: "Bathroom Window Cleaning", price: 99 },
-      { id: "addon-drain", name: "Drain Cleaning", price: 99 }
+      { label: "1 Bathroom", price: 300 },
+      { label: "2 Bathrooms", price: 600 },
+      { label: "3 Bathrooms", price: 900 },
+      { label: "4 Bathrooms", price: 1200 },
+      { label: "5 Bathrooms", price: 1500 },
+      { label: "6 Bathrooms", price: 1800 }
     ]
   },
   "bath-move-in": {
@@ -255,6 +394,8 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
   // States for selected options in the detail modal view
   const [selectedRateIdx, setSelectedRateIdx] = useState(0);
   const [selectedFreq, setSelectedFreq] = useState("One-Time");
+  const [selectedSubFreqWeeks, setSelectedSubFreqWeeks] = useState(null);
+  const [selectedSubMonths, setSelectedSubMonths] = useState(null);
   const [selectedAddons, setSelectedAddons] = useState([]); // Array of addon objects
 
   useEffect(() => {
@@ -304,13 +445,18 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
   const getSectionTitle = () => {
     if (activeTab === "packages") return "FULL BATHROOM CLEANING";
-    return "MINI SERVICES";
+    if (activeTab === "subscription") return "WEEKLY SUBSCRIPTION PLANS";
+    return "QUICK EXTRA SERVICES";
   };
 
   const handleOpenDetails = (service) => {
     setSelectedServiceDetails(service);
     setSelectedRateIdx(0);
+    const details = SERVICE_DETAILS_CONTENT[service.id] || {};
     setSelectedFreq("One-Time");
+    setSelectedRateIdx(details.isSubscription ? null : 0);
+    setSelectedSubFreqWeeks(null);
+    setSelectedSubMonths(null);
     setSelectedAddons([]);
     setActiveFaq(null);
   };
@@ -319,22 +465,33 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
   const getModalPrice = () => {
     if (!selectedServiceDetails) return 0;
     const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+    if (details.bathroomRates && selectedRateIdx === null) return 0;
     const basePrice = details.bathroomRates ? details.bathroomRates[selectedRateIdx]?.price || selectedServiceDetails.price : selectedServiceDetails.price;
+    
+    let multiplier = 1;
+    if (details.isSubscription && selectedSubFreqWeeks && selectedSubMonths) {
+      const months = parseInt(selectedSubMonths) || 1;
+      const visitsPerMonth = selectedSubFreqWeeks === "Once every week" ? 4 : 2;
+      multiplier = visitsPerMonth * months;
+    }
+
     const addonsPrice = selectedAddons.reduce((sum, addon) => sum + addon.price, 0);
-    return basePrice + addonsPrice;
+    return (basePrice * multiplier) + addonsPrice;
   };
 
   const handleProceedFromModal = () => {
     if (!selectedServiceDetails) return;
     const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
     const rateObj = details.bathroomRates ? details.bathroomRates[selectedRateIdx] : null;
-    const basePrice = rateObj ? rateObj.price : selectedServiceDetails.price;
-    const addonsPrice = selectedAddons.reduce((sum, addon) => sum + addon.price, 0);
-    const totalPrice = basePrice + addonsPrice;
+    const totalPrice = getModalPrice();
 
     let detailsParts = [];
     if (rateObj) detailsParts.push(rateObj.label);
     if (details.frequencies && selectedFreq !== "One-Time") detailsParts.push(selectedFreq);
+    if (details.isSubscription) {
+      detailsParts.push(selectedSubFreqWeeks);
+      detailsParts.push(selectedSubMonths);
+    }
     if (selectedAddons.length > 0) {
       detailsParts.push(`${selectedAddons.length} Add-ons`);
     }
@@ -358,18 +515,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             </button>
             <h2 className="text-xl font-black text-slate-900">Bathroom Cleaning</h2>
           </div>
-          <div className="relative w-full sm:w-72">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={14} />
-            </span>
-            <input
-              type="text"
-              placeholder="Search packages..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-full text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-all bg-slate-50/50"
-            />
-          </div>
+
         </div>
 
         {/* Sub-tabs exactly styled like Sofa/Kitchen Cleaning */}
@@ -409,6 +555,26 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               {getSectionTitle()}
             </h3>
           </div>
+
+          {/* Tab Banner Image */}
+          {(() => {
+            const banners = {
+              packages: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=1200&q=80&fit=crop",
+              minis: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=1200&q=80&fit=crop",
+              subscription: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=1200&q=80&fit=crop"
+            };
+            const bannerUrl = banners[activeTab];
+            if (!bannerUrl) return null;
+            return (
+              <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5">
+                <img
+                  src={bannerUrl}
+                  alt={getSectionTitle()}
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
+            );
+          })()}
 
           <div className="space-y-4">
             {activeServices.map((service) => {
@@ -597,7 +763,57 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                                 }`}
                               >
                                 <div>{rate.label}</div>
-                                <div className="text-[10px] text-slate-400 mt-0.5">₹{rate.price}</div>
+                                <div className="text-[10px] text-slate-400 mt-0.5">₹{rate.price}{details.isSubscription ? "/service" : ""}</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2a. Select Frequency in Weeks (Subscription) */}
+                    {details.isSubscription && selectedRateIdx !== null && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-800 block">Select Frequency in Weeks</label>
+                        <div className="flex flex-wrap gap-2">
+                          {["Once every week", "Once in 2 weeks"].map((freq, idx) => {
+                            const isChosen = selectedSubFreqWeeks === freq;
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => setSelectedSubFreqWeeks(freq)}
+                                className={`px-4 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer ${
+                                  isChosen
+                                    ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
+                                    : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                                }`}
+                              >
+                                {freq}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2b. Select Frequency in Months (Subscription) */}
+                    {details.isSubscription && selectedRateIdx !== null && selectedSubFreqWeeks !== null && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-800 block">Select Frequency in Months</label>
+                        <div className="flex flex-wrap gap-2">
+                          {["1 month", "2 months", "3 months"].map((monthOpt, idx) => {
+                            const isChosen = selectedSubMonths === monthOpt;
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => setSelectedSubMonths(monthOpt)}
+                                className={`px-4 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer ${
+                                  isChosen
+                                    ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
+                                    : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                                }`}
+                              >
+                                {monthOpt}
                               </button>
                             );
                           })}
@@ -771,12 +987,29 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             {/* Sticky Footer */}
             <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Price</div>
-                <div className="text-base font-black text-slate-900">₹{getModalPrice()}</div>
+                {(() => {
+                  const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+                  if (details.isSubscription && (selectedRateIdx === null || !selectedSubFreqWeeks || !selectedSubMonths)) {
+                    return null;
+                  }
+                  return (
+                    <>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Price</div>
+                      <div className="text-base font-black text-slate-900">₹{getModalPrice()}</div>
+                    </>
+                  );
+                })()}
               </div>
               <button
                 onClick={handleProceedFromModal}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer border-none"
+                disabled={(() => {
+                  const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+                  if (details.isSubscription && (selectedRateIdx === null || !selectedSubFreqWeeks || !selectedSubMonths)) {
+                    return true;
+                  }
+                  return false;
+                })()}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer border-none"
               >
                 Proceed
               </button>

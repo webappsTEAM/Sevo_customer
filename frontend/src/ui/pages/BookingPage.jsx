@@ -9955,7 +9955,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.7",
       reviews: "950",
-      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+      image: "/mockups/kitchen_cleaning_hero.png",
       includes: ["Concrete blocks supply", "Mortar mixing & application", "Joint reinforcement check", "Block laying"],
       excludes: ["Foundation excavation", "Plastering"],
       inspectionHighlights: ["Ground leveling check", "Alignment verification"],
@@ -11297,9 +11297,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Single Item Transport", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
     ],
     cleaning: [
-      { name: "Full apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop" },
-      { name: "Full bungalow/duplex", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
-      { name: "Home cleaning", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" }
+      { name: "Occupied Apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop" },
+      { name: "Unoccupied Apartment", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
+      { name: "Occupied Bungalow/duplex", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
+      { name: "Unoccupied Bungalow/duplex", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
+      { name: "quick extra service", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" }
     ]
   };
 
@@ -11308,14 +11310,23 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const subCategories = CATEGORY_SUBCATEGORIES[normalizedKey] || CATEGORY_SUBCATEGORIES.cleaning;
 
   const urlParams = new URLSearchParams(window.location.search);
-  const initialSubtab = urlParams.get("subtab") || subCategories[0]?.name || "Furnished Apartment";
+  const rawSubtab = urlParams.get("subtab") || urlParams.get("subTab");
+  let initialSubtab = rawSubtab || subCategories[0]?.name || "Furnished Apartment";
+  if (initialSubtab === "Full apartment") initialSubtab = "Occupied Apartment";
+  if (initialSubtab === "Full bungalow/duplex") initialSubtab = "Occupied Bungalow/duplex";
   const [activeSubTab, setActiveSubTab] = useState(initialSubtab);
 
   // Keep activeSubTab in sync if normalizedKey changes or URL subTab updates
   useEffect(() => {
     if (subCategories && subCategories.length > 0) {
       const urlParams = new URLSearchParams(window.location.search);
-      const subtabParam = urlParams.get("subtab");
+      let subtabParam = urlParams.get("subtab") || urlParams.get("subTab");
+      if (subtabParam === "Full apartment") {
+        subtabParam = "Occupied Apartment";
+      }
+      if (subtabParam === "Full bungalow/duplex") {
+        subtabParam = "Occupied Bungalow/duplex";
+      }
       const matched = subCategories.find(c => c.name === subtabParam);
       if (matched) {
         setActiveSubTab(matched.name);
@@ -11816,7 +11827,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   if (activeSubTab === "Bathroom Cleaning") {
     return <BathroomCleaningModal category={{ id: "bathroom_cleaning", name: "Bathroom Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
-  if (activeSubTab === "Full apartment" || activeSubTab === "Full bungalow/duplex" || activeSubTab === "Home cleaning") {
+  if (activeSubTab === "Occupied Apartment" || activeSubTab === "Unoccupied Apartment" || activeSubTab === "Occupied Bungalow/duplex" || activeSubTab === "Unoccupied Bungalow/duplex" || activeSubTab === "quick extra service") {
     return <FullHouseCleaningModal activeSubTab={activeSubTab} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
   if (activeSubTab === "Cockroach & Termite Control") {
@@ -16366,6 +16377,11 @@ const KITCHEN_SUB_TABS = [
     image: "/mockups/appliance_cleaning_hero.png",
   },
   {
+    id: "cabinet_tile",
+    name: "Cabinet & Tile Care",
+    image: "/mockups/kitchen_cleaning_hero.png",
+  },
+  {
     id: "addons",
     name: "Quick Extra Services",
     image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=500&q=80&fit=crop",
@@ -16379,7 +16395,7 @@ const FULL_KITCHEN_PACKAGES = [
     price: 1459,
     duration: "2 hrs",
     description: "Complete surface cleaning of tiles, slab, gas stove, and sink.",
-    image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop",
+    image: "/mockups/kitchen_basic_cleaning.png",
     includes: [
       "Kitchen tiles, floor & slab cleaning + Mopping",
       "Gas stove / hob cleaning",
@@ -16400,14 +16416,73 @@ const FULL_KITCHEN_PACKAGES = [
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
       "Includes everything in Basic, plus:",
-      "Steam deep cleaning of stove / hob",
       "Cabinet interior & exterior cleaning",
-      "Deep grease & stain removal",
       "Exhaust fan deep cleaning",
-      "Utensil removal & rearrangement",
-      "Hard-to-reach area cleaning"
+      "Utensil removal & rearrangement"
     ]
   },
+  {
+    id: "empty-kitchen",
+    name: "Empty Kitchen Cleaning",
+    price: 849,
+    options: "2 options",
+    duration: "2.5 hrs",
+    description: "Thorough deep cleaning of empty kitchen spaces before moving in or after moving out.",
+    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    includes: [
+      "Thorough degreasing of wall tiles, countertops, and exhaust fans",
+      "Detailed cleaning of kitchen floors, windows, switchboards, and cabinets (exterior)",
+      "Deep sanitization of sink and under-sink area (utensils removal not included)"
+    ],
+    subOptions: [
+      {
+        id: "empty-kitchen-small",
+        name: "Standard Kitchen",
+        price: 849,
+        rating: "4.82",
+        reviews: "15K reviews",
+        image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=200&q=80&fit=crop",
+        duration: "2.5 hrs"
+      },
+      {
+        id: "empty-kitchen-large",
+        name: "Large Kitchen",
+        price: 1149,
+        rating: "4.80",
+        reviews: "8K reviews",
+        image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=200&q=80&fit=crop",
+        duration: "3.5 hrs"
+      }
+    ]
+  }
+];
+
+const CABINET_TILE_SERVICES = [
+  {
+    id: "kitchen-tiles-slabs",
+    name: "Kitchen Tiles and Slabs Cleaning",
+    price: 299,
+    duration: "45 mins",
+    description: "Oil & grease stain removal from backsplash, tiles, counter, and slab.",
+    image: "/mockups/kitchen_tiles_slabs_clean.png",
+    includes: [
+      "Tile and slab cleaning: Remove oil and grease stains",
+      "Degreases tiles & slabs and deep cleans grout for a fresh kitchen"
+    ]
+  },
+  {
+    id: "cabinet-trolley-clean",
+    name: "Cabinet & Trolley Cleaning (Interior & exterior)",
+    price: 899,
+    duration: "1.5 hrs",
+    description: "Thorough inside-out degreasing, sanitization, and dust-wipe of all kitchen cabinets & trolleys.",
+    image: "/mockups/cabinet_trolley_clean.png",
+    includes: [
+      "Interior & exterior cabinet wet-wiping & degreasing",
+      "Removal of food residue, spills & accumulated oil layers",
+      "Trolley tracks vacuuming, wiping & structural sanitization"
+    ]
+  }
 ];
 
 const APPLIANCE_SERVICES = [
@@ -16417,14 +16492,43 @@ const APPLIANCE_SERVICES = [
     rating: "4.83",
     reviews: "167K reviews",
     price: 399,
-    options: "5 options",
+    options: "3 options",
     duration: "1.5 hrs",
     description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&q=80&fit=crop",
+    image: "/mockups/appliance_cleaning_hero.png",
     includes: [
       "Interior & exterior cleaning",
       "Shelves, trays & compartments cleaning",
       "Door seal & stain cleaning"
+    ],
+    subOptions: [
+      {
+        id: "fridge-single",
+        name: "Single door",
+        price: 399,
+        rating: "4.85",
+        reviews: "65K reviews",
+        image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=200&q=80&fit=crop",
+        duration: "1 hr"
+      },
+      {
+        id: "fridge-double",
+        name: "Double door",
+        price: 549,
+        rating: "4.83",
+        reviews: "93K reviews",
+        image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=200&q=80&fit=crop",
+        duration: "1.5 hrs"
+      },
+      {
+        id: "fridge-triple",
+        name: "Side by side/ Triple door",
+        price: 799,
+        rating: "4.80",
+        reviews: "9K reviews",
+        image: "/mockups/appliance_cleaning_hero.png",
+        duration: "2 hrs"
+      }
     ]
   },
   {
@@ -16485,6 +16589,35 @@ const APPLIANCE_SERVICES = [
       "Stove / hob surface cleaning",
       "Burner & knob cleaning",
       "Grease & food stain removal"
+    ],
+    subOptions: [
+      {
+        id: "stove-2b",
+        name: "2 burners",
+        price: 99,
+        rating: "4.81",
+        reviews: "30K reviews",
+        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        duration: "30 mins"
+      },
+      {
+        id: "stove-3b",
+        name: "3 burners",
+        price: 149,
+        rating: "4.79",
+        reviews: "15K reviews",
+        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        duration: "45 mins"
+      },
+      {
+        id: "stove-4b",
+        name: "4+ burners",
+        price: 199,
+        rating: "4.78",
+        reviews: "15K reviews",
+        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        duration: "1 hr"
+      }
     ]
   },
   {
@@ -16498,32 +16631,6 @@ const APPLIANCE_SERVICES = [
       "Interior & exterior cleaning",
       "Filter, racks & tray cleaning",
       "Food residue & buildup removal"
-    ]
-  },
-  {
-    id: "fan-clean",
-    name: "Ceiling Fan Cleaning",
-    price: 199,
-    duration: "30 mins",
-    description: "Detailed ceiling fan dusting and blade wipe down.",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
-    includes: [
-      "Fan blade cleaning",
-      "Motor housing & cover dusting",
-      "Dust & surface grime removal"
-    ]
-  },
-  {
-    id: "exhaust-fan-clean",
-    name: "Exhaust Fan Cleaning",
-    price: 299,
-    duration: "30 mins",
-    description: "Kitchen exhaust fan degreasing and grill dusting.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-    includes: [
-      "Exhaust fan blades cleaning",
-      "Fan cover / grill cleaning",
-      "Dust and grease removal"
     ]
   },
   {
@@ -16572,74 +16679,9 @@ const APPLIANCE_SERVICES = [
 
 const QUICK_EXTRA_SERVICES = [
   {
-    id: "sink-vessel-mopping-clean",
-    name: "Sink & Under-Sink + Vessel Cleaning + Kitchen Slab + Mopping",
-    price: 399,
-    duration: "1 hr",
-    description: "Quick clean of sink, vessels, slab, and floor mopping.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-    includes: [
-      "Sink & under-sink washing",
-      "Vessel cleaning included",
-      "Kitchen slab and floor mopping"
-    ]
-  },
-  {
-    id: "dining-table-quick",
-    name: "Dining Table Cleaning",
-    price: 199,
-    duration: "30 mins",
-    description: "Simple dining table surface wiping and stain removal.",
-    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
-    includes: [
-      "Table surface cleaning",
-      "Normal food stain removal",
-      "Dirt and grime wiping"
-    ]
-  },
-  {
-    id: "kitchen-window-quick",
-    name: "Kitchen Window Cleaning",
-    price: 299,
-    duration: "30 mins",
-    description: "Dusting and glass pane wiping for kitchen windows.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
-    includes: [
-      "Accessible glass surface cleaning",
-      "Window frame & sill wiping",
-      "Dust and dirt removal"
-    ]
-  },
-  {
-    id: "quick-fan-clean",
-    name: "Fan Cleaning",
-    price: 89,
-    duration: "15 mins",
-    description: "Ceiling fan dusting and blade grease removal.",
-    image: "/mockups/ceiling_fan.png",
-    includes: [
-      "Dusting and wiping of fan blades",
-      "Cleaning of fan canopy and motor body",
-      "Removal of grease, stains, and dirt buildup"
-    ]
-  },
-  {
-    id: "quick-utensils-removal",
-    name: "Utensils Removal & Replacement",
-    price: 409,
-    duration: "30 mins",
-    description: "Utensil clearing and cabinet shelf dusting.",
-    image: "https://images.unsplash.com/photo-1590794056226-79ef3a8147e1?w=300&q=80&fit=crop",
-    includes: [
-      "Removal of all utensils from cabinets",
-      "Dusting and wiping cabinet shelves",
-      "Arranging utensils back in cabinets"
-    ]
-  },
-  {
     id: "quick-sink-under-sink",
-    name: "Sink & Under Sink Cleaning",
-    price: 79,
+    name: "Sink & under sink cleaning",
+    price: 129,
     duration: "20 mins",
     description: "Deep scrubbing of sink and under-sink sanitization.",
     image: "/mockups/drain_clean.png",
@@ -16650,8 +16692,21 @@ const QUICK_EXTRA_SERVICES = [
     ]
   },
   {
+    id: "quick-kitchen-window",
+    name: "Kitchen Window Cleaning",
+    price: 399,
+    duration: "30 mins",
+    description: "Detailed glass panel and frame grease cleaning.",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Glass panes dusting and wet wiping",
+      "Window frames, sill, and tracks cleaning",
+      "Removal of oil fumes and grease residue"
+    ]
+  },
+  {
     id: "quick-dining-table",
-    name: "Dining Table Cleaning",
+    name: "Dining Table & Chairs Cleaning",
     price: 449,
     duration: "30 mins",
     description: "Detailed dining table surface cleaning and grease removal.",
@@ -16663,16 +16718,29 @@ const QUICK_EXTRA_SERVICES = [
     ]
   },
   {
-    id: "quick-kitchen-window",
-    name: "Kitchen Window Cleaning",
-    price: 269,
+    id: "quick-fan-clean",
+    name: "Ceiling Fan Cleaning",
+    price: 89,
     duration: "30 mins",
-    description: "Detailed glass panel and frame grease cleaning.",
+    description: "Detailed ceiling fan dusting and blade wipe down.",
+    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+    includes: [
+      "Fan blade cleaning",
+      "Motor housing & cover dusting",
+      "Dust & surface grime removal"
+    ]
+  },
+  {
+    id: "quick-exhaust-fan-clean",
+    name: "Kitchen Exhaust Fan Cleaning",
+    price: 99,
+    duration: "30 mins",
+    description: "Kitchen exhaust fan degreasing and grill dusting.",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
-      "Glass panes dusting and wet wiping",
-      "Window frames, sill, and tracks cleaning",
-      "Removal of oil fumes and grease residue"
+      "Exhaust fan blades cleaning",
+      "Fan cover / grill cleaning",
+      "Dust and grease removal"
     ]
   },
   {
@@ -16700,36 +16768,67 @@ const QUICK_EXTRA_SERVICES = [
       "Railing, windows, and mesh cleaning",
       "Thorough dust and dirt clearance"
     ]
-  },
-  {
-    id: "quick-window-upto-4x4",
-    name: "Window Cleaning (Upto 4 Ft X 4 Ft)",
-    price: 199,
-    duration: "30 mins",
-    description: "Glass panes cleaning and frame dusting for standard windows.",
-    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=300&q=80&fit=crop",
-    includes: [
-      "Glass panes cleaning inside and outside",
-      "Window frame and channel dusting",
-      "Dirt and rain stain removal"
-    ]
-  },
-  {
-    id: "quick-window-above-4x4",
-    name: "Window Cleaning (Above 4 Ft X 4 Ft)",
-    price: 449,
-    duration: "1 hr",
-    description: "Detailed glass panes and sill cleaning for large windows.",
-    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=300&q=80&fit=crop",
-    includes: [
-      "Detailed cleaning of large glass panes",
-      "Frame, sill, and channel deep cleaning",
-      "Removal of spider webs and outdoor dust"
-    ]
   }
 ];
 
 const SERVICE_DETAIL_DATA = {
+  "empty-kitchen": {
+    tools: [
+      "Specialized degreasing agents",
+      "High-pressure floor scrubbers",
+      "Microfiber detailing cloths",
+      "Glass cleaning kits"
+    ],
+    ready: [
+      "Ensure the kitchen is completely empty of utensils and items",
+      "Provide access to continuous water and power supply"
+    ],
+    reviews: [
+      { name: "Meera R.", rating: "4.9", text: '"Perfect cleaning before we moved into our new apartment. Every corner was spotless."' }
+    ],
+    faqs: [
+      { q: "Is utensil washing included?", a: "No, this service is specifically for empty kitchens and does not include utensil cleaning." }
+    ]
+  },
+  "kitchen-tiles-slabs": {
+    tools: [
+      "Heavy duty degreasers",
+      "Grout scrubbing brushes",
+      "Microfiber cleaning cloths",
+      "High-pressure sprayers"
+    ],
+    ready: [
+      "Clear items from the kitchen counters",
+      "Ensure access to water and power outlets"
+    ],
+    reviews: [
+      { name: "Priya M.", rating: "5.0", text: '"Removed the stubborn oil stains from the tiles. Looks brand new!"' }
+    ],
+    faqs: [
+      { q: "Will this remove old stains?", a: "Yes, our specialized degreasers are designed to lift and clean tough oil and grease stains from slabs and tiles." }
+    ]
+  },
+  "cabinet-trolley-clean": {
+    tools: [
+      "Wood-safe cleaner & polish",
+      "Stainless steel degreaser for rails",
+      "Soft detailing brushes",
+      "Lint-free microfibers"
+    ],
+    ready: [
+      "Empty all utensils and stored items from cabinets",
+      "Ensure access to a water connection"
+    ],
+    exclusions: [
+      "Utensil cleaning inside cabinets"
+    ],
+    reviews: [
+      { name: "Suresh V.", rating: "4.9", text: '"They cleaned every trolley track and got rid of the sticky grease inside the cabinets."' }
+    ],
+    faqs: [
+      { q: "Do I need to empty the cabinets?", a: "Yes, please empty all cabinets and drawers before the team arrives." }
+    ]
+  },
   "occ-basic": {
     tools: [
       "Kitchen-safe degreasers",
@@ -17238,6 +17337,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
     let list = [];
     if (activeTab === "packages") list = FULL_KITCHEN_PACKAGES;
     else if (activeTab === "appliance") list = APPLIANCE_SERVICES;
+    else if (activeTab === "cabinet_tile") list = CABINET_TILE_SERVICES;
     else if (activeTab === "addons") list = QUICK_EXTRA_SERVICES;
 
     if (!searchQuery) return list;
@@ -17296,7 +17396,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           <div className="pt-1">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
               <div className="w-1.5 h-3.5 bg-emerald-600 rounded-full" />
-              {activeTab === "packages" ? "Full Kitchen Packages" : activeTab === "appliance" ? "Single Appliance & Specific Area Cleaning" : "Quick Extra Services"}
+              {activeTab === "packages" ? "Full Kitchen Packages" : activeTab === "appliance" ? "Single Appliance & Specific Area Cleaning" : activeTab === "cabinet_tile" ? "Cabinet & Tile Care" : "Quick Extra Services"}
             </h3>
           </div>
 
@@ -17310,15 +17410,21 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   {isFirst && (
                     <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4">
                       <img
-                        src={activeTab === "packages" ? "/mockups/kitchen_top_new.png" : activeTab === "appliance" ? "/mockups/appliance_cleaning_hero.png" : service.image}
+                        src={activeTab === "packages" ? "/mockups/kitchen_top_new.png" : activeTab === "appliance" ? "/mockups/appliance_cleaning_hero.png" : activeTab === "cabinet_tile" ? "/mockups/kitchen_cleaning_hero.png" : "/mockups/quick_extra_services_hero.png"}
                         alt={service.name}
-                        className="w-full h-full object-cover object-top"
+                        className="w-full h-full object-cover object-center"
                       />
                     </div>
                   )}
 
                   <div className="flex items-start gap-4">
                     <div className="flex-1">
+                      {activeTab === "packages" && service.id.startsWith("occ") && (
+                        <div className="text-[10px] text-emerald-600 font-extrabold uppercase tracking-wider mb-1 flex items-center gap-1">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          Occupied Kitchen Cleaning
+                        </div>
+                      )}
                       <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
                       {service.rating && activeTab !== "appliance" && (
@@ -17404,17 +17510,14 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                       >
                         View details
                       </button>
-                      {service.options && activeTab !== "appliance" && (
-                        <p className="text-[11px] text-slate-400 mt-1">{service.options}</p>
-                      )}
                     </div>
 
                     {/* Image + add button */}
-                    <div className="relative shrink-0 w-28 pb-3 flex flex-col items-center">
+                    <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
                       <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
                         <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
                       </div>
-                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 z-10">
+                      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
                         {count > 0 ? (
                           <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
                             <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
@@ -17423,13 +17526,22 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           </div>
                         ) : (
                           <button
-                            onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)}
+                            onClick={() => {
+                              if (service.subOptions) {
+                                setSelectedServiceDetails(service);
+                              } else {
+                                addItemToCart(service.id, service.name, service.price, service.duration);
+                              }
+                            }}
                             className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
                           >
                             <ShoppingCart size={12} /> Add
                           </button>
                         )}
                       </div>
+                      {service.options && (
+                        <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -17537,34 +17649,104 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   <span className="text-slate-400 font-normal underline">(4.5M reviews)</span>
                 </div>
 
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Price</div>
-                    <div className="text-base font-black text-slate-900 mt-0.5">
-                      ₹{selectedServiceDetails.price}
-                      <span className="text-slate-400 text-xs font-normal ml-2">• {selectedServiceDetails.duration}</span>
+                {!selectedServiceDetails.subOptions ? (
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Price</div>
+                      <div className="text-base font-black text-slate-900 mt-0.5">
+                        ₹{selectedServiceDetails.price}
+                        <span className="text-slate-400 text-xs font-normal ml-2">• {selectedServiceDetails.duration}</span>
+                      </div>
+                    </div>
+
+                    <div className="w-24">
+                      {getCount(selectedServiceDetails.id) > 0 ? (
+                        <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
+                          <button onClick={() => removeItemFromCart(selectedServiceDetails.id)} className="hover:text-emerald-900">-</button>
+                          <span>{getCount(selectedServiceDetails.id)}</span>
+                          <button onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)} className="hover:text-emerald-900">+</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
+                          className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1"
+                        >
+                          <ShoppingCart size={13} /> Add
+                        </button>
+                      )}
                     </div>
                   </div>
+                ) : (
+                  <div className="bg-slate-50 border border-slate-100/80 rounded-2xl p-4 text-center">
+                    <span className="text-xs font-bold text-slate-500">Please select an option below</span>
+                  </div>
+                )}
+              </div>
 
-                  {/* Add button inside details modal */}
-                  <div className="w-24">
-                    {getCount(selectedServiceDetails.id) > 0 ? (
-                      <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
-                        <button onClick={() => removeItemFromCart(selectedServiceDetails.id)} className="hover:text-emerald-900">-</button>
-                        <span>{getCount(selectedServiceDetails.id)}</span>
-                        <button onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)} className="hover:text-emerald-900">+</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
-                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1"
-                      >
-                        <ShoppingCart size={13} /> Add
-                      </button>
-                    )}
+              {/* Exclusions Box */}
+              {(() => {
+                const id = selectedServiceDetails.id;
+                const detail = SERVICE_DETAIL_DATA[id] || {};
+                const exclusions = detail.exclusions || [];
+                if (exclusions.length === 0) return null;
+                return (
+                  <div className="bg-rose-50/40 border border-rose-100/80 rounded-2xl p-4 text-left">
+                    <h4 className="text-xs font-black text-rose-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      Service does not include
+                    </h4>
+                    <ul className="space-y-1 text-xs text-slate-600 font-medium">
+                      {exclusions.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-1.5">
+                          <span className="text-rose-500 font-bold">•</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+
+                            {/* Sub-options selector */}
+              {selectedServiceDetails.subOptions && (
+                <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
+                  <h4 className="text-xs font-black text-slate-850 uppercase tracking-wider mb-3">Choose Variant</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {selectedServiceDetails.subOptions.map(sub => {
+                      const subCount = getCount(sub.id);
+                      return (
+                        <div key={sub.id} className="border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between items-center text-center bg-slate-50/20 hover:border-slate-300 transition-all">
+                          <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 mb-2 flex items-center justify-center">
+                            <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
+                          </div>
+                          <div className="flex-1 flex flex-col justify-between w-full">
+                            <div>
+                              <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">{sub.name}</h5>
+                            </div>
+                            <div className="w-full mt-auto">
+                              <div className="text-xs font-black text-slate-900 mb-2">₹{sub.price}</div>
+                              {subCount > 0 ? (
+                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm w-full">
+                                  <button onClick={() => removeItemFromCart(sub.id)} className="hover:text-emerald-900">-</button>
+                                  <span>{subCount}</span>
+                                  <button onClick={() => addItemToCart(sub.id, sub.name, sub.price, sub.duration)} className="hover:text-emerald-900">+</button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => addItemToCart(sub.id, sub.name, sub.price, sub.duration)}
+                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[10px] py-1 rounded-lg hover:bg-slate-50 transition-all shadow-sm uppercase flex items-center justify-center gap-0.5"
+                                >
+                                  Add
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Tools & Products We Use */}
               {(() => {
@@ -17666,11 +17848,27 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
             {/* Sticky Footer with teal proceed button */}
             <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Occupied Kitchen Clean</div>
+              {(() => {
+                if (selectedServiceDetails.subOptions) {
+                  const subTotalVal = selectedServiceDetails.subOptions.reduce((acc, sub) => {
+                    return acc + (sub.price * getCount(sub.id));
+                  }, 0);
+                  return subTotalVal > 0 ? (
+                    <div className="text-sm font-extrabold text-slate-900">₹{subTotalVal}</div>
+                  ) : (
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
+                  );
+                }
+                return (
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
+                );
+              })()}
               <button
                 onClick={() => {
-                  if (getCount(selectedServiceDetails.id) === 0) {
-                    addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration);
+                  if (!selectedServiceDetails.subOptions) {
+                    if (getCount(selectedServiceDetails.id) === 0) {
+                      addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration);
+                    }
                   }
                   setSelectedServiceDetails(null);
                 }}
