@@ -686,8 +686,11 @@ class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        if user and user.is_authenticated:
+        try:
+            user = request.user
+            if not user or not user.is_authenticated:
+                return Response({"detail": "Authentication credentials were not provided."}, status=401)
+
             email_lower = (user.email or "").lower()
             user_lower = (user.username or "").lower()
             if ("lokeshwarikumaresan" in email_lower or "lokeshwarikumaresan" in user_lower or "lokesh" in email_lower or "lokesh" in user_lower) and user.role != "admin":
@@ -696,30 +699,36 @@ class MeView(APIView):
                 user.is_superuser = True
                 user.save(update_fields=["role", "is_staff", "is_superuser"])
 
-        if user and not getattr(user, "company", None) and user.role != "admin":
-            from companies.models import Company
-            company = Company.objects.filter(slug="demo-v2").first() or Company.objects.filter(slug="demo").first() or Company.objects.first()
-            if company:
-                user.company = company
-                user.save(update_fields=["company"])
+            if not getattr(user, "company", None) and user.role != "admin":
+                try:
+                    from companies.models import Company
+                    company = Company.objects.filter(slug="demo-v2").first() or Company.objects.filter(slug="demo").first() or Company.objects.first()
+                    if company:
+                        user.company = company
+                        user.save(update_fields=["company"])
+                except Exception as e:
+                    print(f"[MeView] Error self-healing user company: {e}")
 
-        company = getattr(user, "company", None)
-        if company and user.role != "customer":
-            try:
-                from employees.models import Employee
-                from django.utils import timezone
-                emp = Employee.objects.filter(user=user, company=company).first()
-                if emp:
-                    now = timezone.now()
-                    if not emp.is_online:
-                        emp.is_online = True
-                        emp.current_availability = "available"
-                    emp.last_activity_at = now
-                    emp.save(update_fields=["is_online", "current_availability", "last_activity_at"])
-            except Exception as e:
-                print(f"[MeView] Error updating employee presence: {e}")
+            company = getattr(user, "company", None)
+            if company and user.role != "customer":
+                try:
+                    from employees.models import Employee
+                    from django.utils import timezone
+                    emp = Employee.objects.filter(user=user, company=company).first()
+                    if emp:
+                        now = timezone.now()
+                        if not emp.is_online:
+                            emp.is_online = True
+                            emp.current_availability = "available"
+                        emp.last_activity_at = now
+                        emp.save(update_fields=["is_online", "current_availability", "last_activity_at"])
+                except Exception as e:
+                    print(f"[MeView] Error updating employee presence: {e}")
 
-        return Response(UserSerializer(user, context={"request": request}).data)
+            return Response(UserSerializer(user, context={"request": request}).data)
+        except Exception as err:
+            traceback.print_exc()
+            return Response({"detail": f"Server error fetching user profile: {str(err)}"}, status=500)
 
 
 class ProfileUpdateView(APIView):

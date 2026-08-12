@@ -1086,8 +1086,13 @@ export function LandingPage() {
     }
   }
 
+  const resolveCartArg = (cartArg) => {
+    return Array.isArray(cartArg) ? cartArg : (Array.isArray(modalCart) ? modalCart : [])
+  }
+
   const cleanConsultationItems = (cartArray) => {
-    return (cartArray || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason"));
+    const list = resolveCartArg(cartArray);
+    return list.filter(c => c && typeof c === "object" && c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && typeof c.id === "string" && !c.id.includes("paint") && !c.id.includes("mason"));
   };
 
   const goToBooking = () => navigate(routes.booking)
@@ -1305,7 +1310,7 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
+                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
                 />
               ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
                 <SofaCleaningModal
@@ -1313,7 +1318,7 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
+                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
                 />
               ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
                 <BathroomCleaningModal
@@ -1321,7 +1326,7 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
+                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
                 />
               ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
                 <PaintingPackageModal
@@ -1330,12 +1335,12 @@ export function LandingPage() {
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
                   onCheckout={(customCart) => {
-                    const finalCart = customCart || modalCart;
+                    const finalCart = resolveCartArg(customCart);
                     setModalCart(cleanConsultationItems(finalCart));
                     navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
                   }}
                   onGetEstimate={(customCart) => {
-                    const finalCart = customCart || modalCart;
+                    const finalCart = resolveCartArg(customCart);
                     setModalCart(cleanConsultationItems(finalCart));
                     navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
                   }}
@@ -1348,7 +1353,7 @@ export function LandingPage() {
                   isFullPage={true}
                   onClose={handleCloseCategory}
                   onCheckout={(customCart) => {
-                    const finalCart = customCart || modalCart;
+                    const finalCart = resolveCartArg(customCart);
                     setModalCart(cleanConsultationItems(finalCart));
                     navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
                   }}
@@ -2310,7 +2315,7 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
           />
         ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
           <SofaCleaningModal
@@ -2318,7 +2323,7 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
           />
         ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
           <BathroomCleaningModal
@@ -2326,7 +2331,7 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
           />
         ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
           <PaintingPackageModal
@@ -2335,12 +2340,12 @@ export function LandingPage() {
             setCart={setModalCart}
             onClose={() => navigate("/home")}
             onCheckout={(customCart) => {
-              const finalCart = customCart || modalCart;
+              const finalCart = resolveCartArg(customCart);
               setModalCart(cleanConsultationItems(finalCart));
               navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
             }}
             onGetEstimate={(customCart) => {
-              const finalCart = customCart || modalCart;
+              const finalCart = resolveCartArg(customCart);
               setModalCart(cleanConsultationItems(finalCart));
               navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
             }}
@@ -2353,7 +2358,7 @@ export function LandingPage() {
             setCart={setModalCart}
             onClose={() => navigate("/home")}
             onCheckout={(customCart) => {
-              const finalCart = customCart || modalCart;
+              const finalCart = resolveCartArg(customCart);
               setModalCart(cleanConsultationItems(finalCart));
               navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
             }}
@@ -2361,10 +2366,6 @@ export function LandingPage() {
         )
       )}
 
-
-
-=======
->>>>>>> 6483692d2ad9cafdf3b5eba8f544ceb1cb0b33e3
       {/* ── Home Services & Pest Control Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
       {isHomePestModalOpen &&
         typeof document !== "undefined" &&
@@ -3948,7 +3949,7 @@ export function LandingPage() {
           cart={modalCart}
           setCart={setModalCart}
           onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(null) } })}
         />
       ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
         <SofaCleaningModal
@@ -3956,7 +3957,7 @@ export function LandingPage() {
           cart={modalCart}
           setCart={setModalCart}
           onClose={() => navigate("/home")}
-          onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
+          onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
         />
       ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
         <BathroomCleaningModal
@@ -3964,7 +3965,7 @@ export function LandingPage() {
           cart={modalCart}
           setCart={setModalCart}
           onClose={() => navigate("/home")}
-          onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
+          onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
         />
       ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
         <PaintingPackageModal
@@ -3973,12 +3974,12 @@ export function LandingPage() {
           setCart={setModalCart}
           onClose={() => navigate("/home")}
           onCheckout={(customCart) => {
-            const finalCart = customCart || modalCart;
+            const finalCart = resolveCartArg(customCart);
             setModalCart(cleanConsultationItems(finalCart));
             navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
           }}
           onGetEstimate={(customCart) => {
-            const finalCart = customCart || modalCart;
+            const finalCart = resolveCartArg(customCart);
             setModalCart(cleanConsultationItems(finalCart));
             navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
           }}
@@ -3990,7 +3991,7 @@ export function LandingPage() {
           setCart={setModalCart}
           onClose={() => navigate("/home")}
           onCheckout={(customCart) => {
-            const finalCart = customCart || modalCart;
+            const finalCart = resolveCartArg(customCart);
             setModalCart(cleanConsultationItems(finalCart));
             navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
           }}

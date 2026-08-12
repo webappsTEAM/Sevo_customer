@@ -116,6 +116,14 @@ export async function apiFetchCustomerBookings() {
   return fetchJSON("/booking/my-bookings/")
 }
 
+let _refreshInFlight = null
+let _knownUnauthenticated = false
+
+export function resetAuthSessionState(hasSession = true) {
+  _knownUnauthenticated = !hasSession
+  if (!hasSession) _refreshInFlight = null
+}
+
 /**
  * Fetch the current authenticated user from /auth/me/.
  * Browser sends the qt_access cookie automatically.
@@ -149,10 +157,15 @@ export async function apiFetchMe() {
     let data
     try { data = JSON.parse(text) } catch { data = text || null }
     if (!res.ok) {
-      if (res.status !== 401) {
+      if (res.status === 401) {
+        _knownUnauthenticated = true
+      } else {
         console.warn("apiFetchMe failed with status:", res.status, text)
       }
       return null
+    }
+    if (data?.username) {
+      _knownUnauthenticated = false
     }
     return data
   } catch (err) {
@@ -167,12 +180,24 @@ export async function apiFetchMe() {
  * Returns true on success, false if the session has fully expired.
  */
 export async function apiRefreshToken() {
-  try {
-    const data = await fetchJSON("/auth/refresh/", { method: "POST" })
-    return !!data?.success
-  } catch {
-    return false
-  }
+  if (_knownUnauthenticated) return false
+  if (_refreshInFlight) return _refreshInFlight
+
+  _refreshInFlight = (async () => {
+    try {
+      const data = await fetchJSON("/auth/refresh/", { method: "POST" })
+      const ok = !!data?.success
+      _knownUnauthenticated = !ok
+      return ok
+    } catch {
+      _knownUnauthenticated = true
+      return false
+    } finally {
+      _refreshInFlight = null
+    }
+  })()
+
+  return _refreshInFlight
 }
 
 /**

@@ -12294,21 +12294,27 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                               className="w-full h-full object-cover"
                             />
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
-                              {count > 0 ? (
-                                <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
-                                  <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
-                                  <span>{count}</span>
-                                  <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, p.name + " (Site Consultation)", 49, "")}>+</button>
-                                </div>
-                              ) : (
-                                <button
-                                  className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
-                                  onClick={() => addItemToCart(cartId, p.name + " (Site Consultation)", 49, "")}
-                                >
-                                  <ShoppingCart size={11} className="shrink-0" />
-                                  <span>Add</span>
-                                </button>
-                              )}
+                              {(() => {
+                                const cartItemName = normalizedKey === "mason" ? `${p.name} (Site Consultation)` : p.name;
+                                const cartItemPrice = normalizedKey === "mason" ? 49 : (typeof p.price === "number" ? p.price : (parseFloat(p.price) || 0));
+                                const cartItemDuration = normalizedKey === "mason" ? "" : (p.duration || "");
+
+                                return count > 0 ? (
+                                  <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                    <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                    <span>{count}</span>
+                                    <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, cartItemName, cartItemPrice, cartItemDuration)}>+</button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
+                                    onClick={() => addItemToCart(cartId, cartItemName, cartItemPrice, cartItemDuration)}
+                                  >
+                                    <ShoppingCart size={11} className="shrink-0" />
+                                    <span>Add</span>
+                                  </button>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>

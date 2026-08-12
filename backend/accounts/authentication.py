@@ -38,8 +38,11 @@ class CookieJWTAuthentication(JWTAuthentication):
         User = get_user_model()
         try:
             return User.objects.select_related('company').get(id=user_id)
-        except User.DoesNotExist:
-            return None
+        except Exception:
+            try:
+                return User.objects.get(id=user_id)
+            except Exception:
+                return None
 
     def _authenticate_credentials(self, request):
         # 1. Try the Authorization header first (standard simplejwt path)
