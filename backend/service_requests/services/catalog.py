@@ -170,9 +170,9 @@ def update_package(package, data, actor, reason=None):
             if pkg.description is not None and tier.description != pkg.description:
                 tier.description = pkg.description
                 fields_to_update.append("description")
-            if pkg.tag and tier.capacity_label != pkg.tag:
-                tier.capacity_label = pkg.tag
-                fields_to_update.append("capacity_label")
+            if pkg.tag is not None and tier.icon != (pkg.tag or ""):
+                tier.icon = pkg.tag or ""
+                fields_to_update.append("icon")
             if pkg.status:
                 tier_is_active = (pkg.status == "ACTIVE")
                 if tier.is_active != tier_is_active:

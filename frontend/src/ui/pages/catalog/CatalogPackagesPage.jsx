@@ -117,9 +117,8 @@ const STATUS_TONE = {
 
 const NEXT_STATUSES = {
   DRAFT: ["ACTIVE"],
-  ACTIVE: ["INACTIVE", "ARCHIVED"],
-  INACTIVE: ["ACTIVE", "ARCHIVED"],
-  ARCHIVED: [],
+  ACTIVE: ["INACTIVE"],
+  INACTIVE: ["ACTIVE"],
 }
 
 // 7 Core Specialized Service Pillars Configuration in Bluish / Indigo Theme
@@ -468,6 +467,7 @@ export function CatalogPackagesPage() {
     setQuickPriceEditing({
       ...pkg,
       base_price: Math.round(Number(pkg.base_price) || 0),
+      tag: pkg.tag || (pkg.popular ? "Popular" : ""),
       checklist: items,
     })
     setNewItemText("")
@@ -488,11 +488,17 @@ export function CatalogPackagesPage() {
         finalIncludes = quickPriceEditing.includes
       }
 
+      const isPop = Boolean(
+        quickPriceEditing.tag &&
+        quickPriceEditing.tag.toLowerCase().includes("popular")
+      )
+
       const payload = {
         name: quickPriceEditing.name,
         description: quickPriceEditing.description || "",
         base_price: Math.round(Number(quickPriceEditing.base_price) || 0),
         tag: quickPriceEditing.tag || "",
+        popular: isPop,
         duration: quickPriceEditing.duration || "",
         includes: finalIncludes,
         offer_price: null,
@@ -544,6 +550,24 @@ export function CatalogPackagesPage() {
       includes: Array.isArray(pkg.includes) ? pkg.includes.join(", ") : "",
       excludes: Array.isArray(pkg.excludes) ? pkg.excludes.join(", ") : "",
     })
+  }
+
+  const handleToggleStatus = async (pkg) => {
+    const newStatus = pkg.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${pkg.id}/transition/`, {
+        method: "POST",
+        json: { status: newStatus, reason: `Status changed to ${newStatus}` },
+      })
+      if (res.success) {
+        showToast(`"${pkg.name}" is now ${newStatus}`)
+        loadData()
+      } else {
+        showToast(res.message || "Status update failed", "error")
+      }
+    } catch {
+      showToast("Status update failed", "error")
+    }
   }
 
   const handleTransition = async (pkg, newStatus) => {
@@ -826,7 +850,7 @@ export function CatalogPackagesPage() {
                         <tr className="border-b border-slate-100 bg-slate-50/50 text-slate-700 uppercase tracking-wider text-[10px] font-bold">
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Package / Option Name</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Starting Fare</th>
-                          <th className="py-3 px-4 sm:px-5 font-extrabold">Tag Badge</th>
+                          <th className="py-3 px-4 sm:px-5 font-extrabold">Highlight Badge</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Duration / ETA</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Status</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold text-right">Actions</th>
@@ -837,14 +861,7 @@ export function CatalogPackagesPage() {
                           <tr key={pkg.id} className="hover:bg-slate-50/80 transition-colors group">
                             {/* Package Name & Description */}
                             <td className="py-3.5 px-4 sm:px-5 max-w-xs sm:max-w-md">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-900 text-xs sm:text-sm">{pkg.name}</span>
-                                {pkg.popular && (
-                                  <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/80 text-[10px] font-bold">
-                                    ★ Popular
-                                  </span>
-                                )}
-                              </div>
+                              <div className="font-bold text-slate-900 text-xs sm:text-sm">{pkg.name}</div>
                               {pkg.description ? (
                                 <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
                                   {pkg.description}
@@ -861,14 +878,24 @@ export function CatalogPackagesPage() {
                               </div>
                             </td>
 
-                            {/* Tag Badge */}
+                            {/* Highlight / Popularity Badge */}
                             <td className="py-3.5 px-4 sm:px-5">
-                              {pkg.tag ? (
-                                <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-semibold">
-                                  {pkg.tag}
+                              {pkg.tag || pkg.popular ? (
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${
+                                    (pkg.tag || "").toLowerCase().includes("popular") || pkg.popular
+                                      ? "bg-amber-50 text-amber-700 border-amber-200/90"
+                                      : (pkg.tag || "").toLowerCase().includes("rare")
+                                      ? "bg-slate-100 text-slate-700 border-slate-200"
+                                      : (pkg.tag || "").toLowerCase().includes("best")
+                                      ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                      : "bg-blue-50 text-blue-700 border-blue-200"
+                                  }`}
+                                >
+                                  ★ {pkg.tag || "Popular"}
                                 </span>
                               ) : (
-                                <span className="text-slate-300 text-xs">—</span>
+                                <span className="text-slate-300 text-xs font-medium">—</span>
                               )}
                             </td>
 
@@ -881,29 +908,32 @@ export function CatalogPackagesPage() {
                               )}
                             </td>
 
-                            {/* Status */}
+                            {/* Status (Clickable Toggle) */}
                             <td className="py-3.5 px-4 sm:px-5">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase border ${
-                                  STATUS_TONE[pkg.status] || "bg-slate-100 text-slate-600 border-slate-200"
+                              <button
+                                type="button"
+                                onClick={() => handleToggleStatus(pkg)}
+                                title={`Click to set ${pkg.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"}`}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase border transition-all cursor-pointer ${
+                                  pkg.status === "ACTIVE"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200/90 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"
+                                    : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200"
                                 }`}
                               >
                                 <span
                                   className={`w-1.5 h-1.5 rounded-full ${
                                     pkg.status === "ACTIVE"
                                       ? "bg-emerald-500"
-                                      : pkg.status === "DRAFT"
-                                      ? "bg-slate-400"
-                                      : "bg-amber-500"
+                                      : "bg-slate-400"
                                   }`}
                                 />
-                                {pkg.status}
-                              </span>
+                                <span>{pkg.status}</span>
+                              </button>
                             </td>
 
                             {/* Actions */}
                             <td className="py-3.5 px-4 sm:px-5 text-right">
-                              <div className="inline-flex items-center gap-2">
+                              <div className="inline-flex items-center justify-end gap-2">
                                 {/* Customise Details & Price Button */}
                                 <button
                                   type="button"
@@ -913,18 +943,6 @@ export function CatalogPackagesPage() {
                                   <Edit2 className="w-3.5 h-3.5" />
                                   <span>Customise</span>
                                 </button>
-
-                                {/* Status Transitions */}
-                                {(NEXT_STATUSES[pkg.status] || []).map((next) => (
-                                  <button
-                                    key={next}
-                                    type="button"
-                                    onClick={() => handleTransition(pkg, next)}
-                                    className="px-2 py-1 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                                  >
-                                    → {next}
-                                  </button>
-                                ))}
 
                                 {/* Full Edit Modal */}
                                 <button
@@ -1177,23 +1195,83 @@ export function CatalogPackagesPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                label="Tag Badge (e.g. Heavy (above 750kg), Eco Express, Fast Dispatch)"
-                placeholder="e.g. Heavy (above 750kg)"
-                value={quickPriceEditing.tag || ""}
-                onChange={(e) =>
-                  setQuickPriceEditing({ ...quickPriceEditing, tag: e.target.value })
-                }
-              />
-              <Input
-                label="Duration / ETA (e.g. 30 mins, 12 mins)"
-                placeholder="e.g. 30 mins"
-                value={quickPriceEditing.duration || ""}
-                onChange={(e) =>
-                  setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
-                }
-              />
+            {/* ── Highlight / Popularity Badge Customization Section ── */}
+            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">
+                      Highlight / Popularity Badge
+                    </span>
+                    {quickPriceEditing.tag ? (
+                      <span className="px-2 py-0.5 text-[10px] font-extrabold bg-amber-50 text-amber-800 rounded-full border border-amber-200 shadow-2xs">
+                        Active: {quickPriceEditing.tag}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-500 rounded-full border border-slate-200">
+                        No Badge (Hidden on Service Page)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Click a badge preset or type custom text. If set, it will be displayed on the customer service card. If cleared, no badge is shown.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Select Pills */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {[
+                  { label: "★ Popular", val: "Popular", tone: "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100" },
+                  { label: "📦 Rarely Used", val: "Rarely Used", tone: "bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200" },
+                  { label: "⚡ Best Seller", val: "Best Seller", tone: "bg-indigo-50 text-indigo-800 border-indigo-300 hover:bg-indigo-100" },
+                  { label: "🔥 Trending", val: "Trending", tone: "bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100" },
+                  { label: "✕ None (Clear)", val: "", tone: "bg-white text-slate-600 border-slate-200 hover:bg-slate-50" },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() =>
+                      setQuickPriceEditing({
+                        ...quickPriceEditing,
+                        tag: opt.val,
+                        popular: opt.val === "Popular",
+                      })
+                    }
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      (quickPriceEditing.tag || "") === opt.val
+                        ? "ring-2 ring-indigo-500 shadow-xs " + opt.tone
+                        : opt.tone
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Input */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <Input
+                  label="Custom Badge Text"
+                  placeholder="e.g. Popular, Rarely Used, Most Booked..."
+                  value={quickPriceEditing.tag || ""}
+                  onChange={(e) =>
+                    setQuickPriceEditing({
+                      ...quickPriceEditing,
+                      tag: e.target.value,
+                      popular: e.target.value.toLowerCase().includes("popular"),
+                    })
+                  }
+                />
+                <Input
+                  label="Duration / ETA (e.g. 15 mins, 30 mins)"
+                  placeholder="e.g. 15 mins"
+                  value={quickPriceEditing.duration || ""}
+                  onChange={(e) =>
+                    setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
+                  }
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-slate-100">
