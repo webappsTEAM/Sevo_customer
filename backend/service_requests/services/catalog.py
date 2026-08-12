@@ -119,6 +119,32 @@ def delete_service(service):
 def create_package(data, actor):
     package = Package.objects.create(**data)
     _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.CREATE, actor)
+    try:
+        from logistics.models import ServiceTier, LogisticsCategory
+        svc_slug = getattr(package.service, "slug", "").lower()
+        cat_enum = None
+        if "truck" in svc_slug:
+            cat_enum = LogisticsCategory.TRUCK
+        elif "two-wheeler" in svc_slug or "2-wheeler" in svc_slug:
+            cat_enum = LogisticsCategory.TWO_WHEELER
+        elif "packers" in svc_slug or "mover" in svc_slug:
+            cat_enum = LogisticsCategory.PACKERS_MOVERS
+        if cat_enum:
+            price_to_sync = package.base_price if package.base_price is not None else (package.offer_price or 0)
+            ServiceTier.objects.update_or_create(
+                slug=package.slug,
+                defaults={
+                    "category": cat_enum,
+                    "name": package.name,
+                    "capacity_label": package.tag or "Standard",
+                    "starting_price": price_to_sync,
+                    "description": package.description or "",
+                    "city": "hosur",
+                    "is_active": (package.status == "ACTIVE"),
+                }
+            )
+    except Exception:
+        pass
     return package
 
 
@@ -133,10 +159,30 @@ def update_package(package, data, actor, reason=None):
                     tier = t
                     break
         if tier:
+            fields_to_update = []
             price_to_sync = pkg.base_price if pkg.base_price is not None else pkg.offer_price
-            if price_to_sync is not None:
+            if price_to_sync is not None and tier.starting_price != price_to_sync:
                 tier.starting_price = price_to_sync
-                tier.save(update_fields=["starting_price"])
+                fields_to_update.append("starting_price")
+            if pkg.name and tier.name != pkg.name:
+                tier.name = pkg.name
+                fields_to_update.append("name")
+            if pkg.description is not None and tier.description != pkg.description:
+                tier.description = pkg.description
+                fields_to_update.append("description")
+            if pkg.tag and tier.capacity_label != pkg.tag:
+                tier.capacity_label = pkg.tag
+                fields_to_update.append("capacity_label")
+            if pkg.status:
+                tier_is_active = (pkg.status == "ACTIVE")
+                if tier.is_active != tier_is_active:
+                    tier.is_active = tier_is_active
+                    fields_to_update.append("is_active")
+            if pkg.includes is not None and tier.includes != pkg.includes:
+                tier.includes = pkg.includes
+                fields_to_update.append("includes")
+            if fields_to_update:
+                tier.save(update_fields=fields_to_update)
     except Exception:
         pass
     return pkg
@@ -157,6 +203,19 @@ def transition_package_status(package, new_status, actor, reason=None):
     package.save(update_fields=["status", "updated_at"])
     _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.STATUS_CHANGE, actor,
          field_name="status", old_value=current, new_value=new_status, reason=reason)
+    try:
+        from logistics.models import ServiceTier
+        tier = ServiceTier.objects.filter(slug=package.slug).first()
+        if not tier:
+            for t in ServiceTier.objects.all():
+                if t.slug in package.slug or package.slug in t.slug or t.name.lower() in package.name.lower():
+                    tier = t
+                    break
+        if tier:
+            tier.is_active = (new_status == "ACTIVE")
+            tier.save(update_fields=["is_active"])
+    except Exception:
+        pass
     return package
 
 

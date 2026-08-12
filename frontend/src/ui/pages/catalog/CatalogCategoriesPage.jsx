@@ -64,7 +64,7 @@ export function CatalogCategoriesPage() {
   }
 
   return (
-    <div style={{ animation: "fadeUp 0.4s ease both" }} className="p-6 max-w-5xl mx-auto">
+    <div style={{ animation: "fadeUp 0.4s ease both" }} className="p-4 sm:p-6 lg:p-8 w-full max-w-[1720px] mx-auto space-y-6">
       <ToastBanner toast={toast} />
       <Card
         title="Categories"
