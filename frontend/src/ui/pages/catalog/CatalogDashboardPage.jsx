@@ -50,7 +50,7 @@ export function CatalogDashboardPage() {
   }, [])
 
   return (
-    <div style={{ animation: "fadeUp 0.4s ease both" }} className="p-6 max-w-6xl mx-auto">
+    <div style={{ animation: "fadeUp 0.4s ease both" }} className="p-4 sm:p-6 lg:p-8 w-full max-w-[1720px] mx-auto space-y-6">
       <ToastBanner toast={toast} />
       <h1 className="text-xl font-black text-slate-900 dark:text-white mb-1">Service Catalog</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
@@ -62,11 +62,11 @@ export function CatalogDashboardPage() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            <StatTile label="Categories" value={counts.totalCategories} />
-            <StatTile label="Active Services" value={counts.activeServices} accent="#059669" />
+            <StatTile label="Categories" value={counts.totalCategories} accent="#4F46E5" />
+            <StatTile label="Active Services" value={counts.activeServices} accent="#2563EB" />
             <StatTile label="Inactive Services" value={counts.inactiveServices} accent="#E94560" />
-            <StatTile label="Active Packages" value={counts.activePackages} accent="#059669" />
-            <StatTile label="Active Add-ons" value={counts.activeAddOns} accent="#5d5fef" />
+            <StatTile label="Active Packages" value={counts.activePackages} accent="#3B82F6" />
+            <StatTile label="Active Add-ons" value={counts.activeAddOns} accent="#6366F1" />
           </div>
 
           <Card title="Packages by Status">
