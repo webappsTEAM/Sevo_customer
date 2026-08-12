@@ -12,7 +12,8 @@ import {
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
-import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CATEGORIES as BOOKING_CATEGORIES } from "./BookingPage.jsx"
+import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal } from "./BookingPage.jsx"
+import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -1476,34 +1477,54 @@ export function LandingPage() {
 
               {/* User Profile / Login (Urban Company Style) */}
               {user ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveAccountTab("My Profile")
-                    setShowAccountPortal(true)
-                  }}
-                  className="flex items-center gap-2.5 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
-                >
-                  <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
-                    <User className="w-4 h-4 stroke-[1.75]" />
-                  </div>
-                  <span className="font-semibold text-slate-800">
-                    Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
-                  </span>
-                  <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
-                </button>
+                <div className="flex items-center gap-3">
+                  {user.companyId && user.role !== "customer" && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(routes.dashboard)}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-xs transition-colors cursor-pointer"
+                    >
+                      Dashboard
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveAccountTab("My Profile")
+                      setShowAccountPortal(true)
+                    }}
+                    className="flex items-center gap-2.5 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+                  >
+                    <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                      <User className="w-4 h-4 stroke-[1.75]" />
+                    </div>
+                    <span className="font-semibold text-slate-800">
+                      Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+                  </button>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={goToLogin}
-                  className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
-                >
-                  <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
-                    <User className="w-4 h-4 stroke-[1.75]" />
-                  </div>
-                  <span className="font-semibold text-slate-800">Login / Sign Up</span>
-                  <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate(routes.login)}
+                    className="text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    Staff Login
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goToLogin}
+                    className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+                  >
+                    <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                      <User className="w-4 h-4 stroke-[1.75]" />
+                    </div>
+                    <span className="font-semibold text-slate-800">Login / Sign Up</span>
+                    <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+                  </button>
+                </div>
               )}
             </div>
           </div>

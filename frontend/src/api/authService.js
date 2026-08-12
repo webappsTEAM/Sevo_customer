@@ -128,16 +128,30 @@ export async function apiFetchMe() {
   const timeoutId = setTimeout(() => controller.abort(), 15000)
   try {
     const url = `${API_BASE_URL}/auth/me/`
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       credentials: "include",
       signal: controller.signal,
     })
+
+    // If access token is expired (401), attempt a silent refresh using the refresh cookie
+    if (res.status === 401) {
+      const refreshed = await apiRefreshToken()
+      if (refreshed) {
+        res = await fetch(url, {
+          credentials: "include",
+          signal: controller.signal,
+        })
+      }
+    }
+
     clearTimeout(timeoutId)
     const text = await res.text()
     let data
     try { data = JSON.parse(text) } catch { data = text || null }
     if (!res.ok) {
-      console.warn("apiFetchMe failed with status:", res.status, text)
+      if (res.status !== 401) {
+        console.warn("apiFetchMe failed with status:", res.status, text)
+      }
       return null
     }
     return data

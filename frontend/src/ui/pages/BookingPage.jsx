@@ -21,6 +21,7 @@ import {
 } from "../../api/authService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { routes } from "../routes.js"
+import { CATEGORIES } from "./categoriesData.js"
 import { apiRequest } from "../../api/client.js"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -74,22 +75,7 @@ function TwitterMark(props) {
    ───────────────────────────────────────────────────────────────────────── */
 
 
-export const CATEGORIES = [
-  { id: "cleaning", name: "Home Cleaning", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", desc: "Deep clean & sanitization", rating: "4.8", jobs: "50K+" },
-  { id: "sofa_cleaning", name: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=500&q=80&fit=crop", desc: "Sofa, mattress & carpet", rating: "4.8", jobs: "15K+" },
-  { id: "kitchen_cleaning", name: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&q=80&fit=crop", desc: "Complete kitchen & appliance clean", rating: "4.8", jobs: "20K+" },
-  { id: "bathroom_cleaning", name: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", desc: "Bathroom deep cleaning & subscriptions", rating: "4.8", jobs: "25K+" },
-  { id: "plumbing", name: "Plumbing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop", desc: "Leaks, pipes & fixtures", rating: "4.7", jobs: "30K+" },
-  { id: "electrical", name: "Electrical", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop", desc: "Wiring, panels & lighting", rating: "4.8", jobs: "40K+" },
-  { id: "carpentry", name: "Carpentry", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=500&q=80&fit=crop", desc: "Furniture & wood repairs", rating: "4.6", jobs: "15K+" },
-  { id: "hvac", name: "AC & Heating", image: "/mockups/service_hvac.png", desc: "AC service & installation", rating: "4.9", jobs: "60K+" },
-  { id: "pest_control", name: "Pest Control", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=500&q=80&fit=crop", desc: "Termites, cockroaches & more", rating: "4.7", jobs: "25K+" },
-  { id: "painting", name: "Painting", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&q=80&fit=crop", desc: "Walls, ceilings & textures", rating: "4.6", jobs: "20K+" },
-  { id: "mason", name: "Mason", image: "/mockups/service_building.png", desc: "Brick, plaster & civil work", rating: "4.8", jobs: "12K+" },
-  { id: "appliance_repair", name: "Appliances", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop", desc: "Fridge, washer & oven repairs", rating: "4.8", jobs: "35K+" },
-  { id: "security", name: "Security Systems", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop", desc: "CCTV & alarm systems", rating: "4.7", jobs: "10K+" },
-  { id: "general", name: "General Repair", image: "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=500&q=80&fit=crop", desc: "Handyman & misc tasks", rating: "4.5", jobs: "45K+" },
-]
+// CATEGORIES imported from categoriesData.js above
 
 function openGoogleSignInPopup(onSuccess, onError) {
   const runSignIn = () => {
@@ -548,7 +534,7 @@ export function AddAddressSearchModal({
       const updated = [newEntry, ...filtered].slice(0, 10)
       localStorage.setItem("calservices_recent_locations", JSON.stringify(updated))
       setRecents(updated)
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Debounced geocoding search via Google Places Autocomplete
@@ -664,7 +650,7 @@ export function AddAddressSearchModal({
         const parsed = JSON.parse(stored)
         if (Array.isArray(parsed) && parsed.length > 0) return parsed
       }
-    } catch (e) {}
+    } catch (e) { }
     return []
   })
 
@@ -5807,9 +5793,8 @@ function QuickCommerceCartCheckout({
                           setSelectedAddressId(addr.id)
                           setIsAddressScreenOpen(false)
                         }}
-                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-xs ${
-                          isSelected ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200/90 hover:border-slate-300"
-                        }`}
+                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-xs ${isSelected ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200/90 hover:border-slate-300"
+                          }`}
                       >
                         <div className="flex items-start gap-3">
                           <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
@@ -5874,9 +5859,8 @@ function QuickCommerceCartCheckout({
                           key={t}
                           type="button"
                           onClick={() => setNewAddressType(t)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${
-                            newAddressType === t ? "bg-emerald-600 text-white border-emerald-600" : "bg-slate-50 text-slate-700 border-slate-200"
-                          }`}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${newAddressType === t ? "bg-emerald-600 text-white border-emerald-600" : "bg-slate-50 text-slate-700 border-slate-200"
+                            }`}
                         >
                           {t}
                         </button>
@@ -5933,7 +5917,7 @@ function QuickCommerceCartCheckout({
               type="button"
               onClick={() => {
                 if (navigator.share) {
-                  navigator.share({ title: "My Vegetables Cart", url: window.location.href }).catch(() => {})
+                  navigator.share({ title: "My Vegetables Cart", url: window.location.href }).catch(() => { })
                 }
               }}
               className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 cursor-pointer bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200/60 transition-colors"
@@ -6122,11 +6106,10 @@ function QuickCommerceCartCheckout({
                           setIsCustomTipOpen(t.val === "custom")
                         }
                       }}
-                      className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                        isSelected
+                      className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${isSelected
                           ? "bg-emerald-50 border-emerald-600 text-emerald-800 shadow-2xs"
                           : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
-                      }`}
+                        }`}
                     >
                       <span>{t.icon}</span>
                       <span>{t.label}</span>
@@ -8484,7 +8467,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
               {/* Middle Column - Service Choices Cards */}
               <div className="uc-paint-middle-col">
                 <div className="uc-paint-choices">
-                  
+
 
 
                   <h3 className="uc-paint-section-title">Painting choices for your home</h3>
@@ -9026,19 +9009,19 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                   const w1 = (r1 / total) * 100;
 
                   const serviceId = activeDetailService.id;
-                  
+
                   // Define category-specific data
                   let startingRateText = "";
                   let subtitleText = "Final price depends on area, paint type & site inspection";
                   let viewListText = "View Price List →";
                   let hideListText = "Hide Price List ↑";
                   let tableHeaderType = "Paint Type";
-                  
+
                   let priceList = [];
                   let paintTypes = [];
                   let chooseTypeTitle = "🎨 Choose Paint Type";
                   let chooseTypePlaceholder = "Select a painting area above to choose paint types & see exact price estimate.";
-                  
+
                   if (serviceId === "paint-interior") {
                     startingRateText = "Starting from ₹7/sq.ft";
                     subtitleText = "Final price depends on area, paint type & site inspection";
@@ -9217,7 +9200,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                 <div style={{ fontSize: '0.9rem', fontWeight: 900, color: '#0f172a' }}>💰 {startingRateText}</div>
                                 <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>{subtitleText}</div>
                               </div>
-                              <button 
+                              <button
                                 onClick={() => setShowPriceList(!showPriceList)}
                                 style={{
                                   background: 'none', border: 'none', color: '#7C3AED', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px'
@@ -9334,7 +9317,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                   {paintTypes.map(paint => {
                                     const isSelected = selectedPaintType === paint.id;
                                     return (
-                                      <div 
+                                      <div
                                         key={paint.id}
                                         onClick={() => setSelectedPaintType(paint.id)}
                                         style={{
@@ -9545,7 +9528,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                   const isExpanded = expandedFaq === idx;
                                   return (
                                     <div key={idx} style={{ border: '1.5px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
-                                      <div 
+                                      <div
                                         onClick={() => setExpandedFaq(isExpanded ? null : idx)}
                                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none' }}
                                       >
@@ -10904,11 +10887,11 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                               <div style={{
                                 width: '22px', height: '22px', borderRadius: '50%',
-                                background: stepColors[i % stepColors.length], 
+                                background: stepColors[i % stepColors.length],
                                 display: 'flex', alignItems: 'center',
-                                justifyContent: 'center', fontSize: '0.7rem', fontWeight: 900, 
+                                justifyContent: 'center', fontSize: '0.7rem', fontWeight: 900,
                                 color: stepTextColors[i % stepTextColors.length],
-                                border: `1.5px solid ${stepBorders[i % stepBorders.length]}`, 
+                                border: `1.5px solid ${stepBorders[i % stepBorders.length]}`,
                                 boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
                                 zIndex: 2
                               }}>
@@ -11027,7 +11010,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                             const isExpanded = expandedFaq === idx;
                             return (
                               <div key={idx} style={{ border: '1.5px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
-                                <div 
+                                <div
                                   onClick={() => setExpandedFaq(isExpanded ? null : idx)}
                                   style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none' }}
                                 >
@@ -15997,10 +15980,10 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                             const isBasic = service.id === "occ-basic";
                             const isDeep = service.id === "occ-deep";
                             const isExpanded = isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true);
-                            const displayIncludes = (isBasic || isDeep) && !isExpanded 
-                              ? service.includes.slice(0, 3) 
+                            const displayIncludes = (isBasic || isDeep) && !isExpanded
+                              ? service.includes.slice(0, 3)
                               : service.includes;
-                            
+
                             return (
                               <>
                                 {displayIncludes.map((item, i) => {
@@ -16013,7 +15996,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                                         {isLastOfThree && (
                                           <>
                                             {" "}
-                                            <span 
+                                            <span
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 if (isBasic) setIsBasicExpanded(true);
@@ -16031,7 +16014,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                                 })}
                                 {(isBasic || isDeep) && isExpanded && (
                                   <div className="text-left mt-1 pl-3">
-                                    <span 
+                                    <span
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (isBasic) setIsBasicExpanded(false);

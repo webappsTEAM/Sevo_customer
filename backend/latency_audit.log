@@ -1,0 +1,29 @@
+==================================================
+ CALSERVICE LATENCY & PERFORMANCE AUDIT REPORT
+ Timestamp: 2026-08-11 17:10:34
+==================================================
+
+[1. Database Connection Configuration]
+  Engine:       django.db.backends.postgresql
+  Host:         aws-0-ap-southeast-2.pooler.supabase.com
+  Port:         5432
+  CONN_MAX_AGE: 60s
+
+[2. Database Query & Connection Latency Benchmarks]
+  Initial DB Query Latency (Connection Setup + Query): 1869.28 ms
+  Reused DB Connection Latency (Persistent Connection): 253.85 ms
+  Batch 10 Queries Total Duration:                     2542.89 ms
+  Average Query Latency over Persistent Connection:    254.29 ms
+
+[3. API Endpoint Request Latency & Query Count Analysis]
+  GET  /api/auth/me/                  -> Status: 401 | Duration:  429.20 ms | SQL Queries: 0
+  GET  /api/company/list/             -> Status: 404 | Duration:   21.26 ms | SQL Queries: 0
+  GET  /api/service-requests/         -> Status: 404 | Duration:   12.58 ms | SQL Queries: 0
+  GET  /api/tasks/                    -> Status: 404 | Duration:   12.80 ms | SQL Queries: 0
+
+[4. Diagnostics Summary & Recommendations]
+  [PASS] Direct connection pooler (5432) active.
+  [PASS] Persistent connection pooling enabled (CONN_MAX_AGE=60s).
+  Average Single Query Overhead: 254.29 ms
+==================================================
+

@@ -30,6 +30,17 @@ class CookieJWTAuthentication(JWTAuthentication):
         
         return user, validated
 
+    def get_user(self, validated_token):
+        user_id = validated_token.get("user_id")
+        if not user_id:
+            return None
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            return User.objects.select_related('company').get(id=user_id)
+        except User.DoesNotExist:
+            return None
+
     def _authenticate_credentials(self, request):
         # 1. Try the Authorization header first (standard simplejwt path)
         header = self.get_header(request)

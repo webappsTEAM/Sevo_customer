@@ -182,8 +182,15 @@ class CatalogCategoryListView(APIView):
                 image="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=800&q=80&fit=crop"
             )
             
-        cats = CatalogCategory.objects.all().order_by('name')
-        data = CatalogCategorySerializer(cats, many=True).data
+        from django.core.cache import cache
+        data = cache.get("catalog_categories_list")
+        if data is None:
+            try:
+                cats = CatalogCategory.objects.all().order_by('name')
+                data = CatalogCategorySerializer(cats, many=True).data
+                cache.set("catalog_categories_list", data, timeout=600)
+            except Exception:
+                data = []
         return Response({"success": True, "data": data})
 
 
@@ -193,26 +200,34 @@ class CatalogServiceListView(APIView):
         from .models import CatalogService
         from .serializers import CatalogServiceSerializer
         from django.db import connection
-        cat_id = request.GET.get('category_id')
-        qs = CatalogService.objects.all().order_by('name')
+        from django.core.cache import cache
+
+        cat_id = request.GET.get('category_id', '')
+        cache_key = f"catalog_services_list_{cat_id}"
+        cached_res = cache.get(cache_key)
+        if cached_res is not None:
+            return Response(cached_res)
+
+        qs = CatalogService.objects.select_related('category').all().order_by('name')
         if cat_id:
             qs = qs.filter(category_id=cat_id)
         data = CatalogServiceSerializer(qs, many=True).data
-        
-        # Determine currency from company tenant region
+
         tenant = getattr(request, 'tenant', None) or getattr(connection, 'tenant', None)
         currency = "USD"
         currency_symbol = "$"
         if tenant and getattr(tenant, 'region', None):
             currency = tenant.region.currency
             currency_symbol = tenant.region.currency_symbol
-            
-        return Response({
+
+        res_payload = {
             "success": True, 
             "data": data,
             "currency": currency,
             "currency_symbol": currency_symbol
-        })
+        }
+        cache.set(cache_key, res_payload, timeout=600)
+        return Response(res_payload)
 
 class BookingCreateView(APIView):
     """
