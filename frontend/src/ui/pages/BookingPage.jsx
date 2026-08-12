@@ -6368,12 +6368,15 @@ function StepWorkflowCheckout({
   const displayCategoryTitle = useMemo(() => {
     if (cart && cart.length > 0) {
       if (cart[0].categoryName) return cart[0].categoryName;
-      const first = cart[0].name.toLowerCase();
-      if (first.includes("washing") || first.includes("fridge") || first.includes("appliance")) return "Appliance Service & Repair";
-      if (first.includes("ac") || first.includes("foam") || first.includes("jet") || first.includes("heating")) return "AC & Heating";
-      if (first.includes("clean") || first.includes("sofa") || first.includes("kitchen")) return "Home Cleaning Services";
+      const first = (cart[0].id + " " + cart[0].name + " " + (cart[0].category || "")).toLowerCase();
+      if (first.includes("carp") || first.includes("lock") || first.includes("handle") || first.includes("door") || first.includes("furniture") || first.includes("hinge")) return "Carpentry Services";
+      if (first.includes("elec") || first.includes("switch") || first.includes("socket") || first.includes("fan") || first.includes("mcb") || first.includes("wire")) return "Electrical Services";
+      if (first.includes("plumb") || first.includes("tap") || first.includes("drain") || first.includes("leak") || first.includes("mixer")) return "Plumbing Services";
+      if (first.includes("washing") || first.includes("fridge") || first.includes("refrigerator") || first.includes("appliance")) return "Appliance Service & Repair";
+      if (first.includes("ac") || first.includes("foam") || first.includes("jet") || first.includes("heating") || first.includes("hvac")) return "AC & Heating";
+      if (first.includes("clean") || first.includes("sofa") || first.includes("kitchen") || first.includes("bath")) return "Home Cleaning Services";
       if (first.includes("paint") || first.includes("waterproof")) return "Painting & Waterproofing";
-      if (first.includes("plumb") || first.includes("drain") || first.includes("tap")) return "Plumbing Services";
+      if (first.includes("mason") || first.includes("tile") || first.includes("brick")) return "Masonry Services";
     }
     if (category?.name && category.name !== "General Service") return category.name;
     return "Services Added";
@@ -6921,7 +6924,54 @@ function StepWorkflowCheckout({
         />
       )}
     </div>
-  )
+  );
+}
+
+export function resolveCategoryFromCart(currentCategory, cartItems) {
+  if (cartItems && cartItems.length > 0) {
+    const first = cartItems[0];
+    const catName = (first.categoryName || first.category || first.catId || "").toLowerCase();
+    const idName = (first.id || "").toLowerCase();
+    const itemName = (first.name || "").toLowerCase();
+    const combined = `${catName} ${idName} ${itemName}`;
+
+    if (combined.includes("carp") || combined.includes("lock") || combined.includes("handle") || combined.includes("door") || combined.includes("furniture") || combined.includes("hinge") || combined.includes("wood") || combined.includes("drawer")) {
+      return { id: "carpentry", name: "Carpentry", slug: "carpentry" };
+    }
+    if (combined.includes("elec") || combined.includes("switch") || combined.includes("socket") || combined.includes("fan") || combined.includes("mcb") || combined.includes("wire") || combined.includes("inverter") || combined.includes("geyser") || combined.includes("light")) {
+      return { id: "electrical", name: "Electrical", slug: "electrical" };
+    }
+    if (combined.includes("plumb") || combined.includes("tap") || combined.includes("mixer") || combined.includes("drain") || combined.includes("pipe") || combined.includes("toilet") || combined.includes("flush") || combined.includes("sink") || combined.includes("leak") || combined.includes("faucet")) {
+      return { id: "plumbing", name: "Plumbing", slug: "plumbing" };
+    }
+    if (combined.includes("hvac") || combined.includes("ac") || combined.includes("foam") || combined.includes("jet") || combined.includes("heating") || combined.includes("air conditioner")) {
+      return { id: "ac", name: "AC & Heating", slug: "ac" };
+    }
+    if (combined.includes("paint") || combined.includes("waterproof") || combined.includes("wall")) {
+      return { id: "painting", name: "Painting", slug: "painting" };
+    }
+    if (combined.includes("mason") || combined.includes("tile") || combined.includes("brick") || combined.includes("grout") || combined.includes("civil")) {
+      return { id: "mason", name: "Masonry", slug: "mason" };
+    }
+    if (combined.includes("appliance") || combined.includes("fridge") || combined.includes("refrigerator") || combined.includes("washing") || combined.includes("tv") || combined.includes("microwave") || combined.includes("oven") || combined.includes("purifier") || combined.includes("ro")) {
+      return { id: "appliance_repair", name: "Appliance Repair", slug: "appliance_repair" };
+    }
+    if (combined.includes("pest") || combined.includes("bedbug") || combined.includes("cockroach") || combined.includes("termite")) {
+      return { id: "pest_control", name: "Pest Control", slug: "pest_control" };
+    }
+    if (combined.includes("goods") || combined.includes("transport") || combined.includes("truck") || combined.includes("mover") || combined.includes("packer")) {
+      return { id: "goods_transport", name: "Goods & Transport", slug: "goods_transport" };
+    }
+    if (combined.includes("clean") || combined.includes("sofa") || combined.includes("bath") || combined.includes("kitchen") || combined.includes("house")) {
+      return { id: "cleaning", name: "Cleaning", slug: "cleaning" };
+    }
+  }
+
+  if (currentCategory && currentCategory.name) {
+    return currentCategory;
+  }
+
+  return { id: "carpentry", name: "Carpentry", slug: "carpentry" };
 }
 
 export function BookingPage() {
@@ -6948,7 +6998,7 @@ export function BookingPage() {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [error, setError] = useState(null)
   const [successData, setSuccessData] = useState(null)
-  const [category, setCategory] = useState(incomingCategory || null)
+  const [category, setCategory] = useState(() => incomingCategory || (incomingCart?.length ? resolveCategoryFromCart(null, incomingCart) : null))
   const [cart, setCart] = useState(incomingCart || [])
 
   // Scroll to the top of the page when checkout page mounts or step changes
@@ -7432,27 +7482,8 @@ export function BookingPage() {
                 loading={loading}
                 error={error}
                 onBack={() => {
-                  let activeCat = category;
-                  if (!activeCat && cart && cart.length > 0) {
-                    const first = cart[0];
-                    const catName = first.categoryName || first.name || "";
-                    const nameLower = catName.toLowerCase();
-                    if (nameLower.includes("ac") || nameLower.includes("foam") || nameLower.includes("heating") || nameLower.includes("appliance") || nameLower.includes("fridge") || nameLower.includes("washing")) {
-                      activeCat = { id: "ac", name: "AC & Heating", slug: "ac" };
-                    } else if (nameLower.includes("electric") || nameLower.includes("switch") || nameLower.includes("fan") || nameLower.includes("mcb") || nameLower.includes("wire")) {
-                      activeCat = { id: "electrical", name: "Electrical", slug: "electrical" };
-                    } else if (nameLower.includes("paint") || nameLower.includes("waterproof")) {
-                      activeCat = { id: "painting", name: "Painting", slug: "painting" };
-                    } else if (nameLower.includes("mason") || nameLower.includes("brick") || nameLower.includes("tile")) {
-                      activeCat = { id: "mason", name: "Masonry", slug: "mason" };
-                    } else if (nameLower.includes("plumb") || nameLower.includes("tap") || nameLower.includes("drain")) {
-                      activeCat = { id: "plumbing", name: "Plumbing", slug: "plumbing" };
-                    } else {
-                      activeCat = { id: "cleaning", name: "Cleaning", slug: "cleaning" };
-                    }
-                    setCategory(activeCat);
-                  }
-
+                  let activeCat = resolveCategoryFromCart(category, cart);
+                  setCategory(activeCat);
                   if (activeCat) {
                     setShowPackageModal(true);
                   } else {
@@ -11240,7 +11271,8 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, isFullPage = false }) {
   const rawCatKey = (category?.id || category?.slug || "cleaning").toLowerCase();
   let normalizedKey = "cleaning";
-  if (["hvac", "ac", "ac_appliance", "appliance_repair", "appliance"].some(k => rawCatKey.includes(k))) normalizedKey = "hvac";
+  if (["hvac", "ac"].some(k => rawCatKey.includes(k))) normalizedKey = "hvac";
+  else if (["appliance", "appliance_repair"].some(k => rawCatKey.includes(k))) normalizedKey = "appliance_repair";
   else if (["electrical", "electricity", "elec"].some(k => rawCatKey.includes(k))) normalizedKey = "electrical";
   else if (["plumbing", "plumber", "plum"].some(k => rawCatKey.includes(k))) normalizedKey = "plumbing";
   else if (["carpentry", "carpenter", "carp"].some(k => rawCatKey.includes(k))) normalizedKey = "carpentry";
@@ -11249,13 +11281,241 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   else if (["pest", "pest_control"].some(k => rawCatKey.includes(k))) normalizedKey = "pest_control";
   else if (["goods", "transport", "mini_truck", "truck"].some(k => rawCatKey.includes(k))) normalizedKey = "goods_transport";
 
+  const EXTRA_SERVICES_BY_SUBCATEGORY = {
+    "AC Service & Repair": [
+      { id: "ext-ac-srv-1", name: "Anti-Rust Protective Coil Coating", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Shields AC outdoor & indoor coils from atmospheric oxidation & gas leaks." },
+      { id: "ext-ac-srv-2", name: "AC Gas Leak Audit & Top-Up", price: 499, origPrice: 799, duration: "30 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Nitrogen pressure leak audit and Freon gas top-up." },
+      { id: "ext-ac-srv-3", name: "Foam Filter Deep Sanitization", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Anti-bacterial foam wash for AC filters removing 99% allergens." },
+      { id: "ext-ac-srv-4", name: "Drain Pipe Flushing & De-clog", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "High pressure water jet flushing to stop water leakage." }
+    ],
+    "AC Installation": [
+      { id: "ext-ac-inst-1", name: "Heavy-Duty Wall Bracket Kit", price: 349, origPrice: 499, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop", description: "Rust-resistant powder coated metal brackets for outdoor unit safety." },
+      { id: "ext-ac-inst-2", name: "Copper Pipe Extension (per meter)", price: 299, origPrice: 449, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Insulated 100% pure copper piping extension with brass flare nuts." },
+      { id: "ext-ac-inst-3", name: "Outdoor Unit Anti-Vibration Rubber Pads", price: 149, origPrice: 249, duration: "10 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Dampening rubber pads to eliminate compressor vibration noise." }
+    ],
+    "AC Cleaning": [
+      { id: "ext-ac-cln-1", name: "Coil Anti-Bacterial Sanitizer Spray", price: 149, origPrice: 249, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Kills 99.9% airborne bacteria & viruses in cooling fins." },
+      { id: "ext-ac-cln-2", name: "Heavy Water Jet Outdoor Coil Flush", price: 249, origPrice: 399, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop", description: "High pressure water jet removal of mud & leaves from outdoor unit." },
+      { id: "ext-ac-cln-3", name: "Drain Pipe Anti-Mold Flushing Gel", price: 129, origPrice: 199, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Enzymatic gel flush to prevent slime buildup in drain line." }
+    ],
+    "AC Gas & Cooling": [
+      { id: "ext-ac-gas-1", name: "Nitrogen High Pressure Leak Test", price: 399, origPrice: 599, duration: "30 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "300 PSI nitrogen holding pressure test to detect micro leaks." },
+      { id: "ext-ac-gas-2", name: "Compressor Synthetic Oil Top-Up", price: 299, origPrice: 449, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop", description: "POE/PAG synthetic oil refill for smooth compressor piston stroke." },
+      { id: "ext-ac-gas-3", name: "Deep Vacuum Pump Moisture Evacuation", price: 249, origPrice: 399, duration: "20 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Two-stage vacuum pump evacuation down to 500 microns." }
+    ],
+    "AC Maintenance": [
+      { id: "ext-ac-mnt-1", name: "Voltage & Current Surge Protection Check", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Verifies safe running amperage & stabilizer voltage output." },
+      { id: "ext-ac-mnt-2", name: "Blower Wheel Balance Alignment", price: 199, origPrice: 299, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Eliminates blower wobbling & fan motor strain." }
+    ],
+    "AC Parts & Repair": [
+      { id: "ext-ac-prt-1", name: "Heavy Duty Dual Run Capacitor 45uF", price: 349, origPrice: 499, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "High temperature metalized film capacitor for reliable compressor start." },
+      { id: "ext-ac-prt-2", name: "PCB Relay & Microcontroller Soldering", price: 499, origPrice: 799, duration: "30 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Precision PCB solder repair for display error codes & relay trips." }
+    ],
+    "Washing Machine Service & Repair": [
+      { id: "ext-wm-srv-1", name: "Drum Anti-Limescale Descaling Pack", price: 149, origPrice: 249, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Removes tough limescale buildup & restores washing efficiency." },
+      { id: "ext-wm-srv-2", name: "Inlet Water Filter Adapter Fitting", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Filters hard water impurities before entering machine drum." },
+      { id: "ext-wm-srv-3", name: "High-Pressure Outlet Hose Replacement", price: 249, origPrice: 399, duration: "20 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", description: "Flexible reinforced corrugated drain pipe." }
+    ],
+    "Washing Machine Installation": [
+      { id: "ext-wm-inst-1", name: "Anti-Vibration Heavy Duty Rubber Feet (Set of 4)", price: 299, origPrice: 499, duration: "10 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Shock absorbing rubber pads to prevent machine floor walking & noise." },
+      { id: "ext-wm-inst-2", name: "Multi-Thread Brass Tap Adapter Fit", price: 199, origPrice: 299, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Universal brass quick connector for washing machine tap." },
+      { id: "ext-wm-inst-3", name: "Waterproof Dust Cover (Top/Front Load)", price: 349, origPrice: 599, duration: "5 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Heavy duty zip cover protecting machine body from dust & rain." }
+    ],
+    "Washing Machine Cleaning": [
+      { id: "ext-wm-cln-1", name: "Enzymatic Tub Sanitizing Powder (2-Pack)", price: 199, origPrice: 349, duration: "10 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Kills 99.9% mold spores & bacteria trapped behind outer tub." },
+      { id: "ext-wm-cln-2", name: "Rubber Door Gasket Anti-Mold Spray", price: 149, origPrice: 249, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Protective silicone spray preventing black mold spots on rubber bellow." }
+    ],
+    "Washing Machine Water & Drainage": [
+      { id: "ext-wm-wtr-1", name: "Magnesium Hard Water Conditioner Filter", price: 499, origPrice: 799, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Neutralizes mineral salts to protect heater coil & keep clothes soft." },
+      { id: "ext-wm-wtr-2", name: "Stainless Steel Hose Clamp Tightener", price: 99, origPrice: 199, duration: "5 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", description: "Rust-proof worm drive clamp securing drain hose joint." }
+    ],
+    "Washing Machine Motor & Spin": [
+      { id: "ext-wm-mtr-1", name: "Heavy Metal Start Capacitor 10uF/12uF", price: 249, origPrice: 399, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "High stability motor start capacitor for powerful spin torque." },
+      { id: "ext-wm-mtr-2", name: "High-Heat Synthetic Shaft Grease Coat", price: 149, origPrice: 249, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Water-resistant lithium grease for spin bearing protection." }
+    ],
+    "Washing Machine Electrical & PCB": [
+      { id: "ext-wm-elec-1", name: "Main Board Moisture-Proof Conformal Coating", price: 299, origPrice: 449, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Transparent protective lacquer spray shielding PCB from humidity & insects." },
+      { id: "ext-wm-elec-2", name: "16A Heavy Duty Power Socket & Plug", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Molded 3-pin 16A plug replacement for safe electrical load." }
+    ],
+    "Refrigerator & Fridge": [
+      { id: "ext-ref-1", name: "Door Gasket Antimicrobial Seal Clean", price: 199, origPrice: 299, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Deep sanitization of rubber door seals to eliminate mold & air leaks." },
+      { id: "ext-ref-2", name: "Condenser Coil Dust Cleaning", price: 149, origPrice: 249, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Vacuuming coil dust to boost cooling & cut electricity usage." },
+      { id: "ext-ref-3", name: "Fridge Deodorizer & Odor Absorber Pack", price: 99, origPrice: 199, duration: "5 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Activated carbon filter for odor elimination." }
+    ],
+    "Microwave & Purifier": [
+      { id: "ext-micro-1", name: "Water Purifier Sediment Pre-Filter Cartridge", price: 249, origPrice: 399, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Spun polypropylene pre-filter replacing blocked sediment cartridge." },
+      { id: "ext-micro-2", name: "Microwave Turntable Glass Polish & Clean", price: 119, origPrice: 199, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Removing burnt oil grease & glass tray polishing." },
+      { id: "ext-micro-3", name: "RO Alkaline Booster Mineral Cartridge", price: 399, origPrice: 599, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Enriches purified drinking water with essential minerals & pH balance." }
+    ],
+    "TV Service & Repair": [
+      { id: "ext-tv-srv-1", name: "Heavy Duty Swivel TV Wall Bracket (32\"-65\")", price: 599, origPrice: 899, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop", description: "Heavy gauge steel dual arm swivel mount with 180° rotation & tilt." },
+      { id: "ext-tv-srv-2", name: "HDMI 4K Braided High-Speed Cable (2M)", price: 299, origPrice: 499, duration: "5 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "24K gold plated connectors for crystal clear 4K HDR video signal." },
+      { id: "ext-tv-srv-3", name: "TV Surge Protector Plug & Voltage Guard", price: 399, origPrice: 599, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Protects TV motherboard from sudden voltage spikes & lightning surges." }
+    ],
+    "TV Installation & Setup": [
+      { id: "ext-tv-inst-1", name: "Appliance Wire PVC Trunk Casing (per meter)", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Conceals TV power & HDMI cables neatly along the wall." },
+      { id: "ext-tv-inst-2", name: "Wall Anchor Bolt & Spacer Heavy Pack", price: 199, origPrice: 299, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop", description: "Heavy duty metallic wall plugs for hollow brick & drywall mount." }
+    ],
+    "TV Screen & Display": [
+      { id: "ext-tv-scr-1", name: "Display Screen Cleaner & Microfiber Cloth Kit", price: 149, origPrice: 249, duration: "5 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop", description: "Anti-static screen spray & ultra-soft lint-free microfiber cloth." },
+      { id: "ext-tv-scr-2", name: "Acrylic Screen Protector Guard (55\")", price: 1299, origPrice: 1999, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop", description: "Clear shatterproof acrylic guard shielding TV panel from toy impacts." }
+    ],
+    "TV Sound & Speaker": [
+      { id: "ext-tv-snd-1", name: "Optical Audio TOSLINK Fiber Cable (1.5M)", price: 249, origPrice: 399, duration: "5 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop", description: "High-grade fiber optic cable for lossless 5.1 surround sound output." }
+    ],
+    "Switches & Sockets": [
+      { id: "ext-sw-1", name: "Heavy Appliance 16A Modular Socket Upgrade", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Heavy duty 16A socket replacement for AC, Geyser & Refrigerator." },
+      { id: "ext-sw-2", name: "Voltage & Earthing Multi-Meter Test", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Check earthing safety, neutral leakage & voltage fluctuations." },
+      { id: "ext-sw-3", name: "Fire-Retardant Switch Box Casing", price: 129, origPrice: 199, duration: "10 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop", description: "Insulated backplate fitting to prevent internal sparking." }
+    ],
+    "Fan & Lighting": [
+      { id: "ext-fan-1", name: "Heavy Duty Fan Capacitor Replacement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop", description: "Increases ceiling fan RPM speed by replacing worn-out capacitor." },
+      { id: "ext-fan-2", name: "False Ceiling Spot Light Fixture Fit", price: 199, origPrice: 299, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Spring clip LED spotlight installation in GYP/POP ceiling." },
+      { id: "ext-fan-3", name: "Fan Speed Regulator Knob Polish", price: 119, origPrice: 199, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop", description: "Smooth stepless speed regulator knob replacement." }
+    ],
+    "MCB & Wiring": [
+      { id: "ext-mcb-1", name: "Double Pole MCB Isolator Upgrade", price: 299, origPrice: 449, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Main distribution box isolator switch replacement for electrical safety." },
+      { id: "ext-mcb-2", name: "Main DB Panel Thermal Scan & Tightening", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Terminal lug tightening to prevent electrical fire & wire melting." },
+      { id: "ext-mcb-3", name: "Heavy Load Copper Wiring Run (per meter)", price: 199, origPrice: 299, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "2.5mm / 4.0mm flame retardant copper wire laying in PVC casing." }
+    ],
+    "Inverter & Heavy Appliance": [
+      { id: "ext-inv-1", name: "Inverter Battery Distilled Water Top-Up", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Pure de-ionized battery water filling for maximum battery life." },
+      { id: "ext-inv-2", name: "Battery Terminal Anti-Corrosion Grease Coating", price: 99, origPrice: 199, duration: "10 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", description: "Petroleum jelly terminal coat to stop acid sulphate buildup." },
+      { id: "ext-inv-3", name: "Heavy Load Changeover Switch Installation", price: 399, origPrice: 599, duration: "30 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Manual / Automatic mains-to-inverter changeover switch setup." }
+    ],
+    "Taps & Mixers": [
+      { id: "ext-tap-1", name: "Tap Spout Aerator Replacement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", description: "Water saving aerator fitting for smooth foam spray." },
+      { id: "ext-tap-2", name: "Brass Spindle Core Valve Replacement", price: 199, origPrice: 299, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Replaces worn out internal brass tap spindle to stop dripping." },
+      { id: "ext-tap-3", name: "Teflon Thread Tape Leak Seal", price: 99, origPrice: 199, duration: "10 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Multi-wrap thread tape seal on pipe joints." }
+    ],
+    "Tap & Mixer": [
+      { id: "ext-tap-1", name: "Tap Spout Aerator Replacement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", description: "Water saving aerator fitting for smooth foam spray." },
+      { id: "ext-tap-2", name: "Brass Spindle Core Valve Replacement", price: 199, origPrice: 299, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Replaces worn out internal brass tap spindle to stop dripping." },
+      { id: "ext-tap-3", name: "Teflon Thread Tape Leak Seal", price: 99, origPrice: 199, duration: "10 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Multi-wrap thread tape seal on pipe joints." }
+    ],
+    "Toilet": [
+      { id: "ext-wc-1", name: "Flush Tank Float Valve Replacement", price: 249, origPrice: 399, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Automatic water level shut-off valve to stop continuous tank overflow." },
+      { id: "ext-wc-2", name: "Jet Spray Chrome Flexible Hose Replacement", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", description: "Stainless steel braided 1.2m health faucet hose pipe." }
+    ],
+    "Basin & Sink": [
+      { id: "ext-bs-1", name: "Waste Coupling Rubber Seal Fit", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "High density rubber gasket for leak-free basin coupling joint." }
+    ],
+    "Bath Fittings": [
+      { id: "ext-bf-1", name: "Angle Valve Ceramic Disc Cartridge Replacement", price: 199, origPrice: 299, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Smooth 90-degree turn ceramic disc cartridge replacement for angle valves." }
+    ],
+    "Water Tank & Motor": [
+      { id: "ext-wt-1", name: "Water Level Controller Auto Sensor Float Fit", price: 349, origPrice: 549, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Automatic magnetic float switch sensor to prevent water tank overflow." }
+    ],
+    "Drainage": [
+      { id: "ext-drn-1", name: "Enzymatic Drain Gel De-clogging Treatment", price: 199, origPrice: 299, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Enzymatic gel application to dissolve grease & hair clogs." }
+    ],
+    "Water Filter": [
+      { id: "ext-wf-1", name: "Pre-Filter Housing Spun Candle Replacement", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "5 micron PP spun candle replacement for sediment pre-filter." }
+    ],
+    "Grouting": [
+      { id: "ext-gr-1", name: "Tile Joint Mold Inhibitor Spray", price: 149, origPrice: 249, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Anti-fungal spray sealing tile grout lines against black mold." }
+    ],
+    "Plumber On-Demand": [
+      { id: "ext-od-1", name: "Plumbing Pressure Diagnostic Scan", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", description: "Digital pressure gauge test to diagnose low water pressure points." }
+    ],
+    "Drainage & Clog": [
+      { id: "ext-drn-1", name: "Enzymatic Drain Gel De-clogging Treatment", price: 199, origPrice: 299, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Enzymatic gel application to dissolve grease & hair clogs." },
+      { id: "ext-drn-2", name: "Bathroom Trap Anti-Odor Seal Flap", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", description: "One-way silicone drain valve preventing cockroach & foul odor entry." },
+      { id: "ext-drn-3", name: "Kitchen Sink Pipe Degreaser Jet Flush", price: 249, origPrice: 399, duration: "25 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Flushes accumulated food sludge from kitchen sink drain line." }
+    ],
+    "Toilet & Flush Tank": [
+      { id: "ext-wc-1", name: "Flush Tank Float Valve Replacement", price: 249, origPrice: 399, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Automatic water level shut-off valve to stop continuous tank overflow." },
+      { id: "ext-wc-2", name: "Jet Spray Chrome Flexible Hose Replacement", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", description: "Stainless steel braided 1.2m health faucet hose pipe." },
+      { id: "ext-wc-3", name: "Toilet Seat Sanitizing Spray & Hinge Fix", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Tightening wobbly toilet seat bolts & deep sanitizing." }
+    ],
+    "Water Heater & Tank": [
+      { id: "ext-gys-1", name: "Geyser Thermostat & Heating Element Audit", price: 249, origPrice: 399, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Multi-meter element health check & thermostat temperature calibration." },
+      { id: "ext-gys-2", name: "Geyser Safety Valve Pressure Release Pipe", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Multi-function safety valve fitting to release steam overpressure." },
+      { id: "ext-gys-3", name: "High Pressure Steel Braided Inlet Hose Pipe", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", description: "Hot-water resistant heavy duty connection hose." }
+    ],
+    "Lock & Handle": [
+      { id: "ext-lck-1", name: "High-Security Door Mortise Latch Lubrication", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Graphite powder lubrication for sticky door keys & latches." },
+      { id: "ext-lck-2", name: "Brass Cabinet Handle & Screw Reinforcement", price: 119, origPrice: 199, duration: "10 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Reinforcing loose drawer knobs & cabinet handles." },
+      { id: "ext-lck-3", name: "Main Door Magic Eye / Peephole Installation", price: 199, origPrice: 299, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Wide-angle 180 degree optical glass door viewer drill & fitting." }
+    ],
+    "Cupboard & Drawer": [
+      { id: "ext-cup-1", name: "Shelf Support Stud Replacement", price: 99, origPrice: 199, duration: "10 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Heavy duty metallic shelf support pegs for cupboard panels." }
+    ],
+    "Kitchen Fittings": [
+      { id: "ext-kit-1", name: "Soft-Close Buffer Damper Fit", price: 149, origPrice: 249, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Silent rubber soft-close plunger for quiet kitchen cabinet shutting." }
+    ],
+    "Hangers & Drying Solutions": [
+      { id: "ext-hng-1", name: "High-Tension Nylon Pulley Cord Replacement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Weather-resistant UV coated braided cord for ceiling hangers." }
+    ],
+    "Furniture Services": [
+      { id: "ext-furn-1", name: "Scratch Repair & Wood Polish Touchup", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Wax crayon filler & lacquer touchup for wooden furniture scratches." }
+    ],
+    "Doors & Windows": [
+      { id: "ext-dr-1", name: "Heavy Duty Door Weatherstrip Seal", price: 199, origPrice: 299, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Bottom rubber draft stopper to prevent dust & insect entry." }
+    ],
+    "Drill & Hanging": [
+      { id: "ext-drl-1", name: "Heavy Duty Toggle Bolt Anchor Fit", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop", description: "High-capacity metallic toggle anchors for hollow wall mounting." }
+    ],
+    "Carpenter On-Demand": [
+      { id: "ext-cod-1", name: "Wood Joint Glue Reinforcement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "High-strength PVA wood adhesive joint clamping." }
+    ],
+    "Furniture Repair": [
+      { id: "ext-fur-1", name: "Hydraulic Bed Lifter Alignment", price: 299, origPrice: 449, duration: "25 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Gas spring hydraulic pump adjustment for smooth bed lift." },
+      { id: "ext-fur-2", name: "Drawer Telescopic Roller Channel Lubrication", price: 149, origPrice: 249, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Silicon grease lubrication for smooth sliding drawers." },
+      { id: "ext-fur-3", name: "Wood Scratch Wax Polish Touch-Up", price: 199, origPrice: 299, duration: "20 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Wood wax polishing to conceal minor table & sofa scratches." }
+    ],
+    "Doors & Windows": [
+      { id: "ext-dr-1", name: "Door Bottom Weather Strip / Dust Sealer Fitting", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Aluminium & brush strip fit under door to stop insect & dust entry." },
+      { id: "ext-dr-2", name: "Sliding Window Roller Wheel Lubrication", price: 249, origPrice: 399, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Cleaning aluminum window track & lubricating roller bearings." },
+      { id: "ext-dr-3", name: "Window Latch Safety Lock Fitting", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Stainless steel window latch & tower bolt fitting." }
+    ],
+    "Drill & Hanging": [
+      { id: "ext-drl-1", name: "Precision Drill & Wall Hanging (Up to 3 items)", price: 199, origPrice: 349, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop", description: "Hanging mirrors, photo frames, or wall clocks using heavy-duty anchors." },
+      { id: "ext-drl-2", name: "TV Wall Mount Bracket Fitting", price: 349, origPrice: 499, duration: "30 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Fixed / Swivel LED TV bracket wall mounting with level balance." },
+      { id: "ext-drl-3", name: "Curtain Rod Bracket Fitting & Alignment", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Precision drilling & mounting curtain rod end brackets." }
+    ]
+  };
+
   const CATEGORY_SUBCATEGORIES = {
-    hvac: [
-      { name: "AC Service & Repair", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-      { name: "AC Installation", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-      { name: "Washing Machine", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+    refrigerator: [
+      { name: "Refrigerator Check-up", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Service & Repair", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Gas & Compressor", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Cleaning & Maintenance", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+    ],
+    microwave: [
+      { name: "Microwave Repair", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Water Purifier & RO", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+      { name: "Microwave & Purifier", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    ],
+    appliance_repair: [
       { name: "Refrigerator & Fridge", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
       { name: "Microwave & Purifier", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+    ],
+    tv_display: [
+      { name: "TV Service & Repair", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+      { name: "TV Installation & Setup", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+      { name: "TV Screen & Display", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+      { name: "TV Sound & Speaker", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
+      { name: "TV Software & Smart Features", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+      { name: "TV Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+    ],
+    hvac: [
+      { name: "AC Service & Cleaning", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+      { name: "AC Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "AC Gas & Refrigerant", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
+      { name: "AC Installation & Uninstallation", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+      { name: "AC PCB & Electrical", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "AC Parts & Accessories", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+    ],
+    washing_machine: [
+      { name: "Washing Machine Jet Service", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Washing Machine Check-up", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Installation & Uninstallation", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Washing Machine Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
     ],
     electrical: [
       { name: "Switches & Sockets", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
@@ -11264,16 +11524,25 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Inverter & Heavy Appliance", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
     ],
     plumbing: [
-      { name: "Taps & Mixers", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-      { name: "Drainage & Clog", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Toilet & Flush Tank", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-      { name: "Water Heater & Tank", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      { name: "Tap & Mixer", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+      { name: "Toilet", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Basin & Sink", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Bath Fittings", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Water Tank & Motor", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Drainage", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
+      { name: "Water Filter", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Grouting", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "Plumber On-Demand", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
     ],
     carpentry: [
       { name: "Lock & Handle", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-      { name: "Furniture Repair", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Cupboard & Drawer", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Kitchen Fittings", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Hangers & Drying Solutions", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Furniture Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
       { name: "Doors & Windows", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-      { name: "Drill & Hanging", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" }
+      { name: "Drill & Hanging", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
+      { name: "Carpenter On-Demand", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
     ],
     painting: [
       { name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
@@ -11305,25 +11574,180 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const subCategories = CATEGORY_SUBCATEGORIES[normalizedKey] || CATEGORY_SUBCATEGORIES.cleaning;
+
+  const tvSubtabs = [
+    "TV & Display",
+    "TV Service & Repair",
+    "TV Installation & Setup",
+    "TV Screen & Display",
+    "TV Sound & Speaker",
+    "TV Software & Smart Features",
+    "TV Parts & Electrical Repair"
+  ];
+  const washingMachineSubtabs = [
+    "Washing Machine Jet Service",
+    "Washing Machine Check-up",
+    "Installation & Uninstallation",
+    "Washing Machine Repair",
+    "Washing Machine",
+    "Washing Machine Service & Repair",
+    "Washing Machine Installation",
+    "Washing Machine Cleaning",
+    "Washing Machine Water & Drainage",
+    "Washing Machine Motor & Spin",
+    "Washing Machine Electrical & PCB"
+  ];
+  const refrigeratorSubtabs = [
+    "Refrigerator Check-up",
+    "Refrigerator & Fridge",
+    "Refrigerator Service & Repair",
+    "Refrigerator Installation",
+    "Refrigerator Cooling",
+    "Refrigerator Gas & Compressor",
+    "Refrigerator Cleaning & Maintenance",
+    "Refrigerator Parts & Electrical Repair"
+  ];
+  const electricalSubtabs = [
+    "Switches & Sockets",
+    "Fan & Lighting",
+    "MCB & Wiring",
+    "Inverter & Heavy Appliance"
+  ];
+  const plumbingSubtabs = [
+    "Tap & Mixer",
+    "Toilet",
+    "Basin & Sink",
+    "Bath Fittings",
+    "Water Tank & Motor",
+    "Drainage",
+    "Water Filter",
+    "Grouting",
+    "Plumber On-Demand",
+    "Taps & Mixers",
+    "Drainage & Clog",
+    "Toilet & Flush Tank",
+    "Water Heater & Tank"
+  ];
+  const carpentrySubtabs = [
+    "Lock & Handle",
+    "Cupboard & Drawer",
+    "Kitchen Fittings",
+    "Hangers & Drying Solutions",
+    "Furniture Services",
+    "Doors & Windows",
+    "Drill & Hanging",
+    "Carpenter On-Demand",
+    "Furniture Repair"
+  ];
+  const applianceSubtabs = ["Microwave Repair", "Water Purifier & RO", "Refrigerator & Fridge", "Microwave & Purifier"];
+  const hvacSubtabs = [
+    "AC Service & Cleaning",
+    "AC Repair",
+    "AC Gas & Refrigerant",
+    "AC Installation & Uninstallation",
+    "AC PCB & Electrical",
+    "AC Parts & Accessories",
+    "AC Service & Repair",
+    "AC Installation",
+    "AC Cleaning",
+    "AC Gas & Cooling",
+    "AC Maintenance",
+    "AC Parts & Repair"
+  ];
 
   const urlParams = new URLSearchParams(window.location.search);
-  const initialSubtab = urlParams.get("subtab") || subCategories[0]?.name || "Furnished Apartment";
-  const [activeSubTab, setActiveSubTab] = useState(initialSubtab);
+  const subtabParam = urlParams.get("subtab") || urlParams.get("subTab");
+
+  const [activeSubTab, setActiveSubTab] = useState(() => {
+    if (subtabParam === "TV & Display") return "TV Service & Repair";
+    if (subtabParam === "Washing Machine") return "Washing Machine Service & Repair";
+    if (subtabParam === "Refrigerator & Fridge") return "Refrigerator Service & Repair";
+    if (subtabParam === "Electrician" || subtabParam === "electrical") return "Switches & Sockets";
+    if (subtabParam === "Plumber" || subtabParam === "plumbing") return "Tap & Mixer";
+    if (subtabParam === "Carpentry" || subtabParam === "carpentry") return "Lock & Handle";
+    if (subtabParam) return subtabParam;
+    // No URL param — derive default from normalizedKey / category / cart
+    const nk = normalizedKey || (category && (category.id || category.slug)) || "";
+    const cn = ((category && category.name) || "").toLowerCase();
+    if (nk === "electrical" || cn.includes("electric")) return "Switches & Sockets";
+    if (nk === "plumbing" || cn.includes("plumb")) return "Tap & Mixer";
+    if (nk === "carpentry" || cn.includes("carpenter") || cn.includes("carpentry")) return "Lock & Handle";
+    if (nk === "refrigerator" || cn.includes("fridge") || cn.includes("refrigerator")) return "Refrigerator Check-up";
+    if (nk === "washing_machine" || cn.includes("washing")) return "Washing Machine Jet Service";
+    if (nk === "tv_display" || cn.includes("tv")) return "TV Service & Repair";
+    if (nk === "hvac" || cn.includes("ac") || cn.includes("heating")) return "AC Service & Cleaning";
+    if (nk === "cleaning" || cn.includes("clean")) return "Full apartment";
+
+    if (cart && cart.length > 0) {
+      const itemStr = (cart[0].id + " " + cart[0].name + " " + (cart[0].categoryName || "")).toLowerCase();
+      if (itemStr.includes("carp") || itemStr.includes("lock") || itemStr.includes("handle") || itemStr.includes("door") || itemStr.includes("furniture")) return "Lock & Handle";
+      if (itemStr.includes("elec") || itemStr.includes("switch") || itemStr.includes("socket") || itemStr.includes("fan")) return "Switches & Sockets";
+      if (itemStr.includes("plumb") || itemStr.includes("tap") || itemStr.includes("drain")) return "Taps & Mixers";
+      if (itemStr.includes("ac") || itemStr.includes("foam") || itemStr.includes("jet")) return "AC Service & Repair";
+    }
+    return "Lock & Handle";
+  });
+
+  let effectiveKey = normalizedKey;
+  // Check by normalizedKey / category FIRST so they aren't overridden by the default activeSubTab
+  if (normalizedKey === "tv_display" || (category && (category.id === "tv_display" || category.name === "TV & Display"))) {
+    effectiveKey = "tv_display";
+  } else if (normalizedKey === "washing_machine" || (category && (category.id === "washing_machine" || category.name === "Washing Machine"))) {
+    effectiveKey = "washing_machine";
+  } else if (normalizedKey === "refrigerator" || (category && (category.id === "refrigerator" || category.name === "Refrigerator & Fridge"))) {
+    effectiveKey = "refrigerator";
+  } else if (normalizedKey === "microwave" || (category && (category.id === "microwave" || category.name === "Microwave & Purifier"))) {
+    effectiveKey = "microwave";
+  } else if (normalizedKey === "electrical" || (category && (category.id === "electrical" || category.name === "Electrician"))) {
+    effectiveKey = "electrical";
+  } else if (normalizedKey === "plumbing" || (category && (category.id === "plumbing" || category.name === "Plumber"))) {
+    effectiveKey = "plumbing";
+  } else if (normalizedKey === "carpentry" || (category && (category.id === "carpentry" || category.name === "Carpentry"))) {
+    effectiveKey = "carpentry";
+  } else if (tvSubtabs.includes(activeSubTab)) {
+    effectiveKey = "tv_display";
+  } else if (washingMachineSubtabs.includes(activeSubTab)) {
+    effectiveKey = "washing_machine";
+  } else if (refrigeratorSubtabs.includes(activeSubTab)) {
+    effectiveKey = "refrigerator";
+  } else if (activeSubTab === "Microwave & Purifier") {
+    effectiveKey = "microwave";
+  } else if (applianceSubtabs.includes(activeSubTab)) {
+    effectiveKey = "appliance_repair";
+  } else if (electricalSubtabs.includes(activeSubTab)) {
+    effectiveKey = "electrical";
+  } else if (plumbingSubtabs.includes(activeSubTab)) {
+    effectiveKey = "plumbing";
+  } else if (carpentrySubtabs.includes(activeSubTab)) {
+    effectiveKey = "carpentry";
+  } else if (hvacSubtabs.includes(activeSubTab)) {
+    effectiveKey = "hvac";
+  }
+
+  const subCategories = CATEGORY_SUBCATEGORIES[effectiveKey] || CATEGORY_SUBCATEGORIES.appliance_repair || CATEGORY_SUBCATEGORIES.cleaning;
 
   // Keep activeSubTab in sync if normalizedKey changes or URL subTab updates
   useEffect(() => {
-    if (subCategories && subCategories.length > 0) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const subtabParam = urlParams.get("subtab");
-      const matched = subCategories.find(c => c.name === subtabParam);
-      if (matched) {
-        setActiveSubTab(matched.name);
+    const urlParams = new URLSearchParams(window.location.search);
+    const param = urlParams.get("subtab") || urlParams.get("subTab");
+    if (param) {
+      if (param === "TV & Display") {
+        setActiveSubTab("TV Service & Repair");
+      } else if (param === "Washing Machine") {
+        setActiveSubTab("Washing Machine Service & Repair");
+      } else if (param === "Refrigerator & Fridge") {
+        setActiveSubTab("Refrigerator Service & Repair");
+      } else if (param === "Electrician" || param === "electrical") {
+        setActiveSubTab("Switches & Sockets");
+      } else if (param === "Plumber" || param === "plumbing") {
+        setActiveSubTab("Taps & Mixers");
+      } else if (param === "Carpentry" || param === "carpentry") {
+        setActiveSubTab("Lock & Handle");
       } else {
-        setActiveSubTab(subCategories[0].name);
+        setActiveSubTab(param);
       }
     }
-  }, [normalizedKey, searchParams, subCategories]);
+  }, [normalizedKey, searchParams]);
 
   const [bhkSelections, setBhkSelections] = useState({
     essential: 3,
@@ -11335,11 +11759,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedPlans, setExpandedPlans] = useState({});
   const [selectedMasonDetail, setSelectedMasonDetail] = useState(null);
+  const [selectedPackageDetail, setSelectedPackageDetail] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
 
   // Disable background page scrolling when detailed modal is open
   useEffect(() => {
-    if (selectedMasonDetail) {
+    if (selectedMasonDetail || selectedPackageDetail) {
       document.body.style.overflow = "hidden";
       document.documentElement.style.overflow = "hidden";
     } else {
@@ -11350,7 +11775,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
     };
-  }, [selectedMasonDetail]);
+  }, [selectedMasonDetail, selectedPackageDetail]);
 
   const getBhkPrice = (tabName, planId, bhk) => {
     const bhkIdx = bhk - 1;
@@ -11527,30 +11952,259 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   // Service items catalog for non-cleaning categories
   const OTHER_SERVICES = {
+    electrical: {
+      "Switches & Sockets": [
+        { id: "elec-sw-1", name: "Modular Switch Replacement", price: 199, duration: "20 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing faulty switch and fitting premium brand modular switch plate.", includes: ["Old switch removal", "New modular switch fit", "Live wire test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+        { id: "elec-sw-2", name: "5/15A Socket Replacement", price: 199, duration: "20 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe 5A or 15A wall socket replacement with shutter mechanism.", includes: ["Socket removal", "ISI marked socket fit", "Earth continuity check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+        { id: "elec-sw-3", name: "16A Heavy Duty Socket for AC/Geyser", price: 249, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Heavy gauge 16A moulded socket fitting for high-power appliances.", includes: ["16A socket fit", "Earthing check", "Load test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+        { id: "elec-sw-4", name: "Switchboard Installation", price: 349, duration: "30 mins", badge: "New Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "New modular switchboard fitting with up to 4 switch/socket positions.", includes: ["Board frame fit", "Wiring connection", "Safety check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+        { id: "elec-sw-5", name: "USB Charging Socket Fit", price: 299, duration: "25 mins", badge: "Smart Home", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dual USB + 5A socket combo fitting for bedside or office desk.", includes: ["USB socket installation", "Flush mount fitting", "Charging test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+        { id: "elec-sw-6", name: "Faulty Switch Diagnosis", price: 149, duration: "15 mins", badge: "Quick Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Multi-meter testing to identify tripped, arcing, or loose contact switches.", includes: ["Multi-meter test", "Arc trace check", "Fix or replace advice"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "Fan & Lighting": [
+        { id: "elec-fan-1", name: "Ceiling Fan Installation", price: 249, duration: "30 mins", badge: "Standard Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe hook bolt ceiling fit, blade balancing and speed regulator connection.", includes: ["Hook bolt ceiling fit", "Blade balance", "Regulator wiring"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+        { id: "elec-fan-2", name: "Ceiling Fan Repair", price: 299, duration: "30 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fan capacitor replacement, bearing lubrication or speed problem fix.", includes: ["Capacitor replacement", "Bearing lubrication", "Speed test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+        { id: "elec-fan-3", name: "Exhaust Fan Installation", price: 199, duration: "25 mins", badge: "Ventilation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Kitchen or bathroom exhaust fan wall/ceiling fitting with louvre cover.", includes: ["Hole cutting if needed", "Fan bracket fit", "Power connection"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+        { id: "elec-fan-4", name: "LED Light Installation", price: 149, duration: "15 mins", badge: "Energy Save", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Panel light, spot light or batten fitting with safe driver connection.", includes: ["Driver connection", "Flush panel fit", "Brightness test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+        { id: "elec-fan-5", name: "Fan Regulator Replacement", price: 149, duration: "15 mins", badge: "Speed Control", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Replacing faulty step regulator or electronic dimmer with new unit.", includes: ["Old regulator removal", "New regulator fit", "Speed step test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
+        { id: "elec-fan-6", name: "Light Fixture Replacement", price: 199, duration: "20 mins", badge: "Upgrade", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Removing old bulb holder and fitting new LED bulb holder or batten light.", includes: ["Holder removal", "New fixture fit", "Wire connection"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" }
+      ],
+      "MCB & Wiring": [
+        { id: "elec-mcb-1", name: "MCB Replacement", price: 299, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing tripped or faulty MCB with new ISI marked circuit breaker.", includes: ["MCB rating check", "New MCB installation", "Trip test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "elec-mcb-2", name: "Main DB Box Inspection", price: 249, duration: "30 mins", badge: "Safety Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Full distribution board inspection, terminal tightening and leakage check.", includes: ["Terminal tightening", "RCCB/ELCB test", "Wiring health audit"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "elec-mcb-3", name: "Earthing Check & Repair", price: 349, duration: "30 mins", badge: "Grounding", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Earth continuity resistance test and earthing wire repair.", includes: ["Resistance measurement", "Earth wire tracing", "Safe earth restoration"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "elec-mcb-4", name: "Short Circuit Repair", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Tracing and repairing burnt wire short circuits causing repeated MCB trips.", includes: ["Fault circuit tracing", "Burnt wire replacement", "MCB reset test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "elec-mcb-5", name: "New Point Wiring", price: 599, duration: "1 hr", badge: "New Connection", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Adding a new electrical power point with conduit wiring from nearest junction.", includes: ["Conduit routing", "3-core wire pull", "Socket/switch fit"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+        { id: "elec-mcb-6", name: "RCCB / ELCB Installation", price: 799, duration: "45 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Residual current circuit breaker installation for shock protection.", includes: ["RCCB rating selection", "DB box fitting", "Leakage trip test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "Inverter & Heavy Appliance": [
+        { id: "elec-inv-1", name: "Inverter Battery Checkup", price: 299, duration: "30 mins", badge: "Battery Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Battery water level check, terminal cleaning, charging current test & backup estimate.", includes: ["Electrolyte level check", "Terminal cleaning", "Charging voltage test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "elec-inv-2", name: "Inverter Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Inverter PCB repair, MOSFET replacement, charger fault or display board fix.", includes: ["PCB diagnostic", "Faulty component replace", "Output voltage test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "elec-inv-3", name: "Inverter Wiring", price: 399, duration: "45 mins", badge: "Safe Wiring", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Safe inverter bypass wiring for selected power points in the home.", includes: ["Bypass circuit routing", "3-core inverter wire", "Load test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "elec-inv-4", name: "Geyser Installation", price: 399, duration: "45 mins", badge: "Hot Water", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Wall mounting bracket fitting, plumbing inlet/outlet & 16A socket connection.", includes: ["Bracket wall mount", "Inlet/outlet pipe fit", "16A socket connection"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "elec-inv-5", name: "Geyser Repair", price: 499, duration: "45 mins", badge: "Element Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Heating element resistance test, thermostat replacement or pressure valve fix.", includes: ["Element resistance check", "Thermostat swap", "Pressure valve check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "elec-inv-6", name: "Voltage Stabilizer Installation", price: 299, duration: "30 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Stabilizer wall/shelf mounting with dedicated input wiring & load test.", includes: ["Shelf/wall mounting", "Input wiring", "Voltage regulation test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ]
+    },
+    washing_machine: {
+      "Washing Machine Jet Service": [
+        { id: "wm-jet-1", name: "Jet Service", price: 599, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "High-pressure foam & water jet deep cleaning for inner steel tub, outer drum scale & lint filter.", includes: ["High pressure foam jet wash", "Chemical tub descaling", "30-day service warranty"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Washing Machine Check-up": [
+        { id: "wm-chk-1", name: "Washing Machine Check-up", price: 299, duration: "30 mins", badge: "Diagnostic", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Complete 21-point system check-up, drum spin balance audit, water flow & electrical safety inspection.", includes: ["21-point system diagnostic", "Fault inspection report", "Repair cost estimate"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Installation & Uninstallation": [
+        { id: "wm-inst-1", name: "Washing Machine Installation", price: 399, duration: "45 mins", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional top load / front load unboxing, inlet pipe tap adapter fitting, drain hose setup & demo.", includes: ["Unboxing & positioning", "Inlet & outlet pipe connection", "Live run demo"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "wm-inst-2", name: "Washing Machine Uninstallation", price: 249, duration: "30 mins", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe disconnection of water inlet hose, power cord, drain pipe & transit safety bolt fitting.", includes: ["Water line disconnection", "Drain hose detachment", "Transit bolt fit"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Washing Machine Repair": [
+        { id: "wm-rep-1", name: "Washer Spinning Abnormally", price: 499, duration: "45 mins", badge: "Spin Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix uneven tub rotation, spin drum vibration, shock absorber check, or drive belt tension adjustment.", includes: ["Shock absorber inspection", "Drive belt tension check", "Drum spin test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "wm-rep-2", name: "Machine Making Sound", price: 449, duration: "45 mins", badge: "Noise Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnosis & fix for loud grinding, squeaking, or thumping sounds during wash/spin cycles.", includes: ["Coin trap clearance", "Motor pulley check", "Bearing noise test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "wm-rep-3", name: "Other / Other Issue", price: 399, duration: "45 mins", badge: "General Fix", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "General diagnosis for water inlet leak, PCB error codes, door lock failure, or timer issues.", includes: ["Full system diagnostic", "Faulty component fix", "Safety circuit check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ]
+    },
     hvac: {
-      "AC Service & Repair": [
-        { id: "hvac-serv-1", name: "Power Jet AC Foam Service", price: 599, duration: "45 mins", badge: "Value Choice", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Deep jet spray foam wash of indoor & outdoor coils with 2-stage filtration wash.", includes: ["Indoor unit jet foam wash", "Outdoor unit high pressure spray", "Gas & cooling performance check", "30-day service warranty"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-serv-2", name: "AC Gas Leakage Fix & Refill", price: 1499, duration: "1.5 hrs", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Nitrogen pressure leak detection, copper pipe brazing, and 100% full Freon/R32 gas refill.", includes: ["Nitrogen leak testing", "Copper brazing fix", "Vacuuming & full gas recharge", "60-day gas warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
-        { id: "hvac-serv-3", name: "AC Water Leakage & Drain Unclog", price: 399, duration: "45 mins", badge: "Quick Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Clear drain pipe clog, unblock condensation tray, flush mold debris & seal tray crack.", includes: ["Drain line vacuuming", "Anti-fungal tray flush", "Water leak prevention seal"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "hvac-serv-4", name: "AC Noise & Fan Vibration Fix", price: 449, duration: "45 mins", badge: "Troubleshooting", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix squeaking/rattling blower noise, fan blade balancing, motor bushing replacement.", includes: ["Blower wheel vibration fix", "Motor bearing lubrication", "Panel tightness check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-serv-5", name: "AC PCB Circuit Board Repair", price: 999, duration: "1 hr", badge: "Expert PCB", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Fix non-turning on AC, error codes on display, remote sensor failure, or PCB relay replacement.", includes: ["PCB diagnostic test", "Capacitor & relay replace", "60-day PCB warranty"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      "AC Service & Cleaning": [
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" }
       ],
-      "AC Installation": [
-        { id: "hvac-inst-1", name: "Split AC Wall Mounting", price: 1299, duration: "2 hrs", badge: "Recommended", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional wall drilling, bracket fitting, outdoor unit alignment, and copper pipe connection.", includes: ["Indoor & outdoor mounting", "Copper pipe vacuuming", "Safety voltage test"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-        { id: "hvac-inst-2", name: "Window AC Installation", price: 899, duration: "1.5 hrs", badge: "Standard", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Window frame mounting, foam sealant insulation, and vibration pad fitting.", includes: ["Window frame bracket fit", "Gap sealing", "Demo & cooling check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "hvac-inst-3", name: "AC Uninstallation", price: 699, duration: "1 hr", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe gas pump-down into compressor, dismounting indoor/outdoor units, and copper pipe sealing.", includes: ["Gas pump down", "Units dismounting", "Copper pipe packaging"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" }
+      "AC Repair": [
+        { id: "hvac-rep-1", name: "AC Repair — Split/Window", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Comprehensive diagnostic and repair for electrical, mechanical, noise or cooling failure.", includes: ["Full system diagnostic", "Faulty component repair", "Safety voltage test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-rep-2", name: "Less/No Cooling", price: 499, duration: "45 mins", badge: "Cooling Restore", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnostic for AC running without cooling. Refrigerant level scan, compressor relay & fan motor check.", includes: ["Refrigerant PSI scan", "Compressor relay audit", "Filter airflow test"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
+        { id: "hvac-rep-3", name: "Power Issue", price: 499, duration: "45 mins", badge: "Power Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix AC not turning on, MCB tripping, display light dead, or remote receiver failure.", includes: ["Mains voltage test", "Display PCB power check", "Fuse replacement"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-rep-4", name: "Water Leakage", price: 399, duration: "45 mins", badge: "Leak Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix indoor unit water dripping from front or back tray, drain pipe unclogging & tray realignment.", includes: ["Drain pipe jet flush", "Indoor unit tray re-leveling", "Insulation check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "hvac-rep-5", name: "Unwanted Noise/Smell", price: 399, duration: "45 mins", badge: "Noise & Odor", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Eliminate squeaking fan noise, motor bearing grinding, or foul moldy odor from vents.", includes: ["Blower motor greasing", "Coil anti-bacterial spray", "Vibration dampening"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" }
       ],
-      "Washing Machine": [
-        { id: "hvac-wash-1", name: "Automatic Washing Machine Service", price: 499, duration: "1 hr", badge: "Best Value", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Descaling drum clean, filter debris removal, belt tension check, and drain pump flush.", includes: ["Drum descaling wash", "Lint & coin filter clean", "Belt & motor test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "hvac-wash-2", name: "Washing Machine Motor & Spin Repair", price: 699, duration: "1.5 hrs", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix drum noise, spin cycle failure, drain pump blockage, or motor capacitor issues.", includes: ["Motor & belt diagnosis", "Drain pump clearing", "30-day warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      "AC Gas & Refrigerant": [
+        { id: "hvac-gas-1", name: "Gas Leak Fix & Refill", price: 1799, duration: "2 hrs", badge: "Full Gas Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Nitrogen pressure leak detection, copper brazing solder fix, vacuuming & 100% gas refill.", includes: ["Nitrogen pressure test", "Copper brazing solder fix", "100% Freon / R32 gas refill", "60-day gas warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
+        { id: "hvac-gas-2", name: "Gas Charging", price: 1499, duration: "1.5 hrs", badge: "Top-Up Fill", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Standard R32 / R410a / R22 eco refrigerant gas charging with vacuum evacuation.", includes: ["System vacuum evacuation", "Precise PSI gas charging", "Cooling performance test"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
+        { id: "hvac-gas-3", name: "Service Valve Replacement", price: 399, duration: "45 mins", badge: "Valve Swap", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Replacing brass outdoor unit service valve flare nut and sealing pin.", includes: ["Brass valve replace", "Copper flare fitting", "Pressure leak test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-gas-4", name: "Cooling Coil / Condenser Coil Repair", price: 899, duration: "1.5 hrs", badge: "Coil Repair", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Aluminum to copper coil braze repair or u-bend pinhole leak soldering.", includes: ["Coil leak pressure scan", "Copper silver brazing", "Anti-corrosion coat"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
       ],
+      "AC Installation & Uninstallation": [
+        { id: "hvac-inst-split", name: "Split AC Installation", price: 1299, duration: "2 hrs", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional indoor unit plate mounting, core wall drilling, outdoor bracket setup, and copper pipe connection.", includes: ["Indoor & outdoor mounting", "Core wall hole drilling", "Vacuuming & leak test"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+        { id: "hvac-inst-win", name: "Window AC Installation", price: 799, duration: "1.5 hrs", badge: "Window Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Window frame alignment, wooden/iron bracket mounting, and side foam insulation sealing.", includes: ["Window frame alignment", "Rubber vibration pad fit", "Foam gap seal"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+        { id: "hvac-uninst-1", name: "AC Uninstallation", price: 699, duration: "1 hr", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe gas pump-down into compressor, dismounting indoor/outdoor units, and copper pipe sealing.", includes: ["Gas pump down", "Units dismounting", "Copper pipe packaging"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-reinst-ind", name: "Indoor Unit Reinstallation", price: 599, duration: "1 hr", badge: "Indoor Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Remounting split AC indoor unit on backplate, drain hose routing & flare jointing.", includes: ["Backplate mounting", "Flare joint tightening", "Drain test"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+        { id: "hvac-reinst-out", name: "Outdoor Unit Reinstallation", price: 699, duration: "1 hr", badge: "Outdoor Fit", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Remounting heavy outdoor compressor unit on wall stand with anti-vibration rubber pads.", includes: ["Wall stand anchor fit", "Rubber pad placement", "Service valve jointing"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" }
+      ],
+      "AC PCB & Electrical": [
+        { id: "hvac-pcb-inv", name: "Inverter PCB Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Electronic inverter mainboard micro-controller solder repair, IPM module & relay swap.", includes: ["PCB diagnostic test", "IPM module replacement", "60-day PCB warranty"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-pcb-non", name: "Non-Inverter PCB Repair", price: 699, duration: "1 hr", badge: "Standard PCB", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Non-inverter AC mainboard circuit repair, transformer swap, or sensor relay fix.", includes: ["Relay & transformer test", "Component resolder", "30-day warranty"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-cap-1", name: "Capacitor Replacement", price: 299, duration: "30 mins", badge: "Quick Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing weak dual dual-run compressor/fan capacitor with heavy duty metalized capacitor.", includes: ["Microfarad torque test", "Heavy duty capacitor swap", "Compressor start test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-cnt-1", name: "Contactor Replacement", price: 399, duration: "30 mins", badge: "Heavy Switch", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Outdoor unit heavy duty electromagnetic contactor switch replacement.", includes: ["Old contactor dismount", "25A contactor fit", "Coil voltage check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-sns-1", name: "Sensor Replacement", price: 299, duration: "30 mins", badge: "Temp Sensor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Room ambient NTC thermistor or copper coil NTC sensor replacement.", includes: ["NTC resistance measurement", "Sensor probe swap", "Temp calibration"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-lvt-1", name: "LVT Replacement", price: 349, duration: "30 mins", badge: "Transformer", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Low voltage step-down transformer replacement for AC indoor control unit.", includes: ["Step-down voltage test", "Transformer swap", "PCB signal test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "AC Parts & Accessories": [
+        { id: "hvac-prt-cop", name: "Copper Pipe Installation", price: 299, duration: "30 mins", badge: "Per Meter", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High grade insulated copper pipe installation (per meter) with nitrile foam sleeve.", includes: ["Copper flare jointing", "Nitrile insulation wrap", "Pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "hvac-prt-drn", name: "Drain Pipe Installation", price: 199, duration: "20 mins", badge: "Drainage", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Corrugated UV-resistant drain pipe extension & wall clamping.", includes: ["Corrugated pipe extension", "Wall clamp fit", "Water flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "hvac-prt-wst", name: "Split AC Wall Stand", price: 499, duration: "30 mins", badge: "Heavy Stand", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Powder coated heavy gauge metal wall stand bracket installation for outdoor unit.", includes: ["Anchor bolt drilling", "Stand leveling", "Vibration pad fit"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-prt-fst", name: "Floor Stand", price: 399, duration: "30 mins", badge: "Floor Mount", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Heavy duty floor stand for rooftop or balcony outdoor unit positioning.", includes: ["Floor stand assembly", "Vibration dampening", "Rubber foot fit"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-prt-bpl", name: "Universal Back Plate", price: 199, duration: "20 mins", badge: "Mounting Plate", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Galvanized steel indoor unit mounting backplate installation.", includes: ["Wall alignment", "Rawl plug drilling", "Spirit level check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-prt-fast", name: "Fastener Set", price: 99, duration: "15 mins", badge: "Hardware", badgeColor: "bg-gray-50 text-gray-700 border-gray-100", description: "Heavy anchor dash fasteners and stainless steel mounting bolts set.", includes: ["4x anchor bolts", "Rawl plug anchors", "Tightening test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ]
+    },
+    washing_machine: {
+      "Washing Machine Jet Service": [
+        { id: "wm-jet-1", name: "Jet Service", price: 599, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "High-pressure foam & water jet deep cleaning for inner steel tub, outer drum scale & lint filter.", includes: ["High pressure foam jet wash", "Chemical tub descaling", "30-day service warranty"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Washing Machine Check-up": [
+        { id: "wm-chk-1", name: "Washing Machine Check-up", price: 299, duration: "30 mins", badge: "Diagnostic", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Complete 21-point system check-up, drum spin balance audit, water flow & electrical safety inspection.", includes: ["21-point system diagnostic", "Fault inspection report", "Repair cost estimate"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Installation & Uninstallation": [
+        { id: "wm-inst-1", name: "Washing Machine Installation", price: 399, duration: "45 mins", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional top load / front load unboxing, inlet pipe tap adapter fitting, drain hose setup & demo.", includes: ["Unboxing & positioning", "Inlet & outlet pipe connection", "Live run demo"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "wm-inst-2", name: "Washing Machine Uninstallation", price: 249, duration: "30 mins", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe disconnection of water inlet hose, power cord, drain pipe & transit safety bolt fitting.", includes: ["Water line disconnection", "Drain hose detachment", "Transit bolt fit"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      ],
+      "Washing Machine Repair": [
+        { id: "wm-rep-1", name: "Washer Spinning Abnormally", price: 499, duration: "45 mins", badge: "Spin Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix uneven tub rotation, spin drum vibration, shock absorber check, or drive belt tension adjustment.", includes: ["Shock absorber inspection", "Drive belt tension check", "Drum spin test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "wm-rep-2", name: "Machine Making Sound", price: 449, duration: "45 mins", badge: "Noise Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnosis & fix for loud grinding, squeaking, or thumping sounds during wash/spin cycles.", includes: ["Coin trap clearance", "Motor pulley check", "Bearing noise test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "wm-rep-3", name: "Other / Other Issue", price: 399, duration: "45 mins", badge: "General Fix", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "General diagnosis for water inlet leak, PCB error codes, door lock failure, or timer issues.", includes: ["Full system diagnostic", "Faulty component fix", "Safety circuit check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ]
+    },
+    refrigerator: {
+      "Refrigerator Check-up": [
+        { id: "ref-chk-1", name: "Single Door Refrigerator Check-up", price: 249, duration: "30 mins", badge: "Single Door", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Complete 21-point system audit for single door fridge: thermostat calibration, compressor relay test & cooling check.", includes: ["21-point health check", "Thermostat calibration", "Relay & seal audit"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-chk-2", name: "Double Door (Inverter) Refrigerator Check-up", price: 399, duration: "45 mins", badge: "Inverter Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Diagnostic check for inverter double door fridge: inverter PCB sensor test, variable compressor frequency scan & auto-defrost heater check.", includes: ["Inverter PCB diagnostic", "Defrost sensor test", "Variable compressor scan"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-chk-3", name: "Double Door (Non-Inverter) Refrigerator Check-up", price: 349, duration: "40 mins", badge: "Standard Dual", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Inspection for conventional double door fridge: bi-metal defrost timer audit, evaporator fan check & gas pressure check.", includes: ["Bi-metal timer test", "Evaporator fan check", "Gas pressure audit"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-chk-4", name: "Side-by-Side Door Refrigerator Check-up", price: 499, duration: "45 mins", badge: "Premium Multi", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Comprehensive inspection for side-by-side / French door multi-door fridge: dual cooling evaporator test, ice maker dispenser audit & digital control panel scan.", includes: ["Dual cooling cycle scan", "Ice dispenser audit", "Digital control panel test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "Refrigerator Service & Repair": [
+        { id: "ref-srv-1", name: "General Refrigerator Service", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Comprehensive 21-point refrigerator inspection, coil dusting, gasket audit & voltage test.", includes: ["21-point fridge audit", "Condenser coil dusting", "Voltage & relay check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-srv-2", name: "Refrigerator Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Diagnostic and complete fix for cooling, electrical or mechanical issues.", includes: ["Detailed root cause analysis", "Component repair", "Performance test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-srv-3", name: "Not Cooling", price: 499, duration: "45 mins", badge: "Cooling Restore", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Thermostat check, relay replace, gas pressure audit & fan motor testing.", includes: ["Relay & OLP audit", "Thermostat test", "Gas pressure scan"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-srv-4", name: "Not Turning On", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Power plug wire test, thermal fuse check & main PCB power supply repair.", includes: ["Power cord continuity", "Thermal fuse check", "PCB power check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-srv-5", name: "Excessive Noise", price: 399, duration: "45 mins", badge: "Noise Reduction", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Compressor mounting pad dampening, fan blade lubrication & leveling fit.", includes: ["Fan blade realignment", "Vibration pad insertion", "Compressor mount check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-srv-6", name: "Water Leakage", price: 399, duration: "45 mins", badge: "Leak Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Unclog drain pipe tube, empty rear water collection tray & seal gasket leaks.", includes: ["Drain line vacuuming", "Tray cleanout", "Gasket seal alignment"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      ],
+      "Refrigerator Installation": [
+        { id: "ref-inst-1", name: "Refrigerator Installation", price: 399, duration: "45 mins", badge: "Standard", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Unboxing, positioning, leveling feet adjustment & safe power socket setup.", includes: ["Unboxing & positioning", "Leveling alignment", "Stabilizer setup check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-inst-2", name: "Refrigerator Reinstallation", price: 599, duration: "1 hr", badge: "Relocation", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dismounting from old location, safe transfer & setup at new kitchen spot.", includes: ["Safe dismounting", "New location placement", "Cooling cycle verification"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-inst-3", name: "Refrigerator Uninstallation", price: 249, duration: "30 mins", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Disconnecting power & water line connection, draining water tray & packaging prep.", includes: ["Power disconnect", "Water line detachment", "Drain tray emptying"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-inst-4", name: "New Refrigerator Setup", price: 349, duration: "30 mins", badge: "New Appliance", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unpacking tape removal, glass shelf insertion, ice tray alignment & initial run check.", includes: ["Internal tape removal", "Glass shelf alignment", "Initial run check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-inst-5", name: "Leveling & Positioning", price: 199, duration: "20 mins", badge: "Balance", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Adjusting front leg screws to eliminate fridge wobbling & ensure proper door closure.", includes: ["Spirit level check", "Leg screw adjustment", "Door swing test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-inst-6", name: "Water Line Connection", price: 299, duration: "30 mins", badge: "Dispenser Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Connecting external RO / tap water line to fridge ice maker & water dispenser.", includes: ["Food-grade tubing fit", "Push-fit connector check", "Dispenser flow test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      ],
+      "Refrigerator Cooling": [
+        { id: "ref-cool-1", name: "Cooling Problem", price: 499, duration: "45 mins", badge: "Cooling Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Thermostat sensor audit, airflow duct check, compressor relay & capacitor test.", includes: ["Airflow duct scan", "Thermostat audit", "Capacitor check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-cool-2", name: "Freezer Not Cooling", price: 599, duration: "1 hr", badge: "Freezer Restore", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Defrost heater check, evaporator fan motor repair & expansion valve audit.", includes: ["Evaporator fan check", "Defrost heater test", "Freezer temp check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-cool-3", name: "Uneven Cooling", price: 449, duration: "45 mins", badge: "Flow Balance", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Air damper flap motor adjustment, return air vent de-clogging & multi-flow tuning.", includes: ["Air damper check", "Return vent clearing", "Temperature sync"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-cool-4", name: "Over Cooling", price: 449, duration: "45 mins", badge: "Temp Regulation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fixing food freezing in fresh food compartment, thermostat calibration & sensor swap.", includes: ["Thermostat calibration", "NTC sensor check", "Damper motor test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-cool-5", name: "Temperature Problem", price: 399, duration: "45 mins", badge: "Sensor Calibration", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Digital panel temperature display error fix, sensor probe replacement & PCB sync.", includes: ["Digital panel test", "Sensor probe replace", "PCB signal check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-cool-6", name: "Ice Formation Problem", price: 499, duration: "45 mins", badge: "Defrost Restore", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing excessive ice buildup on evaporator coils, bi-metal thermostat & timer repair.", includes: ["Bi-metal fuse check", "Defrost timer test", "Drain tube heater check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Refrigerator Gas & Compressor": [
+        { id: "ref-gas-1", name: "Gas Refill", price: 1299, duration: "1.5 hrs", badge: "100% Gas Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "R134a / R600a eco refrigerant gas charging with vacuum evacuation & leak testing.", includes: ["System vacuuming", "Eco refrigerant fill", "Cooling performance test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-gas-2", name: "Gas Leak Detection", price: 399, duration: "45 mins", badge: "Leak Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Nitrogen pressure testing & electronic gas sniffer scan to locate microscopic leaks.", includes: ["Nitrogen pressure test", "Electronic sniffer scan", "Leak location report"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-gas-3", name: "Gas Leak Repair", price: 1199, duration: "1.5 hrs", badge: "Copper Braze", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Copper brazing silver solder fix, filter dryer filter replacement & pressure holding test.", includes: ["Silver solder brazing", "Filter dryer replace", "Pressure hold test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-gas-4", name: "Compressor Repair", price: 999, duration: "1.5 hrs", badge: "Compressor Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Compressor terminal wire repair, overload protector swap, relay & start capacitor replace.", includes: ["Terminal wire resolder", "OLP protector swap", "Start capacitor check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-gas-5", name: "Compressor Replacement", price: 1499, duration: "2 hrs", badge: "New Unit Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Installing brand new inverter / non-inverter compressor unit with gas charge.", includes: ["Old compressor dismount", "Brand new unit fit", "Full gas recharge"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-gas-6", name: "Refrigerant Pressure Check", price: 299, duration: "30 mins", badge: "PSI Audit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Connecting manifold pressure gauge to check suction/discharge PSI levels.", includes: ["Manifold gauge check", "Suction PSI report", "Compressor current test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "Refrigerator Cleaning & Maintenance": [
+        { id: "ref-cln-1", name: "Refrigerator Deep Cleaning", price: 499, duration: "1 hr", badge: "Hygiene Pack", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Shelves & drawer removal wash, door gasket rubber descaling, coil vacuuming & deodorizing spray.", includes: ["Shelves & drawers wash", "Gasket mold removal", "Deodorizing spray"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-cln-2", name: "Freezer Cleaning", price: 349, duration: "45 mins", badge: "Ice Cleanout", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Steam defrosting of heavy ice buildup, internal wall sanitizing & anti-bacterial wash.", includes: ["Steam ice melt", "Wall anti-bacterial wipe", "Odour removal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-cln-3", name: "Condenser Coil Cleaning", price: 299, duration: "30 mins", badge: "Coil Wash", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Vacuuming and brushing rear/bottom condenser coils to improve heat dissipation.", includes: ["Coil dust vacuuming", "Fin brush cleaning", "Heat dissipation test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-cln-4", name: "Drain Cleaning", price: 249, duration: "30 mins", badge: "Drain Flush", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Pressure flushing rear condensate drain hole & cleaning drip pan tray.", includes: ["Drain hole pressure flush", "Drip tray wash", "Algae treatment"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "ref-cln-5", name: "Defrost System Check", price: 349, duration: "30 mins", badge: "Defrost Audit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Testing defrost heating element resistance, bimetal thermostat & timer sequence.", includes: ["Heater resistance test", "Bi-metal continuity check", "Timer cycle verification"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-cln-6", name: "Preventive Maintenance", price: 599, duration: "1 hr", badge: "Annual Care", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Full annual tune-up: gas check, coil wash, electrical terminal tight & gasket lubricate.", includes: ["Full gas pressure check", "Terminal screw tightening", "Gasket lubrication"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Refrigerator Parts & Electrical Repair": [
+        { id: "ref-prt-1", name: "Thermostat Replacement", price: 499, duration: "45 mins", badge: "Thermostat Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing mechanical / digital temperature control thermostat capillary unit.", includes: ["Capillary tube replace", "Temperature calibration", "Cut-off cycle test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-prt-2", name: "Fan Motor Repair", price: 599, duration: "1 hr", badge: "Fan Swap", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Evaporator / condenser fan motor winding check, bushing greasing or motor replacement.", includes: ["Motor winding check", "Blade balance fit", "Airflow test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-prt-3", name: "Door Seal/Gasket Replacement", price: 449, duration: "45 mins", badge: "Gasket Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing worn magnetic door gasket & fitting brand-new food grade rubber seal.", includes: ["Worn gasket removal", "Magnetic strip insert", "Air tight seal check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "ref-prt-4", name: "PCB Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Electronic inverter mainboard micro-controller solder repair & relay swap.", includes: ["PCB diagnostic test", "Micro-controller repair", "60-day PCB warranty"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-prt-5", name: "Temperature Sensor Replacement", price: 399, duration: "45 mins", badge: "NTC Sensor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing faulty NTC thermistor temperature sensor probe.", includes: ["NTC resistance check", "Probe replacement", "Display error code clear"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "ref-prt-6", name: "Relay & Capacitor Replacement", price: 349, duration: "30 mins", badge: "Relay Swap", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing PTC starter relay, overload protector (OLP) & start capacitor.", includes: ["PTC relay swap", "OLP protector replace", "Start capacitor check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ]
+    },
+    microwave: {
+      "Microwave Repair": [
+        { id: "micro-rep-1", name: "Microwave Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete 15-point microwave diagnostic, magnetron check, diode & capacitor test, and door lock alignment.", includes: ["15-point diagnostic check", "High voltage safety test", "Door latch check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-2", name: "Not Heating", price: 499, duration: "45 mins", badge: "Heating Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnostic and repair for microwave running but food remaining cold. Magnetron, high voltage diode & capacitor test.", includes: ["Magnetron emission test", "HV diode & capacitor check", "Transformer test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-3", name: "Not Working", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Diagnostic for completely dead microwave with no display or power. Thermal fuse replacement & main control board fix.", includes: ["Thermal fuse check", "Door interlock switch test", "PCB power circuit fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "micro-rep-4", name: "Unknown Issue / General Check-up", price: 299, duration: "30 mins", badge: "General Check", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Full diagnostic inspection to identify mysterious sparks, burning smells, or erratic timer behavior.", includes: ["Mica wave guide sheet check", "Turntable alignment", "Fault report & estimate"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-5", name: "Buttons Not Working", price: 399, duration: "40 mins", badge: "Touchpad Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repair or replacement of non-responsive touch keypad membrane, start button failure, or digital display board.", includes: ["Keypad membrane test", "Display IC check", "Button contacts clean"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-6", name: "Noise Issue", price: 349, duration: "35 mins", badge: "Noise Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix grinding or squeaking noise during microwave operation, turntable motor replacement, or cooling fan repair.", includes: ["Turntable motor replace", "Cooling fan blower check", "Roller ring alignment"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      ],
+      "Water Purifier & RO": [
+        { id: "hvac-micro-2", name: "RO Water Purifier Servicing", price: 399, duration: "45 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Filter sediment wash, carbon filter change check, TDS level adjustment, and pump leak fix.", includes: ["Sediment & carbon check", "TDS calibration", "Leakage seal fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      ],
+      "Microwave & Purifier": [
+        { id: "micro-rep-1m", name: "Microwave Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete 15-point microwave diagnostic, magnetron check, diode & capacitor test, and door lock alignment.", includes: ["15-point diagnostic check", "High voltage safety test", "Door latch check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-2m", name: "Not Heating", price: 499, duration: "45 mins", badge: "Heating Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnostic and repair for microwave running but food remaining cold. Magnetron, high voltage diode & capacitor test.", includes: ["Magnetron emission test", "HV diode & capacitor check", "Transformer test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-3m", name: "Not Working", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Diagnostic for completely dead microwave with no display or power. Thermal fuse replacement & main control board fix.", includes: ["Thermal fuse check", "Door interlock switch test", "PCB power circuit fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "micro-rep-4m", name: "Unknown Issue / General Check-up", price: 299, duration: "30 mins", badge: "General Check", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Full diagnostic inspection to identify mysterious sparks, burning smells, or erratic timer behavior.", includes: ["Mica wave guide sheet check", "Turntable alignment", "Fault report & estimate"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-5m", name: "Buttons Not Working", price: 399, duration: "40 mins", badge: "Touchpad Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repair or replacement of non-responsive touch keypad membrane, start button failure, or digital display board.", includes: ["Keypad membrane test", "Display IC check", "Button contacts clean"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-6m", name: "Noise Issue", price: 349, duration: "35 mins", badge: "Noise Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix grinding or squeaking noise during microwave operation, turntable motor replacement, or cooling fan repair.", includes: ["Turntable motor replace", "Cooling fan blower check", "Roller ring alignment"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "hvac-micro-2", name: "RO Water Purifier Servicing", price: 399, duration: "45 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Filter sediment wash, carbon filter change check, TDS level adjustment, and pump leak fix.", includes: ["Sediment & carbon check", "TDS calibration", "Leakage seal fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      ]
+    },
+    appliance_repair: {
       "Refrigerator & Fridge": [
-        { id: "hvac-ref-1", name: "Fridge Cooling & Gas Check", price: 299, duration: "45 mins", badge: "Inspection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Compressor relay test, thermostat check, door gasket seal inspection, and gas pressure reading.", includes: ["21-point fridge inspection", "Thermostat test", "Detailed quote"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "hvac-ref-2", name: "Fridge Gas Charge & Leak Repair", price: 1299, duration: "1.5 hrs", badge: "Comprehensive", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Cooling coil leak solder, capillary tube flush, filter dryer replacement, and gas recharge.", includes: ["Leak repair & soldering", "Filter replacement", "100% Gas charge"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "hvac-ref-1", name: "Single Door Fridge Repair & Checkup", price: 299, duration: "45 mins", badge: "Single Door", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Complete diagnostic for Single Door refrigerator, cooling check, thermostat audit & relay test.", includes: ["Compressor relay test", "Thermostat sensor check", "Detailed inspection report"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "hvac-ref-2", name: "Double Door / Multi-Door Fridge Repair", price: 399, duration: "45 mins", badge: "Double Door", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Defrost heater test, PCB sensor audit, fan motor check & compressor relay test.", includes: ["Defrost heater check", "Evaporator fan motor test", "Thermal fuse check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-ref-3", name: "Fridge Gas Charge & Leak Repair", price: 1299, duration: "1.5 hrs", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Cooling coil leak solder, capillary tube flush, filter dryer replacement, and gas recharge.", includes: ["Nitrogen pressure leak audit", "Copper brazing solder fix", "Filter dryer replace", "100% gas fill"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-ref-4", name: "Fridge Deep Cleaning & Sanitization", price: 499, duration: "1 hr", badge: "Hygiene Pack", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Shelves & drawer removal wash, door gasket rubber descaling, coil vacuuming & deodorizing spray.", includes: ["Shelves & drawers wash", "Gasket mold removal", "Condenser coil vacuuming"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "hvac-ref-5", name: "Fridge Compressor & Motor Repair", price: 1499, duration: "2 hrs", badge: "Major Repair", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Compressor terminal wire fix, start capacitor replacement, relay swap, or new compressor fitting.", includes: ["Compressor overload protector replace", "Start capacitor swap", "Winding resistance test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "hvac-ref-6", name: "Fridge Thermostat & Defrost Timer Fix", price: 499, duration: "45 mins", badge: "Timer & Sensor", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Automatic defrost timer change, bi-metal thermal fuse replacement, or thermostat probe fix.", includes: ["Defrost timer replacement", "Bi-metal thermostat swap", "Temperature calibration"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
       ],
       "Microwave & Purifier": [
         { id: "hvac-micro-1", name: "Microwave Magnetron Repair", price: 499, duration: "45 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix non-heating issues, spark in cavity, touch keypad failure, or turntable motor replacement.", includes: ["Magnetron & diode check", "High voltage safety test", "Door lock repair"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
         { id: "hvac-micro-2", name: "RO Water Purifier Servicing", price: 399, duration: "45 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Filter sediment wash, carbon filter change check, TDS level adjustment, and pump leak fix.", includes: ["Sediment & carbon check", "TDS calibration", "Leakage seal fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      ]
+    },
+    tv_display: {
+      "TV Service & Repair": [
+        { id: "tv-srv-1", name: "TV General Service", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete 21-point TV diagnostic test, panel dust cleaning, port cleaning & voltage stability check.", includes: ["21-point TV audit", "Port & panel cleaning", "Voltage stability check"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-srv-2", name: "TV Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Comprehensive diagnosis and repair for LED/OLED/QLED TV audio, display or power board issues.", includes: ["Full TV diagnostic", "Faulty component fix", "Safety circuit check"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-srv-3", name: "TV Not Turning On", price: 499, duration: "45 mins", badge: "Power Audit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Power supply board test, standby red light audit, fuse replacement & main PCB power fix.", includes: ["SMPS power board test", "Fuse & diode replace", "Standby circuit fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "tv-srv-4", name: "No Picture Problem", price: 699, duration: "1 hr", badge: "Display Audit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Dark screen with audio diagnostic, LED backlight voltage check, T-Con board test & panel ribbon audit.", includes: ["LED backlight voltage check", "T-Con board test", "Panel ribbon audit"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-srv-5", name: "No Sound Problem", price: 449, duration: "45 mins", badge: "Audio Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Internal speaker coil test, audio IC audit, auxiliary jack & optical audio output repair.", includes: ["Speaker coil test", "Audio IC testing", "Aux/Optical jack check"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
+        { id: "tv-srv-6", name: "Screen Flickering Problem", price: 599, duration: "45 mins", badge: "Flicker Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Panel ribbon connector cleaning, COF IC test, voltage regulator check & flickering fix.", includes: ["COF IC diagnostic", "Ribbon connector clean", "Voltage regulator fix"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" }
+      ],
+      "TV Installation & Setup": [
+        { id: "tv-inst-1", name: "TV Installation", price: 399, duration: "45 mins", badge: "Recommended", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Fixed / Tilt wall bracket installation, drill mounting, level verification & cable connections.", includes: ["Wall drilling & bracket fit", "Level balance verification", "HDMI & power setup"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-inst-2", name: "TV Wall Mounting", price: 449, duration: "45 mins", badge: "Heavy Mount", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Heavy-duty drill wall mounting for 32\" to 75\" TVs, heavy anchor fit & wire concealing.", includes: ["Heavy anchor drilling", "Up to 75\" TV support", "Wire layout setup"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-inst-3", name: "TV Uninstallation", price: 249, duration: "30 mins", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe removal of TV from wall bracket, wire detachment & bracket dismounting.", includes: ["Wall bracket unmounting", "Cable detachment", "Packaging prep"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-inst-4", name: "TV Reinstallation", price: 599, duration: "1 hr", badge: "Relocate", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Safe dismounting from old location and new wall bracket drill installation at new spot.", includes: ["Dismount from old spot", "New wall drill installation", "Cable connection & test"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-inst-5", name: "TV Stand Installation", price: 299, duration: "30 mins", badge: "Table Stand", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Table top glass / metal leg stand assembly & rubber foot grip fitting.", includes: ["Leg stand screws fit", "Rubber pad alignment", "Table balance check"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-inst-6", name: "Smart TV Setup", price: 349, duration: "30 mins", badge: "Smart Setup", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Wi-Fi setup, OTT app login, HDMI ARC / eARC setup & voice remote pairing.", includes: ["Wi-Fi network connection", "OTT apps login", "ARC audio link"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" }
+      ],
+      "TV Screen & Display": [
+        { id: "tv-scr-1", name: "Screen Replacement", price: 1499, duration: "2 hrs", badge: "Major Panel", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Original LED/OLED panel assembly replacement with COF bonding & color calibration.", includes: ["Original panel fit", "COF bonding check", "Color & gamma test"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-scr-2", name: "Display Panel Repair", price: 999, duration: "1.5 hrs", badge: "Panel Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Panel T-Con logic board repair, ribbon COF bonding repair & display driver IC fix.", includes: ["T-Con board repair", "COF ribbon bonding", "Display driver IC swap"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-scr-3", name: "Backlight Repair", price: 899, duration: "1.5 hrs", badge: "Brightness", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Full set replacement of burnt LED backlight strips to restore uniform 100% screen brightness.", includes: ["Diffuser removal", "Full LED strip swap", "Uniform brightness check"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-scr-4", name: "Screen Flickering Repair", price: 699, duration: "1 hr", badge: "Flicker Free", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix display flickering, horizontal jitter lines, backlight voltage drop & panel refresh fix.", includes: ["Backlight driver test", "Jitter filter fix", "Panel refresh test"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-scr-5", name: "Vertical/Horizontal Line Repair", price: 799, duration: "1.5 hrs", badge: "Line Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Fix single or multiple vertical/horizontal lines on screen via tab bonding & COF fix.", includes: ["Tab bonding repair", "COF IC bonding", "Line removal verification"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-scr-6", name: "Display Color Problem", price: 599, duration: "45 mins", badge: "Color Tuning", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fix inverted colors, negative screen display, magenta tint, or gamma voltage IC repair.", includes: ["Gamma IC voltage check", "Inverted screen code fix", "Color balance calibration"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" }
+      ],
+      "TV Sound & Speaker": [
+        { id: "tv-snd-1", name: "Speaker Repair", price: 499, duration: "45 mins", badge: "Speaker Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Internal stereo speaker coil repair, paper cone replacement or new speaker unit fit.", includes: ["Speaker coil rewinding", "Paper cone replace", "Stereo balance test"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
+        { id: "tv-snd-2", name: "No Sound Repair", price: 449, duration: "45 mins", badge: "Audio Restore", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Audio amplifier IC replacement, mute circuit reset & audio line trace repair.", includes: ["Audio amp IC replace", "Mute switch reset", "Line trace repair"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
+        { id: "tv-snd-3", name: "Distorted Sound Repair", price: 449, duration: "45 mins", badge: "Clarity Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix cracking/buzzing audio, speaker vibration dampening & voice coil alignment.", includes: ["Vibration pad damping", "Voice coil centering", "High volume test"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
+        { id: "tv-snd-4", name: "Audio Port Repair", price: 399, duration: "45 mins", badge: "Port Repair", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "3.5mm Aux jack solder repair, Optical TOSLINK port swap & HDMI ARC audio fix.", includes: ["3.5mm Aux jack solder", "Optical port swap", "ARC signal check"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
+        { id: "tv-snd-5", name: "Sound System Setup", price: 499, duration: "45 mins", badge: "Soundbar Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Soundbar wall mounting, optical / HDMI eARC cable setup, subwoofer placement & surround tuning.", includes: ["Soundbar wall fit", "Optical / eARC setup", "Surround sound test"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
+        { id: "tv-snd-6", name: "Bluetooth Audio Setup", price: 249, duration: "20 mins", badge: "Wireless", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Pairing wireless Bluetooth headphones / soundbars & low latency audio sync.", includes: ["Bluetooth pairing", "Latency sync check", "Multi-device test"], image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" }
+      ],
+      "TV Software & Smart Features": [
+        { id: "tv-soft-1", name: "Smart TV Setup", price: 349, duration: "30 mins", badge: "Smart Features", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete Android TV / Tizen / WebOS setup, account sync & picture mode tuning.", includes: ["OS initial configuration", "Account sign in", "Picture mode tuning"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-soft-2", name: "Software Update", price: 299, duration: "25 mins", badge: "Firmware", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Firmware flashing via USB/OTA to fix app crashes, boot loops & sluggish OS.", includes: ["Latest OS firmware flash", "Cache wipe", "Boot speed test"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-soft-3", name: "App Installation", price: 249, duration: "20 mins", badge: "App Store", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Installation & configuration of Netflix, Prime, YouTube, Hotstar & IPTV streaming apps.", includes: ["OTT apps install", "Sideloading support", "4K playback test"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-soft-4", name: "Wi-Fi Connection Setup", price: 249, duration: "20 mins", badge: "Network", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Dual band 2.4GHz / 5GHz Wi-Fi connection fix, DNS configuration & network speed test.", includes: ["Wi-Fi module test", "Custom DNS config", "Bandwidth speed check"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-soft-5", name: "Remote Pairing", price: 199, duration: "15 mins", badge: "Remote Pair", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Smart Bluetooth / RF voice remote pairing & IR blaster universal code setup.", includes: ["Bluetooth remote sync", "Voice search config", "IR code programming"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-soft-6", name: "Factory Reset & Configuration", price: 299, duration: "30 mins", badge: "Master Reset", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Full factory master reset, memory cache clearing & user preferences setup.", includes: ["Master system reset", "Memory wipe", "Initial wizard setup"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" }
+      ],
+      "TV Parts & Electrical Repair": [
+        { id: "tv-prt-1", name: "Power Supply Repair", price: 799, duration: "1 hr", badge: "SMPS Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "SMPS power supply board repair, burst capacitor replacement, diode & fuse fix.", includes: ["SMPS board repair", "High voltage diode replace", "Voltage regulator fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "tv-prt-2", name: "Motherboard Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Main logic board BGA CPU reballing, HDMI controller IC swap & EEPROM firmware fix.", includes: ["CPU BGA check", "HDMI controller swap", "EEPROM IC flash"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "tv-prt-3", name: "HDMI Port Repair", price: 599, duration: "1 hr", badge: "HDMI Swap", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Desoldering broken 4K HDMI port connector & soldering brand new gold-plated female jack.", includes: ["Broken port desolder", "4K HDMI jack solder", "Signal continuity test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "tv-prt-4", name: "USB Port Repair", price: 399, duration: "45 mins", badge: "USB Swap", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing damaged USB 2.0 / 3.0 ports on TV mainboard for media playback.", includes: ["USB jack replacement", "Power pin solder", "Flash drive test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "tv-prt-5", name: "Remote Repair", price: 249, duration: "20 mins", badge: "Remote Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Remote keypad membrane cleaning, IR transmitter LED solder & battery terminal fix.", includes: ["Keypad carbon clean", "IR LED resolder", "Battery terminal descaling"], image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+        { id: "tv-prt-6", name: "Capacitor & Component Replacement", price: 399, duration: "45 mins", badge: "Component Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Metalized film & electrolytic capacitor replacement on TV boards.", includes: ["Capacitor microfarad audit", "Low-ESR capacitor swap", "Circuit stress test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
       ]
     },
     electrical: {
@@ -11577,32 +12231,110 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       ]
     },
     plumbing: {
-      "Taps & Mixers": [
-        { id: "plum-tap-1", name: "Tap & Faucet Repair / Fit", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or install new sink/basin tap.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-tap-2", name: "Wall Mixer / Diverter Repair", price: 399, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Hot & cold water mixer valve replacement, shower diverter repair, and thread sealing.", includes: ["Internal cartridge fix", "Teflon tape seal", "Flow pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      "Tap & Mixer": [
+        { id: "plum-tap-1", name: "Tap Repair", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or internal seal tuning.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "plum-tap-2", name: "Tap Installation / Replacement", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unmounting old tap and fitting new sink/basin/wall tap with Teflon thread sealing.", includes: ["Old tap dismount", "New tap fitting", "Teflon seal check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "plum-tap-3", name: "Tap Accessory Installation", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fitting aerators, extension nozzles, foamers, or water filter adapters on taps.", includes: ["Accessory mounting", "Aerator cleaning", "Spray test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "plum-tap-4", name: "Mixer Repair", price: 399, duration: "45 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hot & cold water mixer valve cartridge replacement, shower diverter repair, and thread sealing.", includes: ["Internal cartridge fix", "Teflon tape seal", "Flow pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-tap-5", name: "Mixer Installation", price: 499, duration: "1 hr", badge: "New Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Wall mixer or counter-top mixer installation with hot & cold braided pipe connection.", includes: ["Hot/cold alignment", "Wall flange fit", "Pressure leak test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-tap-6", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Overhead shower arm mounting, hand shower bracket fitting, and flow test.", includes: ["Shower arm fit", "Teflon thread seal", "Spray pattern check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
       ],
-      "Drainage & Clog": [
-        { id: "plum-drain-1", name: "Sink & Drain Pipe Unclogging", price: 349, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High-flex spring wire cleaning to clear food debris, grease, and hair clogs in waste pipes.", includes: ["Spring wire clog removal", "Waste pipe trap cleaning", "Full flow test"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" }
+      "Toilet": [
+        { id: "plum-toil-1", name: "Jet Spray Repair / Replacement", price: 199, duration: "25 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix leaking health faucet jet spray, trigger replacement or new hose installation.", includes: ["Trigger repair/replace", "Braided hose connection", "Pressure test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "plum-toil-2", name: "Jet Spray Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "New health faucet jet spray wall bracket fitting and 2-way angle valve connection.", includes: ["Wall bracket drill & fit", "Angle valve connection", "Leakage test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "plum-toil-3", name: "Toilet Seat Cover Installation", price: 199, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Removing old damaged seat cover and installing new soft-close hydraulic toilet seat cover.", includes: ["Old cover removal", "Hinge bolt alignment", "Soft-close test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "plum-toil-4", name: "Flush Tank Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix continuous flushing water leakage, syphon kit change, or float valve adjustment.", includes: ["Syphon kit check", "Float valve adjustment", "Leak tightness check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "plum-toil-5", name: "Flush Tank Replacement", price: 699, duration: "1 hr", badge: "Full Kit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Dismounting old flush tank and installing new PVC single/dual flush tank assembly.", includes: ["Old tank removal", "New tank mounting", "Dual flush calibration"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "plum-toil-6", name: "Western Toilet Replacement", price: 1299, duration: "1.5 hrs", badge: "Heavy Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Dismounting old commode, wax seal ring installation, floor bolt fixing, and silicone sealing.", includes: ["Old commode dismount", "Wax ring & gasket seal", "Floor anchorage & silicone seal"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "plum-toil-7", name: "Indian Toilet Installation", price: 1499, duration: "2 hrs", badge: "Sanitary Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Squatting pan alignment, P-trap sealing, cement joint packing, and flush connection.", includes: ["P-trap alignment", "Cement mortar packing", "Flush pipe seal"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "plum-toil-8", name: "Toilet Pot Blockage Removal", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "High-pressure auger drain snake clearing for toilet pot blockage and waste line backup.", includes: ["Drain snake clearing", "Pressure flush test", "Sanitizing cleanup"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" }
       ],
-      "Toilet & Flush Tank": [
-        { id: "plum-toilet-1", name: "Flush Tank Syphon & Valve Repair", price: 499, duration: "1 hr", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix continuous tank water leakage, syphon kit change, ball valve replacement, or flush button fix.", includes: ["Syphon kit replacement", "Internal float valve fix", "Sanitary seal check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      "Basin & Sink": [
+        { id: "plum-bs-1", name: "Wash Basin Installation", price: 499, duration: "45 mins", badge: "Recommended", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Wall bracket mounting, ceramic wash basin positioning, waste coupling, and pillar tap fit.", includes: ["Wall bracket drilling", "Basin positioning & leveling", "Waste coupling seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-bs-2", name: "Waste Pipe Replacement", price: 199, duration: "25 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing cracked or leaking flexible corrugated waste pipe under sink/basin.", includes: ["Old pipe removal", "Heavy duty flexible hose fit", "Drain flush check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-bs-3", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "De-clog", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Clearing food sludge, grease buildup, and debris in kitchen sink bottle trap or drain line.", includes: ["Bottle trap dismount & clean", "Spring snake clearing", "Water drain flush"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
+        { id: "plum-bs-4", name: "Waste Coupling Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Brass or stainless steel waste coupling installation with rubber gasket and pop-up plug.", includes: ["Old coupling removal", "Rubber gasket positioning", "Leak-free tightness test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
       ],
-      "Water Heater & Tank": [
-        { id: "plum-geyser-1", name: "Geyser Water Heater Installation", price: 799, duration: "1.5 hrs", badge: "Heavy Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Wall fastener drilling, inlet/outlet braided pipe connection, safety valve fitting.", includes: ["Heavy wall fastener mounting", "Braided pipe connection", "Heating & leak test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      "Bath Fittings": [
+        { id: "plum-bf-1", name: "Bath Accessory Installation", price: 199, duration: "20 mins", badge: "Fitting", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Towel rod, soap dish, robe hook, tumbler holder or mirror bracket wall mounting.", includes: ["Tile drilling with precision", "Rawl plug anchor fit", "Leveling check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-bf-2", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Rain shower head, shower arm extension or hand shower sliding rail fitting.", includes: ["Shower arm connection", "Flange placement", "Spray nozzle check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-bf-3", name: "Bathroom Fitting Repair", price: 249, duration: "30 mins", badge: "Repair", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fixing loose bathroom fixtures, leaking angle valves, or damaged flanges.", includes: ["Loose screw tightening", "Washer replacement", "Sealing check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-bf-4", name: "Bathroom Fitting Replacement", price: 349, duration: "45 mins", badge: "Upgrade", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Complete replacement of old worn out bathroom metallic/CP accessories with new fixtures.", includes: ["Dismounting old fittings", "New accessory fitting", "Alignment test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Water Tank & Motor": [
+        { id: "plum-wt-1", name: "Overhead Water Tank Installation", price: 1499, duration: "2 hrs", badge: "Heavy Duty", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "500L/1000L PVC water tank positioning, inlet/outlet tank nipple fitting, and overflow pipe setup.", includes: ["Tank alignment", "Tank nipple sealing", "Ball valve & overflow fit"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-wt-2", name: "Water Tank Repair", price: 599, duration: "1 hr", badge: "Leak Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing crack leaks in plastic water tanks using thermal plastic welding or leak proof sealant.", includes: ["Crack surface prep", "Thermal welding / sealant", "Water fill test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-wt-3", name: "Motor Installation", price: 799, duration: "1 hr", badge: "Motor Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Submersible or monoblock water pump motor piping connection, check valve, and union fitting.", includes: ["Inlet/outlet pipe jointing", "Non-return valve fit", "Priming & run test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-wt-4", name: "Motor Air Cavity Removal", price: 399, duration: "45 mins", badge: "Air Lock", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Resolving motor air lock issues, suction line priming, and foot valve air bleeding.", includes: ["Suction line priming", "Air bleed valve opening", "Water pumping test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Drainage": [
+        { id: "plum-dr-1", name: "Drain Blockage Removal", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High pressure water jet flushing or heavy rotary snake clearing for clogged bathroom floor drains.", includes: ["Rotary spring snake clear", "Grease & hair extraction", "Drain flush test"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
+        { id: "plum-dr-2", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "Kitchen Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Clearing stubborn food oil and debris blockage in kitchen sink drain trap line.", includes: ["Sink trap removal & clean", "Pipe flush treatment", "Flow restoration"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
+        { id: "plum-dr-3", name: "Pipe Blockage Removal", price: 499, duration: "1 hr", badge: "Deep Clear", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Clearing main chamber or underground PVC drainage pipe line blockage.", includes: ["Chamber inspection", "Heavy duty cable snake", "Debris extraction"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
+        { id: "plum-dr-4", name: "Drainage Repair", price: 599, duration: "1 hr", badge: "Pipe Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Repairing broken PVC drain pipe section, replacing damaged nahani trap, or solvent joint sealing.", includes: ["Damaged pipe cut & patch", "PVC solvent weld joint", "Leak test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Water Filter": [
+        { id: "plum-wf-1", name: "Shower Filter Installation", price: 249, duration: "25 mins", badge: "Hard Water", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Connecting anti-scale hard water filter cartridge to shower arm or tap.", includes: ["Filter adapter attachment", "Cartridge insert", "Flow check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-wf-2", name: "Washing Machine Filter Installation", price: 299, duration: "30 mins", badge: "Appliance Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Inline hard water descaling filter connection to washing machine water inlet tap.", includes: ["Tap adapter fitting", "Inline filter installation", "Leak check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-wf-3", name: "Water Filter Installation", price: 499, duration: "45 mins", badge: "Purifier Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Main water purifier / RO pre-filter housing installation with diverter valve connection.", includes: ["Diverter valve connection", "Pre-filter housing mount", "Pure water pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "plum-wf-4", name: "Filter Replacement", price: 199, duration: "20 mins", badge: "Quick Swap", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Replacing exhausted sediment or carbon filter candle with new fresh cartridge.", includes: ["Housing opening", "Old candle removal & wash", "New cartridge insertion"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Grouting": [
+        { id: "plum-gr-1", name: "Bathroom Tile Grouting", price: 699, duration: "1 hr", badge: "Waterproof Seal", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Scraping old damaged grout lines and applying epoxy / waterproof white cement grout in bathroom tiles.", includes: ["Tile joint scraping", "Waterproof epoxy grout application", "Tile surface sponge clean"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "plum-gr-2", name: "Kitchen Tile Grouting", price: 599, duration: "1 hr", badge: "Hygienic Seal", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Sealing kitchen wall & counter tile joints with anti-bacterial stain-proof grout.", includes: ["Joint cleaning & degreasing", "Stain-proof epoxy grout fill", "Sponge finishing"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "Plumber On-Demand": [
+        { id: "plum-od-1", name: "30-Minute Plumber Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert plumber for quick minor repairs, leak inspection, or small fittings.", includes: ["Rapid response plumber", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "plum-od-2", name: "Hourly Plumber Service", price: 399, duration: "1 hr", badge: "Flexible Labor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Hourly plumbing labor for multiple custom repair jobs, piping work, or fixture replacements.", includes: ["1 hr professional plumber labor", "Multiple small tasks handled", "Tools included"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "plum-od-3", name: "Full-Day Plumber Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated plumber booking for new home setup, bathroom renovation, or major pipe work.", includes: ["8 hrs dedicated master plumber", "Complete plumbing overhaul", "Daily progress check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+        { id: "plum-od-4", name: "Plumber Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site plumbing system health audit, piping leakage trace, and renovation estimate.", includes: ["Detailed on-site audit", "Leakage point trace", "Itemized cost estimate"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
       ]
     },
     carpentry: {
       "Lock & Handle": [
-        { id: "carp-lock-1", name: "Main Door Lock / Handle Installation", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Mortise lock fitting, cylindrical lock replace, latch alignment, key smooth turn check.", includes: ["Lock slot chisel & fit", "Latch strike plate alignment", "Key smooth test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "carp-lock-1", name: "Main Door Lock / Handle Installation", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Mortise lock fitting, cylindrical lock replace, latch alignment, key smooth turn check.", includes: ["Lock slot chisel & fit", "Latch strike plate alignment", "Key smooth test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "carp-lock-2", name: "Mortise Lock Repair & Replacement", price: 299, duration: "45 mins", badge: "Heavy Lock", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repairing or replacing heavy mortise door locks, handles, and key cylinders.", includes: ["Chisel mortise pocket", "Key cylinder alignment", "Latching check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "carp-lock-3", name: "Cylindrical Door Lock Installation", price: 249, duration: "30 mins", badge: "Popular", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fitting cylindrical knob / lever lock for bedroom and office wooden doors.", includes: ["Hole saw drilling", "Latch mechanism fit", "Key test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "carp-lock-4", name: "Door Latch & Tower Bolt Fitting", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Installing brass/steel tower bolts, aldrop latches, or magnetic door catchers.", includes: ["Screw pilot drilling", "Tower bolt fit", "Latching check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
       ],
-      "Furniture Repair": [
-        { id: "carp-furn-1", name: "Bed & Wardrobe Assembly / Repair", price: 399, duration: "1 hr", badge: "Best Value", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Tighten loose joints, replace broken wooden slats, wardrobe door realignment, or new flatpack assembly.", includes: ["Joint tightening & glueing", "Leveling check", "30-day warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      "Cupboard & Drawer": [
+        { id: "carp-cup-1", name: "Cupboard Repair", price: 299, duration: "45 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fixing sagging cupboard shelves, loose wooden joints, door misalignment, and latch fixes.", includes: ["Shelf support reinforcement", "Hinge adjustment", "Joint glue & screw"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "carp-cup-2", name: "Cupboard Lock & Latches", price: 199, duration: "30 mins", badge: "Security", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Installing or replacing multi-purpose cupboard locks, cam locks, and magnetic catches.", includes: ["Cam lock fitting", "Strike plate alignment", "Key smoothness test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "carp-cup-3", name: "Drawer Repair & Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Repairing broken wooden drawer boxes, alignment adjustment, and smooth slide setup.", includes: ["Drawer box alignment", "Telescopic channel fix", "Smooth slide test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "carp-cup-4", name: "Drawer Channel Slide Replacement", price: 199, duration: "25 mins", badge: "Smooth Slide", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing rusty or broken ball-bearing drawer telescopic channels for quiet sliding.", includes: ["Old channel dismount", "Heavy-duty channel fit", "Slide alignment test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      ],
+      "Kitchen Fittings": [
+        { id: "carp-kit-1", name: "Pull-Out Drawer Repair / Replacement", price: 349, duration: "45 mins", badge: "Kitchen Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Modular kitchen stainless steel wire pull-out drawer repair, channel alignment, or basket replacement.", includes: ["Basket channel alignment", "Roller wheel replace", "Load test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "carp-kit-2", name: "Cabinet Hinges", price: 199, duration: "30 mins", badge: "Hinge Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing loose, squeaking, or rusted auto-close cabinet hinges on modular kitchen doors.", includes: ["Auto-close hinge swap", "Door gap adjustment", "Closing test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "carp-kit-3", name: "Cabinet Hydraulic Repair", price: 299, duration: "45 mins", badge: "Hydraulic", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing weak gas lift struts and hydraulic stay arms for overhead kitchen cabinets.", includes: ["Gas strut replacement", "Pressure bracket mount", "Lift & stay test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "carp-kit-4", name: "Utensil Rack Installation", price: 249, duration: "30 mins", badge: "Storage Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Wall drilling and mounting stainless steel dish drying rack, spice rack, or cup holder.", includes: ["Precision tile drilling", "Stainless rack anchor fit", "Weight test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      ],
+      "Hangers & Drying Solutions": [
+        { id: "carp-hng-1", name: "Ceiling-Mounted Hanger Installation", price: 499, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Installing 6-pipe pulley ceiling cloth drying hanger with smooth rope hoisting mechanism.", includes: ["Ceiling anchor drilling", "Pulley wheel alignment", "Hoisting rope test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "carp-hng-2", name: "Wall Hanger Installation", price: 249, duration: "30 mins", badge: "Wall Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Foldable wall-mounted cloth drying rack installation for balcony or utility area.", includes: ["Wall bracket drilling", "Foldable rack fit", "Weight test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "carp-hng-3", name: "Cloth Drying Rope Installation", price: 199, duration: "25 mins", badge: "Quick Rope", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Hook anchor drilling and nylon / stainless steel plastic-coated clothesline stringing.", includes: ["Hook anchor drilling", "High-tension rope knot", "Tension check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      ],
+      "Furniture Services": [
+        { id: "carp-furn-1", name: "Furniture Repair", price: 399, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Tighten loose joints, replace broken wooden slats, wardrobe door realignment, or sofa frame repair.", includes: ["Joint tightening & glueing", "Leveling check", "30-day warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "carp-furn-2", name: "Furniture Making", price: 1499, duration: "2 hrs", badge: "Custom Wood", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Custom carpentry wood cutting, plywood framing, laminate pasting, and custom furniture crafting.", includes: ["Custom wood cutting", "Frame joinery", "Edge banding & sanding"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "carp-furn-3", name: "Furniture Assembly", price: 499, duration: "1 hr", badge: "Flatpack Assembly", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Professional IKEA / Pepperfry flatpack furniture unboxing, cam lock assembly, and leveling.", includes: ["Unboxing & hardware sort", "Cam lock structural assembly", "Stability check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+        { id: "carp-furn-4", name: "Wooden Furniture Fixes", price: 299, duration: "45 mins", badge: "Wood Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fixing wobbly chair legs, cracked table surfaces, drawer wood swelling, or loose veneer.", includes: ["Wood putty filling", "Veneer glue clamping", "Sanding smoothing"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
       ],
       "Doors & Windows": [
-        { id: "carp-door-1", name: "Cabinet Soft-Close Hinge Fix", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hydraulic soft-close hinge replacement, magnetic catch fitting, drawer channel smooth slide fix.", includes: ["Hinge replacement", "Door gap alignment", "Magnetic catch fit"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+        { id: "carp-door-1", name: "Cabinet Soft-Close Hinge Fix", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hydraulic soft-close hinge replacement, magnetic catch fitting, drawer channel smooth slide fix.", includes: ["Hinge replacement", "Door gap alignment", "Magnetic catch fit"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "carp-door-2", name: "Door Alignment & Shaving", price: 299, duration: "45 mins", badge: "Smooth Close", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Planing / shaving jammed wooden doors swelling in monsoon, hinge tightening, and smooth latching.", includes: ["Door edge planing", "Hinge screw tightening", "Latch clearance check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "carp-door-3", name: "Wooden Window Latch Repair", price: 199, duration: "30 mins", badge: "Window Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Replacing wooden window stay handles, tower bolts, hinges, and glass bead strips.", includes: ["Stay handle replacement", "Hinge lubrication", "Latch test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "carp-door-4", name: "Door Stopper & Rubber Buffer Fit", price: 149, duration: "20 mins", badge: "Wall Safety", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Floor or wall door stopper installation with rubber buffer to prevent door handle wall damage.", includes: ["Floor anchor drilling", "Stopper screw fit", "Impact check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
       ],
       "Drill & Hanging": [
-        { id: "carp-drill-1", name: "Wall Shelf / TV Bracket Mounting", price: 249, duration: "30 mins", badge: "Quick Drill", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Laser level drilling, rawl plug anchor insertion, heavy concealed bracket shelf fitting.", includes: ["Laser leveling check", "Concealed bracket fitting", "Weight test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" }
+        { id: "carp-drill-1", name: "Wall Shelf / TV Bracket Mounting", price: 249, duration: "30 mins", badge: "Quick Drill", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Laser level drilling, rawl plug anchor insertion, heavy concealed bracket shelf fitting.", includes: ["Laser leveling check", "Concealed bracket fitting", "Weight test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
+        { id: "carp-drill-2", name: "Photo Frame & Wall Decor Hanging", price: 149, duration: "20 mins", badge: "Decor Drill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Hanging heavy photo frames, paintings, wall clocks, or decorative mirrors safely.", includes: ["Spirit level positioning", "Heavy duty wall anchor drill", "Hang stability test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
+        { id: "carp-drill-3", name: "Curtain Rod & Blind Installation", price: 199, duration: "25 mins", badge: "Curtain Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Single/Double curtain rod bracket drilling, roller blind, or wooden Venetian blind mounting.", includes: ["Rod bracket anchor drilling", "Finial alignment", "Smooth pull check"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" }
+      ],
+      "Carpenter On-Demand": [
+        { id: "carp-od-1", name: "30-Minute Carpenter Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert carpenter for quick minor wood repairs, hinge tuning, or small drill jobs.", includes: ["Rapid response carpenter", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "carp-od-2", name: "Full-Day Carpenter Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated master carpenter booking for home renovation, custom woodworking, or major repairs.", includes: ["8 hrs dedicated master carpenter", "Complete carpentry service", "Tools included"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "carp-od-3", name: "Carpenter Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site woodworking health audit, furniture measurement, and custom work cost estimate.", includes: ["On-site wood inspection", "Precision measurement", "Itemized estimate"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
       ]
     },
     painting: {
@@ -11787,7 +12519,23 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   };
 
   const isApartmentVilla = normalizedKey === "cleaning" && ["Furnished Apartment", "Unfurnished Apartment", "Furnished Villa", "Unfurnished Villa"].includes(activeSubTab);
-  const currentOtherPlans = (OTHER_SERVICES[normalizedKey] && OTHER_SERVICES[normalizedKey][activeSubTab]) || [];
+  const currentOtherPlans = (OTHER_SERVICES[effectiveKey] && OTHER_SERVICES[effectiveKey][activeSubTab]) ||
+    (OTHER_SERVICES["electrical"] && OTHER_SERVICES["electrical"][activeSubTab]) ||
+    (OTHER_SERVICES["refrigerator"] && OTHER_SERVICES["refrigerator"][activeSubTab]) ||
+    (OTHER_SERVICES["tv_display"] && OTHER_SERVICES["tv_display"][activeSubTab]) ||
+    (OTHER_SERVICES["washing_machine"] && OTHER_SERVICES["washing_machine"][activeSubTab]) ||
+    (OTHER_SERVICES["hvac"] && OTHER_SERVICES["hvac"][activeSubTab]) ||
+    (OTHER_SERVICES["appliance_repair"] && OTHER_SERVICES["appliance_repair"][activeSubTab]) || [];
+
+  const isTvTab = tvSubtabs.includes(activeSubTab);
+  const isWmTab = washingMachineSubtabs.includes(activeSubTab);
+  const isRefTab = refrigeratorSubtabs.includes(activeSubTab);
+  const isElecTab = electricalSubtabs.includes(activeSubTab);
+  const isPlumbingTab = plumbingSubtabs.includes(activeSubTab);
+  const isCarpentryTab = carpentrySubtabs.includes(activeSubTab);
+  const isApplianceTab = applianceSubtabs.includes(activeSubTab);
+  const isHvacTab = hvacSubtabs.includes(activeSubTab);
+  const displayCategoryName = isTvTab ? "TV & Display" : isWmTab ? "Washing Machine" : isRefTab ? "Refrigerator & Fridge" : isElecTab ? "Electrician" : isPlumbingTab ? "Plumber" : isCarpentryTab ? "Carpentry" : isApplianceTab ? activeSubTab : isHvacTab ? "AC & Heating" : category.name;
 
   const getBhkTitle = (tab, planName, bhk) => {
     return `${tab} - ${planName} (${bhk} BHK)`;
@@ -11847,7 +12595,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               <ChevronLeft size={14} /> Back to Services
             </button>
             <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              {category.name}
+              {displayCategoryName}
             </h2>
           </div>
 
@@ -11879,6 +12627,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   setActiveSubTab(tab.name);
                   setSearchQuery("");
                   const params = new URLSearchParams(window.location.search);
+                  params.set("subtab", tab.name);
                   params.set("subTab", tab.name);
                   navigate(`?${params.toString()}`, { replace: true });
                 }}
@@ -12253,14 +13002,20 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                             )
                           )}
 
-                          {normalizedKey === "mason" && (
-                             <div className="flex items-center gap-3 mt-3">
-                              <button
-                                onClick={() => setSelectedMasonDetail(p)}
-                                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-                              >
-                                View details
-                              </button>
+                          <div className="flex items-center gap-3 mt-3">
+                            <button
+                              onClick={() => {
+                                if (normalizedKey === "mason") {
+                                  setSelectedMasonDetail(p);
+                                } else {
+                                  setSelectedPackageDetail(p);
+                                }
+                              }}
+                              className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                            >
+                              View details
+                            </button>
+                            {normalizedKey === "mason" && (
                               <button
                                 onClick={() => {
                                   let updatedCart = [...cart];
@@ -12277,8 +13032,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                               >
                                 Book Consultation
                               </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
 
                         {/* Right side image & floating ADD button */}
@@ -12888,6 +13643,173 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   }
                 }}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer"
+              >
+                Proceed
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {selectedPackageDetail && createPortal(
+        <div 
+          onClick={() => setSelectedPackageDetail(null)}
+          className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans text-slate-800"
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setSelectedPackageDetail(null)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors cursor-pointer border-none"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Header image */}
+            <div className="w-full h-44 border-b border-slate-100 shrink-0 bg-slate-100">
+              <img
+                src={selectedPackageDetail.image}
+                alt={selectedPackageDetail.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80&fit=crop";
+                }}
+              />
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-left">
+              {/* Title, rating and price/add */}
+              <div className="border-b border-slate-100 pb-5">
+                <h3 className="text-lg font-extrabold text-slate-900 mb-1">{selectedPackageDetail.name}</h3>
+
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-4">
+                  <Star className="text-purple-600 fill-purple-600" size={13} />
+                  <span className="text-slate-800 font-bold">4.82</span>
+                  <span className="text-slate-400 font-normal underline">(4.5M reviews)</span>
+                </div>
+
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
+                  <div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">PRICE</div>
+                    <div className="text-lg font-black text-slate-900 mt-0.5">
+                      ₹{typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price.toLocaleString("en-IN") : selectedPackageDetail.price}
+                      {selectedPackageDetail.duration && (
+                        <span className="text-slate-400 text-xs font-semibold ml-2">• {selectedPackageDetail.duration}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Add button inside details modal */}
+                  <div className="w-24">
+                    {(() => {
+                      const pkgCartId = `serv-${normalizedKey}-${selectedPackageDetail.id}`;
+                      const pkgCount = getCartItemCount(pkgCartId);
+                      const pkgName = selectedPackageDetail.name;
+                      const pkgPrice = typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price : (parseFloat(selectedPackageDetail.price) || 0);
+                      const pkgDuration = selectedPackageDetail.duration || "";
+
+                      return pkgCount > 0 ? (
+                        <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
+                          <button onClick={() => removeItemFromCart(pkgCartId)} className="hover:text-emerald-900 cursor-pointer">-</button>
+                          <span>{pkgCount}</span>
+                          <button onClick={() => addItemToCart(pkgCartId, pkgName, pkgPrice, pkgDuration)} className="hover:text-emerald-900 cursor-pointer">+</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => addItemToCart(pkgCartId, pkgName, pkgPrice, pkgDuration)}
+                          className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <ShoppingCart size={13} /> Add
+                        </button>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* TOOLS & PRODUCTS WE USE */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
+                <div className="space-y-2">
+                  {(selectedPackageDetail.includes && selectedPackageDetail.includes.length > 0
+                    ? selectedPackageDetail.includes
+                    : [
+                        "Professional grade safety & service tools",
+                        "Microfiber cloths & non-abrasive scrubbers",
+                        "High performance diagnostic equipment",
+                        "Safety gear & protective floor covers"
+                      ]
+                  ).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* WHAT YOU NEED TO KEEP READY */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
+                <div className="space-y-2">
+                  {[
+                    "Continuous water supply",
+                    "Working power connection",
+                    "Service area accessible and cleared",
+                    "Fragile items and valuables kept safely"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                      <span className="leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* CUSTOMER REVIEWS */}
+              <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                {[
+                  { name: "Arvind S.", text: "Prompt service, professional technician, and great attention to detail!", rating: 5 },
+                  { name: "Kavya R.", text: "Arrived right on time. Very neat work and explained everything clearly.", rating: 5 }
+                ].map((rev, idx) => (
+                  <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5 space-y-1">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                      <span>{rev.name}</span>
+                      <span className="text-emerald-600 font-extrabold flex items-center gap-0.5">★ {rev.rating}.0</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-snug">{rev.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                {category?.name || "Service Details"}
+              </span>
+              <button
+                onClick={() => {
+                  const pkgCartId = `serv-${normalizedKey}-${selectedPackageDetail.id}`;
+                  if (getCartItemCount(pkgCartId) === 0) {
+                    const pkgName = selectedPackageDetail.name;
+                    const pkgPrice = typeof selectedPackageDetail.price === "number" ? selectedPackageDetail.price : (parseFloat(selectedPackageDetail.price) || 0);
+                    const pkgDuration = selectedPackageDetail.duration || "";
+                    addItemToCart(pkgCartId, pkgName, pkgPrice, pkgDuration);
+                  }
+                  setSelectedPackageDetail(null);
+                  if (typeof onCheckout === "function") {
+                    onCheckout(cart);
+                  }
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all uppercase tracking-wider cursor-pointer"
               >
                 Proceed
               </button>
@@ -17021,8 +17943,7 @@ const SERVICE_DETAIL_DATA = {
   },
   "dining-table-quick": {
     reviews: [
-      { name: "Rahul K.", rating: "5.0", text: '"The dining table was cleaned very neatly. Food stains were removed well."' },
-      { name: "Ananya S.", rating: "4.9", text: '"Quick and simple service. The table looks fresh and clean."' }
+      { name: "Rahul K.", rating: "5.0", text: '"The dining table was cleaned very neatly. Food stains were removed well."' }
     ],
     faqs: [
       { q: "Will you clean the chairs too?", a: "No, chair cleaning is not included in this service." },

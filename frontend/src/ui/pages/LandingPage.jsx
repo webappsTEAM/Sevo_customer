@@ -1097,9 +1097,14 @@ export function LandingPage() {
 
   const goToBooking = () => navigate(routes.booking)
   const goToLogin = () => setShowCustomerEntryModal(true)
-  const goToCategoryServices = (serviceCategoryId) => {
-    navigate(serviceCategoryId ? `${routes.booking_services}?category=${serviceCategoryId}` : routes.booking_services)
-  }
+  const goToCategoryServices = (serviceCategoryId, subTabName) => {
+    let url = serviceCategoryId ? `${routes.booking_services}?category=${serviceCategoryId}` : routes.booking_services;
+    if (subTabName) {
+      const encoded = encodeURIComponent(subTabName);
+      url += `&subtab=${encoded}&subTab=${encoded}`;
+    }
+    navigate(url);
+  };
 
   // Category clicked on this page opens the existing package/services
   // popup right here, instead of navigating to the old BookingPage UI.
@@ -1439,7 +1444,7 @@ export function LandingPage() {
               {modalCart && modalCart.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => navigate(routes.booking_checkout, { state: { cart: modalCart } })}
+                  onClick={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
                   className="relative p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 text-slate-700 hover:text-emerald-700 transition-all cursor-pointer shrink-0"
                   title="View Cart"
                 >
@@ -2043,7 +2048,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsAcModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("hvac")
+                      goToCategoryServices("hvac", "AC Service & Repair")
                     }}
                     className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
@@ -2061,7 +2066,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsAcModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("appliance_repair")
+                      goToCategoryServices("hvac", "Refrigerator & Fridge")
                     }}
                     className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
@@ -2079,7 +2084,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsAcModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("appliance_repair")
+                      goToCategoryServices("hvac", "Washing Machine")
                     }}
                     className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
@@ -2097,7 +2102,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsAcModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("appliance_repair")
+                      goToCategoryServices("hvac", "TV & Display")
                     }}
                     className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
@@ -2115,7 +2120,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsAcModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("appliance_repair")
+                      goToCategoryServices("hvac", "Microwave & Purifier")
                     }}
                     className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
@@ -2744,7 +2749,7 @@ export function LandingPage() {
                   onClick={() => {
                     setIsAcModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToCategoryServices("hvac")
+                    goToCategoryServices("hvac", "AC Service & Repair")
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                 >
@@ -2762,7 +2767,7 @@ export function LandingPage() {
                   onClick={() => {
                     setIsAcModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToCategoryServices("appliance_repair")
+                    goToCategoryServices("hvac", "Refrigerator & Fridge")
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                 >
@@ -2780,7 +2785,7 @@ export function LandingPage() {
                   onClick={() => {
                     setIsAcModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToCategoryServices("appliance_repair")
+                    goToCategoryServices("hvac", "Washing Machine")
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                 >
@@ -2798,7 +2803,7 @@ export function LandingPage() {
                   onClick={() => {
                     setIsAcModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToCategoryServices("appliance_repair")
+                    goToCategoryServices("hvac", "TV & Display")
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                 >
@@ -2816,7 +2821,7 @@ export function LandingPage() {
                   onClick={() => {
                     setIsAcModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToCategoryServices("appliance_repair")
+                    goToCategoryServices("hvac", "Microwave & Purifier")
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                 >
@@ -4048,7 +4053,7 @@ export function LandingPage() {
           {/* View Cart / Proceed Action Button */}
           <button
             type="button"
-            onClick={() => navigate(routes.booking_checkout, { state: { cart: modalCart } })}
+            onClick={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-600/30 transition-all cursor-pointer active:scale-95 shrink-0 uppercase tracking-wider"
           >
             <span>View Cart</span>
