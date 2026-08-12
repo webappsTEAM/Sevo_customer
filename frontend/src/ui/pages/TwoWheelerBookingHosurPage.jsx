@@ -492,17 +492,25 @@ export function TwoWheelerBookingHosurPage() {
   // Adapt backend ServiceTier rows to the { id, name, capacity, price,
   // diagram, details } shape the rest of this page already renders.
   function tierToVehicle(tier) {
+    const suitableList = (Array.isArray(tier.includes) && tier.includes.length > 0)
+      ? tier.includes
+      : (VEHICLE_SUITABILITY_MAP[tier.slug]?.suitableFor || [])
+    const bestForText = tier.description || VEHICLE_SUITABILITY_MAP[tier.slug]?.bestFor || ""
+
     return {
       id: tier.slug,
       name: tier.name,
       capacity: tier.capacity_label,
+      description: tier.description,
+      suitableFor: suitableList,
+      bestFor: bestForText,
       price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
       diagram: TWO_WHEELER_DIAGRAM_BY_SLUG[tier.slug] || <TwoWheelerDimensionDiagram />,
       details: {
         name: tier.name,
-        capacity: `${tier.capacity_label} capacity`,
-        suitableFor: VEHICLE_SUITABILITY_MAP[tier.slug]?.suitableFor || [],
-        bestFor: VEHICLE_SUITABILITY_MAP[tier.slug]?.bestFor || tier.description,
+        capacity: tier.capacity_label ? `${tier.capacity_label} capacity` : "Standard capacity",
+        suitableFor: suitableList,
+        bestFor: bestForText,
       },
       _tierId: tier.id,
     }
@@ -1042,43 +1050,58 @@ export function TwoWheelerBookingHosurPage() {
           </p>
         </div>
 
-        {/* 2 Centered Cards matching Truck UI layout */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto mt-6 sm:mt-8 items-stretch">
-          {TWO_WHEELER_VEHICLES.map((vehicle) => (
-            <div
-              key={vehicle.id}
-              className="bg-white rounded-xl border border-slate-200/90 p-6 sm:p-7 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between"
-            >
-              {/* Top Graphic with dimension markings */}
-              <div className="w-full flex justify-center items-center my-1">
-                {vehicle.diagram}
-              </div>
-
-              {/* Weight Pill Badge */}
-              <div className="bg-[#F0F4F9] text-slate-800 text-xs font-bold px-3 py-1 rounded-md inline-flex items-center gap-1.5 mt-4">
-                <WeightIcon className="w-3.5 h-3.5 text-slate-900 fill-slate-900" />
-                <span>{vehicle.capacity}</span>
-              </div>
-
-              {/* Name & Price */}
-              <div className="mt-3">
-                <h3 className="text-xl font-bold text-slate-900">{vehicle.name}</h3>
-                <p className="text-sm text-slate-600 mt-1">
-                  Starting from <span className="font-bold text-slate-900 text-base">{vehicle.price}</span>
-                </p>
-              </div>
-
-              {/* Know More dotted link */}
-              <button
-                type="button"
-                onClick={() => setActiveVehicleDetails(vehicle)}
-                className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 border-b border-dotted border-emerald-600 hover:border-emerald-700 mt-5 cursor-pointer pb-0.5 inline-block focus:outline-none"
-              >
-                Know More
-              </button>
+        {/* Centered Cards matching Truck UI layout / dynamic active packages */}
+        {TWO_WHEELER_VEHICLES.length === 0 ? (
+          <div className="max-w-md mx-auto mt-6 sm:mt-8 p-6 sm:p-8 bg-slate-50 border border-slate-200 rounded-2xl text-center">
+            <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3">
+              <Bike className="w-6 h-6" />
             </div>
-          ))}
-        </div>
+            <h3 className="font-bold text-slate-800 text-base">Service Temporarily Unavailable</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Two-wheeler courier packages in this region are currently inactive or undergoing maintenance. Please check back shortly.
+            </p>
+          </div>
+        ) : (
+          <div className={`grid ${TWO_WHEELER_VEHICLES.length === 1 ? 'grid-cols-1 max-w-md' : 'grid-cols-1 sm:grid-cols-2 max-w-2xl'} gap-6 mx-auto mt-6 sm:mt-8 items-stretch`}>
+            {TWO_WHEELER_VEHICLES.map((vehicle) => (
+              <div
+                key={vehicle.id}
+                className="bg-white rounded-xl border border-slate-200/90 p-6 sm:p-7 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between"
+              >
+                {/* Top Graphic with dimension markings */}
+                <div className="w-full flex justify-center items-center my-1">
+                  {vehicle.diagram}
+                </div>
+
+                {/* Weight Pill Badge */}
+                <div className="bg-[#F0F4F9] text-slate-800 text-xs font-bold px-3 py-1 rounded-md inline-flex items-center gap-1.5 mt-4">
+                  <WeightIcon className="w-3.5 h-3.5 text-slate-900 fill-slate-900" />
+                  <span>{vehicle.capacity}</span>
+                </div>
+
+                {/* Name & Price */}
+                <div className="mt-3">
+                  <h3 className="text-xl font-bold text-slate-900">{vehicle.name}</h3>
+                  {vehicle.description && (
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">{vehicle.description}</p>
+                  )}
+                  <p className="text-sm text-slate-600 mt-1.5">
+                    Starting from <span className="font-bold text-slate-900 text-base">{vehicle.price}</span>
+                  </p>
+                </div>
+
+                {/* Know More dotted link */}
+                <button
+                  type="button"
+                  onClick={() => setActiveVehicleDetails(vehicle)}
+                  className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 border-b border-dotted border-emerald-600 hover:border-emerald-700 mt-5 cursor-pointer pb-0.5 inline-block focus:outline-none"
+                >
+                  Know More
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── Section: Popular Routes from Hosur ────────────────────── */}

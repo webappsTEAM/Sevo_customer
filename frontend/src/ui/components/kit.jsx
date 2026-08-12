@@ -1,4 +1,5 @@
 import { forwardRef, useId } from "react"
+import { createPortal } from "react-dom"
 
 export function Card({ title, children, actions, className = "", ...props }) {
   return (
@@ -25,34 +26,40 @@ export const Button = forwardRef(function Button({ variant = "primary", ...props
   return <button {...props} ref={ref} className={cls} />
 })
 
-export function Input({ label, hint, icon, variant = "default", ...props }) {
+export function Input({ label, hint, icon, variant = "default", onWheel, ...props }) {
   const id = useId()
   const variants = {
-    default: "bg-bg2 dark:bg-slate-950/50 text-slate-900 dark:text-white border-stroke2 dark:border-slate-800",
+    default: "bg-slate-50 hover:bg-slate-100/70 focus:bg-white dark:bg-slate-950/50 text-slate-900 dark:text-white border-slate-200 dark:border-slate-800",
     dark: "bg-white dark:bg-black text-slate-900 dark:text-white border-slate-200 dark:border-slate-800"
   }
   return (
     <label className="flex flex-col gap-1.5" htmlFor={id}>
-      {label && <div className="text-[11px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest ml-1">{label}</div>}
+      {label && <div className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-0.5 tracking-tight">{label}</div>}
       <div className="relative group">
         {icon && (
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors pointer-events-none">
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors pointer-events-none">
             {icon}
           </div>
         )}
         <input
           {...props}
           id={id}
+          onWheel={(e) => {
+            if (props.type === "number") {
+              e.currentTarget.blur()
+            }
+            if (onWheel) onWheel(e)
+          }}
           className={[
-            "w-full rounded-2xl border transition-all duration-300 text-sm shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 dark:[color-scheme:dark]",
-            icon ? "pl-11 pr-4" : "px-4",
-            "py-3.5",
+            "w-full rounded-xl border transition-all duration-200 text-sm shadow-2xs focus:outline-none focus:ring-3 focus:ring-indigo-500/15 focus:border-indigo-500 font-medium dark:[color-scheme:dark] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+            icon ? "pl-10 pr-3.5" : "px-3.5",
+            "py-2.5 sm:py-3",
             variants[variant] || variants.default,
             props.className
           ].filter(Boolean).join(" ")}
         />
       </div>
-      {hint ? <div className="text-[10px] font-medium text-slate-400 dark:text-slate-600 mt-0.5 ml-1">{hint}</div> : null}
+      {hint ? <div className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-0.5 ml-0.5">{hint}</div> : null}
     </label>
   )
 }
@@ -61,13 +68,13 @@ export function Select({ label, options, hint, icon, ...props }) {
   const id = useId()
   return (
     <label className="flex flex-col gap-1.5" htmlFor={id}>
-      {label && <div className="text-[11px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest ml-1">{label}</div>}
+      {label && <div className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-0.5 tracking-tight">{label}</div>}
       <div className="relative group">
         <select
           {...props}
           id={id}
           className={[
-            "w-full px-4 py-3.5 rounded-2xl border border-stroke2 dark:border-slate-800 bg-bg2 dark:bg-slate-950/50 text-slate-900 dark:text-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all duration-300 text-sm shadow-sm appearance-none dark:[color-scheme:dark]",
+            "w-full px-3.5 py-2.5 sm:py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-100/70 focus:bg-white dark:bg-slate-950/50 text-slate-900 dark:text-white focus:outline-none focus:ring-3 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all duration-200 text-sm shadow-2xs appearance-none font-medium dark:[color-scheme:dark] cursor-pointer",
             props.className
           ].filter(Boolean).join(" ")}
         >
@@ -77,13 +84,13 @@ export function Select({ label, options, hint, icon, ...props }) {
             </option>
           ))}
         </select>
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-indigo-500 transition-colors">
-          <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-indigo-600 transition-colors">
+          <svg width="12" height="7" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
       </div>
-      {hint ? <div className="text-[10px] font-medium text-slate-400 dark:text-slate-600 mt-0.5 ml-1">{hint}</div> : null}
+      {hint ? <div className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-0.5 ml-0.5">{hint}</div> : null}
     </label>
   )
 }
@@ -92,16 +99,16 @@ export function TextArea({ label, hint, ...props }) {
   const id = useId()
   return (
     <label className="flex flex-col gap-1.5" htmlFor={id}>
-      {label && <div className="text-[11px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest ml-1">{label}</div>}
+      {label && <div className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-0.5 tracking-tight">{label}</div>}
       <textarea
         {...props}
         id={id}
         className={[
-          "w-full px-4 py-3.5 rounded-2xl border border-stroke2 dark:border-slate-800 bg-bg2 dark:bg-slate-950/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all duration-300 text-sm min-h-[140px] shadow-sm dark:[color-scheme:dark]",
+          "w-full px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-100/70 focus:bg-white dark:bg-slate-950/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-3 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all duration-200 text-sm min-h-[110px] shadow-2xs font-medium dark:[color-scheme:dark]",
           props.className
         ].filter(Boolean).join(" ")}
       />
-      {hint ? <div className="text-[10px] font-medium text-slate-400 dark:text-slate-600 mt-0.5 ml-1">{hint}</div> : null}
+      {hint ? <div className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-0.5 ml-0.5">{hint}</div> : null}
     </label>
   )
 }
@@ -124,23 +131,27 @@ export function formatDateTime(value) {
   return dt.toLocaleString()
 }
 
-export function Modal({ title, children, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-md border border-slate-200 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex justify-between items-center p-5 border-b border-slate-100 dark:border-slate-800">
-          <h3 className="font-bold text-lg">{title}</h3>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+export function Modal({ title, children, onClose, maxWidth = "max-w-2xl", className = "" }) {
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto w-screen h-screen">
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      <div className={`relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full ${maxWidth} border border-slate-200 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto ${className}`}>
+        <div className="flex justify-between items-center px-6 sm:px-7 py-4.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40">
+          <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight">{title}</h3>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
-        <div className="p-5">
+        <div className="p-6 sm:p-7 max-h-[85vh] overflow-y-auto font-sans">
           {children}
         </div>
       </div>
     </div>
   )
+  if (typeof document !== "undefined" && document.body) {
+    return createPortal(modalContent, document.body)
+  }
+  return modalContent
 }
 
 
