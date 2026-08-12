@@ -106,15 +106,15 @@ const ADMIN_NAV_ITEMS = [
     label: "Service Catalog",
     to: routes.catalog_dashboard,
     icon: <Package size={20} />,
-    color: "#F59E0B",
+    color: "#3B82F6",
     adminOnly: true,
     children: [
-      { label: "Dashboard", to: routes.catalog_dashboard, icon: <Home size={16} />, color: "#F59E0B" },
-      { label: "Categories", to: routes.catalog_categories, icon: <FolderOpen size={16} />, color: "#F59E0B" },
-      { label: "Services", to: routes.catalog_services, icon: <Wrench size={16} />, color: "#F59E0B" },
-      { label: "Packages", to: routes.catalog_packages, icon: <Package size={16} />, color: "#F59E0B" },
-      { label: "Add-ons", to: routes.catalog_addons, icon: <CheckSquare size={16} />, color: "#F59E0B" },
-      { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#F59E0B" },
+      { label: "Dashboard", to: routes.catalog_dashboard, icon: <Home size={16} />, color: "#3B82F6" },
+      { label: "Categories", to: routes.catalog_categories, icon: <FolderOpen size={16} />, color: "#3B82F6" },
+      { label: "Services", to: routes.catalog_services, icon: <Wrench size={16} />, color: "#3B82F6" },
+      { label: "Packages", to: routes.catalog_packages, icon: <Package size={16} />, color: "#3B82F6" },
+      { label: "Add-ons", to: routes.catalog_addons, icon: <CheckSquare size={16} />, color: "#3B82F6" },
+      { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#3B82F6" },
     ]
   },
   { label: "Inventory", to: routes.inventory, icon: <Package size={20} />, color: "#8B5CF6" },
@@ -562,7 +562,6 @@ export function AppShell() {
         </div>
 
         <div className="flex items-center gap-6">
-          <TrialBanner />
           <button
             type="button"
             className="hidden md:flex items-center gap-3 px-5 py-2.5 bg-white dark:bg-black hover:bg-slate-50 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm text-slate-500 dark:text-white/80 hover:text-slate-900 dark:hover:text-white transition-all duration-300 w-72 group shadow-sm dark:shadow-lg dark:shadow-black/20 active:scale-[0.98]"
@@ -759,7 +758,14 @@ export function AppShell() {
                   {drillDownParent.children
                     .filter(child => (!child.adminOnly || isAdmin) && hasModuleAccess(user, child))
                     .map((child) => {
-                      const active = location.pathname === child.to || (child.to !== '/settings' && child.to !== '/employees' && location.pathname.startsWith(child.to));
+                      const childSiblings = drillDownParent.children.map(c => c.to)
+                      // A child is "active" only when the current path matches it exactly,
+                      // OR starts with it — but only if no sibling route is a more specific match.
+                      const isSiblingMoreSpecific = childSiblings.some(
+                        sib => sib !== child.to && location.pathname.startsWith(sib) && sib.startsWith(child.to)
+                      )
+                      const active = location.pathname === child.to ||
+                        (!isSiblingMoreSpecific && child.to !== '/settings' && child.to !== '/employees' && location.pathname.startsWith(child.to));
                       const color = child.color || drillDownParent.color || "#3b82f6";
                       return (
                         <NavLink
@@ -797,9 +803,9 @@ export function AppShell() {
         </AnimatePresence>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto bg-bg relative scroll-smooth">
+        <main className="flex-1 overflow-y-auto bg-slate-50/60 dark:bg-slate-950 relative scroll-smooth">
           <div className="absolute inset-0 bg-grid-slate-900/[0.02] dark:bg-grid-white/[0.02] pointer-events-none"></div>
-          <div className="relative z-10 min-h-full">
+          <div className="relative z-10 w-full min-h-full">
             <Outlet />
           </div>
         </main>

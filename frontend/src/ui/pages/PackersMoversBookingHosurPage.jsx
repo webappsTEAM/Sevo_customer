@@ -1001,21 +1001,54 @@ export function PackersMoversBookingHosurPage() {
     )
   }
 
+  const PACKERS_SUITABILITY_MAP = {
+    "1-rk-1-bhk-shifting": [
+      "1 RK / 1 BHK Full Household",
+      "Furniture disassembly & assembly",
+      "Bubble wrap & carton packing",
+      "Loading & unloading by verified crew",
+      "Dedicated transport vehicle"
+    ],
+    "2-bhk-3-bhk-shifting": [
+      "2 BHK / 3 BHK Large Household",
+      "Heavy furniture & appliance packing",
+      "Multi-layer bubble & foam protection",
+      "Professional 4-6 member crew",
+      "Large closed container truck"
+    ],
+    "villa-office-relocation": [
+      "Villas, Bungalows & Corporate Offices",
+      "IT hardware & server safe packing",
+      "Customized crating & insurance support",
+      "Dedicated relocation manager",
+      "End-to-end unpacking & setup"
+    ]
+  }
+
   // Adapt backend ServiceTier rows to the { id, name, capacity, price,
   // diagram, details } shape the rest of this page already renders.
   function tierToPackage(tier) {
+    const badgeText = tier.icon || ""
+    const suitableList = (Array.isArray(tier.includes) && tier.includes.length > 0)
+      ? tier.includes
+      : (PACKERS_SUITABILITY_MAP[tier.slug] || [])
+
     return {
       id: tier.slug,
       name: tier.name,
       capacity: tier.capacity_label,
+      description: tier.description,
+      badge: badgeText,
+      suitableFor: suitableList,
       price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
       diagram: PACKERS_DIAGRAM_BY_SLUG[tier.slug] || <OneBhkDiagram />,
       details: {
         name: tier.name,
-        capacity: tier.description,
+        capacity: tier.description || "Complete shifting package with professional crew",
         crew: "Professional packing crew + dedicated vehicle",
         materials: "Bubble wrap, corrugated boxes, stretch film & tape included",
         baseFare: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })} (Includes packing, loading & transport)`,
+        suitableFor: suitableList,
       },
       _tierId: tier.id,
     }
@@ -1557,59 +1590,86 @@ export function PackersMoversBookingHosurPage() {
           </p>
         </div>
 
-        {/* 3 Centered Cards matching uniform UI layout */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto mt-8 items-stretch">
-          {PACKERS_PACKAGES.map((pkg) => (
-            <div
-              key={pkg.id}
-              className="bg-white rounded-xl border border-slate-200/90 p-6 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between"
-            >
-              {/* Top Graphic */}
-              <div className="w-full flex justify-center items-center my-1">
-                {pkg.diagram}
-              </div>
-
-              {/* Weight / Crew Pill Badge */}
-              <div className="bg-[#F0F4F9] text-slate-800 text-xs font-bold px-3 py-1 rounded-md inline-flex items-center gap-1.5 mt-4">
-                <Boxes className="w-3.5 h-3.5 text-slate-900" />
-                <span>{pkg.capacity}</span>
-              </div>
-
-              {/* Name & Price */}
-              <div className="mt-3">
-                <h3 className="text-lg font-bold text-slate-900">{pkg.name}</h3>
-                <p className="text-sm text-slate-600 mt-1">
-                  Starting from <span className="font-bold text-slate-900 text-base">{pkg.price}</span>
-                </p>
-                <p className="text-[11px] text-slate-500 leading-relaxed mt-2 line-clamp-2">
-                  {pkg.details.capacity}
-                </p>
-              </div>
-
-              {/* Know More dotted link & Book Button */}
-              <div className="w-full mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setActivePackageDetails(pkg)}
-                  className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 border-b border-dotted border-emerald-600 hover:border-emerald-700 cursor-pointer pb-0.5 inline-block focus:outline-none"
-                >
-                  Know More
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPackage(pkg)
-                    handleGetEstimate()
-                  }}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span>Select &amp; Book</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
+        {/* Dynamic active packages based on category status */}
+        {PACKERS_PACKAGES.length === 0 ? (
+          <div className="max-w-md mx-auto mt-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center">
+            <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3">
+              <Boxes className="w-6 h-6" />
             </div>
-          ))}
-        </div>
+            <h3 className="font-bold text-slate-800 text-base">Relocation Packages Unavailable</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Packers and movers packages in this area are currently inactive or undergoing maintenance. Please check back shortly.
+            </p>
+          </div>
+        ) : (
+          <div className={`grid ${PACKERS_PACKAGES.length === 1 ? 'grid-cols-1 max-w-md' : PACKERS_PACKAGES.length === 2 ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl'} gap-6 mx-auto mt-8 items-stretch`}>
+            {PACKERS_PACKAGES.map((pkg) => (
+              <div
+                key={pkg.id}
+                className="bg-white rounded-xl border border-slate-200/90 p-6 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between relative"
+              >
+                {/* Highlight Badge if configured */}
+                {pkg.badge && (
+                  <span
+                    className={`absolute top-3.5 right-3.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${
+                      pkg.badge.toLowerCase().includes("popular")
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : pkg.badge.toLowerCase().includes("rare")
+                        ? "bg-slate-100 text-slate-700 border-slate-200"
+                        : "bg-blue-50 text-blue-700 border-blue-200"
+                    }`}
+                  >
+                    ★ {pkg.badge}
+                  </span>
+                )}
+
+                {/* Top Graphic */}
+                <div className="w-full flex justify-center items-center my-1">
+                  {pkg.diagram}
+                </div>
+
+                {/* Weight / Crew Pill Badge */}
+                <div className="bg-[#F0F4F9] text-slate-800 text-xs font-bold px-3 py-1 rounded-md inline-flex items-center gap-1.5 mt-4">
+                  <Boxes className="w-3.5 h-3.5 text-slate-900" />
+                  <span>{pkg.capacity}</span>
+                </div>
+
+                {/* Name & Price */}
+                <div className="mt-3">
+                  <h3 className="text-lg font-bold text-slate-900">{pkg.name}</h3>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Starting from <span className="font-bold text-slate-900 text-base">{pkg.price}</span>
+                  </p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed mt-2 line-clamp-2">
+                    {pkg.details.capacity}
+                  </p>
+                </div>
+
+                {/* Know More dotted link & Book Button */}
+                <div className="w-full mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setActivePackageDetails(pkg)}
+                    className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 border-b border-dotted border-emerald-600 hover:border-emerald-700 cursor-pointer pb-0.5 inline-block focus:outline-none"
+                  >
+                    Know More
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPackage(pkg)
+                      handleGetEstimate()
+                    }}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Select &amp; Book</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
 
@@ -1938,9 +1998,9 @@ export function PackersMoversBookingHosurPage() {
       {/* 1. Package Details Modal */}
       {activePackageDetails && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-extrabold text-slate-900">{activePackageDetails.details.name}</h3>
+              <h3 className="text-lg font-extrabold text-slate-900">{activePackageDetails.name || activePackageDetails.details?.name}</h3>
               <button
                 onClick={() => setActivePackageDetails(null)}
                 className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors"
@@ -1953,23 +2013,31 @@ export function PackersMoversBookingHosurPage() {
               {activePackageDetails.diagram}
             </div>
 
-            <div className="space-y-3 text-xs text-slate-700">
-              <div className="py-1.5 border-b border-slate-100">
-                <span className="font-semibold text-slate-500 block mb-1">What's Included:</span>
-                <span className="font-bold text-slate-900">{activePackageDetails.details.capacity}</span>
+            {/* Checkbox Ticked Inclusions Checklist */}
+            <div className="mt-4">
+              <span className="font-bold text-slate-900 block mb-3 text-sm">Suitable for / Inclusions:</span>
+              <ul className="space-y-2.5">
+                {(activePackageDetails.suitableFor || activePackageDetails.details?.suitableFor || []).map((item, idx) => (
+                  <li key={idx} className="flex items-start text-xs sm:text-sm text-slate-700">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mr-2 shrink-0 mt-0.5" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Description / Summary if set */}
+            {activePackageDetails.description && (
+              <div className="mt-4 bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs text-slate-600">
+                <span className="font-bold text-slate-800">Package Details: </span>
+                <span>{activePackageDetails.description}</span>
               </div>
-              <div className="py-1.5 border-b border-slate-100">
-                <span className="font-semibold text-slate-500 block mb-1">Crew &amp; Vehicle:</span>
-                <span className="font-bold text-slate-900">{activePackageDetails.details.crew}</span>
-              </div>
-              <div className="py-1.5 border-b border-slate-100">
-                <span className="font-semibold text-slate-500 block mb-1">Packaging Materials:</span>
-                <span className="text-slate-800">{activePackageDetails.details.materials}</span>
-              </div>
-              <div className="flex justify-between py-1.5">
-                <span className="font-semibold text-slate-500">Estimated Base Rate:</span>
-                <span className="font-bold text-emerald-700">{activePackageDetails.details.baseFare}</span>
-              </div>
+            )}
+
+            {/* Base Fare */}
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500">Estimated Base Rate:</span>
+              <span className="text-base font-extrabold text-emerald-700">{activePackageDetails.price}</span>
             </div>
 
             <button
@@ -1978,7 +2046,7 @@ export function PackersMoversBookingHosurPage() {
                 setActivePackageDetails(null)
                 handleGetEstimate()
               }}
-              className="w-full mt-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+              className="w-full mt-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
             >
               Proceed to Booking
             </button>
