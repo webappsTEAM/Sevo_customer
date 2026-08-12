@@ -108,19 +108,20 @@ export function LocationPermissionHandler({ onClose, onManualSearch, onLocationC
       {
         enableHighAccuracy: true,
         timeout: GEO_TIMEOUT_MS - 500,  // let our timer fire first on extreme hang
-        maximumAge: 60_000,             // accept a 1-min cached fix (faster UX)
+        maximumAge: 0,                  // force fresh live location fix from device GPS
       }
     )
   }
+
+  const defaultCoords = coords
 
   // ── If details form is showing ─────────────────────────────────────────────
   if (screen === "details" && confirmedAddress) {
     return (
       <AddressDetailsForm
         addressData={confirmedAddress}
-        onBack={() => setScreen("map")}   // returns to map with pin at same coords
+        onBack={() => setScreen("map")}
         onSubmit={(payload) => {
-          // Stub — Slice 4 wires this to the real save API call
           if (typeof onLocationConfirmed === "function") onLocationConfirmed(payload)
           onClose()
         }}
@@ -129,26 +130,24 @@ export function LocationPermissionHandler({ onClose, onManualSearch, onLocationC
     )
   }
 
-  // ── If map is showing, render MapPickerScreen ──────────────────────────────
-  if (status === STATES.GRANTED && coords) {
+  // ── Render MapPickerScreen ONLY when we have real GPS coords ──────────────
+  if (status === STATES.GRANTED && defaultCoords) {
     return (
       <MapPickerScreen
-        initialCoords={coords}
+        initialCoords={defaultCoords}
         onClose={onClose}
         onManualSearch={onManualSearch}
         onCenterChange={(lat, lng, resolvedAddress) => {
-          // Slice 3: when resolvedAddress is provided, user tapped Confirm
           if (resolvedAddress) {
             setConfirmedAddress(resolvedAddress)
             setScreen("details")
           }
-          // Otherwise it's just a center-change notification (no action needed here)
         }}
       />
     )
   }
 
-  // ── Permission / error UI ──────────────────────────────────────────────────
+  // ── Permission / Loading / Error UI ────────────────────────────────────────
 
   const isErrorState = [
     STATES.DENIED, STATES.UNAVAILABLE, STATES.ERROR, STATES.TIMEOUT,

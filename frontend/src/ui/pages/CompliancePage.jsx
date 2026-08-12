@@ -7,7 +7,7 @@ import {
   ShieldAlert, ShieldCheck, ShieldOff, AlertTriangle, Download,
   FileText, Users, Clock, CalendarDays, CheckCircle, XCircle,
   RefreshCw, BadgeAlert, BadgeCheck, FileClock, Send, ScrollText,
-  UserCog, Loader2, ChevronDown, Info,
+  UserCog, Loader2, ChevronDown, Info, Sparkles,
 } from "lucide-react"
 
 // ---------------------------------------------------------------------------

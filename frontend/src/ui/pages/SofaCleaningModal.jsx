@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, Search, ShoppingCart, X, Star } from "lucide-react";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
@@ -295,6 +296,17 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
 
+  useEffect(() => {
+    if (selectedServiceDetails) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedServiceDetails]);
+
   const addItemToCart = (id, name, price, duration) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === id);
@@ -379,12 +391,12 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
             </h3>
           </div>
 
-          <div className="space-y-0 divide-y divide-slate-100">
+          <div className="space-y-4">
             {activeServices.map((service, idx) => {
               const count = getCount(service.id);
               const isFirst = idx === 0 && !searchQuery;
               return (
-                <div key={service.id} className="py-5 px-4 sm:px-5">
+                <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all">
                   {/* First item image hero */}
                   {isFirst && (
                     <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-4">
@@ -514,13 +526,19 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
       </div>
 
       {/* Details modal overlay */}
-      {selectedServiceDetails && (
-        <div className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans">
+      {selectedServiceDetails && createPortal(
+        <div 
+          onClick={() => setSelectedServiceDetails(null)}
+          className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
+          >
             {/* Close button */}
             <button 
               onClick={() => setSelectedServiceDetails(null)} 
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors"
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors border-none"
             >
               <X size={16} />
             </button>
@@ -566,7 +584,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                     ) : (
                       <button
                         onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
-                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
+                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer border-none"
                       >
                         <ShoppingCart size={13} /> Add
                       </button>
@@ -655,7 +673,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                         <div key={idx} className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
                           <button
                             onClick={() => setActiveFaq(isFaqOpen ? null : idx)}
-                            className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50"
+                            className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50 border-none"
                           >
                             <span className={isFaqOpen ? "text-emerald-600 font-bold" : "text-slate-700"}>{faq.q}</span>
                             <span className={isFaqOpen ? "text-emerald-600 text-sm font-bold ml-2 shrink-0" : "text-slate-400 text-sm font-bold ml-2 shrink-0"}>{isFaqOpen ? "−" : "+"}</span>
@@ -683,13 +701,14 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                   }
                   setSelectedServiceDetails(null);
                 }}
-                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer"
+                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer border-none"
               >
                 Proceed
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

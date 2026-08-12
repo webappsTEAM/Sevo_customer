@@ -100,26 +100,12 @@ _LANDMARK_DB: dict[str, dict] = {
 def address_autocomplete(query: str) -> list[dict]:
     """
     Returns up to 8 address suggestions for the given partial query.
-    Priority: local landmark DB → Nominatim.
+    Priority: Live Geocoding API → Local Landmark Fixtures Fallback.
     Each result: {name, full_address, lat, lon}.
     """
     q_low = query.lower().strip()
 
-    # 1. Local landmark partial matches (instant)
-    local_matches = []
-    for key, data in _LANDMARK_DB.items():
-        if q_low in key or any(q_low in part for part in key.split()):
-            local_matches.append({
-                "name": data["area"],
-                "full_address": data["display_name"],
-                "lat": data["lat"],
-                "lon": data["lon"],
-                "source": "local",
-            })
-    if local_matches:
-        return local_matches[:8]
-
-    # 2. Nominatim search (live, subject to rate limit)
+    # 1. Live Geocoding Search (Nominatim / Places API)
     try:
         encoded = urllib.parse.urlencode({
             "q": query,
@@ -151,10 +137,23 @@ def address_autocomplete(query: str) -> list[dict]:
                 "lon": float(item["lon"]),
                 "source": "nominatim",
             })
-        return results
+        if results:
+            return results
     except Exception as e:
-        print(f"Nominatim autocomplete error for '{query}': {e}")
-        return []
+        print(f"Live geocoding autocomplete error for '{query}': {e}")
+
+    # 2. Local landmark fallback (offline / network error scenario)
+    local_matches = []
+    for key, data in _LANDMARK_DB.items():
+        if q_low in key or any(q_low in part for part in key.split()):
+            local_matches.append({
+                "name": data["area"],
+                "full_address": data["display_name"],
+                "lat": data["lat"],
+                "lon": data["lon"],
+                "source": "local_fallback",
+            })
+    return local_matches[:8]
 
 
 # ── Geocode & parse a chosen address ─────────────────────────────────────────

@@ -28,8 +28,12 @@ import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx
 import { LocationPermissionHandler } from "../components/AddressPicker/index.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
+import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
+import { CockroachControlModal } from "./CockroachControlModal.jsx"
+import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
+import { getAddress } from "../../api/geocoding.js";
 
 let BOOKING_CURRENCY_SYMBOL = "₹";
 
@@ -354,17 +358,32 @@ function SavedAddressesModal({
   currentAddress,
   onAddNewAddress
 }) {
-  const [addresses, setAddresses] = useState([
-    { id: "addr-1", title: "Home", text: "fff, Banaswadi, Bengaluru, Karnataka, India" },
-    { id: "addr-2", title: "Home", text: "5, Poonahally, Tamil Nadu, India" },
-    { id: "addr-3", title: "65yu6", text: "t6ytt, Jayamahal Main Rd, Nandi Durga Road Extension, Jayamahal, Bengaluru, Karnataka 560046, India" },
-    { id: "addr-4", title: "Home", text: "12, Bangalore Cantonment Railway Station, Cantonment Railway Quarters, Shivaji Nagar, Bengaluru, Karnataka, India" }
-  ])
+  const [addresses, setAddresses] = useState([])
+  const [selectedId, setSelectedId] = useState(null)
 
-  const [selectedId, setSelectedId] = useState(() => {
-    const found = addresses.find(a => a.text === currentAddress)
-    return found ? found.id : addresses[0].id
-  })
+  useEffect(() => {
+    async function loadSavedAddresses() {
+      try {
+        const res = await apiRequest("/customer/addresses/")
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const list = res.data.map(a => ({
+            id: String(a.id),
+            title: a.label || a.address_type || "Saved Address",
+            text: a.formatted_address || [a.locality, a.city, a.state].filter(Boolean).join(", ")
+          }))
+          setAddresses(list)
+          const found = list.find(a => a.text === currentAddress)
+          setSelectedId(found ? found.id : list[0].id)
+        } else {
+          setAddresses([])
+        }
+      } catch (err) {
+        console.warn("Failed to fetch saved addresses:", err)
+        setAddresses([])
+      }
+    }
+    loadSavedAddresses()
+  }, [currentAddress])
 
   const [menuOpenId, setMenuOpenId] = useState(null)
 
@@ -523,7 +542,21 @@ export function AddAddressSearchModal({
     loadSaved()
   }, [])
 
-  // Debounced geocoding search
+  // Helper: save a location selection to recents in localStorage
+  const saveToRecents = (title, details) => {
+    try {
+      const existing = JSON.parse(localStorage.getItem("calservices_recent_locations") || "[]")
+      const newEntry = { title, details }
+      // Remove duplicates, add to front, keep max 10
+      const filtered = existing.filter(e => e.details !== details)
+      const updated = [newEntry, ...filtered].slice(0, 10)
+      localStorage.setItem("calservices_recent_locations", JSON.stringify(updated))
+      setRecents(updated)
+    } catch (e) {}
+  }
+
+  // Debounced geocoding search via Google Places Autocomplete
+  const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY
   useEffect(() => {
     if (!query || query.length < 3) {
       setSearchResults([])
@@ -533,20 +566,33 @@ export function AddAddressSearchModal({
     setIsSearching(true)
     const delayDebounce = setTimeout(async () => {
       try {
-        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`)
-        const data = await res.json()
-        if (data && data.features) {
-          const formatted = data.features.map(f => {
-            const p = f.properties
-            const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ")
-            return {
-              title: p.name || display.split(',')[0],
-              details: display,
-              lat: f.geometry.coordinates[1],
-              lon: f.geometry.coordinates[0]
-            }
-          })
-          setSearchResults(formatted)
+        if (googleApiKey) {
+          // Use Google Places Autocomplete API
+          const gRes = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${googleApiKey}`
+          )
+          const gData = await gRes.json()
+          if (gData.status === "OK" && gData.results) {
+            const formatted = gData.results.slice(0, 5).map(result => {
+              const comps = result.address_components || []
+              let name = ""
+              for (const c of comps) {
+                if (c.types.includes("sublocality_level_1") || c.types.includes("sublocality") || c.types.includes("locality")) {
+                  name = c.long_name
+                  break
+                }
+              }
+              return {
+                title: name || result.formatted_address.split(",")[0],
+                details: result.formatted_address,
+                lat: result.geometry?.location?.lat,
+                lon: result.geometry?.location?.lng
+              }
+            })
+            setSearchResults(formatted)
+          } else {
+            setSearchResults([])
+          }
         } else {
           setSearchResults([])
         }
@@ -584,12 +630,7 @@ export function AddAddressSearchModal({
 
           if (!readableLocation) {
             try {
-              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en`)
-              const data = await res.json()
-              if (data && data.address) {
-                const a = data.address
-                readableLocation = [a.road || a.suburb || a.neighbourhood, a.city || a.town || a.village, a.state].filter(Boolean).join(", ")
-              }
+              readableLocation = await getAddress(lat, lng)
             } catch (e) { }
           }
 
@@ -619,10 +660,17 @@ export function AddAddressSearchModal({
     )
   }
 
-  const recents = [
-    { title: "Banashankari", details: "Bengaluru, Karnataka, India" },
-    { title: "Bangalore Palace", details: "Palace Cross Road, Vasanth Nagar, Bengaluru, Karnataka, India" }
-  ]
+  // Load recent searches from localStorage (no hardcoded locations)
+  const [recents, setRecents] = useState(() => {
+    try {
+      const stored = localStorage.getItem("calservices_recent_locations")
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch (e) {}
+    return []
+  })
 
   return (
     <div className="fixed inset-0 z-[10002] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose}>
@@ -711,7 +759,7 @@ export function AddAddressSearchModal({
                   {searchResults.map((item, idx) => (
                     <div
                       key={idx}
-                      onClick={() => onSelectLocation(item.details)}
+                      onClick={() => { saveToRecents(item.title, item.details); onSelectLocation(item.details) }}
                       className="py-3 flex items-start gap-3 cursor-pointer hover:bg-slate-50 rounded-xl px-2 transition-colors"
                     >
                       <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
@@ -771,34 +819,36 @@ export function AddAddressSearchModal({
                 </div>
               ) : null}
 
-              {/* Recents Section */}
-              <div>
-                <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Recents</h4>
-                <div className="space-y-3">
-                  {recents.map((item, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => onSelectLocation(item.details)}
-                      className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
-                    >
-                      <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
-                        <Clock size={15} />
+              {/* Recents Section — only shown when user has actual recent searches */}
+              {recents.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Recents</h4>
+                  <div className="space-y-3">
+                    {recents.map((item, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => { saveToRecents(item.title, item.details); onSelectLocation(item.details) }}
+                        className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
+                      >
+                        <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
+                          <Clock size={15} />
+                        </div>
+                        <div>
+                          <span className="text-xs font-black text-slate-900 block group-hover:text-purple-700 transition-colors">
+                            {item.title}
+                          </span>
+                          <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5">
+                            {item.details}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-xs font-black text-slate-900 block group-hover:text-purple-700 transition-colors">
-                          {item.title}
-                        </span>
-                        <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5">
-                          {item.details}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  <button className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
+                    View more
+                  </button>
                 </div>
-                <button className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
-                  View more
-                </button>
-              </div>
+              )}
             </>
           )}
         </div>
@@ -838,7 +888,7 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
   const [isUpdatingAddress, setIsUpdatingAddress] = useState(false)
   const [inlineError, setInlineError] = useState("")
   const [locationPayload, setLocationPayload] = useState(null)
-  const [mapCenter, setMapCenter] = useState(initialCoords ? [initialCoords.lat, initialCoords.lng] : [12.7409, 77.8253]) // Default fallback to Hosur
+  const [mapCenter, setMapCenter] = useState(initialCoords ? [initialCoords.lat, initialCoords.lng] : [12.9716, 77.5946])
   const [searchResults, setSearchResults] = useState([])
   const [mapObj, setMapObj] = useState(null)
   const isTyping = useRef(false)
@@ -846,22 +896,21 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
 
   // Center map on user's current location when modal opens and auto-fill address
   useEffect(() => {
-    if (!initialCoords && navigator.geolocation && mapObj) {
+    if (navigator.geolocation) {
       setIsFetching(true);
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
           setMapCenter([lat, lon]);
-          mapObj.flyTo([lat, lon], 15);
+          if (mapObj) {
+            mapObj.flyTo([lat, lon], 15);
+          }
 
           // Reverse geocode to get live street address immediately
           try {
-            const res = await fetch(`https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}`);
-            const data = await res.json();
-            if (data && data.features && data.features.length > 0) {
-              const p = data.features[0].properties;
-              const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+            const display = await getAddress(lat, lon);
+            if (display) {
               isTyping.current = false;
               setSearch(display);
             }
@@ -872,23 +921,21 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
         },
         (err) => {
           console.error("Geolocation failed", err);
-          setMapCenter([12.7409, 77.8253]);
-          mapObj.flyTo([12.7409, 77.8253], 14);
+          if (initialCoords && mapObj) {
+            setMapCenter([initialCoords.lat, initialCoords.lng]);
+            mapObj.flyTo([initialCoords.lat, initialCoords.lng], 15);
+          }
           setIsFetching(false);
-        }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
-    } else if (mapObj) {
-      if (initialCoords) {
-        setMapCenter([initialCoords.lat, initialCoords.lng]);
-        mapObj.flyTo([initialCoords.lat, initialCoords.lng], 15);
-      } else {
-        setMapCenter([12.7409, 77.8253]);
-        mapObj.flyTo([12.7409, 77.8253], 14);
-      }
+    } else if (initialCoords && mapObj) {
+      setMapCenter([initialCoords.lat, initialCoords.lng]);
+      mapObj.flyTo([initialCoords.lat, initialCoords.lng], 15);
     }
-  }, [mapObj, initialCoords])
+  }, [mapObj])
 
-  // Fetch location suggestions when typing (biased to Hosur coords)
+  // Fetch location suggestions when typing (dynamic search across all locations)
   useEffect(() => {
     if (!search || search.length < 3 || !isTyping.current) {
       if (!search) setSearchResults([])
@@ -898,7 +945,7 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
     setIsSearching(true)
     const delayDebounce = setTimeout(async () => {
       try {
-        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(search)}&limit=5&lon=77.8253&lat=12.7409`);
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(search)}&limit=5`);
         const data = await res.json();
         if (data && data.features) {
           const formatted = data.features.map(f => {
@@ -1076,8 +1123,8 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
                 zoomControl={false}
               >
                 <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; OpenStreetMap'
+                  url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+                  attribution="&copy; Google Maps"
                 />
                 <MapEvents />
               </MapContainer>
@@ -3352,15 +3399,9 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
           if (!line1) {
             try {
-              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en&zoom=18`)
-              const data = await res.json()
-              if (data && data.address) {
-                const a = data.address
-                const parts = [a.building, a.house_number, a.road, a.suburb, a.neighbourhood, a.residential].filter(Boolean)
-                line1 = parts.filter((v, i, a) => a.indexOf(v) === i).join(", ") || (data.display_name ? data.display_name.split(",")[0] : '')
-                city = a.city || a.town || a.village || a.county || city
-                state = a.state || state
-                pincode = a.postcode || pincode
+              const fullAddr = await getAddress(lat, lng)
+              if (fullAddr) {
+                line1 = fullAddr
               }
             } catch (e) {
               console.warn("Reverse geocode warning:", e)
@@ -3726,7 +3767,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 </button>
                               )
                               if (act === "view_invoice") return (
-                                <button key={act} onClick={() => window.open(`http://localhost:8000/api/booking/${b.id}/invoice/`, '_blank')} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <button key={act} onClick={() => window.open(`${API_BASE_URL}/booking/${b.id}/invoice/`, '_blank')} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <FileText size={14} /> Download Invoice
                                 </button>
                               )
@@ -6471,7 +6512,7 @@ function StepWorkflowCheckout({
                   </button>
                 </div>
                 <p className="text-xs font-bold text-slate-800 leading-snug">
-                  {formData.address || "fff, Banaswadi, Bengaluru, Karnataka, India"}
+                  {formData.address || "Select service address"}
                 </p>
               </div>
             </div>
@@ -11262,24 +11303,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Wall Breaking & Demolition", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
     ],
     pest_control: [
-      { name: "Termite Control", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-      { name: "Cockroach & Ant Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Bed Bug Treatment", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      { name: "Cockroach & Termite Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Ants & Bed Bugs Control", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
     ],
     goods_transport: [
       { name: "House Shifting", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
       { name: "Single Item Transport", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
     ],
     cleaning: [
-      { name: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&fit=crop", catId: "kitchen_cleaning" },
-      { name: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop", catId: "sofa_cleaning" },
-      { name: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", catId: "bathroom_cleaning" },
-      { name: "Furnished Apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop" },
-      { name: "Unfurnished Apartment", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
-      { name: "Furnished Villa", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
-      { name: "Unfurnished Villa", image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop" },
-      { name: "Book by Room", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
-      { name: "Mini Services", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      { name: "Full apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop" },
+      { name: "Full bungalow/duplex", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
+      { name: "Home cleaning", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" }
     ]
   };
 
@@ -11287,16 +11321,21 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [searchParams] = useSearchParams();
   const subCategories = CATEGORY_SUBCATEGORIES[normalizedKey] || CATEGORY_SUBCATEGORIES.cleaning;
 
-  const [activeSubTab, setActiveSubTab] = useState(() => searchParams.get("subTab") || subCategories[0]?.name || "Furnished Apartment");
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialSubtab = urlParams.get("subtab") || subCategories[0]?.name || "Furnished Apartment";
+  const [activeSubTab, setActiveSubTab] = useState(initialSubtab);
 
   // Keep activeSubTab in sync if normalizedKey changes or URL subTab updates
   useEffect(() => {
-    const currentSubTabInUrl = searchParams.get("subTab");
-    const tabExists = subCategories.some(t => t.name === currentSubTabInUrl);
-    if (tabExists) {
-      setActiveSubTab(currentSubTabInUrl);
-    } else if (subCategories && subCategories.length > 0) {
-      setActiveSubTab(subCategories[0].name);
+    if (subCategories && subCategories.length > 0) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const subtabParam = urlParams.get("subtab");
+      const matched = subCategories.find(c => c.name === subtabParam);
+      if (matched) {
+        setActiveSubTab(matched.name);
+      } else {
+        setActiveSubTab(subCategories[0].name);
+      }
     }
   }, [normalizedKey, searchParams, subCategories]);
 
@@ -11790,6 +11829,15 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   }
   if (activeSubTab === "Bathroom Cleaning") {
     return <BathroomCleaningModal category={{ id: "bathroom_cleaning", name: "Bathroom Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  }
+  if (activeSubTab === "Full apartment" || activeSubTab === "Full bungalow/duplex" || activeSubTab === "Home cleaning") {
+    return <FullHouseCleaningModal activeSubTab={activeSubTab} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  }
+  if (activeSubTab === "Cockroach & Termite Control") {
+    return <CockroachControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  }
+  if (activeSubTab === "Ants & Bed Bugs Control") {
+    return <AntsBedBugsControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
 
   const contentMarkup = (
@@ -16371,8 +16419,11 @@ const FULL_KITCHEN_PACKAGES = [
 const APPLIANCE_SERVICES = [
   {
     id: "fridge-clean",
-    name: "Refrigerator Cleaning",
-    price: 799,
+    name: "Fridge cleaning",
+    rating: "4.83",
+    reviews: "167K reviews",
+    price: 399,
+    options: "5 options",
     duration: "1.5 hrs",
     image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=600&q=80&fit=crop",
     includes: [
@@ -16383,9 +16434,11 @@ const APPLIANCE_SERVICES = [
   },
   {
     id: "microwave-clean",
-    name: "Microwave Oven Cleaning",
-    price: 399,
-    duration: "45 mins",
+    name: "Microwave cleaning",
+    rating: "4.82",
+    reviews: "37K reviews",
+    price: 199,
+    duration: "15 mins",
     image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
     includes: [
       "Interior & exterior cleaning",
@@ -16396,8 +16449,10 @@ const APPLIANCE_SERVICES = [
   {
     id: "chimney-clean",
     name: "Chimney Cleaning",
-    price: 999,
-    duration: "1.5 hrs",
+    rating: "4.84",
+    reviews: "238K reviews",
+    price: 399,
+    duration: "45 mins",
     image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
     includes: [
       "Filter & exterior cleaning",
@@ -16406,9 +16461,25 @@ const APPLIANCE_SERVICES = [
     ]
   },
   {
-    id: "stove-clean",
-    name: "Gas Stove / Hob Cleaning",
+    id: "chimney-stove-clean",
+    name: "Chimney & stove cleaning",
+    rating: "4.79",
+    reviews: "89K reviews",
     price: 499,
+    duration: "1 hr 10 mins",
+    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    includes: [
+      "Stovetops, burners, mesh & filter cleaning with steam",
+      "Includes motor cleaning, repair & automatic chimney cleaning"
+    ]
+  },
+  {
+    id: "stove-clean",
+    name: "Gas stove cleaning",
+    rating: "4.80",
+    reviews: "32K reviews",
+    price: 99,
+    options: "3 options",
     duration: "45 mins",
     image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
     includes: [
@@ -16452,6 +16523,45 @@ const APPLIANCE_SERVICES = [
       "Fan cover / grill cleaning",
       "Dust and grease removal"
     ]
+  },
+  {
+    id: "air-fryer-clean",
+    name: "Air fryer cleaning",
+    rating: "4.81",
+    reviews: "7K reviews",
+    price: 199,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?w=600&q=80&fit=crop",
+    includes: [
+      "Wet wiping of interior to remove oil stains & odour",
+      "Cleaning of tray to remove food spills"
+    ]
+  },
+  {
+    id: "otg-clean",
+    name: "OTG cleaning",
+    rating: "4.80",
+    reviews: "8K reviews",
+    price: 399,
+    duration: "50 mins",
+    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=600&q=80&fit=crop",
+    includes: [
+      "Cleaning of interior to remove food crumbs & spills",
+      "Exterior & back panel cleaning to remove oil & grease"
+    ]
+  },
+  {
+    id: "sandwich-clean",
+    name: "Sandwich Maker/Griller cleaning",
+    rating: "4.82",
+    reviews: "5K reviews",
+    price: 99,
+    duration: "15 mins",
+    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=600&q=80&fit=crop",
+    includes: [
+      "Deep cleaning of plates to remove stuck food & char marks",
+      "Exterior wipe to remove oil, grease & food stains"
+    ]
   }
 ];
 
@@ -16490,6 +16600,114 @@ const QUICK_EXTRA_SERVICES = [
       "Accessible glass surface cleaning",
       "Window frame & sill wiping",
       "Dust and dirt removal"
+    ]
+  },
+  {
+    id: "quick-fan-clean",
+    name: "Fan Cleaning",
+    price: 89,
+    duration: "15 mins",
+    image: "/mockups/ceiling_fan.png",
+    includes: [
+      "Dusting and wiping of fan blades",
+      "Cleaning of fan canopy and motor body",
+      "Removal of grease, stains, and dirt buildup"
+    ]
+  },
+  {
+    id: "quick-utensils-removal",
+    name: "Utensils Removal & Replacement",
+    price: 409,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1590794056226-79ef3a8147e1?w=300&q=80&fit=crop",
+    includes: [
+      "Removal of all utensils from cabinets",
+      "Dusting and wiping cabinet shelves",
+      "Arranging utensils back in cabinets"
+    ]
+  },
+  {
+    id: "quick-sink-under-sink",
+    name: "Sink & Under Sink Cleaning",
+    price: 79,
+    duration: "20 mins",
+    image: "/mockups/drain_clean.png",
+    includes: [
+      "Deep scrub & sanitization of kitchen sink",
+      "Wiping and disinfecting under-sink area",
+      "Removal of waste, odors, and food particles"
+    ]
+  },
+  {
+    id: "quick-dining-table",
+    name: "Dining Table Cleaning",
+    price: 449,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    includes: [
+      "Surface cleaning & sanitation",
+      "Removal of food stains & greasy layers",
+      "Wiping & drying of tabletop"
+    ]
+  },
+  {
+    id: "quick-kitchen-window",
+    name: "Kitchen Window Cleaning",
+    price: 269,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    includes: [
+      "Glass panes dusting and wet wiping",
+      "Window frames, sill, and tracks cleaning",
+      "Removal of oil fumes and grease residue"
+    ]
+  },
+  {
+    id: "quick-balcony-upto-4ft",
+    name: "Balcony Cleaning: Upto 4 ft Width",
+    price: 399,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    includes: [
+      "Balcony floor washing & scrubbing",
+      "Dusting of railing and windows",
+      "Clearance of cobwebs and dust bunnies"
+    ]
+  },
+  {
+    id: "quick-balcony-above-4ft",
+    name: "Balcony Cleaning: Above 4 ft Width",
+    price: 549,
+    duration: "50 mins",
+    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    includes: [
+      "Deep floor scrubbing & balcony washing",
+      "Railing, windows, and mesh cleaning",
+      "Thorough dust and dirt clearance"
+    ]
+  },
+  {
+    id: "quick-window-upto-4x4",
+    name: "Window Cleaning (Upto 4 Ft X 4 Ft)",
+    price: 199,
+    duration: "30 mins",
+    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=300&q=80&fit=crop",
+    includes: [
+      "Glass panes cleaning inside and outside",
+      "Window frame and channel dusting",
+      "Dirt and rain stain removal"
+    ]
+  },
+  {
+    id: "quick-window-above-4x4",
+    name: "Window Cleaning (Above 4 Ft X 4 Ft)",
+    price: 449,
+    duration: "1 hr",
+    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=300&q=80&fit=crop",
+    includes: [
+      "Detailed cleaning of large glass panes",
+      "Frame, sill, and channel deep cleaning",
+      "Removal of spider webs and outdoor dust"
     ]
   }
 ];
@@ -16570,6 +16788,55 @@ const SERVICE_DETAIL_DATA = {
       { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
     ]
   },
+  "air-fryer-clean": {
+    tools: [
+      "Food-safe interior sanitizers",
+      "Microfiber cloths",
+      "Detail cleaning brushes"
+    ],
+    ready: [
+      "Keep the air fryer accessible and unplugged",
+      "Ensure power outlet is nearby for testing"
+    ],
+    reviews: [
+      { name: "Meera V.", rating: "5.0", text: '"Very neat cleaning. The tray oil and food residues were completely washed."' }
+    ],
+    faqs: [
+      { q: "Is the cleaner safe for non-stick coating?", a: "Yes, we use non-abrasive soft sponges and mild, food-safe cleaners that protect the non-stick coating." }
+    ]
+  },
+  "otg-clean": {
+    tools: [
+      "OTG safe degreasers",
+      "Microfiber cleaning cloths",
+      "Crevice cleaning brushes"
+    ],
+    ready: [
+      "Unplug the OTG and keep it accessible",
+      "Empty any trays or racks inside"
+    ],
+    reviews: [
+      { name: "Siddharth N.", rating: "4.9", text: '"Removed all grease stains from the glass door and walls. Excellent OTG service!"' }
+    ],
+    faqs: [
+      { q: "Will this clean the heating elements?", a: "We clean around heating elements carefully to avoid damage, removing grease from the oven interior walls, glass door, and trays." }
+    ]
+  },
+  "sandwich-clean": {
+    tools: [
+      "Food-safe surface wipes",
+      "Detangled cleaning brushes"
+    ],
+    ready: [
+      "Keep the sandwich maker/griller accessible and unplugged"
+    ],
+    reviews: [
+      { name: "Deepa K.", rating: "4.8", text: '"Quick and efficient. Removed the dark stuck food particles from the grill plates."' }
+    ],
+    faqs: [
+      { q: "Will this clean stuck cheese?", a: "Yes, we use safe scrapers and warm chemical wipes to dissolve and remove cheese and char residues." }
+    ]
+  },
   "microwave-clean": {
     tools: [
       "Appliance-safe cleaning products",
@@ -16612,6 +16879,25 @@ const SERVICE_DETAIL_DATA = {
       { q: "Will you clean the chimney filter?", a: "Yes, the chimney filter will be cleaned." },
       { q: "Will you remove grease and oil?", a: "Yes, visible grease and oil buildup will be cleaned." },
       { q: "Do you repair the chimney?", a: "No, repair and replacement work are not included." }
+    ]
+  },
+  "chimney-stove-clean": {
+    tools: [
+      "Heavy duty degreasers",
+      "Steam cleaning machines",
+      "Microfiber cloths",
+      "Filter scrubbing brushes"
+    ],
+    ready: [
+      "Clear the stovetop and surrounding counter space",
+      "Provide access to a power point and water supply"
+    ],
+    reviews: [
+      { name: "Harish L.", rating: "4.9", text: '"Both chimney and gas stove are super clean now. Great service combo!"' },
+      { name: "Ruchi A.", rating: "4.8", text: '"Deep grease stains were completely steam cleaned. Highly professional."' }
+    ],
+    faqs: [
+      { q: "What does this include?", a: "This includes deep steam cleaning of both the chimney (filters/baffle/housing) and the gas stove (hob/burners/knobs)." }
     ]
   },
   "stove-clean": {
@@ -16738,6 +17024,156 @@ const SERVICE_DETAIL_DATA = {
       { q: "Will you clean the outside of the window?", a: "Only safely accessible exterior areas will be cleaned." },
       { q: "Will you remove paint or cement stains?", a: "No. Heavy paint, cement or permanent stains may require specialized cleaning." }
     ]
+  },
+  "quick-fan-clean": {
+    tools: [
+      "Microfiber cloths",
+      "All-purpose cleaning spray",
+      "Sturdy step ladder"
+    ],
+    ready: [
+      "Keep the space below the fan clear",
+      "Ensure the fan switch is turned off"
+    ],
+    reviews: [
+      { name: "Amit S.", rating: "4.9", text: '"The fan was covered in sticky kitchen grease, but they got it completely clean."' },
+      { name: "Neha P.", rating: "4.8", text: '"Fast and efficient fan cleaning service."' }
+    ],
+    faqs: [
+      { q: "Does this include repair?", a: "No, this is only a cleaning service. No repairs are done." },
+      { q: "Will my floor get dirty?", a: "Our professionals use dust-drop cloths to protect your floor." }
+    ]
+  },
+  "quick-utensils-removal": {
+    tools: [
+      "Clean baskets",
+      "Microfiber dusting cloths",
+      "Sanitizing cabinet spray"
+    ],
+    ready: [
+      "Ensure cabinets are unlocked and accessible"
+    ],
+    reviews: [
+      { name: "Suresh K.", rating: "5.0", text: '"Extremely helpful! Wiped my cabinets thoroughly and rearranged everything."' },
+      { name: "Deepa M.", rating: "4.8", text: '"Very polite worker. Sorted out my cluttered cabinet beautifully."' }
+    ],
+    faqs: [
+      { q: "Will you wash the utensils?", a: "Utensil washing is not included. We only remove, wipe, and reorganize." },
+      { q: "How do you rearrange?", a: "We rearrange them neatly in their original cabinet spaces." }
+    ]
+  },
+  "quick-sink-under-sink": {
+    tools: [
+      "Scrubbing brushes",
+      "Disinfectant sanitizers",
+      "Odour removal sprays"
+    ],
+    ready: [
+      "Clear any vessels from the sink before the professional arrives"
+    ],
+    reviews: [
+      { name: "Kunal T.", rating: "4.9", text: '"The sink shines like new, and the under-sink smell is totally gone."' },
+      { name: "Ritu G.", rating: "4.8", text: '"Great scrubbing work on the hard water stains in the sink."' }
+    ],
+    faqs: [
+      { q: "Do you clean the drain pipe?", a: "We clean the external sink drain area and visible parts. We do not do plumbing repairs or unclogging." }
+    ]
+  },
+  "quick-dining-table": {
+    tools: [
+      "Food-safe table cleaner",
+      "Polishing cloth"
+    ],
+    ready: [
+      "Clear dishes and table mats before service"
+    ],
+    reviews: [
+      { name: "Arjun V.", rating: "5.0", text: '"Got rid of sticky grease stains on the glass tabletop. Super clean!"' }
+    ],
+    faqs: [
+      { q: "Will you polish wooden tables?", a: "We do standard cleaning and gentle wiping. Specialized wood polishing is not included." }
+    ]
+  },
+  "quick-kitchen-window": {
+    tools: [
+      "Glass squeegee",
+      "Grease-cutting window spray",
+      "Track cleaning brush"
+    ],
+    ready: [
+      "Clear the window sill and counter space below the window"
+    ],
+    reviews: [
+      { name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' }
+    ],
+    faqs: [
+      { q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." }
+    ]
+  },
+  "quick-balcony-upto-4ft": {
+    tools: [
+      "Heavy duty floor brush",
+      "High-pressure water source if available",
+      "Balcony cleaning detergent"
+    ],
+    ready: [
+      "Clear planters or light furniture from the balcony floor",
+      "Provide access to a water tap"
+    ],
+    reviews: [
+      { name: "Sneha L.", rating: "5.0", text: '"Balcony floor is sparkling clean. They washed off all the pigeon droppings."' }
+    ],
+    faqs: [
+      { q: "Do you clean the balcony roof?", a: "No, roof or ceiling cleaning is not included in this quick package." }
+    ]
+  },
+  "quick-balcony-above-4ft": {
+    tools: [
+      "Scrubbing brushes & wipers",
+      "Balcony floor wash detergent",
+      "Cobweb removal brush"
+    ],
+    ready: [
+      "Clear all furniture and items from the balcony"
+    ],
+    reviews: [
+      { name: "Manish P.", rating: "4.9", text: '"Very thorough washing. Highly recommend for large balconies."' }
+    ],
+    faqs: [
+      { q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." }
+    ]
+  },
+  "quick-window-upto-4x4": {
+    tools: [
+      "Glass cleaners",
+      "Squeegee and wipers",
+      "Microfiber cloths"
+    ],
+    ready: [
+      "Clear any window decorations or blinds if possible"
+    ],
+    reviews: [
+      { name: "Preeti R.", rating: "4.8", text: '"Quick window cleaning. Spotless glass."' }
+    ],
+    faqs: [
+      { q: "Will you clean both sides?", a: "Yes, if the exterior side is safely accessible from inside." }
+    ]
+  },
+  "quick-window-above-4x4": {
+    tools: [
+      "Glass cleaning sprays",
+      "Extension poles",
+      "Frame scrubbing brushes"
+    ],
+    ready: [
+      "Provide clear access to the window area"
+    ],
+    reviews: [
+      { name: "Rohan D.", rating: "4.9", text: '"Cleaned our large living room window perfectly. Professional work."' }
+    ],
+    faqs: [
+      { q: "Is exterior cleaning included?", a: "Exterior glass is cleaned as long as it does not pose a safety risk to the cleaner." }
+    ]
   }
 };
 
@@ -16748,6 +17184,17 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   const [isBasicExpanded, setIsBasicExpanded] = useState(false);
   const [isDeepExpanded, setIsDeepExpanded] = useState(false);
   const [activeFaq, setActiveFaq] = useState(null);
+
+  useEffect(() => {
+    if (selectedServiceDetails) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedServiceDetails]);
 
   const addItemToCart = (id, name, price, duration) => {
     setCart(prev => {
@@ -16836,12 +17283,12 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             </h3>
           </div>
 
-          <div className="space-y-0 divide-y divide-slate-100">
+          <div className="space-y-4">
             {activeServices.map((service, idx) => {
               const count = getCount(service.id);
               const isFirst = idx === 0 && !searchQuery;
               return (
-                <div key={service.id} className="py-5 px-4 sm:px-5">
+                <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all">
                   {/* First item image hero */}
                   {isFirst && (
                     <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4">
@@ -16857,8 +17304,16 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                     <div className="flex-1">
                       <h4 className="text-sm font-black text-slate-900 mb-1">{service.name}</h4>
 
+                      {service.rating && activeTab !== "appliance" && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
+                          <Star className="text-violet-600 fill-violet-600" size={11} />
+                          <span className="text-slate-800">{service.rating}</span>
+                          <span className="text-slate-400 font-normal">({service.reviews})</span>
+                        </div>
+                      )}
+
                       <p className="text-xs font-bold text-slate-800">
-                        {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
+                        {service.options && activeTab !== "appliance" ? `Starts at ₹${service.price}` : `₹${service.price}`}
                         <span className="text-slate-400 font-normal ml-2">• {service.duration}</span>
                       </p>
                       {activeTab !== "addons" && (
@@ -16924,7 +17379,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                       >
                         View details
                       </button>
-                      {service.options && (
+                      {service.options && activeTab !== "appliance" && (
                         <p className="text-[11px] text-slate-400 mt-1">{service.options}</p>
                       )}
                     </div>
@@ -17019,31 +17474,30 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
         </div>
       </div>
 
-      {selectedServiceDetails && (
-        <div className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans">
+      {selectedServiceDetails && createPortal(
+        <div 
+          onClick={() => setSelectedServiceDetails(null)}
+          className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
+          >
             {/* Close button */}
             <button
               onClick={() => setSelectedServiceDetails(null)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors"
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors border-none"
             >
               <X size={16} />
             </button>
 
-            {/* Header: split hero image + promo card */}
-            <div className="flex h-36 border-b border-slate-100 shrink-0">
-              <div className="w-[60%] h-full bg-slate-100">
-                <img
-                  src={selectedServiceDetails.image}
-                  alt={selectedServiceDetails.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-[40%] bg-amber-50/70 p-4 flex flex-col justify-center text-left border-l border-amber-100/50">
-                <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-0.5">FLAT 10% OFF</span>
-                <span className="text-[10px] text-slate-600 font-bold leading-tight mb-2">For New Users</span>
-                <span className="text-[9px] font-bold text-slate-500 bg-white border border-amber-200 rounded px-1.5 py-0.5 w-fit uppercase tracking-tight">CODE: NEWCLEAN10</span>
-              </div>
+            {/* Header image */}
+            <div className="h-36 border-b border-slate-100 shrink-0">
+              <img
+                src={selectedServiceDetails.image}
+                alt={selectedServiceDetails.name}
+                className="w-full h-full object-cover"
+              />
             </div>
 
             {/* Scrollable Content */}
@@ -17201,7 +17655,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

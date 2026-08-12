@@ -316,7 +316,7 @@ export function LocationsPage() {
   }
 
   /* ── Google Maps API key ────────────────────────────────────── */
-  const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? ""
+  const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ""
 
   /* ── Load Google Maps JS SDK (once) ────────────────────────── */
   const autocompleteService = useRef(null)
@@ -353,33 +353,35 @@ export function LocationsPage() {
       return
     }
 
-    const runNominatimFallback = () => {
+    const runGoogleGeocodingFallback = () => {
       let cancelled = false
       setSearching(true)
       fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-          debouncedQuery
-        )}&format=json&limit=8&addressdetails=1`,
-        { headers: { "Accept-Language": "en" } }
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(debouncedQuery)}&key=${GOOGLE_API_KEY}`
       )
         .then((res) => res.json())
         .then((data) => {
           if (cancelled) return
           setSearching(false)
-          setSearchResults(
-            data.map((d) => ({
-              id: d.place_id,
-              name: d.name || d.display_name.split(",")[0],
-              fullAddress: d.display_name,
-              lat: parseFloat(d.lat),
-              lng: parseFloat(d.lon),
-            }))
-          )
-          setShowDropdown(true)
+          if (data.status === "OK" && data.results) {
+            setSearchResults(
+              data.results.map((d) => ({
+                id: d.place_id,
+                placeId: d.place_id,
+                name: d.formatted_address.split(",")[0],
+                fullAddress: d.formatted_address,
+                lat: d.geometry.location.lat,
+                lng: d.geometry.location.lng,
+              }))
+            )
+            setShowDropdown(true)
+          } else {
+            setSearchResults([])
+          }
         })
         .catch((err) => {
           if (cancelled) return
-          console.error("Nominatim search error:", err)
+          console.error("Google Geocoding search error:", err)
           setSearching(false)
           setSearchResults([])
         })
@@ -399,8 +401,8 @@ export function LocationsPage() {
           },
           (predictions, status) => {
             if (status !== window.google.maps.places.PlacesServiceStatus.OK || !predictions) {
-              console.warn("Google Places failed (Status:", status, ") — Using Nominatim fallback")
-              runNominatimFallback()
+              console.warn("Google Places failed (Status:", status, ") — Using Google Geocoding fallback")
+              runGoogleGeocodingFallback()
               return
             }
             setSearching(false)
@@ -421,10 +423,12 @@ export function LocationsPage() {
         )
       } catch (err) {
         console.error("Autocomplete error:", err)
-        runNominatimFallback()
+        runGoogleGeocodingFallback()
       }
       return
     }
+
+    runGoogleGeocodingFallback()
 
   }, [debouncedQuery])
 
@@ -770,8 +774,8 @@ export function LocationsPage() {
                     </Marker>
                   )}
                   <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+                    url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+                    attribution="&copy; Google Maps"
                     maxNativeZoom={20}
                     maxZoom={22}
                   />

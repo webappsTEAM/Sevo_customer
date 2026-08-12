@@ -8,7 +8,7 @@ import { validateLoginForm } from "../../utils/validate.js"
 import { routes } from "../routes.js"
 import { useGoogleLogin } from "@react-oauth/google"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
-import { RefreshCcw, AlertCircle, Eye, EyeOff, Mail, Lock, X, ArrowRight, Check, User, ShieldCheck, CheckCircle2, ExternalLink } from "lucide-react"
+import { RefreshCcw, AlertCircle, Eye, EyeOff, Mail, Lock, X, ArrowRight, Check, User, ShieldCheck, CheckCircle2, ExternalLink, Sparkles } from "lucide-react"
 import IntroAnimation from "../../components/ui/scroll-morph-hero"
 
 

@@ -2046,7 +2046,7 @@ return (
                         {hasLoc && (
                           <div style={{ position: "relative", height: 200, borderRadius: 16, overflow: "hidden", border: "2px solid #6366f1", boxShadow: "0 4px 20px rgba(99,102,241,0.15)" }}>
                             <MapContainer center={[lat, lon]} zoom={15} style={{ width: "100%", height: "100%" }} zoomControl={false} scrollWheelZoom={false}>
-                              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap" />
+                              <TileLayer url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" attribution="&copy; Google Maps" />
                               <Marker position={[lat, lon]} icon={L.divIcon({ className: "", html: `<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:42px;height:42px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:linear-gradient(135deg,#e94560,#ff6b6b);border:3px solid white;box-shadow:0 4px 16px rgba(233,69,96,0.5);display:flex;align-items:center;justify-content:center;"><div style="transform:rotate(45deg);font-size:18px">🏢</div></div><div style="margin-top:3px;background:rgba(233,69,96,0.9);color:white;padding:2px 8px;border-radius:12px;font-size:9px;font-weight:900;white-space:nowrap;">WORK SITE</div></div>`, iconSize: [60, 65], iconAnchor: [30, 58] })}>
                                 <Popup><div style={{ fontSize: 12, fontWeight: 800, padding: 4 }}>📍 {selTask?.title}{selTask?.job_address && <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>{selTask.job_address}</div>}</div></Popup>
                               </Marker>

@@ -1,7 +1,11 @@
 from django.urls import path
-from .views_catalog import (
-    AdminCatalogCategoryListView, AdminCatalogCategoryDetailView,
-    AdminCatalogServiceListView, AdminCatalogServiceDetailView, ImageUploadView
+from .views_catalog import ImageUploadView
+from .views_catalog_v2 import (
+    AdminCategoryListView, AdminCategoryDetailView,
+    AdminServiceListView, AdminServiceDetailView,
+    AdminPackageListView, AdminPackageDetailView, AdminPackageTransitionView,
+    AdminAddOnListView, AdminAddOnDetailView,
+    AdminCatalogChangeLogView,
 )
 from .views import (
     NotificationPreferenceView,
@@ -45,12 +49,18 @@ urlpatterns = [
     path("invoices/", InvoiceListView.as_view(), name="invoice-list"),
     path("invoices/download/", InvoiceDownloadView.as_view(), name="settings-invoice-download"),
 
-    # Catalog
-    path("catalog/categories/", AdminCatalogCategoryListView.as_view(), name="settings-catalog-categories-list"),
-    path("catalog/categories/<int:pk>/", AdminCatalogCategoryDetailView.as_view(), name="settings-catalog-categories-detail"),
-    path("catalog/services/", AdminCatalogServiceListView.as_view(), name="settings-catalog-services-list"),
-    path("catalog/services/<int:pk>/", AdminCatalogServiceDetailView.as_view(), name="settings-catalog-services-detail"),
+    # Catalog v2 (Category -> Service -> Package -> AddOn)
     path("catalog/upload-image/", ImageUploadView.as_view(), name="settings-catalog-upload-image"),
+    path("catalog/v2/categories/", AdminCategoryListView.as_view(), name="settings-catalog-v2-categories-list"),
+    path("catalog/v2/categories/<int:pk>/", AdminCategoryDetailView.as_view(), name="settings-catalog-v2-categories-detail"),
+    path("catalog/v2/services/", AdminServiceListView.as_view(), name="settings-catalog-v2-services-list"),
+    path("catalog/v2/services/<int:pk>/", AdminServiceDetailView.as_view(), name="settings-catalog-v2-services-detail"),
+    path("catalog/v2/packages/", AdminPackageListView.as_view(), name="settings-catalog-v2-packages-list"),
+    path("catalog/v2/packages/<int:pk>/", AdminPackageDetailView.as_view(), name="settings-catalog-v2-packages-detail"),
+    path("catalog/v2/packages/<int:pk>/transition/", AdminPackageTransitionView.as_view(), name="settings-catalog-v2-packages-transition"),
+    path("catalog/v2/addons/", AdminAddOnListView.as_view(), name="settings-catalog-v2-addons-list"),
+    path("catalog/v2/addons/<int:pk>/", AdminAddOnDetailView.as_view(), name="settings-catalog-v2-addons-detail"),
+    path("catalog/v2/change-log/", AdminCatalogChangeLogView.as_view(), name="settings-catalog-v2-change-log"),
 
     # Data / Privacy
     path("data/export/", DataExportView.as_view(), name="data-export"),
