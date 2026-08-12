@@ -34,7 +34,7 @@ export function Input({ label, hint, icon, variant = "default", onWheel, ...prop
   }
   return (
     <label className="flex flex-col gap-1.5" htmlFor={id}>
-      {label && <div className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-0.5 tracking-tight">{label}</div>}
+      {label && <div className="text-[11px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest ml-1">{label}{props.required && <span className="text-rose-500 ml-0.5">*</span>}</div>}
       <div className="relative group">
         {icon && (
           <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors pointer-events-none">
@@ -68,7 +68,7 @@ export function Select({ label, options, hint, icon, ...props }) {
   const id = useId()
   return (
     <label className="flex flex-col gap-1.5" htmlFor={id}>
-      {label && <div className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-0.5 tracking-tight">{label}</div>}
+      {label && <div className="text-[11px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest ml-1">{label}{props.required && <span className="text-rose-500 ml-0.5">*</span>}</div>}
       <div className="relative group">
         <select
           {...props}

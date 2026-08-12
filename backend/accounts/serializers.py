@@ -20,6 +20,8 @@ class UserSerializer(serializers.ModelSerializer):
     companyCountry = serializers.SerializerMethodField()
     primaryCountry = serializers.SerializerMethodField()
     employee_roles = serializers.SerializerMethodField()
+    is_care_agent = serializers.SerializerMethodField()
+    care_role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -27,8 +29,25 @@ class UserSerializer(serializers.ModelSerializer):
             "id", "username", "email", "first_name", "last_name", "role",
             "company", "company_name", "company_domain", "company_schema", "bio", "phone", "timezone", "language",
             "avatar_url", "two_fa_enabled", "company_permissions", "employee_country", "company_country", "company_region",
-            "companyCountry", "primaryCountry", "employee_roles", "company_currency", "company_currency_symbol"
+            "companyCountry", "primaryCountry", "employee_roles", "company_currency", "company_currency_symbol",
+            "is_care_agent", "care_role"
         )
+
+    def get_is_care_agent(self, obj):
+        try:
+            from customer_care.permissions import get_care_access
+            access = get_care_access(obj)
+            return access["has_access"]
+        except Exception:
+            return False
+
+    def get_care_role(self, obj):
+        try:
+            from customer_care.permissions import get_care_access
+            access = get_care_access(obj)
+            return access["tier"]
+        except Exception:
+            return None
 
     def get_company_permissions(self, obj):
         try:
