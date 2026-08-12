@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, Search, ShoppingCart, X, Star } from "lucide-react";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
@@ -27,6 +28,7 @@ const SOFA_CLEANING_SERVICES = [
     name: "Fabric Sofa Cleaning",
     price: 329,
     duration: "1 hr",
+    description: "Deep foam cleaning and vacuuming to revitalize fabric sofas.",
     image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
     includes: [
       "Foam cleaning of sofa seats and backrests",
@@ -40,6 +42,7 @@ const SOFA_CLEANING_SERVICES = [
     name: "Fabric Sofa & Cushion Cleaning",
     price: 599,
     duration: "1.5 hrs",
+    description: "Complete foam cleaning of fabric sofas including all loose cushions.",
     image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop",
     includes: [
       "Foam cleaning of sofa seats and backrests",
@@ -53,6 +56,7 @@ const SOFA_CLEANING_SERVICES = [
     name: "Leather Sofa Cleaning",
     price: 349,
     duration: "1 hr",
+    description: "Gentle cleaning and conditioning to restore leather shine.",
     image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop",
     includes: [
       "Gentle cleaning of leather sofa surfaces",
@@ -66,6 +70,7 @@ const SOFA_CLEANING_SERVICES = [
     name: "Leather Sofa & Cushion Cleaning",
     price: 599,
     duration: "1.5 hrs",
+    description: "Comprehensive leather cleaning and conditioning including cushions.",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
       "Gentle cleaning of leather sofa seats and backrests",
@@ -82,6 +87,7 @@ const MATTRESS_SERVICES = [
     name: "Mattress Deep Cleaning",
     price: 389,
     duration: "1 hr",
+    description: "Deep vacuuming and shampoo wash to remove dust mites and stains.",
     image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop",
     includes: [
       "Deep vacuuming to remove dust and dirt",
@@ -95,6 +101,7 @@ const MATTRESS_SERVICES = [
     name: "Mattress & Pillow Refresh",
     price: 499,
     duration: "1.5 hrs",
+    description: "Complete mattress shampooing and pillow deep cleaning.",
     image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop",
     includes: [
       "Deep vacuuming of mattress and pillows",
@@ -111,6 +118,7 @@ const CARPET_SERVICES = [
     name: "Carpet Cleaning",
     price: 369,
     duration: "1 hr",
+    description: "Deep foam shampoo wash to extract deep-seated dirt from carpets.",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
       "Removal of accumulated dust particles, dirt",
@@ -295,6 +303,17 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
 
+  useEffect(() => {
+    if (selectedServiceDetails) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedServiceDetails]);
+
   const addItemToCart = (id, name, price, duration) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === id);
@@ -379,12 +398,12 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
             </h3>
           </div>
 
-          <div className="space-y-0 divide-y divide-slate-100">
+          <div className="space-y-4">
             {activeServices.map((service, idx) => {
               const count = getCount(service.id);
               const isFirst = idx === 0 && !searchQuery;
               return (
-                <div key={service.id} className="py-5 px-4 sm:px-5">
+                <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all">
                   {/* First item image hero */}
                   {isFirst && (
                     <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-4">
@@ -398,20 +417,30 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
 
                   <div className="flex items-start gap-4">
                     <div className="flex-1">
-                      <h4 className="text-sm font-black text-slate-900 mb-1">{service.name}</h4>
+                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                      <p className="text-xs font-bold text-slate-800">
-                        {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
-                        <span className="text-slate-400 font-normal ml-2">• {service.duration}</span>
-                      </p>
-                      <div className="mt-3 space-y-1">
-                        {service.includes.map((item, i) => (
-                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                            <span className="text-slate-400 mt-0.5">•</span>
-                            <span>{item}</span>
-                          </div>
-                        ))}
+                      {service.description && (
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                      )}
+
+                      <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                        <span className="text-base font-black text-slate-900">
+                          {service.options ? `Starts at ₹${service.price}` : `₹${service.price}`}
+                        </span>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-slate-500 font-semibold">{service.duration}</span>
                       </div>
+
+                      {service.includes && service.includes.length > 0 && (
+                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                          {service.includes.map((item, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       <button 
                         onClick={() => setSelectedServiceDetails(service)}
                         className="text-xs font-semibold text-blue-600 mt-2 hover:underline bg-transparent border-0 cursor-pointer"
@@ -514,13 +543,19 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
       </div>
 
       {/* Details modal overlay */}
-      {selectedServiceDetails && (
-        <div className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans">
+      {selectedServiceDetails && createPortal(
+        <div 
+          onClick={() => setSelectedServiceDetails(null)}
+          className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
+          >
             {/* Close button */}
             <button 
               onClick={() => setSelectedServiceDetails(null)} 
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors"
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white p-1.5 rounded-full z-30 shadow-md transition-colors border-none"
             >
               <X size={16} />
             </button>
@@ -566,7 +601,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                     ) : (
                       <button
                         onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
-                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
+                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer border-none"
                       >
                         <ShoppingCart size={13} /> Add
                       </button>
@@ -655,7 +690,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                         <div key={idx} className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm transition-all duration-200">
                           <button
                             onClick={() => setActiveFaq(isFaqOpen ? null : idx)}
-                            className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50"
+                            className="w-full p-3 flex justify-between items-center text-xs bg-white font-semibold text-left cursor-pointer hover:bg-slate-50/50 border-none"
                           >
                             <span className={isFaqOpen ? "text-emerald-600 font-bold" : "text-slate-700"}>{faq.q}</span>
                             <span className={isFaqOpen ? "text-emerald-600 text-sm font-bold ml-2 shrink-0" : "text-slate-400 text-sm font-bold ml-2 shrink-0"}>{isFaqOpen ? "−" : "+"}</span>
@@ -683,13 +718,14 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                   }
                   setSelectedServiceDetails(null);
                 }}
-                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer"
+                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer border-none"
               >
                 Proceed
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

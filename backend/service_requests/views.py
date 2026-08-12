@@ -120,97 +120,41 @@ def _sr_qs(request):
 class CatalogCategoryListView(APIView):
     permission_classes = [permissions.AllowAny]
     def get(self, request):
-        from .models import CatalogCategory, CatalogService
+        from .models import CatalogCategory
         from .serializers import CatalogCategorySerializer
-        
-        # Auto-seed Masonry if it doesn't exist
-        if not CatalogCategory.objects.filter(slug='mason').exists():
-            mason_cat = CatalogCategory.objects.create(
-                name="Mason",
-                slug="mason",
-                image="/mockups/service_building.png",
-                description="Brick, plaster & civil work",
-                rating="4.8",
-                jobs_count_str="12K+"
-            )
-            CatalogService.objects.create(
-                category=mason_cat,
-                name="Brick & Block Work",
-                description="New walls & extensions",
-                price=999,
-                duration="2 hrs",
-                image="/mockups/service_building.png"
-            )
-            CatalogService.objects.create(
-                category=mason_cat,
-                name="Plastering & Wall Repair",
-                description="Internal & external plastering",
-                price=499,
-                duration="1 hr",
-                image="https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80&fit=crop"
-            )
-            CatalogService.objects.create(
-                category=mason_cat,
-                name="Wall & Partition Construction",
-                description="Room partitions & kitchen partitions",
-                price=999,
-                duration="2 hrs",
-                image="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80&fit=crop"
-            )
-            CatalogService.objects.create(
-                category=mason_cat,
-                name="House Construction",
-                description="Complete civil and structure construction",
-                price=0,
-                duration="Flexible",
-                image="https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&q=80&fit=crop"
-            )
-            CatalogService.objects.create(
-                category=mason_cat,
-                name="Office / Commercial Construction",
-                description="Internal partition and remodeling",
-                price=0,
-                duration="Flexible",
-                image="https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80&fit=crop"
-            )
-            CatalogService.objects.create(
-                category=mason_cat,
-                name="Wall Breaking & Demolition",
-                description="Partial wall removal and cutouts",
-                price=0,
-                duration="Flexible",
-                image="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=800&q=80&fit=crop"
-            )
-            
         from django.core.cache import cache
+
         data = cache.get("catalog_categories_list")
         if data is None:
+            cats = CatalogCategory.objects.all().order_by('name')
+            data = CatalogCategorySerializer(cats, many=True).data
             try:
-                cats = CatalogCategory.objects.all().order_by('name')
-                data = CatalogCategorySerializer(cats, many=True).data
                 cache.set("catalog_categories_list", data, timeout=600)
             except Exception:
-                data = []
+                pass
         return Response({"success": True, "data": data})
 
 
 class CatalogServiceListView(APIView):
+    """v1 compat — see CatalogServiceSerializer docstring. Still live/consumed
+    by BookingPage.jsx and ServiceRequestsPage.jsx; do not remove without
+    first rewiring those callers to the new /api/settings/catalog/v2/ shape."""
     permission_classes = [permissions.AllowAny]
     def get(self, request):
-        from .models import CatalogService
+        from .models import Package
         from .serializers import CatalogServiceSerializer
         from django.db import connection
         from django.core.cache import cache
 
-        cat_id = request.GET.get('category_id', '')
+        cat_id = request.GET.get('category_id') or ''
         cache_key = f"catalog_services_list_{cat_id}"
         cached_res = cache.get(cache_key)
         if cached_res is not None:
             return Response(cached_res)
 
-        qs = CatalogService.objects.select_related('category').all().order_by('name')
+        qs = Package.objects.select_related("service").all().order_by('name')
         if cat_id:
-            qs = qs.filter(category_id=cat_id)
+            qs = qs.filter(service__category_id=cat_id)
         data = CatalogServiceSerializer(qs, many=True).data
 
         tenant = getattr(request, 'tenant', None) or getattr(connection, 'tenant', None)
@@ -226,7 +170,10 @@ class CatalogServiceListView(APIView):
             "currency": currency,
             "currency_symbol": currency_symbol
         }
-        cache.set(cache_key, res_payload, timeout=600)
+        try:
+            cache.set(cache_key, res_payload, timeout=600)
+        except Exception:
+            pass
         return Response(res_payload)
 
 class BookingCreateView(APIView):

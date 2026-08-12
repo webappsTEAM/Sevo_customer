@@ -707,7 +707,7 @@ function getFoodItemPhoto(name = "", isGrocery = false) {
   if (n.includes("beetroot")) return "/mockups/veg/beetroot.jpg"
   if (n.includes("pumpkin") || n.includes("parangikkai") || n.includes("kaddu")) return "/mockups/veg/pumpkin.jpg"
   if (n.includes("mint") || n.includes("pudhina")) return "/mockups/veg/mint.jpg"
-  if (n.includes("basil") || n.includes("rosemary") || n.includes("herbs")) return "/mockups/veg/herbs.jpg"
+  if (n.includes("basil") || n.includes("rosemary") || n.includes("herbs")) return "/mockups/veg/rosemary.png"
   if (n.includes("turmeric") || n.includes("manjal") || n.includes("haldi")) return "/mockups/veg/turmeric.jpg"
   if (n.includes("amla") || n.includes("nellikai")) return "/mockups/veg/amla.jpg"
   if (n.includes("colocasia") || n.includes("seppankizhangu") || n.includes("arvi")) return "/mockups/veg/arvi.jpg"
@@ -891,7 +891,8 @@ const FOOD_HEALTH_SUB = [
     name: "Groceries",
     tagline: "Daily Essentials, Staples & Packaged Goods",
     graphic: GroceriesGraphic,
-    badge: "15-min Express Delivery",
+    photo: "/mockups/groceries_realistic.png",
+    badge: "Coming Soon",
     items: GROCERY_ITEMS,
   },
   {
@@ -899,6 +900,7 @@ const FOOD_HEALTH_SUB = [
     name: "Vegetables",
     tagline: "Farm-Fresh & 100% Organic Green Vegetables",
     graphic: VegetablesGraphic,
+    photo: "/mockups/vegetables_realistic.png",
     badge: "8-min Farm Delivery",
     items: VEGETABLE_ITEMS,
   },
@@ -932,8 +934,7 @@ const HOME_SERVICES_SUB = [
 ]
 
 const PEST_CONTROL_SUB = [
-  { name: "Cockroach Control", graphic: CockroachControlGraphic, categoryId: "pest_control" },
-  { name: "Termite Control", graphic: TermiteControlGraphic, categoryId: "pest_control" },
+  { name: "Cockroach & Termite Control", graphic: CockroachControlGraphic, categoryId: "pest_control" },
   { name: "Ants & Bed Bugs Control", graphic: AntBedBugControlGraphic, categoryId: "pest_control" },
 ]
 
@@ -1018,7 +1019,7 @@ export function LandingPage() {
   const [query, setQuery] = useState("")
   const [testimonialIdx, setTestimonialIdx] = useState(0)
   const location = useLocation()
-  const [modalCart, setModalCart] = useState(location.state?.cart || [])
+  const [modalCart, setModalCart] = useState(() => (location.state?.cart || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")))
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
@@ -1070,6 +1071,7 @@ export function LandingPage() {
   }, [location.state])
 
   const handleCloseCategory = () => {
+    setModalCart(prev => prev.filter(c => !c.id.includes("mason") && !c.id.includes("paint")));
     const rawCatKey = (activeCategory?.id || activeCategory?.slug || activeCategoryId || "").toLowerCase()
     if (["hvac", "ac", "appliance"].some(k => rawCatKey.includes(k))) {
       navigate("/home", { state: { openAcModal: true } })
@@ -1077,10 +1079,16 @@ export function LandingPage() {
       navigate("/home", { state: { openElecModal: true } })
     } else if (["goods", "transport"].some(k => rawCatKey.includes(k))) {
       navigate("/home", { state: { openGoodsModal: true } })
+    } else if (["painting", "mason"].some(k => rawCatKey.includes(k))) {
+      navigate("/home")
     } else {
       navigate("/home", { state: { openHomePestModal: true } })
     }
   }
+
+  const cleanConsultationItems = (cartArray) => {
+    return (cartArray || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason"));
+  };
 
   const goToBooking = () => navigate(routes.booking)
   const goToLogin = () => setShowCustomerEntryModal(true)
@@ -1289,7 +1297,7 @@ export function LandingPage() {
           </header>
 
           {/* Full Page View Wrapper */}
-          <main className={`flex-1 max-w-7xl w-full mx-auto px-6 ${activeCategory ? "pt-4 pb-10" : "py-10"}`}>
+          <main className={`flex-1 max-w-7xl w-full mx-auto px-6 ${activeCategory ? "pt-4 pb-0" : "py-10"}`}>
             {activeCategory && (
               (activeCategory.id === "kitchen_cleaning" || activeCategory.slug === "kitchen_cleaning" || String(activeCategory.id) === "kitchen_cleaning" || activeCategory.name?.toLowerCase()?.includes("kitchen")) ? (
                 <KitchenCleaningModal
@@ -1297,7 +1305,7 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
                 />
               ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
                 <SofaCleaningModal
@@ -1305,7 +1313,7 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
                 />
               ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
                 <BathroomCleaningModal
@@ -1313,7 +1321,7 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
                 />
               ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
                 <PaintingPackageModal
@@ -1321,17 +1329,16 @@ export function LandingPage() {
                   cart={modalCart}
                   setCart={setModalCart}
                   onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-                  onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
-                />
-              ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
-                <MasonPackageModal
-                  category={activeCategory}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-                  onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
+                  onCheckout={(customCart) => {
+                    const finalCart = customCart || modalCart;
+                    setModalCart(cleanConsultationItems(finalCart));
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                  }}
+                  onGetEstimate={(customCart) => {
+                    const finalCart = customCart || modalCart;
+                    setModalCart(cleanConsultationItems(finalCart));
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+                  }}
                 />
               ) : (
                 <CustomCleaningPackageModal
@@ -1340,52 +1347,15 @@ export function LandingPage() {
                   setCart={setModalCart}
                   isFullPage={true}
                   onClose={handleCloseCategory}
-                  onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onCheckout={(customCart) => {
+                    const finalCart = customCart || modalCart;
+                    setModalCart(cleanConsultationItems(finalCart));
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                  }}
                 />
               )
             )}
           </main>
-
-          {/* Footer */}
-          <footer className="bg-slate-50 border-t border-slate-100 py-12">
-            <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white font-black flex items-center justify-center">C</div>
-                  <span className="font-extrabold text-slate-800 text-base">CalServices</span>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
-                  Your trusted partner for professional home services. Quality service, transparent pricing, and trusted professionals.
-                </p>
-                <div className="flex gap-3 mt-4 text-slate-400">
-                  <FacebookMark className="w-4 h-4" />
-                  <InstagramMark className="w-4 h-4" />
-                  <YoutubeMark className="w-4 h-4" />
-                  <TwitterMark className="w-4 h-4" />
-                </div>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800 mb-3">Services</p>
-                <ul className="space-y-2 text-xs text-slate-500">
-                  {CATEGORIES.slice(0, 4).map((c) => <li key={c.label}>{c.label}</li>)}
-                </ul>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800 mb-3">Company</p>
-                <ul className="space-y-2 text-xs text-slate-500">
-                  <li>About Us</li><li>Careers</li><li>Blog</li><li>Become a Partner</li>
-                </ul>
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800 mb-3">Need Help?</p>
-                <ul className="space-y-2 text-xs text-slate-500">
-                  <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-emerald-600" /> +91 98765 43210</li>
-                  <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-emerald-600" /> support@calservices.com</li>
-                  <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-emerald-600" /> Mon &ndash; Sun (8 AM &ndash; 8 PM)</li>
-                </ul>
-              </div>
-            </div>
-          </footer>
         </div>
         <BkStyles />
 
@@ -2340,7 +2310,7 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
           />
         ) : (activeCategory.id === "sofa_cleaning" || activeCategory.slug === "sofa_cleaning" || String(activeCategory.id) === "sofa_cleaning" || activeCategory.name?.toLowerCase()?.includes("sofa")) ? (
           <SofaCleaningModal
@@ -2348,7 +2318,7 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
           />
         ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
           <BathroomCleaningModal
@@ -2356,7 +2326,7 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
           />
         ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
           <PaintingPackageModal
@@ -2364,31 +2334,37 @@ export function LandingPage() {
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-            onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
-          />
-        ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
-          <MasonPackageModal
-            category={activeCategory}
-            cart={modalCart}
-            setCart={setModalCart}
-            onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-            onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
+            onCheckout={(customCart) => {
+              const finalCart = customCart || modalCart;
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+            }}
+            onGetEstimate={(customCart) => {
+              const finalCart = customCart || modalCart;
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+            }}
           />
         ) : (
+
           <CustomCleaningPackageModal
             category={activeCategory}
             cart={modalCart}
             setCart={setModalCart}
             onClose={() => navigate("/home")}
-            onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+            onCheckout={(customCart) => {
+              const finalCart = customCart || modalCart;
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+            }}
           />
         )
       )}
 
 
 
+=======
+>>>>>>> 6483692d2ad9cafdf3b5eba8f544ceb1cb0b33e3
       {/* ── Home Services & Pest Control Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
       {isHomePestModalOpen &&
         typeof document !== "undefined" &&
@@ -2442,7 +2418,7 @@ export function LandingPage() {
                         } else if (item.name === "Sofa Cleaning") {
                           navigate(`?category=sofa_cleaning`)
                         } else {
-                          navigate(`?category=${item.categoryId}`)
+                          navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
                         }
                       }}
                       className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
@@ -2476,7 +2452,7 @@ export function LandingPage() {
                       onClick={() => {
                         setIsHomePestModalOpen(false)
                         document.body.style.overflow = "unset"
-                        navigate(`?category=${item.categoryId}`)
+                        navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
                       }}
                       className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
                     >
@@ -2872,7 +2848,7 @@ export function LandingPage() {
             }}
           >
             <div
-              className={`bg-white rounded-3xl p-5 sm:p-7 w-full shadow-2xl border border-slate-100 relative max-h-[92vh] overflow-y-auto transition-all ${
+              className={`bg-white rounded-3xl w-full shadow-2xl border border-slate-100 relative flex flex-col max-h-[90vh] overflow-hidden transition-all ${
                 selectedFoodSubModule ? "max-w-5xl" : "max-w-xl"
               }`}
               onClick={(e) => e.stopPropagation()}
@@ -2888,88 +2864,16 @@ export function LandingPage() {
                   setVegCategoryFilter("All")
                 }}
                 aria-label="Close popup"
-                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-800 flex items-center justify-center transition-colors cursor-pointer z-20"
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-800 flex items-center justify-center transition-colors cursor-pointer z-40"
               >
                 <X className="w-5 h-5" />
               </button>
 
-              {!selectedFoodSubModule ? (
-                /* Sub-Modules Main View: Groceries & Vegetables (Compact & Attractive Emerald UI) */
-                <div>
-                  <div className="text-center mb-6">
-                    <h3
-                      id="food-health-modal-title"
-                      className="text-lg sm:text-xl font-extrabold text-slate-900"
-                    >
-                      Food and Health
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Choose a category to view items &amp; schedule fast delivery
-                    </p>
-                  </div>
-
-                  {/* 2 Compact & Attractive Sub-Module Cards */}
-                  <div className="grid grid-cols-2 gap-4 items-stretch max-w-lg mx-auto">
-                    {/* Option 1: Groceries */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedFoodSubModule(FOOD_HEALTH_SUB[0])
-                        setFoodOrderPlaced(false)
-                        setVegSearchQuery("")
-                        setVegCategoryFilter("All")
-                      }}
-                      className="group flex flex-col items-center justify-between p-4 sm:p-5 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/40 hover:shadow-md bg-white"
-                    >
-                      <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100 flex items-center justify-center p-2.5 group-hover:scale-105 transition-all shadow-2xs">
-                        <GroceriesGraphic className="w-full h-full" />
-                      </div>
-                      <div className="mt-3">
-                        <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block">
-                          Groceries
-                        </span>
-                        <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
-                          Daily Essentials &amp; Staples
-                        </span>
-                        <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/80 text-emerald-800 border border-emerald-200">
-                          ⚡ 15-min Delivery
-                        </span>
-                      </div>
-                    </button>
-
-                    {/* Option 2: Vegetables */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedFoodSubModule(FOOD_HEALTH_SUB[1])
-                        setFoodOrderPlaced(false)
-                        setVegSearchQuery("")
-                        setVegCategoryFilter("All")
-                      }}
-                      className="group flex flex-col items-center justify-between p-4 sm:p-5 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/40 hover:shadow-md bg-white"
-                    >
-                      <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100 flex items-center justify-center p-2.5 group-hover:scale-105 transition-all shadow-2xs">
-                        <VegetablesGraphic className="w-full h-full" />
-                      </div>
-                      <div className="mt-3">
-                        <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block">
-                          Vegetables
-                        </span>
-                        <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
-                          Farm-Fresh &amp; 100% Organic
-                        </span>
-                        <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/80 text-emerald-800 border border-emerald-200">
-                          🌱 8-min Farm Express
-                        </span>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Sub-Module Detail Catalog View */
-                <div>
+              {/* Pinned Modal Header (When viewing a sub-module detail) */}
+              {selectedFoodSubModule && (
+                <div className="px-5 sm:px-7 pt-5 sm:pt-6 pb-3 border-b border-slate-100 bg-white shrink-0">
                   {/* Back Link & Header */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pr-10">
                     <button
                       type="button"
                       onClick={() => {
@@ -2990,352 +2894,378 @@ export function LandingPage() {
                     </div>
                   </div>
 
-                  {/* Title and Search Row */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                    <div>
-                      <h4 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-                        {selectedFoodSubModule.name}
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                          {selectedFoodSubModule.items.length} items
-                        </span>
-                      </h4>
-                      <p className="text-xs text-slate-500 font-medium">
-                        {selectedFoodSubModule.tagline}
+                  {/* Title and Search Row (only for live catalogs, not Coming Soon) */}
+                  {selectedFoodSubModule.id !== "groceries" && (
+                    <>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                            {selectedFoodSubModule.name}
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                              {selectedFoodSubModule.items.length} items
+                            </span>
+                          </h4>
+                          <p className="text-xs text-slate-500 font-medium">
+                            {selectedFoodSubModule.tagline}
+                          </p>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="relative min-w-[240px]">
+                          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={vegSearchQuery}
+                            onChange={(e) => setVegSearchQuery(e.target.value)}
+                            placeholder={`Search ${selectedFoodSubModule.name.toLowerCase()} (e.g. Onion, Tomato)...`}
+                            className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 focus:border-emerald-500 focus:outline-none bg-slate-50/50"
+                          />
+                          {vegSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setVegSearchQuery("")}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Category Filter Pills (if vegetables) */}
+                      {selectedFoodSubModule.id === "vegetables" && (
+                        <div className="flex items-center gap-2 overflow-x-auto pt-3 no-scrollbar">
+                          {["All", "Daily Essentials", "Herbs & Leafy", "Gourds & Roots", "Organic & Exotic", "Herbs & Seasoning"].map((cat) => (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => setVegCategoryFilter(cat)}
+                              className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                                vegCategoryFilter === cat
+                                  ? "bg-emerald-600 text-white shadow-xs"
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                              }`}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Scrollable Body Container (Optimized for smooth 60fps scrolling) */}
+              <div
+                className="flex-1 overflow-y-auto p-5 sm:p-7 overscroll-contain"
+                style={{
+                  overscrollBehavior: "contain",
+                  WebkitOverflowScrolling: "touch",
+                  willChange: "scroll-position",
+                  transform: "translateZ(0)",
+                }}
+              >
+                {!selectedFoodSubModule ? (
+                  /* Sub-Modules Main View: Groceries & Vegetables (Compact & Attractive Emerald UI) */
+                  <div>
+                    <div className="text-center mb-6">
+                      <h3
+                        id="food-health-modal-title"
+                        className="text-lg sm:text-xl font-extrabold text-slate-900"
+                      >
+                        Food and Health
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Choose a category to view items &amp; schedule fast delivery
                       </p>
                     </div>
 
-                    {/* Search Bar */}
-                    <div className="relative min-w-[240px]">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={vegSearchQuery}
-                        onChange={(e) => setVegSearchQuery(e.target.value)}
-                        placeholder={`Search ${selectedFoodSubModule.name.toLowerCase()} (e.g. Onion, Tomato)...`}
-                        className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 focus:border-emerald-500 focus:outline-none bg-slate-50/50"
-                      />
-                      {vegSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setVegSearchQuery("")}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                    {/* 2 Compact & Attractive Sub-Module Cards */}
+                    <div className="grid grid-cols-2 gap-4 items-stretch max-w-lg mx-auto">
+                      {/* Option 1: Groceries (Coming Soon) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFoodSubModule(FOOD_HEALTH_SUB[0])
+                          setFoodOrderPlaced(false)
+                          setVegSearchQuery("")
+                          setVegCategoryFilter("All")
+                        }}
+                        className="group flex flex-col items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:border-amber-400 hover:bg-amber-50/20 hover:shadow-md bg-white relative"
+                      >
+                        <div className="w-full aspect-square max-w-[125px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100/80 overflow-hidden flex items-center justify-center p-1 group-hover:scale-105 transition-all shadow-2xs relative">
+                          <img
+                            src="/mockups/groceries_realistic.png"
+                            alt="Groceries"
+                            className="w-full h-full object-cover rounded-xl"
+                          />
+                          <div className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-xs">
+                            Coming Soon
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-amber-800 transition-colors block">
+                            Groceries
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
+                            Daily Essentials &amp; Staples
+                          </span>
+                          <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                            ⏳ Coming Soon
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* Option 2: Vegetables */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFoodSubModule(FOOD_HEALTH_SUB[1])
+                          setFoodOrderPlaced(false)
+                          setVegSearchQuery("")
+                          setVegCategoryFilter("All")
+                        }}
+                        className="group flex flex-col items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 hover:shadow-md bg-white"
+                      >
+                        <div className="w-full aspect-square max-w-[125px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100/80 overflow-hidden flex items-center justify-center p-1 group-hover:scale-105 transition-all shadow-2xs">
+                          <img
+                            src="/mockups/vegetables_realistic.png"
+                            alt="Vegetables"
+                            className="w-full h-full object-cover rounded-xl"
+                          />
+                        </div>
+                        <div className="mt-3">
+                          <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors block">
+                            Vegetables
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
+                            Farm-Fresh &amp; 100% Organic
+                          </span>
+                          <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/80 text-emerald-800 border border-emerald-200">
+                            🌱 8-min Farm Express
+                          </span>
+                        </div>
+                      </button>
                     </div>
                   </div>
-
-                  {/* Category Filter Pills (if vegetables or groceries) */}
-                  {selectedFoodSubModule.id === "vegetables" && (
-                    <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-4 no-scrollbar">
-                      {["All", "Daily Essentials", "Herbs & Leafy", "Gourds & Roots", "Organic & Exotic", "Herbs & Seasoning"].map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setVegCategoryFilter(cat)}
-                          className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                            vegCategoryFilter === cat
-                              ? "bg-emerald-600 text-white shadow-xs"
-                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {foodOrderPlaced ? (
-                    <div className="p-8 rounded-3xl bg-gradient-to-b from-emerald-50 to-teal-50 border-2 border-emerald-200 text-center my-6">
-                      <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-600/30">
-                        <Check className="w-8 h-8 stroke-[3]" />
-                      </div>
-                      <h5 className="text-xl font-extrabold text-emerald-950">
-                        Order Confirmed Successfully!
-                      </h5>
-                      <p className="text-xs sm:text-sm text-emerald-800 font-medium mt-1.5 max-w-md mx-auto">
-                        Your fresh {selectedFoodSubModule.name.toLowerCase()} order has been placed. Our Hosur delivery partner is packing and dispatching your items within 8-10 minutes.
-                      </p>
-                      <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-emerald-800 text-xs font-bold border border-emerald-200">
-                        <span>📍 Delivery to:</span> Hosur Central &bull; ⏱ ETA: 8-12 mins
-                      </div>
-                      <div className="mt-6">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFoodCart({})
-                            setFoodOrderPlaced(false)
-                            setSelectedFoodSubModule(null)
-                          }}
-                          className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 cursor-pointer shadow-md transition-all"
-                        >
-                          Back to Home
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Products Grid matching Quick Commerce Layout */}
-                      {selectedFoodSubModule.items.filter((item) => {
-                        const q = vegSearchQuery.toLowerCase()
-                        const matchesSearch =
-                          !vegSearchQuery ||
-                          item.name.toLowerCase().includes(q) ||
-                          (item.category && item.category.toLowerCase().includes(q))
-                        const matchesCat =
-                          vegCategoryFilter === "All" || item.category === vegCategoryFilter
-                        return matchesSearch && matchesCat
-                      }).length === 0 ? (
-                        <div className="py-12 text-center">
-                          <p className="text-sm font-bold text-slate-500">No items found matching your search.</p>
+                ) : (
+                  /* Sub-Module Detail Catalog View */
+                  <div>
+                    {selectedFoodSubModule.id === "groceries" ? (
+                      <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-b from-amber-50/60 to-orange-50/20 border-2 border-amber-200/70 text-center my-4">
+                        <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl overflow-hidden mx-auto mb-4 border-2 border-amber-200 shadow-lg">
+                          <img
+                            src="/mockups/groceries_realistic.png"
+                            alt="Groceries Coming Soon"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-extrabold mb-3 border border-amber-300 shadow-2xs">
+                          <span>⏳</span> Coming Soon to Hosur
+                        </div>
+                        <h4 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                          Groceries Delivery is Coming Soon!
+                        </h4>
+                        <p className="text-xs sm:text-sm text-slate-600 font-medium mt-2 max-w-md mx-auto leading-relaxed">
+                          We are currently expanding our express fulfillment network in Hosur to deliver packaged staples, daily essentials, and dairy directly to your doorstep.
+                        </p>
+                        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                           <button
                             type="button"
                             onClick={() => {
+                              setSelectedFoodSubModule(FOOD_HEALTH_SUB[1])
+                              setFoodOrderPlaced(false)
                               setVegSearchQuery("")
                               setVegCategoryFilter("All")
                             }}
-                            className="mt-2 text-xs font-bold text-emerald-600 hover:underline"
+                            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm transition-all shadow-md cursor-pointer flex items-center gap-2"
                           >
-                            Clear filters
+                            <span>Order Fresh Vegetables</span>
+                            <span>&rarr;</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedFoodSubModule(null)
+                              setFoodOrderPlaced(false)
+                            }}
+                            className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm transition-all border border-slate-200 cursor-pointer"
+                          >
+                            Back to Categories
                           </button>
                         </div>
-                      ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-3.5 mb-6">
-                          {selectedFoodSubModule.items
-                            .filter((item) => {
-                              const q = vegSearchQuery.toLowerCase()
-                              const matchesSearch =
-                                !vegSearchQuery ||
-                                item.name.toLowerCase().includes(q) ||
-                                (item.category && item.category.toLowerCase().includes(q))
-                              const matchesCat =
-                                vegCategoryFilter === "All" || item.category === vegCategoryFilter
-                              return matchesSearch && matchesCat
-                            })
-                            .map((item, idx) => {
-                              const hasOptions = item.options && item.options.length > 0
-                              const count = hasOptions
-                                ? item.options.reduce((sum, opt) => sum + (foodCart[`${item.name} (${opt.unit})`] || 0), 0)
-                                : (foodCart[item.name] || 0)
-                              return (
-                                <div
-                                  key={idx}
-                                  className="group rounded-2xl border border-slate-200/90 bg-white hover:border-emerald-500 hover:shadow-lg flex flex-col justify-between transition-all duration-200 overflow-hidden"
-                                >
-                                  <div>
-                                    {/* Real Studio Photographic Product Image */}
-                                    <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
-                                      <img
-                                        src={getFoodItemPhoto(item.name, selectedFoodSubModule.id === "groceries")}
-                                        alt={item.name}
-                                        className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-300"
-                                        onError={(e) => {
-                                          e.target.onerror = null
-                                          e.target.src = "/mockups/category_food_health.png"
-                                        }}
-                                        loading="lazy"
-                                      />
-                                    </div>
-
-                                    {/* 8 MINS Delivery Pill */}
-                                    <div className="px-3 pt-2.5 flex items-center text-[10px] font-bold text-slate-400 gap-1">
-                                      <Clock className="w-3 h-3 text-slate-400" />
-                                      <span>{item.delivery || "8 MINS"}</span>
-                                    </div>
-
-                                    {/* Name and Weight / Options Pill */}
-                                    <h5 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-2 min-h-[34px] px-3 mt-1 leading-snug group-hover:text-emerald-700 transition-colors">
-                                      {item.name}
-                                    </h5>
-                                    {hasOptions ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => setVariantModalItem(item)}
-                                        className="mx-3 mt-1 px-2 py-0.5 rounded-md bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-500 flex items-center justify-between text-[10px] font-bold text-slate-700 transition-all cursor-pointer"
-                                      >
-                                        <span>{item.unit}</span>
-                                        <span className="text-emerald-700 font-extrabold flex items-center gap-0.5">
-                                          2 Options <ChevronDown className="w-2.5 h-2.5" />
-                                        </span>
-                                      </button>
-                                    ) : (
-                                      <p className="text-[11px] font-semibold text-slate-400 px-3 mt-0.5">
-                                        {item.unit}
-                                      </p>
-                                    )}
-                                  </div>
-
-                                  {/* Price and Add / Quantity Row */}
-                                  <div className="px-3 pb-3 pt-2 mt-3 border-t border-slate-100 flex items-center justify-between gap-1">
-                                    <div className="flex flex-col">
-                                      <span className="text-xs sm:text-sm font-black text-slate-900 leading-none">
-                                        ₹{item.price}
-                                      </span>
-                                      {item.mrp && (
-                                        <span className="text-[10px] line-through text-slate-400 font-semibold mt-0.5">
-                                          ₹{item.mrp}
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    {/* ADD or Counter Button */}
-                                    {hasOptions ? (
-                                      count > 0 ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => setVariantModalItem(item)}
-                                          className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1 text-xs font-black shadow-xs cursor-pointer active:scale-95 transition-all"
-                                        >
-                                          <span>{count} added</span>
-                                          <ChevronDown className="w-3 h-3" />
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => setVariantModalItem(item)}
-                                          className="px-3 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white flex items-center gap-1"
-                                        >
-                                          <span>ADD</span>
-                                          <ChevronDown className="w-2.5 h-2.5" />
-                                        </button>
-                                      )
-                                    ) : count > 0 ? (
-                                      <div className="flex items-center bg-emerald-600 text-white rounded-lg px-1.5 py-1 shadow-xs">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setFoodCart((prev) => ({
-                                              ...prev,
-                                              [item.name]: Math.max(0, (prev[item.name] || 0) - 1),
-                                            }))
-                                          }
-                                          className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
-                                        >
-                                          -
-                                        </button>
-                                        <span className="text-xs font-extrabold min-w-[14px] text-center px-0.5">
-                                          {count}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setFoodCart((prev) => ({
-                                              ...prev,
-                                              [item.name]: (prev[item.name] || 0) + 1,
-                                            }))
-                                          }
-                                          className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
-                                        >
-                                          +
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setFoodCart((prev) => ({
-                                            ...prev,
-                                            [item.name]: 1,
-                                          }))
-                                        }
-                                        className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white"
-                                      >
-                                        ADD
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
+                      </div>
+                    ) : foodOrderPlaced ? (
+                      <div className="p-8 rounded-3xl bg-gradient-to-b from-emerald-50 to-teal-50 border-2 border-emerald-200 text-center my-6">
+                        <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-600/30">
+                          <Check className="w-8 h-8 stroke-[3]" />
                         </div>
-                      )}
-
-                      {/* Quick Pack/Weight Options Modal matching User Screenshot */}
-                      {variantModalItem && (
-                        <div
-                          className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
-                          onClick={() => setVariantModalItem(null)}
-                        >
-                          <div
-                            className="relative bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150"
-                            onClick={(e) => e.stopPropagation()}
+                        <h5 className="text-xl font-extrabold text-emerald-950">
+                          Order Confirmed Successfully!
+                        </h5>
+                        <p className="text-xs sm:text-sm text-emerald-800 font-medium mt-1.5 max-w-md mx-auto">
+                          Your fresh {selectedFoodSubModule.name.toLowerCase()} order has been placed. Our Hosur delivery partner is packing and dispatching your items within 8-10 minutes.
+                        </p>
+                        <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-emerald-800 text-xs font-bold border border-emerald-200">
+                          <span>📍 Delivery to:</span> Hosur Central &bull; ⏱ ETA: 8-12 mins
+                        </div>
+                        <div className="mt-6">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFoodCart({})
+                              setFoodOrderPlaced(false)
+                              setSelectedFoodSubModule(null)
+                            }}
+                            className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 cursor-pointer shadow-md transition-all"
                           >
-                            {/* Floating Close Button on top */}
+                            Back to Home
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Products Grid matching Quick Commerce Layout */}
+                        {selectedFoodSubModule.items.filter((item) => {
+                          const q = vegSearchQuery.toLowerCase()
+                          const matchesSearch =
+                            !vegSearchQuery ||
+                            item.name.toLowerCase().includes(q) ||
+                            (item.category && item.category.toLowerCase().includes(q))
+                          const matchesCat =
+                            vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                          return matchesSearch && matchesCat
+                        }).length === 0 ? (
+                          <div className="py-12 text-center">
+                            <p className="text-sm font-bold text-slate-500">No items found matching your search.</p>
                             <button
                               type="button"
-                              onClick={() => setVariantModalItem(null)}
-                              className="absolute -top-4 right-1/2 translate-x-1/2 sm:translate-x-0 sm:right-3 sm:-top-4 w-9 h-9 rounded-full bg-slate-900 text-white hover:bg-slate-800 flex items-center justify-center shadow-lg transition-transform hover:scale-105 cursor-pointer z-10"
+                              onClick={() => {
+                                setVegSearchQuery("")
+                                setVegCategoryFilter("All")
+                              }}
+                              className="mt-2 text-xs font-bold text-emerald-600 hover:underline"
                             >
-                              <X className="w-4 h-4" />
+                              Clear filters
                             </button>
-
-                            {/* Modal Header */}
-                            <h4 className="text-base sm:text-lg font-black text-slate-900 mb-4 pr-6">
-                              {variantModalItem.name}
-                            </h4>
-
-                            {/* Options List */}
-                            <div className="space-y-3">
-                              {variantModalItem.options?.map((opt, oIdx) => {
-                                const cartKey = `${variantModalItem.name} (${opt.unit})`
-                                const optCount = foodCart[cartKey] || 0
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-3.5 mb-2">
+                            {selectedFoodSubModule.items
+                              .filter((item) => {
+                                const q = vegSearchQuery.toLowerCase()
+                                const matchesSearch =
+                                  !vegSearchQuery ||
+                                  item.name.toLowerCase().includes(q) ||
+                                  (item.category && item.category.toLowerCase().includes(q))
+                                const matchesCat =
+                                  vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                                return matchesSearch && matchesCat
+                              })
+                              .map((item, idx) => {
+                                const hasOptions = item.options && item.options.length > 0
+                                const count = hasOptions
+                                  ? item.options.reduce((sum, opt) => sum + (foodCart[`${item.name} (${opt.unit})`] || 0), 0)
+                                  : (foodCart[item.name] || 0)
                                 return (
                                   <div
-                                    key={oIdx}
-                                    className="bg-white rounded-2xl border border-slate-200/90 p-3 flex items-center justify-between gap-3 shadow-xs hover:border-emerald-500 transition-all"
+                                    key={idx}
+                                    className="group rounded-2xl border border-slate-200/90 bg-white hover:border-emerald-500 hover:shadow-md flex flex-col justify-between transition-shadow duration-150 overflow-hidden"
+                                    style={{
+                                      contentVisibility: "auto",
+                                      containIntrinsicSize: "0 230px",
+                                    }}
                                   >
-                                    {/* Left: Product Thumbnail */}
-                                    <div className="w-14 h-14 rounded-xl bg-[#f5f1eb] overflow-hidden shrink-0">
-                                      <img
-                                        src={getFoodItemPhoto(variantModalItem.name, false)}
-                                        alt={variantModalItem.name}
-                                        className="w-full h-full object-cover"
-                                      />
+                                    <div>
+                                      {/* Real Studio Photographic Product Image */}
+                                      <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
+                                        <img
+                                          src={getFoodItemPhoto(item.name, selectedFoodSubModule.id === "groceries")}
+                                          alt={item.name}
+                                          loading="lazy"
+                                          decoding="async"
+                                          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                          onError={(e) => {
+                                            e.target.onerror = null
+                                            e.target.src = "/mockups/category_food_health.png"
+                                          }}
+                                        />
+                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-white px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
+                                          <Clock className="w-2.5 h-2.5 text-emerald-600" />
+                                          <span>{item.delivery || "8 MINS"}</span>
+                                        </div>
+                                      </div>
+
+                                      {/* Details */}
+                                      <div className="p-2.5">
+                                        <h5 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight min-h-[30px]" title={item.name}>
+                                          {item.name}
+                                        </h5>
+                                        <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
+                                          {item.unit}
+                                        </p>
+                                      </div>
                                     </div>
 
-                                    {/* Middle: Unit & Price */}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-bold text-slate-800">
-                                        {opt.unit}
-                                      </p>
-                                      <div className="flex items-center gap-1.5 mt-0.5">
-                                        <span className="text-sm font-black text-slate-900">
-                                          ₹{opt.price}
-                                        </span>
-                                        {opt.mrp && (
-                                          <span className="text-xs line-through text-slate-400 font-semibold">
-                                            ₹{opt.mrp}
+                                    {/* Price and Add CTA */}
+                                    <div className="p-2.5 pt-0 flex items-center justify-between gap-1.5 mt-auto">
+                                      <div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                                            ₹{item.price}
+                                          </span>
+                                        </div>
+                                        {item.mrp && (
+                                          <span className="text-[10px] text-slate-400 line-through">
+                                            ₹{item.mrp}
                                           </span>
                                         )}
                                       </div>
-                                    </div>
 
-                                    {/* Right: Add / Counter Button */}
-                                    <div>
-                                      {optCount > 0 ? (
-                                        <div className="flex items-center bg-emerald-600 text-white rounded-lg px-2 py-1 shadow-xs">
+                                      {hasOptions ? (
+                                        count > 0 ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => setVariantModalItem(item)}
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-extrabold text-[11px] shadow-xs flex items-center gap-1 cursor-pointer"
+                                          >
+                                            <span>{count} in Cart</span>
+                                            <ChevronDown className="w-2.5 h-2.5" />
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => setVariantModalItem(item)}
+                                            className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white flex items-center gap-1"
+                                          >
+                                            <span>ADD</span>
+                                            <ChevronDown className="w-2.5 h-2.5" />
+                                          </button>
+                                        )
+                                      ) : count > 0 ? (
+                                        <div className="flex items-center bg-emerald-600 text-white rounded-lg px-1.5 py-1 shadow-xs">
                                           <button
                                             type="button"
                                             onClick={() =>
                                               setFoodCart((prev) => ({
                                                 ...prev,
-                                                [cartKey]: Math.max(0, (prev[cartKey] || 0) - 1),
+                                                [item.name]: Math.max(0, (prev[item.name] || 0) - 1),
                                               }))
                                             }
                                             className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
                                           >
                                             -
                                           </button>
-                                          <span className="text-xs font-extrabold min-w-[16px] text-center px-1">
-                                            {optCount}
+                                          <span className="text-xs font-extrabold min-w-[14px] text-center px-0.5">
+                                            {count}
                                           </span>
                                           <button
                                             type="button"
                                             onClick={() =>
                                               setFoodCart((prev) => ({
                                                 ...prev,
-                                                [cartKey]: (prev[cartKey] || 0) + 1,
+                                                [item.name]: (prev[item.name] || 0) + 1,
                                               }))
                                             }
                                             className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
@@ -3349,10 +3279,10 @@ export function LandingPage() {
                                           onClick={() =>
                                             setFoodCart((prev) => ({
                                               ...prev,
-                                              [cartKey]: 1,
+                                              [item.name]: 1,
                                             }))
                                           }
-                                          className="px-4 py-1.5 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-xs transition-all cursor-pointer active:scale-95 bg-white"
+                                          className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white"
                                         >
                                           ADD
                                         </button>
@@ -3361,131 +3291,247 @@ export function LandingPage() {
                                   </div>
                                 )
                               })}
+                          </div>
+                        )}
+
+                        {/* Quick Pack/Weight Options Modal */}
+                        {variantModalItem && (
+                          <div
+                            className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+                            onClick={() => setVariantModalItem(null)}
+                          >
+                            <div
+                              className="relative bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {/* Floating Close Button on top */}
+                              <button
+                                type="button"
+                                onClick={() => setVariantModalItem(null)}
+                                className="absolute -top-4 right-1/2 translate-x-1/2 sm:translate-x-0 sm:right-3 sm:-top-4 w-9 h-9 rounded-full bg-slate-900 text-white hover:bg-slate-800 flex items-center justify-center shadow-lg transition-transform hover:scale-105 cursor-pointer z-10"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+
+                              {/* Modal Header */}
+                              <h4 className="text-base sm:text-lg font-black text-slate-900 mb-4 pr-6">
+                                {variantModalItem.name}
+                              </h4>
+
+                              {/* Options List */}
+                              <div className="space-y-3">
+                                {variantModalItem.options?.map((opt, oIdx) => {
+                                  const cartKey = `${variantModalItem.name} (${opt.unit})`
+                                  const optCount = foodCart[cartKey] || 0
+                                  return (
+                                    <div
+                                      key={oIdx}
+                                      className="bg-white rounded-2xl border border-slate-200/90 p-3 flex items-center justify-between gap-3 shadow-xs hover:border-emerald-500 transition-all"
+                                    >
+                                      {/* Left: Product Thumbnail */}
+                                      <div className="w-14 h-14 rounded-xl bg-[#f5f1eb] overflow-hidden shrink-0">
+                                        <img
+                                          src={getFoodItemPhoto(variantModalItem.name, false)}
+                                          alt={variantModalItem.name}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      </div>
+
+                                      {/* Middle: Unit & Price */}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-bold text-slate-800">
+                                          {opt.unit}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                          <span className="text-xs sm:text-sm font-black text-slate-900">
+                                            ₹{opt.price}
+                                          </span>
+                                          {opt.mrp && (
+                                            <span className="text-[10px] text-slate-400 line-through">
+                                              ₹{opt.mrp}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Right: Add/Quantity Control */}
+                                      <div className="shrink-0">
+                                        {optCount > 0 ? (
+                                          <div className="flex items-center bg-emerald-600 text-white rounded-lg px-1.5 py-1 shadow-xs">
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setFoodCart((prev) => ({
+                                                  ...prev,
+                                                  [cartKey]: Math.max(0, (prev[cartKey] || 0) - 1),
+                                                }))
+                                              }
+                                              className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                            >
+                                              -
+                                            </button>
+                                            <span className="text-xs font-extrabold min-w-[14px] text-center px-0.5">
+                                              {optCount}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setFoodCart((prev) => ({
+                                                  ...prev,
+                                                  [cartKey]: (prev[cartKey] || 0) + 1,
+                                                }))
+                                              }
+                                              className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                            >
+                                              +
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setFoodCart((prev) => ({
+                                                ...prev,
+                                                [cartKey]: 1,
+                                              }))
+                                            }
+                                            className="px-4 py-1.5 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-xs transition-all cursor-pointer active:scale-95 bg-white"
+                                          >
+                                            ADD
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
 
-                      {/* Sticky Order Action Bar */}
-                      <div className="sticky bottom-0 bg-white/95 backdrop-blur-md pt-3 pb-1 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                        <div className="text-xs text-slate-600 font-semibold">
-                          {Object.values(foodCart).reduce((a, b) => a + b, 0) > 0 ? (
-                            <div className="flex items-center gap-2">
-                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-extrabold text-xs">
-                                {Object.values(foodCart).reduce((a, b) => a + b, 0)} items in cart
-                              </span>
-                              <span className="text-slate-800 font-bold">
-                                Total: ₹
-                                {Object.entries(foodCart).reduce((sum, [nameWithUnit, qty]) => {
-                                  if (qty <= 0) return sum
-                                  let matchedPrice = 0
-                                  if (selectedFoodSubModule?.items) {
-                                    for (const it of selectedFoodSubModule.items) {
-                                      if (it.options) {
-                                        for (const opt of it.options) {
-                                          if (`${it.name} (${opt.unit})` === nameWithUnit) {
-                                            matchedPrice = opt.price
-                                            break
-                                          }
-                                        }
-                                      }
-                                      if (matchedPrice) break
-                                      if (it.name === nameWithUnit) {
-                                        matchedPrice = it.price
-                                        break
-                                      }
+              {/* Pinned Fixed Bottom Action Bar */}
+              {selectedFoodSubModule && selectedFoodSubModule.id !== "groceries" && !foodOrderPlaced && (
+                <div className="px-5 sm:px-7 py-3.5 bg-white border-t border-slate-200 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] rounded-b-3xl">
+                  <div className="text-xs text-slate-600 font-semibold">
+                    {Object.values(foodCart).reduce((a, b) => a + b, 0) > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-extrabold text-xs">
+                          {Object.values(foodCart).reduce((a, b) => a + b, 0)} items in cart
+                        </span>
+                        <span className="text-slate-800 font-bold">
+                          Total: ₹
+                          {Object.entries(foodCart).reduce((sum, [nameWithUnit, qty]) => {
+                            if (qty <= 0) return sum
+                            let matchedPrice = 0
+                            if (selectedFoodSubModule?.items) {
+                              for (const it of selectedFoodSubModule.items) {
+                                if (it.options) {
+                                  for (const opt of it.options) {
+                                    if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                      matchedPrice = opt.price
+                                      break
                                     }
-                                  }
-                                  return sum + matchedPrice * qty
-                                }, 0)}
-                              </span>
-                            </div>
-                          ) : (
-                            <span>Select vegetables above for instant Hosur door delivery</span>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
-                          onClick={() => {
-                            const itemsList = []
-                            Object.entries(foodCart).forEach(([nameWithUnit, qty]) => {
-                              if (qty <= 0) return
-                              let matchedItem = null
-                              let unit = "1 unit"
-                              let price = 0
-                              let mrp = 0
-                              let baseName = nameWithUnit
-
-                              if (selectedFoodSubModule?.items) {
-                                for (const it of selectedFoodSubModule.items) {
-                                  if (it.options) {
-                                    for (const opt of it.options) {
-                                      if (`${it.name} (${opt.unit})` === nameWithUnit) {
-                                        matchedItem = it
-                                        unit = opt.unit
-                                        price = opt.price
-                                        mrp = opt.mrp || Math.round(opt.price * 1.2)
-                                        baseName = it.name
-                                        break
-                                      }
-                                    }
-                                  }
-                                  if (matchedItem) break
-                                  if (it.name === nameWithUnit) {
-                                    matchedItem = it
-                                    unit = it.unit
-                                    price = it.price
-                                    mrp = it.mrp || Math.round(it.price * 1.2)
-                                    baseName = it.name
-                                    break
                                   }
                                 }
+                                if (matchedPrice) break
+                                if (it.name === nameWithUnit) {
+                                  matchedPrice = it.price
+                                  break
+                                }
                               }
-
-                              itemsList.push({
-                                id: `veg_${nameWithUnit.replace(/[^a-zA-Z0-9]/g, "_")}`,
-                                name: baseName,
-                                displayName: nameWithUnit,
-                                unit: unit,
-                                price: price || 30,
-                                mrp: mrp || (price ? Math.round(price * 1.2) : 36),
-                                quantity: qty,
-                                image: getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
-                                serviceType: "vegetables_quick_delivery",
-                                deliveryMins: "15-25 mins",
-                              })
-                            })
-
-                            if (itemsList.length === 0) return
-
-                            setSelectedFoodSubModule(null)
-                            navigate(routes.booking_checkout, {
-                              state: {
-                                category: {
-                                  id: "vegetables_quick_delivery",
-                                  name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
-                                  isQuickCommerce: true,
-                                  deliveryTime: "15-25 mins",
-                                },
-                                cart: itemsList,
-                                isQuickCommerce: true,
-                              }
-                            })
-                          }}
-                          className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
-                            Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                              ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
-                              : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                          }`}
-                        >
-                          <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
+                            }
+                            return sum + matchedPrice * qty
+                          }, 0)}
+                        </span>
                       </div>
-                    </>
-                  )}
+                    ) : (
+                      <span>Select vegetables above for instant Hosur door delivery</span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
+                    onClick={() => {
+                      const itemsList = []
+                      Object.entries(foodCart).forEach(([nameWithUnit, qty]) => {
+                        if (qty <= 0) return
+                        let matchedItem = null
+                        let unit = "1 unit"
+                        let price = 0
+                        let mrp = 0
+                        let baseName = nameWithUnit
+
+                        if (selectedFoodSubModule?.items) {
+                          for (const it of selectedFoodSubModule.items) {
+                            if (it.options) {
+                              for (const opt of it.options) {
+                                if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                  matchedItem = it
+                                  unit = opt.unit
+                                  price = opt.price
+                                  mrp = opt.mrp || Math.round(opt.price * 1.2)
+                                  baseName = it.name
+                                  break
+                                }
+                              }
+                            }
+                            if (matchedItem) break
+                            if (it.name === nameWithUnit) {
+                              matchedItem = it
+                              unit = it.unit
+                              price = it.price
+                              mrp = it.mrp || Math.round(it.price * 1.2)
+                              baseName = it.name
+                              break
+                            }
+                          }
+                        }
+
+                        itemsList.push({
+                          id: `veg_${nameWithUnit.replace(/[^a-zA-Z0-9]/g, "_")}`,
+                          name: baseName,
+                          displayName: nameWithUnit,
+                          unit: unit,
+                          price: price || 30,
+                          mrp: mrp || (price ? Math.round(price * 1.2) : 36),
+                          quantity: qty,
+                          image: getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
+                          serviceType: "vegetables_quick_delivery",
+                          deliveryMins: "15-25 mins",
+                        })
+                      })
+
+                      if (itemsList.length === 0) return
+
+                      setSelectedFoodSubModule(null)
+                      navigate(routes.booking_checkout, {
+                        state: {
+                          category: {
+                            id: "vegetables_quick_delivery",
+                            name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
+                            isQuickCommerce: true,
+                            deliveryTime: "15-25 mins",
+                          },
+                          cart: itemsList,
+                          isQuickCommerce: true,
+                        }
+                      })
+                    }}
+                    className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
+                      Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                        ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    }`}
+                  >
+                    <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               )}
             </div>
@@ -3910,7 +3956,7 @@ export function LandingPage() {
           cart={modalCart}
           setCart={setModalCart}
           onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+          onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
         />
       ) : (activeCategory.id === "bathroom_cleaning" || activeCategory.slug === "bathroom_cleaning" || String(activeCategory.id) === "bathroom_cleaning" || activeCategory.name?.toLowerCase()?.includes("bathroom")) ? (
         <BathroomCleaningModal
@@ -3918,7 +3964,7 @@ export function LandingPage() {
           cart={modalCart}
           setCart={setModalCart}
           onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+          onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: customCart || modalCart } })}
         />
       ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
         <PaintingPackageModal
@@ -3926,38 +3972,31 @@ export function LandingPage() {
           cart={modalCart}
           setCart={setModalCart}
           onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-          onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
-        />
-      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
-        <MasonPackageModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
-          onGetEstimate={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart, triggerLocPicker: true } })}
+          onCheckout={(customCart) => {
+            const finalCart = customCart || modalCart;
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+          }}
+          onGetEstimate={(customCart) => {
+            const finalCart = customCart || modalCart;
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+          }}
         />
       ) : (
-        <PackageModal
+        <CustomCleaningPackageModal
           category={activeCategory}
           cart={modalCart}
           setCart={setModalCart}
-          packagesData={{}}
           onClose={() => navigate("/home")}
-          onCheckout={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+          onCheckout={(customCart) => {
+            const finalCart = customCart || modalCart;
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+          }}
         />
       )
     )}
-
-    <CustomerEntryFlowModal
-      isOpen={showCustomerEntryModal}
-      onClose={() => setShowCustomerEntryModal(false)}
-      onComplete={() => {
-        setShowCustomerEntryModal(false)
-        if (typeof refreshMe === "function") refreshMe()
-      }}
-    />
 
       <CustomerEntryFlowModal
         isOpen={showCustomerEntryModal}
@@ -3979,7 +4018,7 @@ export function LandingPage() {
       </AnimatePresence>
 
       {/* Urban Company Style Floating Bottom Cart Bar */}
-      {modalCart && modalCart.length > 0 && (
+      {modalCart && modalCart.length > 0 && !activeCategory && !isGoodsModalOpen && !isElecModalOpen && !isAcModalOpen && !isHomePestModalOpen && !isForYouModalOpen && !isFoodHealthModalOpen && !isHomeServicesCombinedModalOpen && (
         <motion.div
           initial={{ y: 50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
