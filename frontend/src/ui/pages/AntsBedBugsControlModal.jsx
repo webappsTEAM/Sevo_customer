@@ -18,6 +18,7 @@ const PEST_SERVICES = {
       reviews: "38K reviews",
       price: 1899,
       duration: "1.5 hrs",
+      description: "Two-stage chemical & steam extraction treatment to completely eliminate bed bugs.",
       image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
       includes: [
         "Thorough inspection of the entire home before treatment",
@@ -37,6 +38,7 @@ const PEST_SERVICES = {
       reviews: "887 reviews",
       price: 999,
       duration: "45 mins",
+      description: "Focused gel and spray treatment targeting kitchen & bathroom ant colonies.",
       image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
       includes: [
         "Before inspection we will handle utensils",
@@ -53,6 +55,7 @@ const PEST_SERVICES = {
       reviews: "976 reviews",
       price: 1549,
       duration: "1 hr",
+      description: "Complete ant control for apartments with chemical spray and crevice sealing.",
       image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop",
       includes: [
         "Before inspection we will handle utensils",
@@ -67,6 +70,7 @@ const PEST_SERVICES = {
       reviews: "1K reviews",
       price: 2099,
       duration: "1.5 hrs",
+      description: "Whole-bungalow ant treatment including chemical perimeter barriers.",
       image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop",
       includes: [
         "Before inspection we will handle utensils",
@@ -333,20 +337,42 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                   <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
                     <div className="flex flex-col sm:flex-row gap-5">
                       <div className="flex-1 order-2 sm:order-1">
-                        <h4 className="text-base font-black text-slate-900 mb-1">{service.name}</h4>
+                        <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                        <div className="text-sm font-extrabold text-slate-900 mb-4">
-                          ₹{service.price}
+                        {service.rating && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
+                            <Star className="text-violet-600 fill-violet-600" size={11} />
+                            <span className="text-slate-800">{service.rating}</span>
+                            <span className="text-slate-400 font-normal">({service.reviews})</span>
+                          </div>
+                        )}
+
+                        {service.description && (
+                          <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                        )}
+
+                        <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                          <span className="text-base font-black text-slate-900">
+                            ₹{service.price}
+                          </span>
+                          {service.duration && (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-slate-500 font-semibold">{service.duration}</span>
+                            </>
+                          )}
                         </div>
 
-                        <div className="space-y-2 mb-4">
-                          {service.includes.map((item, i) => (
-                            <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                              <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
-                              <span>{item}</span>
-                            </div>
-                          ))}
-                        </div>
+                        {service.includes && service.includes.length > 0 && (
+                          <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                            {service.includes.map((item, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
 
                         {service.notIncluded && service.notIncluded.length > 0 && (
                           <div className="mt-4 pt-3 border-t border-slate-100 mb-4">
@@ -404,20 +430,42 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                       <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="text-base font-black text-slate-900 mb-1">{service.name}</h4>
+                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                            <div className="text-sm font-extrabold text-slate-900 mb-4">
-                              ₹{service.price}
+                            {service.rating && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
+                                <Star className="text-violet-600 fill-violet-600" size={11} />
+                                <span className="text-slate-800">{service.rating}</span>
+                                <span className="text-slate-400 font-normal">({service.reviews})</span>
+                              </div>
+                            )}
+
+                            {service.description && (
+                              <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                            )}
+
+                            <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                              <span className="text-base font-black text-slate-900">
+                                ₹{service.price}
+                              </span>
+                              {service.duration && (
+                                <>
+                                  <span className="text-slate-300">•</span>
+                                  <span className="text-slate-500 font-semibold">{service.duration}</span>
+                                </>
+                              )}
                             </div>
 
-                            <div className="space-y-2 mb-4">
-                              {service.includes.map((item, i) => (
-                                <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                                  <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
-                                  <span>{item}</span>
-                                </div>
-                              ))}
-                            </div>
+                            {service.includes && service.includes.length > 0 && (
+                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                                {service.includes.map((item, i) => (
+                                  <li key={i} className="flex items-start gap-2">
+                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
 
                             <button
                               onClick={() => handleOpenDetails(service)}
@@ -459,20 +507,42 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                       <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="text-base font-black text-slate-900 mb-1">{service.name}</h4>
+                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                            <div className="text-sm font-extrabold text-slate-900 mb-4">
-                              ₹{service.price}
+                            {service.rating && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
+                                <Star className="text-violet-600 fill-violet-600" size={11} />
+                                <span className="text-slate-800">{service.rating}</span>
+                                <span className="text-slate-400 font-normal">({service.reviews})</span>
+                              </div>
+                            )}
+
+                            {service.description && (
+                              <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                            )}
+
+                            <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                              <span className="text-base font-black text-slate-900">
+                                ₹{service.price}
+                              </span>
+                              {service.duration && (
+                                <>
+                                  <span className="text-slate-300">•</span>
+                                  <span className="text-slate-500 font-semibold">{service.duration}</span>
+                                </>
+                              )}
                             </div>
 
-                            <div className="space-y-2 mb-4">
-                              {service.includes.map((item, i) => (
-                                <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                                  <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
-                                  <span>{item}</span>
-                                </div>
-                              ))}
-                            </div>
+                            {service.includes && service.includes.length > 0 && (
+                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                                {service.includes.map((item, i) => (
+                                  <li key={i} className="flex items-start gap-2">
+                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
 
                             <button
                               onClick={() => handleOpenDetails(service)}

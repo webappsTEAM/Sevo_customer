@@ -417,33 +417,35 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 <div key={service.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 relative transition-all hover:shadow-md">
                   <div className="flex flex-col sm:flex-row gap-5">
                     <div className="flex-1 order-2 sm:order-1">
-                      <h4 className="text-base font-black text-slate-900 mb-1.5">{service.name}</h4>
+                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
                       {service.description && (
-                        <p className="text-xs text-slate-500 mb-2">{service.description}</p>
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
                       )}
 
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="text-sm font-extrabold text-slate-900">
+                      <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                        <span className="text-base font-black text-slate-900">
                           {service.options && <span className="text-slate-500 font-medium text-xs mr-1">{service.options}</span>}
                           ₹{service.price}
-                        </div>
+                        </span>
                         <span className="text-slate-300">•</span>
-                        <span className="text-xs font-semibold text-slate-600">{service.duration}</span>
+                        <span className="text-slate-500 font-semibold">{service.duration}</span>
                       </div>
 
                       {service.highlight && (
                         <p className="text-xs font-bold text-slate-800 mb-3">{service.highlight}</p>
                       )}
 
-                      <div className="space-y-2 mb-4">
-                        {service.includes.map((item, i) => (
-                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                            <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
-                            <span>{item}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {service.includes && service.includes.length > 0 && (
+                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                          {service.includes.map((item, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
 
                       <button
                         onClick={() => handleOpenDetails(service)}

@@ -18,6 +18,7 @@ const PEST_SERVICES = {
       reviews: "164K reviews",
       price: 999,
       duration: "45 mins",
+      description: "Dual-session gel and spray treatment targeting kitchen & bathroom cockroaches.",
       image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
       includes: [
         "Before inspection we will handle utensils",
@@ -34,6 +35,7 @@ const PEST_SERVICES = {
       reviews: "75K reviews",
       price: 1549,
       duration: "1 hr",
+      description: "Complete cockroach control for apartments with odorless bio-spray.",
       image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop",
       includes: [
         "Before inspection we will handle utensils",
@@ -48,6 +50,7 @@ const PEST_SERVICES = {
       reviews: "2K reviews",
       price: 2099,
       duration: "1.5 hrs",
+      description: "Full independent house & villa cockroach eradication service.",
       image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
       includes: [
         "Before inspection we will handle utensils",
@@ -64,6 +67,7 @@ const PEST_SERVICES = {
       reviews: "9K reviews",
       price: 1499,
       duration: "1 hr",
+      description: "Targeted drill-and-inject barrier protection for termite control in kitchens & bathrooms.",
       image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
       includes: [
         "Before inspection we will handle utensils",
@@ -80,6 +84,7 @@ const PEST_SERVICES = {
       reviews: "15K reviews",
       price: 2499,
       duration: "2 hrs",
+      description: "Drilling and chemical shield treatment to safeguard apartments from termites.",
       image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop",
       includes: [
         "Before inspection we will handle utensils",
@@ -94,6 +99,7 @@ const PEST_SERVICES = {
       reviews: "3K reviews",
       price: 3499,
       duration: "3 hrs",
+      description: "Comprehensive whole-bungalow drilling shield for ultimate termite protection.",
       image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop",
       includes: [
         "Before inspection we will handle utensils",
@@ -411,20 +417,38 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                       <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="text-base font-black text-slate-900 mb-1">{service.name}</h4>
+                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                            <div className="text-sm font-extrabold text-slate-900 mb-4">
-                              ₹{service.price}
+                            {service.rating && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
+                                <Star className="text-violet-600 fill-violet-600" size={11} />
+                                <span className="text-slate-800">{service.rating}</span>
+                                <span className="text-slate-400 font-normal">({service.reviews})</span>
+                              </div>
+                            )}
+
+                            {service.description && (
+                              <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                            )}
+
+                            <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                              <span className="text-base font-black text-slate-900">
+                                ₹{service.price}
+                              </span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-slate-500 font-semibold">{service.duration}</span>
                             </div>
 
-                            <div className="space-y-2 mb-4">
-                              {service.includes.map((item, i) => (
-                                <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                                  <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
-                                  <span>{item}</span>
-                                </div>
-                              ))}
-                            </div>
+                            {service.includes && service.includes.length > 0 && (
+                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                                {service.includes.map((item, i) => (
+                                  <li key={i} className="flex items-start gap-2">
+                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
 
                             <button
                               onClick={() => handleOpenDetails(service)}
@@ -466,20 +490,38 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                       <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="text-base font-black text-slate-900 mb-1">{service.name}</h4>
+                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                            <div className="text-sm font-extrabold text-slate-900 mb-4">
-                              ₹{service.price}
+                            {service.rating && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
+                                <Star className="text-violet-600 fill-violet-600" size={11} />
+                                <span className="text-slate-800">{service.rating}</span>
+                                <span className="text-slate-400 font-normal">({service.reviews})</span>
+                              </div>
+                            )}
+
+                            {service.description && (
+                              <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                            )}
+
+                            <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                              <span className="text-base font-black text-slate-900">
+                                ₹{service.price}
+                              </span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-slate-500 font-semibold">{service.duration}</span>
                             </div>
 
-                            <div className="space-y-2 mb-4">
-                              {service.includes.map((item, i) => (
-                                <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                                  <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
-                                  <span>{item}</span>
-                                </div>
-                              ))}
-                            </div>
+                            {service.includes && service.includes.length > 0 && (
+                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                                {service.includes.map((item, i) => (
+                                  <li key={i} className="flex items-start gap-2">
+                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
 
                             <button
                               onClick={() => handleOpenDetails(service)}
@@ -525,20 +567,38 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                       <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="text-base font-black text-slate-900 mb-1">{service.name}</h4>
+                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                            <div className="text-sm font-extrabold text-slate-900 mb-4">
-                              ₹{service.price}
+                            {service.rating && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
+                                <Star className="text-violet-600 fill-violet-600" size={11} />
+                                <span className="text-slate-800">{service.rating}</span>
+                                <span className="text-slate-400 font-normal">({service.reviews})</span>
+                              </div>
+                            )}
+
+                            {service.description && (
+                              <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                            )}
+
+                            <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                              <span className="text-base font-black text-slate-900">
+                                ₹{service.price}
+                              </span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-slate-500 font-semibold">{service.duration}</span>
                             </div>
 
-                            <div className="space-y-2 mb-4">
-                              {service.includes.map((item, i) => (
-                                <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                                  <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
-                                  <span>{item}</span>
-                                </div>
-                              ))}
-                            </div>
+                            {service.includes && service.includes.length > 0 && (
+                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                                {service.includes.map((item, i) => (
+                                  <li key={i} className="flex items-start gap-2">
+                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
 
                             <button
                               onClick={() => handleOpenDetails(service)}
@@ -580,20 +640,38 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                       <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="text-base font-black text-slate-900 mb-1">{service.name}</h4>
+                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                            <div className="text-sm font-extrabold text-slate-900 mb-4">
-                              ₹{service.price}
+                            {service.rating && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
+                                <Star className="text-violet-600 fill-violet-600" size={11} />
+                                <span className="text-slate-800">{service.rating}</span>
+                                <span className="text-slate-400 font-normal">({service.reviews})</span>
+                              </div>
+                            )}
+
+                            {service.description && (
+                              <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                            )}
+
+                            <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                              <span className="text-base font-black text-slate-900">
+                                ₹{service.price}
+                              </span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-slate-500 font-semibold">{service.duration}</span>
                             </div>
 
-                            <div className="space-y-2 mb-4">
-                              {service.includes.map((item, i) => (
-                                <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                                  <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
-                                  <span>{item}</span>
-                                </div>
-                              ))}
-                            </div>
+                            {service.includes && service.includes.length > 0 && (
+                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                                {service.includes.map((item, i) => (
+                                  <li key={i} className="flex items-start gap-2">
+                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
 
                             <button
                               onClick={() => handleOpenDetails(service)}
