@@ -22,7 +22,7 @@ import { TrialExpiredModal } from "../components/TrialExpiredModal.jsx"
 
 import {
   Home, Clock, CheckSquare, CalendarDays, Banknote, CalendarRange,
-  Users, BarChart3, MapPin, Settings, Search, LogOut,
+  Users, BarChart3, MapPin, Settings, Search, LogOut, Headset,
   ChevronLeft, ChevronRight, Rocket, ShieldAlert, Globe, Package, Award,
   FolderOpen, GraduationCap, Bell, FileText, CheckCircle, XCircle, Car, X,
   Wrench, MessageSquare, UserCheck, Activity, ArrowUpRight, Repeat2, User,
@@ -118,6 +118,7 @@ const ADMIN_NAV_ITEMS = [
     ]
   },
   { label: "Inventory", to: routes.inventory, icon: <Package size={20} />, color: "#8B5CF6" },
+  { label: "Customer Care", to: "/support/tickets", icon: <Headset size={20} />, color: "#0EA5E9" },
   {
     label: "Settings",
     to: "/settings",
@@ -359,6 +360,13 @@ export function AppShell() {
   const items = useMemo(() => {
     if (!user) return []
     const isAdminUser = user.role === "admin" || user.role === "manager"
+    
+    if (user.isCareAgent && !isAdminUser) {
+      return [
+        { label: "Customer Care", to: "/support/tickets", icon: <Headset size={20} />, color: "#0EA5E9" }
+      ]
+    }
+
     const navSource = isAdminUser ? ADMIN_NAV_ITEMS : EMPLOYEE_NAV_ITEMS
     return navSource.filter(item => hasModuleAccess(user, item))
   }, [user])
