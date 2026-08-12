@@ -23,7 +23,9 @@ urlpatterns = [
     path("api/trial/", include("trial_management.urls")),
     path("api/", include("service_requests.urls")),
     path("api/logistics/", include("logistics.urls")),
+    path("api/customer-care/", include("customer_care.urls")),
 ]
+
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

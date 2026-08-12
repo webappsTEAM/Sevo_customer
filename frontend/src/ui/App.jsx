@@ -85,6 +85,10 @@ const AdminComplaintsPage = lazy(() =>
   import("./pages/AdminComplaintsPage.jsx").then(m => ({ default: m.AdminComplaintsPage }))
 )
 
+const CustomerCarePage = lazy(() =>
+  import("./pages/CustomerCarePage.jsx")
+)
+
 const OnboardingPage = lazy(() =>
   import("./pages/OnboardingPage.jsx").then(m => ({ default: m.OnboardingPage }))
 )
@@ -209,6 +213,15 @@ function RequireAdmin() {
   const { isAdmin } = useRole()
   if (!isAdmin) return <Navigate to={routes.dashboard} replace />
   return <Outlet />
+}
+
+function RequireCareAgentOrAdmin() {
+  const { user } = useAuth()
+  const { isAdmin } = useRole()
+  if (user?.isCareAgent || isAdmin) {
+    return <Outlet />
+  }
+  return <Navigate to={routes.dashboard} replace />
 }
 
 /**
@@ -396,12 +409,24 @@ export function App() {
                   <Navigate to={routes.onboarding} replace />
                 )
               ) : (
-                <Navigate to={routes.landing} replace />
+                <Navigate to={routes.login} replace />
               )
             }
           >
             {/* ── Routes accessible by ALL authenticated roles ── */}
-            <Route path={routes.dashboard} element={<DashboardPage />} />
+            <Route
+              path={routes.dashboard}
+              element={
+                user?.isCareAgent && user?.role !== "admin" && user?.role !== "manager" ? (
+                  <Navigate to="/support/tickets" replace />
+                ) : (
+                  <DashboardPage />
+                )
+              }
+            />
+            <Route element={<RequireCareAgentOrAdmin />}>
+              <Route path="/support/tickets" element={<CustomerCarePage />} />
+            </Route>
             <Route
               path={routes.analysis}
               element={isAdmin ? <Navigate to={routes.dashboard} replace /> : <AnalysisPage />}

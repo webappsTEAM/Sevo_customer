@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "mileage",
     "service_requests",
     "logistics",
+    "customer_care",
 ]
 
 MIDDLEWARE = [

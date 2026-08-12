@@ -17,11 +17,15 @@ export function CatalogCategoriesPage() {
     setLoading(true)
     try {
       const res = await apiRequest("/settings/catalog/v2/categories/")
-      if (res.success) setCategories(res.data)
-    } catch {
-      showToast("Failed to load categories", "error")
+      if (res && res.success) setCategories(res.data)
+    } catch (err) {
+      // Suppress 401 auth errors — they self-resolve on login/session refresh
+      if (err?.status !== 401) {
+        showToast("Failed to load categories", "error")
+      }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => { load() }, [])
@@ -64,7 +68,7 @@ export function CatalogCategoriesPage() {
   }
 
   return (
-    <div style={{ animation: "fadeUp 0.4s ease both" }} className="p-6 max-w-5xl mx-auto">
+    <div style={{ animation: "fadeUp 0.4s ease both" }} className="p-4 sm:p-6 lg:p-8 w-full max-w-[1720px] mx-auto space-y-6">
       <ToastBanner toast={toast} />
       <Card
         title="Categories"
