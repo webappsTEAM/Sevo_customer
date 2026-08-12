@@ -32,9 +32,8 @@ export function AuthProvider({ children }) {
     let me;
     try {
       me = await apiFetchMe()
-      console.log("DEBUG: apiFetchMe raw response:", JSON.stringify(me))
     } catch (e) {
-      console.error("DEBUG: apiFetchMe exception:", e)
+      console.error("apiFetchMe exception:", e)
     }
 
     if (me?.username && me?.role) {
@@ -67,7 +66,9 @@ export function AuthProvider({ children }) {
       }
       return u
     } else {
-      console.log("DEBUG: refreshMe check failed — username:", me?.username, "role:", me?.role, "company:", me?.company)
+      if (me) {
+        console.warn("apiFetchMe returned incomplete user object:", me)
+      }
       // Not authenticated (cookies missing, expired, or server rejected them)
       setUser(null)
       return null

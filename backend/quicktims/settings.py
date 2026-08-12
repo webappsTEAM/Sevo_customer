@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Prevent loading remote Supabase dotenv when running pytest / django tests
-if "test" not in "".join(sys.argv) and not os.getenv("DJANGO_TESTING"):
-    load_dotenv(BASE_DIR / ".env", override=True)
+# Load environment settings from .env
+if not os.getenv("DJANGO_SECRET_KEY"):
+    load_dotenv(BASE_DIR / ".env", override=False)
 
 _SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not _SECRET_KEY:
@@ -72,6 +72,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "compliance.middleware.AuditRequestMiddleware",
     "companies.middleware.CompanyMiddleware",
+    "common.middleware.RequestLatencyLoggingMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -342,5 +343,40 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "True") == "True"
+
+# ── Performance & Application Logging Configuration ──────────────────────────
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+        "simple": {
+            "format": "%(levelname)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "performance": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
+
 
 

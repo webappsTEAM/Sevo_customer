@@ -17,8 +17,13 @@ class RegionListView(views.APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        regions = Region.objects.all()
-        return Response(RegionSerializer(regions, many=True).data)
+        from django.core.cache import cache
+        data = cache.get("company_regions_list")
+        if data is None:
+            regions = Region.objects.all()
+            data = RegionSerializer(regions, many=True).data
+            cache.set("company_regions_list", data, timeout=3600)
+        return Response(data)
 
 
 # ── Company ──────────────────────────────────────────────────────────────────

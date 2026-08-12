@@ -22,6 +22,7 @@ import {
 } from "../../api/authService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { routes } from "../routes.js"
+import { CATEGORIES } from "./categoriesData.js"
 import { apiRequest } from "../../api/client.js"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -78,22 +79,7 @@ function TwitterMark(props) {
    ───────────────────────────────────────────────────────────────────────── */
 
 
-export const CATEGORIES = [
-  { id: "cleaning", name: "Home Cleaning", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", desc: "Deep clean & sanitization", rating: "4.8", jobs: "50K+" },
-  { id: "sofa_cleaning", name: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=500&q=80&fit=crop", desc: "Sofa, mattress & carpet", rating: "4.8", jobs: "15K+" },
-  { id: "kitchen_cleaning", name: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&q=80&fit=crop", desc: "Complete kitchen & appliance clean", rating: "4.8", jobs: "20K+" },
-  { id: "bathroom_cleaning", name: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", desc: "Bathroom deep cleaning & subscriptions", rating: "4.8", jobs: "25K+" },
-  { id: "plumbing", name: "Plumbing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop", desc: "Leaks, pipes & fixtures", rating: "4.7", jobs: "30K+" },
-  { id: "electrical", name: "Electrical", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop", desc: "Wiring, panels & lighting", rating: "4.8", jobs: "40K+" },
-  { id: "carpentry", name: "Carpentry", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=500&q=80&fit=crop", desc: "Furniture & wood repairs", rating: "4.6", jobs: "15K+" },
-  { id: "hvac", name: "AC & Heating", image: "/mockups/service_hvac.png", desc: "AC service & installation", rating: "4.9", jobs: "60K+" },
-  { id: "pest_control", name: "Pest Control", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=500&q=80&fit=crop", desc: "Termites, cockroaches & more", rating: "4.7", jobs: "25K+" },
-  { id: "painting", name: "Painting", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&q=80&fit=crop", desc: "Walls, ceilings & textures", rating: "4.6", jobs: "20K+" },
-  { id: "mason", name: "Mason", image: "/mockups/service_building.png", desc: "Brick, plaster & civil work", rating: "4.8", jobs: "12K+" },
-  { id: "appliance_repair", name: "Appliances", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&q=80&fit=crop", desc: "Fridge, washer & oven repairs", rating: "4.8", jobs: "35K+" },
-  { id: "security", name: "Security Systems", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop", desc: "CCTV & alarm systems", rating: "4.7", jobs: "10K+" },
-  { id: "general", name: "General Repair", image: "https://images.unsplash.com/photo-1581244277943-fe4a9c777189?w=500&q=80&fit=crop", desc: "Handyman & misc tasks", rating: "4.5", jobs: "45K+" },
-]
+// CATEGORIES imported from categoriesData.js above
 
 function openGoogleSignInPopup(onSuccess, onError) {
   const runSignIn = () => {
@@ -552,7 +538,7 @@ export function AddAddressSearchModal({
       const updated = [newEntry, ...filtered].slice(0, 10)
       localStorage.setItem("calservices_recent_locations", JSON.stringify(updated))
       setRecents(updated)
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Debounced geocoding search via Google Places Autocomplete
@@ -668,7 +654,7 @@ export function AddAddressSearchModal({
         const parsed = JSON.parse(stored)
         if (Array.isArray(parsed) && parsed.length > 0) return parsed
       }
-    } catch (e) {}
+    } catch (e) { }
     return []
   })
 
@@ -12308,21 +12294,27 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                               className="w-full h-full object-cover"
                             />
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
-                              {count > 0 ? (
-                                <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
-                                  <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
-                                  <span>{count}</span>
-                                  <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, p.name + " (Site Consultation)", 49, "")}>+</button>
-                                </div>
-                              ) : (
-                                <button
-                                  className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
-                                  onClick={() => addItemToCart(cartId, p.name + " (Site Consultation)", 49, "")}
-                                >
-                                  <ShoppingCart size={11} className="shrink-0" />
-                                  <span>Add</span>
-                                </button>
-                              )}
+                              {(() => {
+                                const cartItemName = normalizedKey === "mason" ? `${p.name} (Site Consultation)` : p.name;
+                                const cartItemPrice = normalizedKey === "mason" ? 49 : (typeof p.price === "number" ? p.price : (parseFloat(p.price) || 0));
+                                const cartItemDuration = normalizedKey === "mason" ? "" : (p.duration || "");
+
+                                return count > 0 ? (
+                                  <div className="flex items-center justify-between w-full px-2 text-xs font-bold text-emerald-700">
+                                    <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => removeItemFromCart(cartId)}>-</button>
+                                    <span>{count}</span>
+                                    <button className="px-2 py-0.5 hover:bg-slate-100 rounded cursor-pointer" onClick={() => addItemToCart(cartId, cartItemName, cartItemPrice, cartItemDuration)}>+</button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    className="w-full text-center text-xs font-extrabold text-emerald-700 uppercase tracking-wider py-0.5 flex items-center justify-center gap-1 cursor-pointer"
+                                    onClick={() => addItemToCart(cartId, cartItemName, cartItemPrice, cartItemDuration)}
+                                  >
+                                    <ShoppingCart size={11} className="shrink-0" />
+                                    <span>Add</span>
+                                  </button>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>

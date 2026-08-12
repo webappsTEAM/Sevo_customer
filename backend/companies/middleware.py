@@ -53,7 +53,7 @@ class CompanyMiddleware(MiddlewareMixin):
                 if user_id:
                     from django.contrib.auth import get_user_model
                     User = get_user_model()
-                    u = User.objects.filter(id=user_id).first()
+                    u = User.objects.select_related('company').filter(id=user_id).first()
                     if u and u.company_id:
                         company = u.company
                 if not company and company_id:

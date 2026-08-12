@@ -122,9 +122,16 @@ class CatalogCategoryListView(APIView):
     def get(self, request):
         from .models import CatalogCategory
         from .serializers import CatalogCategorySerializer
+        from django.core.cache import cache
 
-        cats = CatalogCategory.objects.all().order_by('name')
-        data = CatalogCategorySerializer(cats, many=True).data
+        data = cache.get("catalog_categories_list")
+        if data is None:
+            cats = CatalogCategory.objects.all().order_by('name')
+            data = CatalogCategorySerializer(cats, many=True).data
+            try:
+                cache.set("catalog_categories_list", data, timeout=600)
+            except Exception:
+                pass
         return Response({"success": True, "data": data})
 
 
@@ -137,26 +144,37 @@ class CatalogServiceListView(APIView):
         from .models import Package
         from .serializers import CatalogServiceSerializer
         from django.db import connection
-        cat_id = request.GET.get('category_id')
+        from django.core.cache import cache
+
+        cat_id = request.GET.get('category_id') or ''
+        cache_key = f"catalog_services_list_{cat_id}"
+        cached_res = cache.get(cache_key)
+        if cached_res is not None:
+            return Response(cached_res)
+
         qs = Package.objects.select_related("service").all().order_by('name')
         if cat_id:
             qs = qs.filter(service__category_id=cat_id)
         data = CatalogServiceSerializer(qs, many=True).data
-        
-        # Determine currency from company tenant region
+
         tenant = getattr(request, 'tenant', None) or getattr(connection, 'tenant', None)
         currency = "USD"
         currency_symbol = "$"
         if tenant and getattr(tenant, 'region', None):
             currency = tenant.region.currency
             currency_symbol = tenant.region.currency_symbol
-            
-        return Response({
+
+        res_payload = {
             "success": True, 
             "data": data,
             "currency": currency,
             "currency_symbol": currency_symbol
-        })
+        }
+        try:
+            cache.set(cache_key, res_payload, timeout=600)
+        except Exception:
+            pass
+        return Response(res_payload)
 
 class BookingCreateView(APIView):
     """

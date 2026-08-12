@@ -1,0 +1,4 @@
+﻿5033; 2606 18928 CONSTRAINT public service_requests_package service_requests_catalogservice_pkey postgres
+5798; 2606 20717 FK CONSTRAINT public service_requests_addon service_requests_add_package_id_86a63aae_fk_service_r postgres
+5757; 2606 20006 FK CONSTRAINT public service_requests_catalogserviceaddon service_requests_cat_service_id_b403f5cb_fk_service_r postgres
+5758; 2606 20012 FK CONSTRAINT public service_requests_catalogservicevariant service_requests_cat_service_id_b863dd52_fk_service_r postgres

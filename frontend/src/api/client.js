@@ -9,6 +9,8 @@
  * also fails the user is signed out via the session-expired event.
  */
 
+import { apiRefreshToken } from "./authService.js"
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (
   import.meta.env.PROD
     ? `${window.location.origin}/Caltrack/api`
@@ -32,15 +34,7 @@ async function safeJson(res) {
 
 /** Ask the server to rotate the access cookie using the refresh cookie. */
 async function _silentRefresh() {
-  try {
-    const res = await fetch(`${API_BASE_URL}/auth/refresh/`, {
-      method: "POST",
-      credentials: "include",
-    })
-    return res.ok
-  } catch {
-    return false
-  }
+  return await apiRefreshToken()
 }
 
 export async function apiRequest(path, init = {}, attemptRefresh = true) {
