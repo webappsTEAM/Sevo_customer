@@ -16386,6 +16386,7 @@ const FULL_KITCHEN_PACKAGES = [
     name: "Full Kitchen cleaning(Basic)",
     price: 1459,
     duration: "2 hrs",
+    description: "Complete surface cleaning of tiles, slab, gas stove, and sink.",
     image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop",
     includes: [
       "Kitchen tiles, floor & slab cleaning + Mopping",
@@ -16403,6 +16404,7 @@ const FULL_KITCHEN_PACKAGES = [
     name: "Full Kitchen Cleaning – Deep Clean",
     price: 1959,
     duration: "3 hrs",
+    description: "Deep steam sanitization of kitchen counters, cabinets, chimney, and hobs.",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
       "Includes everything in Basic, plus:",
@@ -16425,7 +16427,8 @@ const APPLIANCE_SERVICES = [
     price: 399,
     options: "5 options",
     duration: "1.5 hrs",
-    image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=600&q=80&fit=crop",
+    description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&q=80&fit=crop",
     includes: [
       "Interior & exterior cleaning",
       "Shelves, trays & compartments cleaning",
@@ -16439,6 +16442,7 @@ const APPLIANCE_SERVICES = [
     reviews: "37K reviews",
     price: 199,
     duration: "15 mins",
+    description: "Complete interior grease removal and sanitization of turntable.",
     image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
     includes: [
       "Interior & exterior cleaning",
@@ -16453,6 +16457,7 @@ const APPLIANCE_SERVICES = [
     reviews: "238K reviews",
     price: 399,
     duration: "45 mins",
+    description: "Deep filter degreasing and external hood surface cleaning.",
     image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
     includes: [
       "Filter & exterior cleaning",
@@ -16467,6 +16472,7 @@ const APPLIANCE_SERVICES = [
     reviews: "89K reviews",
     price: 499,
     duration: "1 hr 10 mins",
+    description: "Combined steam deep cleaning of kitchen chimney and gas stove.",
     image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
     includes: [
       "Stovetops, burners, mesh & filter cleaning with steam",
@@ -16481,6 +16487,7 @@ const APPLIANCE_SERVICES = [
     price: 99,
     options: "3 options",
     duration: "45 mins",
+    description: "Surface cleaning of gas stove burners and knobs to remove grease.",
     image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
     includes: [
       "Stove / hob surface cleaning",
@@ -16493,6 +16500,7 @@ const APPLIANCE_SERVICES = [
     name: "Dishwasher Cleaning",
     price: 599,
     duration: "1 hr",
+    description: "Thorough interior rack wash and food debris clearing.",
     image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
     includes: [
       "Interior & exterior cleaning",
@@ -16505,6 +16513,7 @@ const APPLIANCE_SERVICES = [
     name: "Ceiling Fan Cleaning",
     price: 199,
     duration: "30 mins",
+    description: "Detailed ceiling fan dusting and blade wipe down.",
     image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
     includes: [
       "Fan blade cleaning",
@@ -16517,6 +16526,7 @@ const APPLIANCE_SERVICES = [
     name: "Exhaust Fan Cleaning",
     price: 299,
     duration: "30 mins",
+    description: "Kitchen exhaust fan degreasing and grill dusting.",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
       "Exhaust fan blades cleaning",
@@ -16531,6 +16541,7 @@ const APPLIANCE_SERVICES = [
     reviews: "7K reviews",
     price: 199,
     duration: "30 mins",
+    description: "Air fryer interior wet wipe and tray wash.",
     image: "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?w=600&q=80&fit=crop",
     includes: [
       "Wet wiping of interior to remove oil stains & odour",
@@ -16544,6 +16555,7 @@ const APPLIANCE_SERVICES = [
     reviews: "8K reviews",
     price: 399,
     duration: "50 mins",
+    description: "Oven interior crumb removal and grease wipe down.",
     image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=600&q=80&fit=crop",
     includes: [
       "Cleaning of interior to remove food crumbs & spills",
@@ -16557,6 +16569,7 @@ const APPLIANCE_SERVICES = [
     reviews: "5K reviews",
     price: 99,
     duration: "15 mins",
+    description: "Sandwich maker deep cleaning to remove charred food spills.",
     image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=600&q=80&fit=crop",
     includes: [
       "Deep cleaning of plates to remove stuck food & char marks",
@@ -16571,6 +16584,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Sink & Under-Sink + Vessel Cleaning + Kitchen Slab + Mopping",
     price: 399,
     duration: "1 hr",
+    description: "Quick clean of sink, vessels, slab, and floor mopping.",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
       "Sink & under-sink washing",
@@ -16583,6 +16597,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Dining Table Cleaning",
     price: 199,
     duration: "30 mins",
+    description: "Simple dining table surface wiping and stain removal.",
     image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
     includes: [
       "Table surface cleaning",
@@ -16595,6 +16610,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Kitchen Window Cleaning",
     price: 299,
     duration: "30 mins",
+    description: "Dusting and glass pane wiping for kitchen windows.",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
       "Accessible glass surface cleaning",
@@ -16607,6 +16623,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Fan Cleaning",
     price: 89,
     duration: "15 mins",
+    description: "Ceiling fan dusting and blade grease removal.",
     image: "/mockups/ceiling_fan.png",
     includes: [
       "Dusting and wiping of fan blades",
@@ -16619,6 +16636,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Utensils Removal & Replacement",
     price: 409,
     duration: "30 mins",
+    description: "Utensil clearing and cabinet shelf dusting.",
     image: "https://images.unsplash.com/photo-1590794056226-79ef3a8147e1?w=300&q=80&fit=crop",
     includes: [
       "Removal of all utensils from cabinets",
@@ -16631,6 +16649,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Sink & Under Sink Cleaning",
     price: 79,
     duration: "20 mins",
+    description: "Deep scrubbing of sink and under-sink sanitization.",
     image: "/mockups/drain_clean.png",
     includes: [
       "Deep scrub & sanitization of kitchen sink",
@@ -16643,6 +16662,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Dining Table Cleaning",
     price: 449,
     duration: "30 mins",
+    description: "Detailed dining table surface cleaning and grease removal.",
     image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
     includes: [
       "Surface cleaning & sanitation",
@@ -16655,6 +16675,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Kitchen Window Cleaning",
     price: 269,
     duration: "30 mins",
+    description: "Detailed glass panel and frame grease cleaning.",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
     includes: [
       "Glass panes dusting and wet wiping",
@@ -16667,6 +16688,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Balcony Cleaning: Upto 4 ft Width",
     price: 399,
     duration: "30 mins",
+    description: "Washing and scrubbing of balcony floor and railings.",
     image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
     includes: [
       "Balcony floor washing & scrubbing",
@@ -16679,6 +16701,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Balcony Cleaning: Above 4 ft Width",
     price: 549,
     duration: "50 mins",
+    description: "Deep floor scrubbing and mesh cleaning for large balconies.",
     image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
     includes: [
       "Deep floor scrubbing & balcony washing",
@@ -16691,6 +16714,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Window Cleaning (Upto 4 Ft X 4 Ft)",
     price: 199,
     duration: "30 mins",
+    description: "Glass panes cleaning and frame dusting for standard windows.",
     image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=300&q=80&fit=crop",
     includes: [
       "Glass panes cleaning inside and outside",
@@ -16703,6 +16727,7 @@ const QUICK_EXTRA_SERVICES = [
     name: "Window Cleaning (Above 4 Ft X 4 Ft)",
     price: 449,
     duration: "1 hr",
+    description: "Detailed glass panes and sill cleaning for large windows.",
     image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=300&q=80&fit=crop",
     includes: [
       "Detailed cleaning of large glass panes",
@@ -17302,7 +17327,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
                   <div className="flex items-start gap-4">
                     <div className="flex-1">
-                      <h4 className="text-sm font-black text-slate-900 mb-1">{service.name}</h4>
+                      <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
                       {service.rating && activeTab !== "appliance" && (
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
@@ -17312,12 +17337,20 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                         </div>
                       )}
 
-                      <p className="text-xs font-bold text-slate-800">
-                        {service.options && activeTab !== "appliance" ? `Starts at ₹${service.price}` : `₹${service.price}`}
-                        <span className="text-slate-400 font-normal ml-2">• {service.duration}</span>
-                      </p>
-                      {activeTab !== "addons" && (
-                        <div className="mt-3 space-y-1">
+                      {service.description && (
+                        <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                      )}
+
+                      <div className="flex items-center gap-3 text-xs pt-1 mb-3">
+                        <span className="text-base font-black text-slate-900">
+                          {service.options && activeTab !== "appliance" ? `Starts at ₹${service.price}` : `₹${service.price}`}
+                        </span>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-slate-500 font-semibold">{service.duration}</span>
+                      </div>
+
+                      {activeTab !== "addons" && service.includes && service.includes.length > 0 && (
+                        <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
                           {(() => {
                             const isBasic = service.id === "occ-basic";
                             const isDeep = service.id === "occ-deep";
@@ -17331,8 +17364,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                                 {displayIncludes.map((item, i) => {
                                   const isLastOfThree = (isBasic || isDeep) && !isExpanded && i === 2;
                                   return (
-                                    <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                                      <span className="text-slate-400 mt-0.5">•</span>
+                                    <li key={i} className="flex items-start gap-2">
+                                      <span className="text-emerald-600 font-bold mt-0.5">✓</span>
                                       <span>
                                         {item}
                                         {isLastOfThree && (
@@ -17351,7 +17384,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                                           </>
                                         )}
                                       </span>
-                                    </div>
+                                    </li>
                                   );
                                 })}
                                 {(isBasic || isDeep) && isExpanded && (
@@ -17371,7 +17404,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                               </>
                             );
                           })()}
-                        </div>
+                        </ul>
                       )}
                       <button
                         onClick={() => setSelectedServiceDetails(service)}
