@@ -293,7 +293,7 @@ export default function IntroAnimation({
                         transition={{ duration: 1, delay: 0.2 }}
                         className="mt-4 text-[9px] font-bold tracking-[0.2em] text-gray-500 font-mono"
                     >
-                        POWERED BY CALDIM
+                        POWERED BY CALDIX
                     </motion.p>
                 </div>
 

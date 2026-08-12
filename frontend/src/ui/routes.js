@@ -2,7 +2,7 @@ export const routes = {
   landing: "/home",
   login: "/login",
   organization_signup: "/organization-signup",
-  dashboard: "/",
+  dashboard: "/dashboard",
   analysis: "/analysis",
   locations: "/locations",
   time: "/time",
