@@ -32,6 +32,7 @@ import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
+import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -17757,7 +17758,6 @@ const FULL_KITCHEN_PACKAGES = [
     id: "empty-kitchen",
     name: "Empty Kitchen Cleaning",
     price: 849,
-    options: "2 options",
     duration: "2.5 hrs",
     description: "Thorough deep cleaning of empty kitchen spaces before moving in or after moving out.",
     image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
@@ -17765,26 +17765,6 @@ const FULL_KITCHEN_PACKAGES = [
       "Thorough degreasing of wall tiles, countertops, and exhaust fans",
       "Detailed cleaning of kitchen floors, windows, switchboards, and cabinets (exterior)",
       "Deep sanitization of sink and under-sink area (utensils removal not included)"
-    ],
-    subOptions: [
-      {
-        id: "empty-kitchen-small",
-        name: "Standard Kitchen",
-        price: 849,
-        rating: "4.82",
-        reviews: "15K reviews",
-        image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=200&q=80&fit=crop",
-        duration: "2.5 hrs"
-      },
-      {
-        id: "empty-kitchen-large",
-        name: "Large Kitchen",
-        price: 1149,
-        rating: "4.80",
-        reviews: "8K reviews",
-        image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=200&q=80&fit=crop",
-        duration: "3.5 hrs"
-      }
     ]
   }
 ];
@@ -18100,6 +18080,19 @@ const QUICK_EXTRA_SERVICES = [
       "Railing, windows, and mesh cleaning",
       "Thorough dust and dirt clearance"
     ]
+  },
+  {
+    id: "quick-door-clean",
+    name: "Door Cleaning",
+    price: 89,
+    duration: "10 mins",
+    description: "Thorough wiping and dusting of doors to remove fingerprints and dirt.",
+    image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+    includes: [
+      "Wiping of door panels and frames",
+      "Removal of smudges, dust & fingerprint marks",
+      "Handle sanitization"
+    ]
   }
 ];
 
@@ -18181,10 +18174,13 @@ const SERVICE_DETAIL_DATA = {
     ],
     faqs: [
       { q: "Will you move utensils from the cabinets?", a: "No. Utensil removal and rearrangement are not included in the Basic package." },
-      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring the required cleaning tools and products." },
-      { q: "Is chimney cleaning included?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
-      { q: "Can I add appliance cleaning?", a: "Yes. You can add individual appliance cleaning as an additional service." },
-      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." }
+      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring all the required environment-friendly cleaning tools and products." },
+      { q: "Is chimney cleaning included in the Basic package?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add appliance cleaning to this package?", a: "Yes. You can add individual appliance cleaning as an additional service." },
+      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean the exhaust fan in basic cleaning?", a: "No, exhaust fan cleaning is part of our deep cleaning package or can be booked separately as a quick service." },
+      { q: "Will you clean tiles and grout?", a: "Yes, we wipe tiles and slabs to remove superficial oil stains, but deep scrubbing grout lines is part of the deep cleaning package." },
+      { q: "Is garbage disposal included?", a: "We collect all waste generated during the cleaning and hand it over to your society bin, but we do not discard pre-existing bulk trash." }
     ]
   },
   "occ-deep": {
@@ -18207,14 +18203,83 @@ const SERVICE_DETAIL_DATA = {
     ],
     faqs: [
       { q: "Does Deep Clean include everything in Basic?", a: "Yes. Deep Clean includes all services covered in the Basic package, along with additional deep-cleaning services." },
-      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed and rearranged as part of the Deep Clean service." },
+      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed, cabinets cleaned internally, and utensils rearranged as part of the Deep Clean service." },
       { q: "Does Deep Clean include chimney cleaning?", a: "No. Chimney cleaning is available separately under Single Appliance & Specific Area Cleaning." },
       { q: "Can I add refrigerator or microwave cleaning?", a: "Yes. Individual appliance cleaning can be added separately to your booking." },
       { q: "Does steam cleaning remove tough grease?", a: "Yes. Steam cleaning helps loosen and remove stubborn grease, oil buildup and stains from suitable kitchen surfaces." },
-      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." }
+      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean internal cabinet walls?", a: "Yes, we deep clean both the interiors and exteriors of all kitchen cabinets and drawers." },
+      { q: "Are window panes and grills cleaned in this package?", a: "Yes, deep cleaning includes cleaning of kitchen window panes, frames, exhaust fans, and mesh surfaces." },
+      { q: "Do you offer stain guarantee for old granite or tiles?", a: "While we use professional-grade degreasers and steam machines that remove 99% of grease, extremely old chemical etchings or stone discoloration may not disappear completely." }
     ]
   },
   "fridge-clean": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-single": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-double": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-triple": {
     tools: [
       "Food-safe cleaning products",
       "Microfiber cloths",
@@ -18349,6 +18414,72 @@ const SERVICE_DETAIL_DATA = {
     ]
   },
   "stove-clean": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-2b": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-3b": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-4b": {
     tools: [
       "Stove-safe cleaning products",
       "Microfiber cloths",
@@ -18528,17 +18659,27 @@ const SERVICE_DETAIL_DATA = {
   },
   "quick-dining-table": {
     tools: [
-      "Food-safe table cleaner",
-      "Polishing cloth"
+      "Heavy duty degreasers / polishers",
+      "Microfiber detailing cloths",
+      "Soft detailing brushes"
     ],
     ready: [
-      "Clear dishes and table mats before service"
+      "Clear all items from the dining table",
+      "Ensure access to water and power outlets"
     ],
     reviews: [
-      { name: "Arjun V.", rating: "5.0", text: '"Got rid of sticky grease stains on the glass tabletop. Super clean!"' }
+      { name: "Rohit P.", rating: "4.9", text: '"Very detailed cleaning of the dining chairs as well. Stains are completely gone!"' },
+      { name: "Kunal M.", rating: "4.8", text: '"Cleaned the glass table top spotless. The wooden chairs look polished."' }
     ],
     faqs: [
-      { q: "Will you polish wooden tables?", a: "We do standard cleaning and gentle wiping. Specialized wood polishing is not included." }
+      { q: "Will this clean the table chairs too?", a: "Yes, this service covers the deep cleaning of both the dining table and the chairs." },
+      { q: "Is wood polishing included?", a: "No, we perform standard cleaning and gentle wiping. Wood varnishing or professional polishing is not included." },
+      { q: "How many chairs are covered?", a: "Up to a 6-seater dining set is covered in the standard package." },
+      { q: "Will you clean table mats?", a: "No, table mats, table cloths, and runners are not cleaned." },
+      { q: "Do you clean table extensions?", a: "Yes, if the table extensions are opened by the customer before cleaning." },
+      { q: "Will you remove grease stains?", a: "Yes, food oil, grease, and sticky stains are thoroughly cleaned." },
+      { q: "Do you clean glass tabletops?", a: "Yes, glass tops are cleaned with specialized glass cleaning spray." },
+      { q: "How long does it take?", a: "The dining table and chairs cleaning takes about 30 to 40 minutes." }
     ]
   },
   "quick-kitchen-window": {
@@ -18551,43 +18692,69 @@ const SERVICE_DETAIL_DATA = {
       "Clear the window sill and counter space below the window"
     ],
     reviews: [
-      { name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' }
+      { name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' },
+      { name: "Sonia P.", rating: "4.7", text: '"Spotless cleaning. The frames and tracks are completely clean now."' }
     ],
     faqs: [
-      { q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." }
+      { q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." },
+      { q: "Will you clean both sides of the window?", a: "Yes, if the exterior side is safely accessible from inside the kitchen." },
+      { q: "Do you remove window frames?", a: "No, window panels are cleaned as installed without dismantling." },
+      { q: "Will you remove paint or cement stains?", a: "No, heavy paint or cement scrapings are not included in this quick package." },
+      { q: "How long does it take?", a: "It takes about 30 to 40 minutes per window." },
+      { q: "Do you clean window grills?", a: "Yes, accessible window grills are wiped and cleaned of dust and grease." },
+      { q: "What cleaning agents do you use?", a: "We use professional glass cleaner and kitchen-grade grease removers." },
+      { q: "Is slider track vacuuming included?", a: "Yes, we vacuum/brush dirt out of the window sliding tracks." }
     ]
   },
   "quick-balcony-upto-4ft": {
     tools: [
-      "Heavy duty floor brush",
-      "High-pressure water source if available",
-      "Balcony cleaning detergent"
+      "Floor scrubbers",
+      "High pressure water sprays",
+      "Hard dusting brushes"
     ],
     ready: [
-      "Clear planters or light furniture from the balcony floor",
-      "Provide access to a water tap"
+      "Remove plants or outdoor furniture from the balcony",
+      "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Sneha L.", rating: "5.0", text: '"Balcony floor is sparkling clean. They washed off all the pigeon droppings."' }
+      { name: "Vikram P.", rating: "4.9", text: '"Scrubbed all the dust and dirt from the balcony floor. Very clean."' },
+      { name: "Divya N.", rating: "4.8", text: '"The pigeon droppings were cleaned very neatly. Worth the price."' }
     ],
     faqs: [
-      { q: "Do you clean the balcony roof?", a: "No, roof or ceiling cleaning is not included in this quick package." }
+      { q: "Do you clean balcony windows?", a: "Yes, accessible balcony windows are dusted and wiped." },
+      { q: "Is roof cleaning included?", a: "No, ceiling/roof cleaning is not included in this quick package." },
+      { q: "Do you wash the railings?", a: "Yes, railings are scrubbed and wiped to remove dust." },
+      { q: "What if there is no water connection near the balcony?", a: "Our team will fetch water from the nearest bathroom or kitchen." },
+      { q: "Do you clean wall tiles in the balcony?", a: "Yes, wall tiles are wiped down to remove surface dust." },
+      { q: "Will you discard old items?", a: "No, we do not throw away trash or scrap items left in the balcony." },
+      { q: "How long does it take?", a: "It takes about 30 to 45 minutes." },
+      { q: "Do you clean mesh windows?", a: "Yes, window mesh screen dusting is included." }
     ]
   },
   "quick-balcony-above-4ft": {
     tools: [
-      "Scrubbing brushes & wipers",
-      "Balcony floor wash detergent",
-      "Cobweb removal brush"
+      "Floor scrubbers",
+      "High pressure water sprays",
+      "Hard dusting brushes",
+      "Mesh cleaning brushes"
     ],
     ready: [
-      "Clear all furniture and items from the balcony"
+      "Remove plants or outdoor furniture from the balcony",
+      "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Manish P.", rating: "4.9", text: '"Very thorough washing. Highly recommend for large balconies."' }
+      { name: "Aditi G.", rating: "4.8", text: '"Deep scrubbed the entire balcony floor and mesh screens. Perfect."' },
+      { name: "Rohan J.", rating: "4.7", text: '"Professional cleaners. Cleaned my large balcony tiles and railings nicely."' }
     ],
     faqs: [
-      { q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." }
+      { q: "Is mesh screen cleaning included?", a: "Yes, mesh screen dusting and washing is included." },
+      { q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." },
+      { q: "Do you clean balcony ceilings?", a: "No, ceiling and roof cleaning is not included." },
+      { q: "How much time is required?", a: "It takes around 45 to 60 minutes for balconies above 4ft width." },
+      { q: "Do you scrub the floor with a machine?", a: "No, manual heavy-duty scrubbing brushes are used to remove stains." },
+      { q: "Are plant pots moved by the cleaners?", a: "We request customers to move heavy plant pots beforehand. Light pots can be moved by our team." },
+      { q: "Do you clean outer side of balcony walls?", a: "No, exterior walls are excluded due to safety hazards." },
+      { q: "Do you remove hard water stains from tiles?", a: "We use cleaning detergents, but very old hard water scaling might not disappear completely." }
     ]
   },
   "quick-window-upto-4x4": {
@@ -18621,6 +18788,57 @@ const SERVICE_DETAIL_DATA = {
     faqs: [
       { q: "Is exterior cleaning included?", a: "Exterior glass is cleaned as long as it does not pose a safety risk to the cleaner." }
     ]
+  },
+  "quick-exhaust-fan-clean": {
+    tools: [
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Grease-removing cleaning solution",
+      "Long-reach dusting tools"
+    ],
+    ready: [
+      "Switch off the exhaust fan before cleaning",
+      "Keep the area around the fan clear",
+      "Provide safe access to the fan"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The exhaust fan had a lot of dust and grease. It was cleaned very neatly."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Quick service and the fan looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the fan blades?", a: "Yes, the accessible fan blades will be cleaned properly." },
+      { q: "Will you clean the cover / grill?", a: "Yes, the fan cover and visible grill will also be cleaned." },
+      { q: "Will you remove grease from the fan?", a: "Yes, normal dust, grease and dirt buildup will be cleaned." },
+      { q: "Will you remove the exhaust fan from the wall?", a: "No, the fan will be cleaned while it remains installed." },
+      { q: "Do you repair exhaust fans?", a: "No, electrical, motor and wiring repairs are not included." },
+      { q: "How long does it take?", a: "It takes about 30 to 45 minutes to deep clean the exhaust fan." },
+      { q: "Do you clean the wall area around the fan?", a: "Yes, we wipe the immediate wall area around the fan to remove splashed grease." },
+      { q: "What cleaning chemicals do you use?", a: "We use heavy-duty kitchen-safe degreasers to dissolve grease and oil." }
+    ]
+  },
+  "quick-door-clean": {
+    tools: [
+      "Wood-safe spray",
+      "Soft detailing sponges",
+      "Microfiber towels"
+    ],
+    ready: [
+      "Provide clear path to doors"
+    ],
+    reviews: [
+      { name: "Alok R.", rating: "4.8", text: '"Got rid of all grease spots on the door handles and corners."' },
+      { name: "Suresh P.", rating: "4.7", text: '"Excellent door wiping. The panels look polished and clean now."' }
+    ],
+    faqs: [
+      { q: "Is handle disinfection included?", a: "Yes, we sanitize door handles as part of the service." },
+      { q: "Do you clean the door frames?", a: "Yes, we clean both door panels and frames." },
+      { q: "Do you clean glass panels on doors?", a: "Yes, any glass panels are wiped and cleaned with glass cleaner." },
+      { q: "Will this service polish wooden doors?", a: "No, this is a cleaning service. We do not apply wood polish or varnish." },
+      { q: "How many doors are cleaned?", a: "This service is priced per door. You can select the quantity accordingly." },
+      { q: "Do you clean mesh doors?", a: "No, mesh doors require separate pricing/washing." },
+      { q: "Do you remove scratches?", a: "No, cleaning cannot repair scratches, dents or structural damage." },
+      { q: "Are sliding door tracks cleaned?", a: "Yes, we dust and wipe the accessible sliding track area." }
+    ]
   }
 };
 
@@ -18631,6 +18849,21 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   const [isBasicExpanded, setIsBasicExpanded] = useState(false);
   const [isDeepExpanded, setIsDeepExpanded] = useState(false);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [dbPackages, setDbPackages] = useState([]);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      try {
+        const res = await apiRequest("/settings/catalog/public/packages/?service_slug=kitchen-cleaning");
+        if (res.success && Array.isArray(res.data)) {
+          setDbPackages(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch kitchen packages:", err);
+      }
+    };
+    fetchPackages();
+  }, []);
 
   useEffect(() => {
     if (selectedServiceDetails) {
@@ -18666,10 +18899,70 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   const getActiveServices = () => {
     let list = [];
-    if (activeTab === "packages") list = FULL_KITCHEN_PACKAGES;
-    else if (activeTab === "appliance") list = APPLIANCE_SERVICES;
-    else if (activeTab === "cabinet_tile") list = CABINET_TILE_SERVICES;
-    else if (activeTab === "addons") list = QUICK_EXTRA_SERVICES;
+    if (activeTab === "packages") list = JSON.parse(JSON.stringify(FULL_KITCHEN_PACKAGES));
+    else if (activeTab === "appliance") list = JSON.parse(JSON.stringify(APPLIANCE_SERVICES));
+    else if (activeTab === "cabinet_tile") list = JSON.parse(JSON.stringify(CABINET_TILE_SERVICES));
+    else if (activeTab === "addons") list = JSON.parse(JSON.stringify(QUICK_EXTRA_SERVICES));
+
+    if (dbPackages.length > 0) {
+      list = list.map(item => {
+        if (Array.isArray(item.subOptions)) {
+          const parentDbMatch = dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id));
+          if (parentDbMatch) {
+            item.name = parentDbMatch.name;
+            item.price = Math.round(Number(parentDbMatch.base_price) || item.price);
+            item.duration = parentDbMatch.duration || item.duration;
+            item.description = parentDbMatch.description || item.description;
+            item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
+            item.tag = parentDbMatch.tag || "";
+            item.popular = parentDbMatch.popular || false;
+          }
+
+          item.subOptions = item.subOptions.map(subOpt => {
+            const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
+            if (dbMatch) {
+              return {
+                ...subOpt,
+                name: dbMatch.name,
+                price: Math.round(Number(dbMatch.base_price) || subOpt.price),
+                duration: dbMatch.duration || subOpt.duration,
+                description: dbMatch.description || subOpt.description,
+                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes),
+                tag: dbMatch.tag || "",
+                popular: dbMatch.popular || false,
+                tools: Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0 ? dbMatch.tools : (subOpt.tools || []),
+                ready: Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0 ? dbMatch.ready : (subOpt.ready || []),
+                reviews: Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || []),
+                faqs: Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0 ? dbMatch.faqs : (subOpt.faqs || []),
+              };
+            }
+            return {
+              ...subOpt,
+              includes: subOpt.includes || item.includes
+            };
+          });
+          if (item.subOptions.length > 0) {
+            item.price = item.subOptions[0].price;
+          }
+        } else {
+          const dbMatch = dbPackages.find(p => p.slug === item.id);
+          if (dbMatch) {
+            item.name = dbMatch.name;
+            item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.duration = dbMatch.duration || item.duration;
+            item.description = dbMatch.description || item.description;
+            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            item.tag = dbMatch.tag || "";
+            item.popular = dbMatch.popular || false;
+            if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
+            if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews = dbMatch.reviews;
+            if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
+          }
+        }
+        return item;
+      });
+    }
 
     if (!searchQuery) return list;
     return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -18682,12 +18975,12 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
       {/* Sticky Header + Tabs */}
       <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
         <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
-          <div>
+          <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-2 text-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
-              <ChevronLeft size={16} /> Back to Services
+              <ChevronLeft size={14} /> Back to Services
             </button>
             <h2 className="text-xl font-black text-slate-900">Kitchen Cleaning</h2>
           </div>
@@ -18755,6 +19048,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           Occupied Kitchen Cleaning
                         </div>
+                      )}
+                      {service.tag && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80 mb-1">
+                          ★ {service.tag}
+                        </span>
                       )}
                       <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
@@ -18942,6 +19240,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
         </div>
       </div>
 
+      <AppBannerAndFooter />
+
       {selectedServiceDetails && createPortal(
         <div
           onClick={() => setSelectedServiceDetails(null)}
@@ -19014,6 +19314,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 )}
               </div>
 
+              {/* Inclusions Box removed for kitchen cleaning view details per request */}
+
               {/* Exclusions Box */}
               {(() => {
                 const id = selectedServiceDetails.id;
@@ -19050,11 +19352,19 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 mb-2 flex items-center justify-center">
                             <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
                           </div>
-                          <div className="flex-1 flex flex-col justify-between w-full">
+                            <div className="flex-1 flex flex-col justify-between w-full">
                             <div>
                               <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">{sub.name}</h5>
                             </div>
                             <div className="w-full mt-auto">
+                              <button
+                                onClick={() => {
+                                  setSelectedServiceDetails(sub);
+                                }}
+                                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] py-1 rounded-lg mb-1.5 uppercase transition-colors"
+                              >
+                                View Details
+                              </button>
                               <div className="text-xs font-black text-slate-900 mb-2">₹{sub.price}</div>
                               {subCount > 0 ? (
                                 <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm w-full">
@@ -19083,7 +19393,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const tools = detail.tools || [];
+                const tools = (Array.isArray(selectedServiceDetails.tools) && selectedServiceDetails.tools.length > 0)
+                  ? selectedServiceDetails.tools
+                  : (detail.tools || []);
                 if (tools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -19104,7 +19416,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const readyList = detail.ready || [];
+                const readyList = (Array.isArray(selectedServiceDetails.ready) && selectedServiceDetails.ready.length > 0)
+                  ? selectedServiceDetails.ready
+                  : (detail.ready || []);
                 if (readyList.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -19127,7 +19441,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 {(() => {
                   const id = selectedServiceDetails.id;
                   const detail = SERVICE_DETAIL_DATA[id] || {};
-                  const reviews = detail.reviews || [];
+                  const reviews = (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0)
+                    ? selectedServiceDetails.reviews
+                    : (detail.reviews || []);
                   return reviews.map((rev, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
                       <div className="flex items-center justify-between">
@@ -19152,7 +19468,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   {(() => {
                     const id = selectedServiceDetails.id;
                     const detail = SERVICE_DETAIL_DATA[id] || {};
-                    const faqs = detail.faqs || [];
+                    const faqs = (Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0)
+                      ? selectedServiceDetails.faqs
+                      : (detail.faqs || []);
                     return faqs.map((faq, idx) => {
                       const isFaqOpen = activeFaq === idx;
                       return (
