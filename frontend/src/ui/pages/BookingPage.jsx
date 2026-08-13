@@ -6111,8 +6111,8 @@ function QuickCommerceCartCheckout({
                         }
                       }}
                       className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${isSelected
-                          ? "bg-emerald-50 border-emerald-600 text-emerald-800 shadow-2xs"
-                          : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
+                        ? "bg-emerald-50 border-emerald-600 text-emerald-800 shadow-2xs"
+                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
                         }`}
                     >
                       <span>{t.icon}</span>
@@ -6221,6 +6221,53 @@ function StepWorkflowCheckout({
   const [avoidCalling, setAvoidCalling] = useState(true)
   const [couponCode, setCouponCode] = useState("")
   const [couponApplied, setCouponApplied] = useState(false)
+  const [appliedCoupon, setAppliedCoupon] = useState(null)
+  const [isCouponDrawerOpen, setIsCouponDrawerOpen] = useState(false)
+  const [typedCouponCode, setTypedCouponCode] = useState("")
+  const [couponError, setCouponError] = useState("")
+  const [dbCoupons, setDbCoupons] = useState([])
+
+  useEffect(() => {
+    apiRequest("/api/customer/coupons/")
+      .then(res => {
+        if (res && res.data) {
+          setDbCoupons(res.data.filter(c => c.eligible !== false));
+        }
+      })
+      .catch(e => console.error("Failed to load coupons from API", e));
+  }, []);
+
+  const handleApplyCouponCode = async (codeToTest) => {
+    if (!codeToTest) return;
+    setCouponError("");
+    try {
+      const res = await apiRequest("/api/customer/coupons/validate/", {
+        method: "POST",
+        body: JSON.stringify({ code: codeToTest, cart_total: itemTotal, order_amount: itemTotal })
+      });
+      if (res && res.success && res.data) {
+        setAppliedCoupon({
+          code: res.data.code,
+          name: res.data.name,
+          discountType: res.data.discountType,
+          discountValue: res.data.discountValue,
+          maxDiscount: res.data.maxDiscount,
+          minBooking: res.data.minBooking,
+          discountAmount: res.data.discountAmount
+        });
+        setCouponApplied(true);
+        setIsCouponDrawerOpen(false);
+        setCouponError("");
+      } else {
+        const msg = res?.error?.message || "Failed to apply coupon";
+        setCouponError(msg);
+      }
+    } catch (e) {
+      const msg = e?.data?.error?.message || e?.message || "Invalid coupon code";
+      setCouponError(msg);
+    }
+  };
+
   const [tip, setTip] = useState(0)
   const [customTip, setCustomTip] = useState("")
   const [payMethod, setPayMethod] = useState("online")
@@ -6260,7 +6307,13 @@ function StepWorkflowCheckout({
 
   const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const origTotal = Math.round(itemTotal * 1.1)
-  const discount = couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 0
+  const discount = appliedCoupon
+    ? (appliedCoupon.discountAmount != null
+        ? appliedCoupon.discountAmount
+        : (appliedCoupon.discountType === "flat"
+            ? Math.min(itemTotal, appliedCoupon.discountValue)
+            : Math.min(appliedCoupon.maxDiscount || itemTotal, Math.floor(itemTotal * (appliedCoupon.discountValue / 100)))))
+    : (couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 0)
   const taxFee = itemTotal === 0 ? 49 : (itemTotal === 49 || (items && items.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
   const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
   const grandTotal = Math.max(0, itemTotal + taxFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
@@ -6665,7 +6718,7 @@ function StepWorkflowCheckout({
                     )}
 
                     <button
-                      onClick={() => onSubmit(payMethod)}
+                      onClick={() => onSubmit(payMethod, appliedCoupon?.code)}
                       disabled={loading}
                       className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300"
                     >
@@ -6759,19 +6812,41 @@ function StepWorkflowCheckout({
           </div>
 
           {/* Coupons Card */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div className={`border rounded-2xl p-4 shadow-xs flex items-center justify-between transition-all ${
+            appliedCoupon ? "bg-emerald-50/80 border-emerald-300" : "bg-white border-slate-200/80"
+          }`}>
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
-                %
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                appliedCoupon ? "bg-emerald-600 text-white" : "bg-indigo-100 text-indigo-700"
+              }`}>
+                {appliedCoupon ? "✓" : "%"}
               </div>
-              <span className="text-xs font-black text-slate-900">Coupons and offers</span>
+              <div>
+                <span className="text-xs font-black text-slate-900 block">
+                  {appliedCoupon ? `${appliedCoupon.code} Applied` : "Coupons and offers"}
+                </span>
+                <span className="text-[11px] font-semibold text-emerald-700 block">
+                  {appliedCoupon ? `Saved ₹${discount} on this order` : "Explore discount codes & promotions"}
+                </span>
+              </div>
             </div>
-            <button
-              onClick={() => setCouponApplied(!couponApplied)}
-              className="text-xs font-extrabold text-indigo-600 hover:underline"
-            >
-              {couponApplied ? "1 applied ✓" : "9 offers >"}
-            </button>
+            <div className="flex items-center gap-2">
+              {appliedCoupon ? (
+                <button
+                  onClick={() => { setAppliedCoupon(null); setCouponApplied(false); }}
+                  className="text-xs font-bold text-rose-600 hover:underline cursor-pointer border-none bg-transparent"
+                >
+                  Remove
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsCouponDrawerOpen(true)}
+                  className="text-xs font-extrabold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
+                >
+                  9 offers &gt;
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Payment Summary */}
@@ -6794,9 +6869,9 @@ function StepWorkflowCheckout({
                 <span className="font-bold text-slate-800">₹{taxFee}</span>
               </div>
 
-              {couponApplied && (
-                <div className="flex justify-between text-indigo-700 font-bold">
-                  <span>Coupon Discount</span>
+              {discount > 0 && (
+                <div className="flex justify-between text-emerald-700 font-extrabold bg-emerald-50/60 p-2 rounded-lg border border-emerald-100">
+                  <span>Coupon Discount {appliedCoupon ? `(${appliedCoupon.code})` : ""}</span>
                   <span>-₹{discount}</span>
                 </div>
               )}
@@ -6922,6 +6997,127 @@ function StepWorkflowCheckout({
             }
           }}
         />
+      )}
+
+      {/* Urban Company-Style Customer Coupons Drawer Overlay */}
+      {isCouponDrawerOpen && (
+        <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex justify-end">
+          <div className="bg-white w-full max-w-md h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-250 font-sans">
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Coupons & Offers</h3>
+                <p className="text-[11px] text-slate-500 font-medium">Apply discount codes to save on your order</p>
+              </div>
+              <button
+                onClick={() => { setIsCouponDrawerOpen(false); setCouponError(""); }}
+                className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900 cursor-pointer shadow-xs"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Input Promo Code Section */}
+            <div className="p-4 bg-slate-50/60 border-b border-slate-100 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={typedCouponCode}
+                  onChange={e => { setTypedCouponCode(e.target.value.toUpperCase()); setCouponError(""); }}
+                  placeholder="Enter coupon code"
+                  className="flex-1 px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-900 outline-none focus:border-emerald-600 shadow-2xs"
+                />
+                <button
+                  onClick={() => handleApplyCouponCode(typedCouponCode)}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl cursor-pointer shadow-xs border-none"
+                >
+                  Apply
+                </button>
+              </div>
+              {couponError && (
+                <div className="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200/60 p-2.5 rounded-xl flex items-center gap-1.5">
+                  <AlertCircle size={13} className="shrink-0" />
+                  <span>{couponError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Available Database Coupons List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+              <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                Available Offers ({dbCoupons.length})
+              </div>
+
+              {dbCoupons.length === 0 ? (
+                <div className="text-center py-8 text-xs font-bold text-slate-400">
+                  No active database coupons available at the moment.
+                </div>
+              ) : (
+                dbCoupons.map(cpn => {
+                  const isApplied = appliedCoupon?.code === cpn.code;
+                  const isEligible = itemTotal >= cpn.minBooking;
+                  const diff = cpn.minBooking - itemTotal;
+
+                  return (
+                    <div
+                      key={cpn.id || cpn.code}
+                      className={`p-4 rounded-2xl border transition-all ${
+                        isApplied
+                          ? "border-emerald-500 bg-emerald-50/40 shadow-xs"
+                          : "border-slate-200/80 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-purple-700 bg-purple-50 border border-purple-200/60 px-2.5 py-0.5 rounded-lg tracking-wider">
+                              🎉 {cpn.code}
+                            </span>
+                            <span className="text-[9.5px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                              {cpn.customerEligibility || "OFFER"}
+                            </span>
+                          </div>
+                          <h4 className="text-xs font-black text-slate-900 mt-2">{cpn.name}</h4>
+                          <p className="text-[11px] text-slate-500 font-medium mt-0.5">{cpn.description}</p>
+                        </div>
+
+                        <div className="shrink-0 pt-1">
+                          {isApplied ? (
+                            <button
+                              onClick={() => { setAppliedCoupon(null); setCouponApplied(false); }}
+                              className="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-xl text-xs font-extrabold cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          ) : isEligible ? (
+                            <button
+                              onClick={() => handleApplyCouponCode(cpn.code)}
+                              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold shadow-xs cursor-pointer border-none"
+                            >
+                              APPLY
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              className="px-3 py-1.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl text-[10.5px] font-bold cursor-not-allowed"
+                            >
+                              ADD ₹{diff} MORE
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[10.5px] text-slate-400 font-semibold">
+                        <span>{cpn.minBooking > 0 ? `Min. order ₹${cpn.minBooking}` : "No min order required"}</span>
+                        <span>{isEligible ? "Eligible ✓" : `Add ₹${diff} more`}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -7206,7 +7402,7 @@ export function BookingPage() {
     if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)) }
   }
 
-  const handleSubmit = async (paymentMethod = "cash") => {
+  const handleSubmit = async (paymentMethod = "cash", couponCode = null) => {
     if (!user && (!formData.phone || formData.phone === "9150632938")) {
       setShowCustomerEntryModal(true)
       return
@@ -7239,6 +7435,9 @@ export function BookingPage() {
       categoryName: c.categoryName || category?.name || ""
     }))))
     data.append("payment_method", backendPaymentMethod)
+    if (couponCode) {
+      data.append("coupon_code", couponCode)
+    }
     if (photoFile) data.append("photo", photoFile)
     try {
       const res = await apiRequest("/booking/", { method: "POST", body: data })
@@ -11268,10 +11467,210 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   );
 }
 
+function getCategoryFaqsAndReviews(pkg) {
+  if (!pkg) return { reviews: [], faqs: [] };
+  const name = (pkg.name || "").toLowerCase();
+  const desc = (pkg.description || "").toLowerCase();
+
+  // 1. Gas Leak & Refill
+  if (name.includes("gas") || name.includes("refrigerant") || name.includes("leak") || name.includes("refill")) {
+    return {
+      reviews: [
+        { name: "Vikram S.", text: "AC was blowing warm air. Technician found pinhole leak, brazed it and recharged R32 gas. Cooling is ice cold now!", rating: 5 },
+        { name: "Ananya M.", text: "Extremely thorough nitrogen pressure test. Provided 60-day gas warranty card.", rating: 5 }
+      ],
+      faqs: [
+        { q: "How do you identify the exact leak for Gas Leak Fix & Refill?", a: "We conduct high-pressure nitrogen testing and use electronic sniffer scans to pinpoint micro pinhole leaks in copper coils and braze joints." },
+        { q: "What type of refrigerant gas is used?", a: "We use 100% pure R32, R410a, or R134a refrigerant cylinders calibrated to exact OEM PSI pressure specifications." },
+        { q: "Is warranty provided on gas refilling?", a: "Yes, all gas charging, leak repairs, and valve replacements come with an official 60-day gas warranty." },
+        { q: "How long does gas charging take?", a: "A complete nitrogen leak audit, copper brazing fix, vacuum evacuation, and 100% gas recharge takes approximately 60 to 90 minutes." }
+      ]
+    };
+  }
+
+  // 2. Installation & Uninstallation
+  if (name.includes("install") || name.includes("uninstall") || name.includes("mount") || name.includes("reinstall")) {
+    return {
+      reviews: [
+        { name: "Rohan P.", text: "Flawless Split AC installation! Perfect level alignment and core wall drilling.", rating: 5 },
+        { name: "Meera K.", text: "Uninstalled AC smoothly without losing any refrigerant gas.", rating: 5 }
+      ],
+      faqs: [
+        { q: "What is included in Split / Window AC Installation?", a: "Unboxing, back-plate wall mounting, precision core drilling, insulated copper pipe connection, vacuum purging, and live cooling run demo." },
+        { q: "Will gas be saved during uninstallation?", a: "Yes! Technicians perform a safe gas pump-down procedure to lock all refrigerant into the outdoor compressor prior to unmounting." },
+        { q: "Are wall mounting brackets and copper pipes included?", a: "Standard installation covers wall drilling and connection. Heavy-duty powder-coated brackets and extra copper piping are available as add-ons." },
+        { q: "Is testing performed after installation?", a: "Yes, our technician runs a 15-minute cooling load & electrical stability test to verify proper temperature drops and zero water leakage." }
+      ]
+    };
+  }
+
+  // 3. PCB & Electrical (AC / Inverter)
+  if (name.includes("pcb") || name.includes("capacitor") || name.includes("contactor") || name.includes("sensor")) {
+    return {
+      reviews: [
+        { name: "Devendra T.", text: "Inverter PCB was showing error code E6. Repaired logic board microcontroller on-site!", rating: 5 },
+        { name: "Suresh N.", text: "Replaced faulty start capacitor and contactor switch. AC turned on instantly.", rating: 5 }
+      ],
+      faqs: [
+        { q: "Can PCB Repair be completed on site?", a: "Initial diagnostic is done on-site. Complex IC microcontroller chip soldering is completed in our bench lab and reinstalled within 24-48 hours." },
+        { q: "Will I get a warranty on electrical and PCB repairs?", a: "Yes, all repaired logic boards, capacitors, contactors, and sensors carry a 60-day official warranty." },
+        { q: "What are common symptoms of a PCB failure?", a: "Display error codes (e.g. E1, E6, F3), outdoor unit not starting, erratic fan speed, or AC turning off automatically after 2 minutes." },
+        { q: "Are original components used for replacement?", a: "Yes, all capacitors, contactors, relays, and sensors are genuine factory-certified parts matching exact voltage & capacitance specs." }
+      ]
+    };
+  }
+
+  // 4. Foam & Power Jet Cleaning (AC)
+  if (name.includes("foam") || name.includes("jet") || name.includes("cleaning") || name.includes("service & cleaning") || name.includes("anti-rust")) {
+    return {
+      reviews: [
+        { name: "Priya V.", text: "The foam jet wash removed years of hidden dust and mold from the cooling fins!", rating: 5 },
+        { name: "Karthik R.", text: "Water jet pressure wash made the AC whisper quiet and super chilly.", rating: 5 }
+      ],
+      faqs: [
+        { q: "How does Foam & Power Jet AC Service work?", a: "Deep-penetrating anti-bacterial eco-foam is sprayed over cooling fins to break down mold & oil dust, followed by a high-pressure water jet flush." },
+        { q: "Will cleaning eliminate foul odor and mold?", a: "Yes! The service thoroughly sanitizes the blower fan wheel, cooling fins, drain tray, and air filters to kill 99% mold and eliminate sour smell." },
+        { q: "Is jet wash safe for indoor walls and furniture?", a: "Yes, our technician uses a 360-degree waterproof service jacket catch-bag to collect all dirty runoff water into a bucket, keeping your walls and floor 100% dry." },
+        { q: "How often should AC jet servicing be done?", a: "We recommend deep foam jet wash twice a year—once before summer peak season and once post-monsoon to maintain peak cooling efficiency and low power bills." }
+      ]
+    };
+  }
+
+  // 5. Electrical Category (Switches, Sockets, Fan, MCB, Wiring, Inverter)
+  if (name.includes("switch") || name.includes("socket") || name.includes("fan") || name.includes("mcb") || name.includes("wiring") || name.includes("inverter") || name.includes("electric")) {
+    return {
+      reviews: [
+        { name: "Rajesh K.", text: "Replaced 4 modular switches and fixed tripping MCB board in 20 mins. Very professional!", rating: 5 },
+        { name: "Nisha T.", text: "Installed ceiling fan with perfect wobble-free balance. Neat wiring work.", rating: 5 }
+      ],
+      faqs: [
+        { q: "What is included in Switches & Sockets installation?", a: "Complete voltage testing, backbox flush mounting, terminal wire stripping, and safety earthing check." },
+        { q: "How are MCB tripping issues resolved?", a: "High-precision load balance audit, short circuit diagnostic, neutral leakage scan, and genuine Havells/Schneider MCB replacement." },
+        { q: "Can ceiling fan regulators or motors be repaired on-site?", a: "Yes! Capacitor replacements, speed regulator changes, and blade balance adjustments are completed on-site in 20-30 minutes." },
+        { q: "What safety precautions do your electricians follow?", a: "Electricians use insulated VDE tools, digital multimeters, wear rubberized safety gear, and perform zero-voltage lockout testing before work." }
+      ]
+    };
+  }
+
+  // 6. Plumbing Category (Taps, Mixers, Toilets, Drains, Water Tank)
+  if (name.includes("tap") || name.includes("mixer") || name.includes("drain") || name.includes("toilet") || name.includes("basin") || name.includes("tank") || name.includes("pipe") || name.includes("plumb")) {
+    return {
+      reviews: [
+        { name: "Alok D.", text: "Fixed dripping mixer tap by replacing ceramic disc cartridge. Zero leaks!", rating: 5 },
+        { name: "Bhavna P.", text: "Unclogged kitchen sink drain pipe with rotary spring snake in 20 mins.", rating: 5 }
+      ],
+      faqs: [
+        { q: "How are leaky taps & mixers fixed?", a: "By replacing worn rubber O-rings, fitting ceramic disc cartridges, and wrapping high-density PTFE Teflon thread tape." },
+        { q: "How are clogged drains cleared?", a: "Using heavy-duty rotary spring snakes and non-acidic enzymatic de-clogging gel to dissolve hair and grease without damaging PVC pipes." },
+        { q: "What is included in toilet & flush tank repair?", a: "Automatic float valve calibration, jet spray flexible hose replacement, bi-press syphon kit fitting, and leakage seal audit." },
+        { q: "Are replacement taps or pipes supplied by technician?", a: "Technicians carry standard cartridges, washers, Teflon tapes, and flex hoses. Major fixtures can be provided or installed using your preferred brand." }
+      ]
+    };
+  }
+
+  // 7. Carpentry Category (Lock, Handle, Hinge, Door, Drawer, Furniture, Drill)
+  if (name.includes("lock") || name.includes("handle") || name.includes("hinge") || name.includes("door") || name.includes("drawer") || name.includes("carpenter") || name.includes("furniture") || name.includes("drill")) {
+    return {
+      reviews: [
+        { name: "Manish G.", text: "Installed 6-lever mortise door lock with precise slot fitting. Feels very secure!", rating: 5 },
+        { name: "Pooja V.", text: "Replaced sticky drawer telescopic channels. Smooth gliding now!", rating: 5 }
+      ],
+      faqs: [
+        { q: "How are mortise door locks installed?", a: "Precision chisel slotting, key cylinder alignment, brass latch mortising, and strike plate screw reinforcement." },
+        { q: "How are sticky drawers & cabinet hinges fixed?", a: "Heavy-duty telescopic ball-bearing channel replacement, 3D concealed hinge adjustment, and silicon lubricant application." },
+        { q: "What is included in drill & wall hanging services?", a: "Precision laser spirit level balance, heavy-duty toggle bolt anchor drilling, and secure mounting for mirrors, TVs & curtain rods." },
+        { q: "What tools does the carpenter bring?", a: "Technicians arrive equipped with heavy-duty rotary hammer drills, wood chisels, spirit levels, hole saws, and precision wood fasteners." }
+      ]
+    };
+  }
+
+  // 8. Refrigerator Category
+  if (name.includes("fridge") || name.includes("refrigerator") || name.includes("freezer") || name.includes("compressor")) {
+    return {
+      reviews: [
+        { name: "Amit B.", text: "Fixed fridge not cooling issue. Replaced compressor PTC relay and OLP protector on-site!", rating: 5 },
+        { name: "Sangeeta R.", text: "Deep cleaning restored fridge freshness and removed stubborn ice buildup.", rating: 5 }
+      ],
+      faqs: [
+        { q: "What causes refrigerator cooling failure?", a: "Worn compressor starter relay, faulty bi-metal defrost thermostat probe, dirty condenser coils, or gas pressure leak." },
+        { q: "How is ice buildup in frost-free freezers fixed?", a: "Testing defrost heating element resistance, thermal fuse continuity, and automatic defrost timer sequence." },
+        { q: "Is refrigerator gas refilling covered under warranty?", a: "Yes, all R134a/R600a gas refilling, filter dryer replacement, and brazing leak repairs come with a 60-day warranty." },
+        { q: "How does Refrigerator Deep Cleaning work?", a: "Removable shelf wash, rubber door gasket mold removal, rear condenser vacuuming, and food-grade sanitizing spray." }
+      ]
+    };
+  }
+
+  // 9. TV & Display Category
+  if (name.includes("tv") || name.includes("display") || name.includes("screen") || name.includes("backlight")) {
+    return {
+      reviews: [
+        { name: "Kunal S.", text: "Diagnosed LED TV dark screen with sound issue. Replaced backlight strip in 45 mins!", rating: 5 },
+        { name: "Deepak M.", text: "Mounted 65-inch OLED TV flush against wall with laser level perfection.", rating: 5 }
+      ],
+      faqs: [
+        { q: "How is TV 'No Picture, Only Sound' issue fixed?", a: "LED backlight array voltage testing, T-Con board diagnostic, and panel ribbon connector cleaning." },
+        { q: "Can TV power supply board (SMPS) be repaired?", a: "Yes, power board surge repair, standby red light fix, fuse replacement, and diode swaps are completed on-site." },
+        { q: "What is included in TV Wall Mounting?", a: "Fixed or swivel bracket wall drilling, level balance verification, heavy anchor fitting, and cable alignment." },
+        { q: "Is warranty provided on TV board repairs?", a: "Yes, all repaired main logic boards, power boards, and replaced LED backlights carry a 60-day warranty." }
+      ]
+    };
+  }
+
+  // 10. Microwave Oven & Water Purifier Category
+  if (name.includes("micro") || name.includes("oven") || name.includes("magnetron") || name.includes("purifier") || name.includes("ro")) {
+    return {
+      reviews: [
+        { name: "Sujata N.", text: "Microwave stopped heating. Replaced high voltage magnetron & diode, working like new!", rating: 5 },
+        { name: "Rahul C.", text: "RO water purifier servicing done with filter wash & TDS level adjustment.", rating: 5 }
+      ],
+      faqs: [
+        { q: "How is microwave non-heating issue resolved?", a: "High-voltage diode check, magnetron emission testing, high-voltage capacitor audit, and door interlock switch repair." },
+        { q: "Can touch membrane keypad or start button be fixed?", a: "Yes, touchpad membrane replacement, display IC resoldering, and control PCB repairs are completed quickly." },
+        { q: "What is included in RO Water Purifier Servicing?", a: "Sediment filter wash, activated carbon filter change, TDS level calibration, and booster pump leak fix." },
+        { q: "Are genuine microwave & RO spare parts used?", a: "Yes, all replacement magnetrons, mica sheets, filters, and RO membranes are 100% genuine factory certified." }
+      ]
+    };
+  }
+
+  // 11. Check-up & General Diagnostic Fallback
+  if (name.includes("check-up") || name.includes("checkup") || name.includes("repair") || name.includes("diagnostic") || name.includes("issue") || name.includes("problem")) {
+    return {
+      reviews: [
+        { name: "Siddharth N.", text: "Great 21-point check-up! Pinpointed the exact loose wiring fault in 15 mins.", rating: 5 },
+        { name: "Deepa S.", text: "Very honest technician. Explained the diagnostic report clearly before repairing.", rating: 5 }
+      ],
+      faqs: [
+        { q: "What is covered in the 21-point check-up?", a: "Motor winding resistance testing, thermistor sensor probe checks, thermostat calibration, earthing safety audit, and gas operating pressure test." },
+        { q: "Will the fault be repaired immediately after check-up?", a: "Our technician provides a transparent repair estimate first and carries common genuine spare parts to complete most repairs immediately upon approval." },
+        { q: "Is the check-up charge adjusted if I proceed with repair?", a: "Yes! If you approve the recommended repair during the visit, the inspection fee is adjusted towards the total repair bill." },
+        { q: "How long does a diagnostic inspection take?", a: "A complete 21-point electrical, mechanical, and gas pressure audit takes 20 to 30 minutes." }
+      ]
+    };
+  }
+
+  // Default fallback
+  return {
+    reviews: [
+      { name: "Arvind S.", text: "Prompt service, professional technician, and great attention to detail!", rating: 5 },
+      { name: "Kavya R.", text: "Arrived right on time. Very neat work and explained everything clearly.", rating: 5 }
+    ],
+    faqs: [
+      { q: "Are spare parts included in the service cost?", a: "Standard diagnostic and labor are included. Any required replacement spare parts are billed transparently as per the official rate card." },
+      { q: "Is service warranty provided?", a: "Yes, all service packages and genuine spare parts come with a 30 to 60-day CalServices warranty." },
+      { q: "How can I reschedule or cancel my booking?", a: "You can easily reschedule or cancel your appointment directly through the app or by contacting customer support up to 2 hours before the slot." },
+      { q: "What safety guidelines do your technicians follow?", a: "All technicians undergo background verification, carry identity cards, wear protective shoe covers, and use sanitized professional equipment." }
+    ]
+  };
+}
+
 export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, isFullPage = false }) {
   const rawCatKey = (category?.id || category?.slug || "cleaning").toLowerCase();
   let normalizedKey = "cleaning";
   if (["hvac", "ac"].some(k => rawCatKey.includes(k))) normalizedKey = "hvac";
+  else if (["tv_display", "tv"].some(k => rawCatKey.includes(k))) normalizedKey = "tv_display";
+  else if (["washing_machine", "washing", "washer"].some(k => rawCatKey.includes(k))) normalizedKey = "washing_machine";
+  else if (["refrigerator", "fridge"].some(k => rawCatKey.includes(k))) normalizedKey = "refrigerator";
+  else if (["microwave", "purifier"].some(k => rawCatKey.includes(k))) normalizedKey = "microwave";
   else if (["appliance", "appliance_repair"].some(k => rawCatKey.includes(k))) normalizedKey = "appliance_repair";
   else if (["electrical", "electricity", "elec"].some(k => rawCatKey.includes(k))) normalizedKey = "electrical";
   else if (["plumbing", "plumber", "plum"].some(k => rawCatKey.includes(k))) normalizedKey = "plumbing";
@@ -11478,7 +11877,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const CATEGORY_SUBCATEGORIES = {
     refrigerator: [
-      { name: "Refrigerator Check-up", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
       { name: "Refrigerator Service & Repair", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
       { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
       { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
@@ -11492,7 +11890,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Microwave & Purifier", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
     ],
     appliance_repair: [
-      { name: "Refrigerator & Fridge", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Microwave Repair", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Water Purifier & RO", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
       { name: "Microwave & Purifier", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
     ],
     tv_display: [
@@ -11598,7 +11997,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     "Washing Machine Electrical & PCB"
   ];
   const refrigeratorSubtabs = [
-    "Refrigerator Check-up",
     "Refrigerator & Fridge",
     "Refrigerator Service & Repair",
     "Refrigerator Installation",
@@ -11659,9 +12057,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const subtabParam = urlParams.get("subtab") || urlParams.get("subTab");
 
   const [activeSubTab, setActiveSubTab] = useState(() => {
+    if (subtabParam === "AC Service & Repair" || subtabParam === "AC & Heating" || subtabParam === "hvac" || subtabParam === "Air Conditioner") return "AC Service & Cleaning";
     if (subtabParam === "TV & Display") return "TV Service & Repair";
-    if (subtabParam === "Washing Machine") return "Washing Machine Service & Repair";
+    if (subtabParam === "Washing Machine") return "Washing Machine Jet Service";
     if (subtabParam === "Refrigerator & Fridge") return "Refrigerator Service & Repair";
+    if (subtabParam === "Microwave & Purifier" || subtabParam === "Microwave Repair" || subtabParam === "microwave") return "Microwave Repair";
     if (subtabParam === "Electrician" || subtabParam === "electrical") return "Switches & Sockets";
     if (subtabParam === "Plumber" || subtabParam === "plumbing") return "Tap & Mixer";
     if (subtabParam === "Carpentry" || subtabParam === "carpentry") return "Lock & Handle";
@@ -11672,7 +12072,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (nk === "electrical" || cn.includes("electric")) return "Switches & Sockets";
     if (nk === "plumbing" || cn.includes("plumb")) return "Tap & Mixer";
     if (nk === "carpentry" || cn.includes("carpenter") || cn.includes("carpentry")) return "Lock & Handle";
-    if (nk === "refrigerator" || cn.includes("fridge") || cn.includes("refrigerator")) return "Refrigerator Check-up";
+    if (nk === "refrigerator" || cn.includes("fridge") || cn.includes("refrigerator")) return "Refrigerator Service & Repair";
     if (nk === "washing_machine" || cn.includes("washing")) return "Washing Machine Jet Service";
     if (nk === "tv_display" || cn.includes("tv")) return "TV Service & Repair";
     if (nk === "hvac" || cn.includes("ac") || cn.includes("heating")) return "AC Service & Cleaning";
@@ -12066,12 +12466,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       ]
     },
     refrigerator: {
-      "Refrigerator Check-up": [
-        { id: "ref-chk-1", name: "Single Door Refrigerator Check-up", price: 249, duration: "30 mins", badge: "Single Door", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Complete 21-point system audit for single door fridge: thermostat calibration, compressor relay test & cooling check.", includes: ["21-point health check", "Thermostat calibration", "Relay & seal audit"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-chk-2", name: "Double Door (Inverter) Refrigerator Check-up", price: 399, duration: "45 mins", badge: "Inverter Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Diagnostic check for inverter double door fridge: inverter PCB sensor test, variable compressor frequency scan & auto-defrost heater check.", includes: ["Inverter PCB diagnostic", "Defrost sensor test", "Variable compressor scan"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "ref-chk-3", name: "Double Door (Non-Inverter) Refrigerator Check-up", price: 349, duration: "40 mins", badge: "Standard Dual", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Inspection for conventional double door fridge: bi-metal defrost timer audit, evaporator fan check & gas pressure check.", includes: ["Bi-metal timer test", "Evaporator fan check", "Gas pressure audit"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "ref-chk-4", name: "Side-by-Side Door Refrigerator Check-up", price: 499, duration: "45 mins", badge: "Premium Multi", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Comprehensive inspection for side-by-side / French door multi-door fridge: dual cooling evaporator test, ice maker dispenser audit & digital control panel scan.", includes: ["Dual cooling cycle scan", "Ice dispenser audit", "Digital control panel test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
-      ],
       "Refrigerator Service & Repair": [
         { id: "ref-srv-1", name: "General Refrigerator Service", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Comprehensive 21-point refrigerator inspection, coil dusting, gasket audit & voltage test.", includes: ["21-point fridge audit", "Condenser coil dusting", "Voltage & relay check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
         { id: "ref-srv-2", name: "Refrigerator Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Diagnostic and complete fix for cooling, electrical or mechanical issues.", includes: ["Detailed root cause analysis", "Component repair", "Performance test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
@@ -12144,13 +12538,16 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       ]
     },
     appliance_repair: {
-      "Refrigerator & Fridge": [
-        { id: "hvac-ref-1", name: "Single Door Fridge Repair & Checkup", price: 299, duration: "45 mins", badge: "Single Door", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Complete diagnostic for Single Door refrigerator, cooling check, thermostat audit & relay test.", includes: ["Compressor relay test", "Thermostat sensor check", "Detailed inspection report"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "hvac-ref-2", name: "Double Door / Multi-Door Fridge Repair", price: 399, duration: "45 mins", badge: "Double Door", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Defrost heater test, PCB sensor audit, fan motor check & compressor relay test.", includes: ["Defrost heater check", "Evaporator fan motor test", "Thermal fuse check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-ref-3", name: "Fridge Gas Charge & Leak Repair", price: 1299, duration: "1.5 hrs", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Cooling coil leak solder, capillary tube flush, filter dryer replacement, and gas recharge.", includes: ["Nitrogen pressure leak audit", "Copper brazing solder fix", "Filter dryer replace", "100% gas fill"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-ref-4", name: "Fridge Deep Cleaning & Sanitization", price: 499, duration: "1 hr", badge: "Hygiene Pack", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Shelves & drawer removal wash, door gasket rubber descaling, coil vacuuming & deodorizing spray.", includes: ["Shelves & drawers wash", "Gasket mold removal", "Condenser coil vacuuming"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "hvac-ref-5", name: "Fridge Compressor & Motor Repair", price: 1499, duration: "2 hrs", badge: "Major Repair", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Compressor terminal wire fix, start capacitor replacement, relay swap, or new compressor fitting.", includes: ["Compressor overload protector replace", "Start capacitor swap", "Winding resistance test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-ref-6", name: "Fridge Thermostat & Defrost Timer Fix", price: 499, duration: "45 mins", badge: "Timer & Sensor", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Automatic defrost timer change, bi-metal thermal fuse replacement, or thermostat probe fix.", includes: ["Defrost timer replacement", "Bi-metal thermostat swap", "Temperature calibration"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      "Microwave Repair": [
+        { id: "micro-rep-1", name: "Microwave Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete 15-point microwave diagnostic, magnetron check, diode & capacitor test, and door lock alignment.", includes: ["15-point diagnostic check", "High voltage safety test", "Door latch check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-2", name: "Not Heating", price: 499, duration: "45 mins", badge: "Heating Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnostic and repair for microwave running but food remaining cold. Magnetron, high voltage diode & capacitor test.", includes: ["Magnetron emission test", "HV diode & capacitor check", "Transformer test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-3", name: "Not Working", price: 499, duration: "45 mins", badge: "Power Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Diagnostic for completely dead microwave with no display or power. Thermal fuse replacement & main control board fix.", includes: ["Thermal fuse check", "Door interlock switch test", "PCB power circuit fix"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+        { id: "micro-rep-4", name: "Unknown Issue / General Check-up", price: 299, duration: "30 mins", badge: "General Check", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Full diagnostic inspection to identify mysterious sparks, burning smells, or erratic timer behavior.", includes: ["Mica wave guide sheet check", "Turntable alignment", "Fault report & estimate"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-5", name: "Buttons Not Working", price: 399, duration: "40 mins", badge: "Touchpad Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repair or replacement of non-responsive touch keypad membrane, start button failure, or digital display board.", includes: ["Keypad membrane test", "Display IC check", "Button contacts clean"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+        { id: "micro-rep-6", name: "Noise Issue", price: 349, duration: "35 mins", badge: "Noise Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix grinding or squeaking noise during microwave operation, turntable motor replacement, or cooling fan repair.", includes: ["Turntable motor replace", "Cooling fan blower check", "Roller ring alignment"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      ],
+      "Water Purifier & RO": [
+        { id: "hvac-micro-2", name: "RO Water Purifier Servicing", price: 399, duration: "45 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Filter sediment wash, carbon filter change check, TDS level adjustment, and pump leak fix.", includes: ["Sediment & carbon check", "TDS calibration", "Leakage seal fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
       ],
       "Microwave & Purifier": [
         { id: "hvac-micro-1", name: "Microwave Magnetron Repair", price: 499, duration: "45 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix non-heating issues, spark in cavity, touch keypad failure, or turntable motor replacement.", includes: ["Magnetron & diode check", "High voltage safety test", "Door lock repair"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
@@ -13653,11 +14050,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       )}
 
       {selectedPackageDetail && createPortal(
-        <div 
+        <div
           onClick={() => setSelectedPackageDetail(null)}
           className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans text-slate-800"
           >
@@ -13740,11 +14137,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   {(selectedPackageDetail.includes && selectedPackageDetail.includes.length > 0
                     ? selectedPackageDetail.includes
                     : [
-                        "Professional grade safety & service tools",
-                        "Microfiber cloths & non-abrasive scrubbers",
-                        "High performance diagnostic equipment",
-                        "Safety gear & protective floor covers"
-                      ]
+                      "Professional grade safety & service tools",
+                      "Microfiber cloths & non-abrasive scrubbers",
+                      "High performance diagnostic equipment",
+                      "Safety gear & protective floor covers"
+                    ]
                   ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
@@ -13772,22 +14169,64 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 </div>
               </div>
 
-              {/* CUSTOMER REVIEWS */}
-              <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
-                {[
-                  { name: "Arvind S.", text: "Prompt service, professional technician, and great attention to detail!", rating: 5 },
-                  { name: "Kavya R.", text: "Arrived right on time. Very neat work and explained everything clearly.", rating: 5 }
-                ].map((rev, idx) => (
-                  <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5 space-y-1">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                      <span>{rev.name}</span>
-                      <span className="text-emerald-600 font-extrabold flex items-center gap-0.5">★ {rev.rating}.0</span>
+              {/* CUSTOMER REVIEWS & FREQUENTLY ASKED QUESTIONS */}
+              {(() => {
+                const extra = getCategoryFaqsAndReviews(selectedPackageDetail);
+                return (
+                  <>
+                    {/* CUSTOMER REVIEWS */}
+                    <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                      {extra.reviews.map((rev, idx) => (
+                        <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5 space-y-1">
+                          <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                            <span>{rev.name}</span>
+                            <span className="text-emerald-600 font-extrabold flex items-center gap-0.5">★ {rev.rating}.0</span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 leading-snug">{rev.text}</p>
+                        </div>
+                      ))}
                     </div>
-                    <p className="text-[11px] text-slate-600 leading-snug">{rev.text}</p>
-                  </div>
-                ))}
-              </div>
+
+                    {/* FREQUENTLY ASKED QUESTIONS */}
+                    {extra.faqs.length > 0 && (
+                      <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Frequently Asked Questions</h4>
+                        <div className="space-y-2">
+                          {extra.faqs.map((faq, idx) => {
+                            const isFaqOpen = activeFaq === null ? idx === 0 : activeFaq === idx;
+                            return (
+                              <div
+                                key={idx}
+                                className={`border rounded-xl overflow-hidden transition-all duration-200 ${
+                                  isFaqOpen ? "border-emerald-500/50 bg-emerald-50/20 shadow-xs" : "border-slate-200/80 bg-white hover:border-slate-300"
+                                }`}
+                              >
+                                <button
+                                  onClick={() => setActiveFaq(isFaqOpen ? -1 : idx)}
+                                  className="w-full p-3.5 flex justify-between items-center text-xs font-semibold text-left cursor-pointer transition-colors"
+                                >
+                                  <span className={isFaqOpen ? "text-emerald-700 font-extrabold" : "text-slate-800 font-bold"}>
+                                    {faq.q}
+                                  </span>
+                                  <span className={`text-sm font-black ml-2 shrink-0 ${isFaqOpen ? "text-emerald-600" : "text-slate-400"}`}>
+                                    {isFaqOpen ? "−" : "+"}
+                                  </span>
+                                </button>
+                                {isFaqOpen && (
+                                  <div className="px-3.5 pb-3.5 pt-0 text-xs text-slate-600 leading-relaxed border-t border-emerald-100/60 bg-emerald-50/40 text-left">
+                                    <p className="mt-2 text-[11.5px] font-medium text-slate-700">{faq.a}</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Footer */}
@@ -18421,11 +18860,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
       </div>
 
       {selectedServiceDetails && createPortal(
-        <div 
+        <div
           onClick={() => setSelectedServiceDetails(null)}
           className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
           >

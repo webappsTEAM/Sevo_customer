@@ -2048,7 +2048,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsAcModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("hvac", "AC Service & Repair")
+                      goToCategoryServices("hvac", "AC Service & Cleaning")
                     }}
                     className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
@@ -2066,7 +2066,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsAcModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("hvac", "Refrigerator & Fridge")
+                      goToCategoryServices("refrigerator", "Refrigerator Service & Repair")
                     }}
                     className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
@@ -2084,7 +2084,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsAcModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("hvac", "Washing Machine")
+                      goToCategoryServices("washing_machine", "Washing Machine Jet Service")
                     }}
                     className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
@@ -2102,7 +2102,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsAcModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("hvac", "TV & Display")
+                      goToCategoryServices("tv_display", "TV Service & Repair")
                     }}
                     className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
@@ -2120,7 +2120,7 @@ export function LandingPage() {
                     onClick={() => {
                       setIsAcModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("hvac", "Microwave & Purifier")
+                      goToCategoryServices("microwave", "Microwave Repair")
                     }}
                     className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
@@ -2749,7 +2749,7 @@ export function LandingPage() {
                   onClick={() => {
                     setIsAcModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToCategoryServices("hvac", "AC Service & Repair")
+                    goToCategoryServices("hvac", "AC Service & Cleaning")
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                 >
@@ -2767,7 +2767,7 @@ export function LandingPage() {
                   onClick={() => {
                     setIsAcModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToCategoryServices("hvac", "Refrigerator & Fridge")
+                    goToCategoryServices("refrigerator", "Refrigerator Service & Repair")
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                 >
@@ -2785,7 +2785,7 @@ export function LandingPage() {
                   onClick={() => {
                     setIsAcModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToCategoryServices("hvac", "Washing Machine")
+                    goToCategoryServices("washing_machine", "Washing Machine Jet Service")
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                 >
@@ -2803,7 +2803,7 @@ export function LandingPage() {
                   onClick={() => {
                     setIsAcModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToCategoryServices("hvac", "TV & Display")
+                    goToCategoryServices("tv_display", "TV Service & Repair")
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                 >
@@ -2821,7 +2821,7 @@ export function LandingPage() {
                   onClick={() => {
                     setIsAcModalOpen(false)
                     document.body.style.overflow = "unset"
-                    goToCategoryServices("hvac", "Microwave & Purifier")
+                    goToCategoryServices("microwave", "Microwave Repair")
                   }}
                   className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                 >

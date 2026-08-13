@@ -53,7 +53,12 @@ from .views import (
     SupportWorkExtensionRecordDecisionView,
     ServiceRequestSupplementalInvoiceView,
     
-    # Complaints, Reschedule & Refunds
+    # Marketing & Coupons
+    AdminCouponAnalyticsView,
+    CouponListCreateView,
+    CouponDetailView,
+    CustomerCouponListView,
+    CustomerCouponValidateView,
     CustomerComplaintCreateView,
     CustomerComplaintListView,
     CustomerComplaintDetailView,
@@ -253,4 +258,15 @@ urlpatterns = [
     path('employee/refunds/assigned/',                   EmployeeAssignedRefundListView.as_view(),     name='employee-refund-assigned-list'),
     path('employee/refunds/<int:pk>/',                   EmployeeRefundDetailView.as_view(),           name='employee-refund-detail'),
     path('employee/refunds/<int:pk>/submit-investigation/', EmployeeRefundInvestigationSubmitView.as_view(), name='employee-refund-submit-investigation'),
+
+    # Marketing Coupons API routes (Admin & Customer)
+    path('coupons/',                                     CouponListCreateView.as_view(),               name='coupon-list-create'),
+    path('coupons/<int:pk>/',                            CouponDetailView.as_view(),                   name='coupon-detail'),
+    path('coupons/apply/',                               CustomerCouponValidateView.as_view(),        name='coupon-apply'),
+    path('admin/coupons/',                               CouponListCreateView.as_view(),               name='admin-coupon-list-create'),
+    path('admin/coupons/analytics/',                     AdminCouponAnalyticsView.as_view(),           name='admin-coupon-analytics'),
+    path('admin/coupons/<int:pk>/',                      CouponDetailView.as_view(),                   name='admin-coupon-detail'),
+    path('admin/coupons/<int:pk>/status/',               CouponDetailView.as_view(),                   name='admin-coupon-status'),
+    path('customer/coupons/',                            CustomerCouponListView.as_view(),             name='customer-coupon-list'),
+    path('customer/coupons/validate/',                   CustomerCouponValidateView.as_view(),         name='customer-coupon-validate'),
 ]

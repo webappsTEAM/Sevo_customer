@@ -178,6 +178,13 @@ class ServiceRequest(models.Model):
         related_name="assigned_service_requests",
     )
 
+    # Coupon snapshot fields
+    coupon               = models.ForeignKey("Coupon", on_delete=models.SET_NULL, null=True, blank=True, related_name="service_requests")
+    coupon_code_snapshot = models.CharField(max_length=50, blank=True, default="")
+    discount_amount      = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    subtotal_amount      = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    final_amount         = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1259,3 +1266,108 @@ class ComplaintStatusHistory(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class Coupon(models.Model):
+    """
+    Marketing Coupon model for promotions and discounts.
+    """
+    class DiscountType(models.TextChoices):
+        FLAT       = "flat",       "Flat Amount (₹)"
+        PERCENTAGE = "percentage", "Percentage (%)"
+
+    class Status(models.TextChoices):
+        ACTIVE    = "Active",    "Active"
+        SCHEDULED = "Scheduled", "Scheduled"
+        EXPIRED   = "Expired",   "Expired"
+        PAUSED    = "Paused",    "Paused"
+
+    code                 = models.CharField(max_length=50, unique=True)
+    name                 = models.CharField(max_length=255)
+    description          = models.TextField(blank=True, default="")
+    discount_type        = models.CharField(max_length=20, choices=DiscountType.choices, default=DiscountType.FLAT)
+    discount_value       = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    max_discount         = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    customer_eligibility = models.CharField(max_length=100, default="All Customers")
+    order_type           = models.CharField(max_length=100, default="Any Order")
+    service_eligibility  = models.CharField(max_length=100, default="All Services")
+    min_booking          = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    usage_per_customer   = models.IntegerField(default=1)
+    total_usage_limit    = models.IntegerField(default=1000)
+    current_usage        = models.IntegerField(default=0)
+    stacking             = models.CharField(max_length=10, default="No")
+    start_date           = models.DateField(null=True, blank=True)
+    end_date             = models.DateField(null=True, blank=True)
+    status               = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    created_at           = models.DateTimeField(auto_now_add=True)
+    updated_at           = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Coupon({self.code} - {self.name})"
+
+
+class CouponCategory(models.Model):
+    """Junction table for Category-restricted coupons."""
+    coupon      = models.ForeignKey(Coupon, on_delete=models.CASCADE, related_name="categories")
+    category_id = models.CharField(max_length=100, db_index=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("coupon", "category_id")
+
+    def __str__(self):
+        return f"CouponCategory({self.coupon.code} -> {self.category_id})"
+
+
+class CouponService(models.Model):
+    """Junction table for Service-restricted coupons."""
+    coupon     = models.ForeignKey(Coupon, on_delete=models.CASCADE, related_name="services")
+    service_id = models.CharField(max_length=100, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("coupon", "service_id")
+
+    def __str__(self):
+        return f"CouponService({self.coupon.code} -> {self.service_id})"
+
+
+class CouponPackage(models.Model):
+    """Junction table for Package-restricted coupons."""
+    coupon     = models.ForeignKey(Coupon, on_delete=models.CASCADE, related_name="packages")
+    package_id = models.CharField(max_length=100, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("coupon", "package_id")
+
+    def __str__(self):
+        return f"CouponPackage({self.coupon.code} -> {self.package_id})"
+
+
+class CouponUsage(models.Model):
+    """
+    Transaction-safe log tracking every redemption of a coupon.
+    """
+    coupon          = models.ForeignKey(Coupon, on_delete=models.CASCADE, related_name="usages")
+    customer        = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="coupon_redemptions")
+    booking         = models.ForeignKey(ServiceRequest, on_delete=models.SET_NULL, null=True, blank=True, related_name="coupon_usages")
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    order_amount    = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    final_amount    = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    used_at         = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-used_at"]
+        indexes = [
+            models.Index(fields=["coupon", "customer"]),
+            models.Index(fields=["coupon", "booking"]),
+        ]
+
+    def __str__(self):
+        return f"CouponUsage({self.coupon.code} by User {self.customer_id} on SR {self.booking_id})"
+
+

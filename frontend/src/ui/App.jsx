@@ -167,6 +167,9 @@ const CatalogAddOnsPage = lazy(() =>
 const CatalogChangeLogPage = lazy(() =>
   import("./pages/catalog/CatalogChangeLogPage.jsx").then(m => ({ default: m.CatalogChangeLogPage }))
 )
+const CouponsPage = lazy(() => import("./pages/marketing/CouponsPage.jsx"))
+const OffersPage = lazy(() => import("./pages/marketing/OffersPage.jsx"))
+const ReferralsPage = lazy(() => import("./pages/marketing/ReferralsPage.jsx"))
 
 const BookingPage = lazy(() =>
   import("./pages/BookingPage.jsx").then(m => ({ default: m.BookingPage }))
@@ -454,6 +457,9 @@ export function App() {
               <Route path={routes.catalog_packages} element={<CatalogPackagesPage />} />
               <Route path={routes.catalog_addons} element={<CatalogAddOnsPage />} />
               <Route path={routes.catalog_change_log} element={<CatalogChangeLogPage />} />
+              <Route path={routes.marketing_coupons} element={<CouponsPage />} />
+              <Route path={routes.marketing_offers} element={<OffersPage />} />
+              <Route path={routes.marketing_referrals} element={<ReferralsPage />} />
               <Route path={routes.admin_service_requests} element={<ServiceRequestsPage />} />
               <Route path={routes.admin_feedback} element={<FeedbackManagementPage />} />
               <Route path="/customers/list" element={<ServiceRequestsPage />} />

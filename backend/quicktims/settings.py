@@ -23,7 +23,7 @@ SECRET_KEY = _SECRET_KEY
 # DEBUG is OFF by default. Must be explicitly set to "1" or "True" in the environment.
 DEBUG = os.getenv("DJANGO_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 
-ALLOWED_HOSTS = [h for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
+ALLOWED_HOSTS = ["*"]
 
 # ── Subpath / Reverse-proxy settings ─────────────────────────────────────────
 # Required when Django is served under a subpath (e.g. /Caltrack/) behind Nginx.
