@@ -19,6 +19,11 @@ const SOFA_SUB_TABS = [
     id: "carpet",
     name: "Carpet Cleaning",
     image: "/mockups/carpet_header_new.png",
+  },
+  {
+    id: "addons",
+    name: "Quick Extra Services",
+    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=150&q=80&fit=crop",
   }
 ];
 
@@ -68,7 +73,7 @@ const SOFA_CLEANING_SERVICES = [
   {
     id: "leather-sofa-cushion-clean",
     name: "Leather Sofa & Cushion Cleaning",
-    price: 599,
+    price: 619,
     duration: "1.5 hrs",
     description: "Comprehensive leather cleaning and conditioning including cushions.",
     image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
@@ -77,6 +82,19 @@ const SOFA_CLEANING_SERVICES = [
       "Cleaning of loose/removable leather cushions",
       "Leather-safe conditioning",
       "Soft finishing for a clean appearance"
+    ]
+  },
+  {
+    id: "quick-dining-table",
+    name: "Dining Table & Chairs Cleaning",
+    price: 449,
+    duration: "30 mins",
+    description: "Detailed dining table and chairs surface cleaning and grease removal.",
+    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    includes: [
+      "Surface cleaning & sanitation of table and chairs",
+      "Removal of food stains & greasy layers",
+      "Wiping & drying of tabletop"
     ]
   }
 ];
@@ -128,7 +146,214 @@ const CARPET_SERVICES = [
   }
 ];
 
+const SOFA_ADDONS_SERVICES = [
+  {
+    id: "quick-fan-clean",
+    name: "Ceiling Fan Cleaning",
+    price: 89,
+    duration: "30 mins",
+    description: "Detailed ceiling fan dusting and blade wipe down.",
+    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+    includes: [
+      "Fan blade cleaning",
+      "Motor housing & cover dusting",
+      "Dust & surface grime removal"
+    ]
+  },
+  {
+    id: "quick-door-clean",
+    name: "Door Cleaning",
+    price: 89,
+    duration: "10 mins",
+    description: "Thorough wiping and dusting of doors to remove fingerprints and dirt.",
+    image: "/mockups/bath_door.png",
+    includes: [
+      "Wiping of door panels and frames",
+      "Removal of smudges, dust & fingerprint marks",
+      "Handle sanitization"
+    ]
+  },
+  {
+    id: "fridge-clean",
+    name: "Fridge cleaning",
+    rating: "4.83",
+    reviews: "167K reviews",
+    price: 399,
+    options: "3 options",
+    duration: "1.5 hrs",
+    description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
+    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&q=80&fit=crop",
+    includes: [
+      "Interior & exterior cleaning",
+      "Shelves, trays & compartments cleaning",
+      "Door seal & stain cleaning"
+    ],
+    subOptions: [
+      {
+        id: "fridge-single",
+        name: "Single door",
+        price: 399,
+        rating: "4.85",
+        reviews: "65K reviews",
+        image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=200&q=80&fit=crop",
+        duration: "1 hr"
+      },
+      {
+        id: "fridge-double",
+        name: "Double door",
+        price: 549,
+        rating: "4.83",
+        reviews: "93K reviews",
+        image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=200&q=80&fit=crop",
+        duration: "1.5 hrs"
+      },
+      {
+        id: "fridge-triple",
+        name: "Side by side/ Triple door",
+        price: 799,
+        rating: "4.80",
+        reviews: "9K reviews",
+        image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+        duration: "2 hrs"
+      }
+    ]
+  },
+  {
+    id: "quick-balcony-upto-4ft",
+    name: "Balcony Cleaning: Upto 4 ft Width",
+    price: 399,
+    duration: "30 mins",
+    description: "Washing and scrubbing of balcony floor and railings.",
+    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    includes: [
+      "Balcony floor washing & scrubbing",
+      "Dusting of railing and windows",
+      "Clearance of cobwebs and dust bunnies"
+    ]
+  },
+  {
+    id: "quick-balcony-above-4ft",
+    name: "Balcony Cleaning: Above 4 ft Width",
+    price: 549,
+    duration: "50 mins",
+    description: "Deep floor scrubbing and mesh cleaning for large balconies.",
+    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    includes: [
+      "Deep floor scrubbing & balcony washing",
+      "Railing, windows, and mesh cleaning",
+      "Thorough dust and dirt clearance"
+    ]
+  }
+];
+
 const SOFA_DETAIL_DATA = {
+  "quick-fan-clean": {
+    tools: [
+      "Extension dusters",
+      "Microfiber cloths",
+      "Mild cleaning sprays"
+    ],
+    ready: [
+      "Ensure space directly below the fan is clear",
+      "Provide access to a power source"
+    ],
+    reviews: [
+      { name: "Vijay S.", rating: "4.9", text: '"Cleaned the fan blades and motor body nicely. Dust-free now."' }
+    ],
+    faqs: [
+      { q: "Do you clean the regulator?", a: "No, we only clean the fan blades, motor housing, and downrod." }
+    ]
+  },
+  "quick-door-clean": {
+    tools: [
+      "Wood-safe spray",
+      "Soft detailing sponges",
+      "Microfiber towels"
+    ],
+    ready: [
+      "Provide clear path to doors"
+    ],
+    reviews: [
+      { name: "Alok R.", rating: "4.8", text: '"Got rid of all grease spots on the door handles and corners."' }
+    ],
+    faqs: [
+      { q: "Is handle disinfection included?", a: "Yes, we sanitize door handles as part of the service." }
+    ]
+  },
+  "fridge-clean": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "quick-balcony-upto-4ft": {
+    tools: [
+      "Floor scrubbers",
+      "High pressure water sprays",
+      "Hard dusting brushes"
+    ],
+    ready: [
+      "Remove plants or outdoor furniture from the balcony",
+      "Ensure access to a water connection"
+    ],
+    reviews: [
+      { name: "Vikram P.", rating: "4.9", text: '"Scrubbed all the dust and dirt from the balcony floor. Very clean."' }
+    ],
+    faqs: [
+      { q: "Do you clean balcony windows?", a: "Yes, accessible balcony windows are dusted and wiped." }
+    ]
+  },
+  "quick-balcony-above-4ft": {
+    tools: [
+      "Floor scrubbers",
+      "High pressure water sprays",
+      "Hard dusting brushes",
+      "Mesh cleaning brushes"
+    ],
+    ready: [
+      "Remove plants or outdoor furniture from the balcony",
+      "Ensure access to a water connection"
+    ],
+    reviews: [
+      { name: "Aditi G.", rating: "4.8", text: '"Deep scrubbed the entire balcony floor and mesh screens. Perfect."' }
+    ],
+    faqs: [
+      { q: "Is mesh screen cleaning included?", a: "Yes, mesh screen dusting and washing is included." }
+    ]
+  },
+  "quick-dining-table": {
+    tools: [
+      "Heavy duty degreasers / polishers",
+      "Microfiber detailing cloths",
+      "Soft detailing brushes"
+    ],
+    ready: [
+      "Clear all items from the dining table",
+      "Ensure access to water and power outlets"
+    ],
+    reviews: [
+      { name: "Rohit P.", rating: "4.9", text: '"Very detailed cleaning of the dining chairs as well. Stains are completely gone!"' }
+    ],
+    faqs: [
+      { q: "Will this clean the table chairs too?", a: "Yes, this service covers the deep cleaning of both the dining table and the chairs." }
+    ]
+  },
   "fabric-sofa-clean": {
     tools: [
       "Fabric-safe cleaning shampoo",
@@ -333,7 +558,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
 
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
 
-  const currentServicesList = activeTab === "sofa" ? SOFA_CLEANING_SERVICES : activeTab === "mattress" ? MATTRESS_SERVICES : CARPET_SERVICES;
+  const currentServicesList = activeTab === "sofa" ? SOFA_CLEANING_SERVICES : activeTab === "mattress" ? MATTRESS_SERVICES : activeTab === "carpet" ? CARPET_SERVICES : SOFA_ADDONS_SERVICES;
 
   const activeServices = currentServicesList.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -447,17 +672,14 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                       >
                         View details
                       </button>
-                      {service.options && (
-                        <p className="text-[11px] text-slate-400 mt-1">{service.options}</p>
-                      )}
                     </div>
 
                     {/* Image + add button */}
-                    <div className="relative shrink-0 w-28 pb-3 flex flex-col items-center">
+                    <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
                       <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
                         <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
                       </div>
-                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 z-10">
+                      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
                         {count > 0 ? (
                           <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
                             <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
@@ -466,13 +688,22 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                           </div>
                         ) : (
                           <button
-                            onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)}
+                            onClick={() => {
+                              if (service.subOptions) {
+                                setSelectedServiceDetails(service);
+                              } else {
+                                addItemToCart(service.id, service.name, service.price, service.duration);
+                              }
+                            }}
                             className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
                           >
                             <ShoppingCart size={12} /> Add
                           </button>
                         )}
                       </div>
+                      {service.options && (
+                        <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -581,34 +812,80 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                   <span className="text-slate-400 font-normal underline">(4.5M reviews)</span>
                 </div>
 
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Price</div>
-                    <div className="text-base font-black text-slate-900 mt-0.5">
-                      ₹{selectedServiceDetails.price}
-                      <span className="text-slate-400 text-xs font-normal ml-2">• {selectedServiceDetails.duration}</span>
+                {!selectedServiceDetails.subOptions ? (
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100/80 rounded-2xl p-4">
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Price</div>
+                      <div className="text-base font-black text-slate-900 mt-0.5">
+                        ₹{selectedServiceDetails.price}
+                        <span className="text-slate-400 text-xs font-normal ml-2">• {selectedServiceDetails.duration}</span>
+                      </div>
+                    </div>
+
+                    <div className="w-24">
+                      {getCount(selectedServiceDetails.id) > 0 ? (
+                        <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
+                          <button onClick={() => removeItemFromCart(selectedServiceDetails.id)} className="hover:text-emerald-900">-</button>
+                          <span>{getCount(selectedServiceDetails.id)}</span>
+                          <button onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)} className="hover:text-emerald-900">+</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
+                          className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer border-none"
+                        >
+                          <ShoppingCart size={13} /> Add
+                        </button>
+                      )}
                     </div>
                   </div>
+                ) : (
+                  <div className="bg-slate-50 border border-slate-100/80 rounded-2xl p-4 text-center">
+                    <span className="text-xs font-bold text-slate-500">Please select an option below</span>
+                  </div>
+                )}
+              </div>
 
-                  {/* Add button inside details modal */}
-                  <div className="w-24">
-                    {getCount(selectedServiceDetails.id) > 0 ? (
-                      <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
-                        <button onClick={() => removeItemFromCart(selectedServiceDetails.id)} className="hover:text-emerald-900">-</button>
-                        <span>{getCount(selectedServiceDetails.id)}</span>
-                        <button onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)} className="hover:text-emerald-900">+</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration)}
-                        className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer border-none"
-                      >
-                        <ShoppingCart size={13} /> Add
-                      </button>
-                    )}
+                            {/* Sub-options selector */}
+              {selectedServiceDetails.subOptions && (
+                <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
+                  <h4 className="text-xs font-black text-slate-850 uppercase tracking-wider mb-3">Choose Variant</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {selectedServiceDetails.subOptions.map(sub => {
+                      const subCount = getCount(sub.id);
+                      return (
+                        <div key={sub.id} className="border border-slate-200/80 rounded-2xl p-2.5 flex flex-col justify-between items-center text-center bg-slate-50/20 hover:border-slate-300 transition-all">
+                          <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 mb-2 flex items-center justify-center">
+                            <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
+                          </div>
+                          <div className="flex-1 flex flex-col justify-between w-full">
+                            <div>
+                              <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">{sub.name}</h5>
+                            </div>
+                            <div className="w-full mt-auto">
+                              <div className="text-xs font-black text-slate-900 mb-2">₹{sub.price}</div>
+                              {subCount > 0 ? (
+                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm w-full">
+                                  <button onClick={() => removeItemFromCart(sub.id)} className="hover:text-emerald-900">-</button>
+                                  <span>{subCount}</span>
+                                  <button onClick={() => addItemToCart(sub.id, sub.name, sub.price, sub.duration)} className="hover:text-emerald-900">+</button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => addItemToCart(sub.id, sub.name, sub.price, sub.duration)}
+                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[10px] py-1 rounded-lg hover:bg-slate-50 transition-all shadow-sm uppercase flex items-center justify-center gap-0.5"
+                                >
+                                  Add
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Tools & Products We Use */}
               {(() => {
@@ -710,11 +987,27 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
 
             {/* Sticky Footer with teal proceed button */}
             <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
+              {(() => {
+                if (selectedServiceDetails.subOptions) {
+                  const subTotalVal = selectedServiceDetails.subOptions.reduce((acc, sub) => {
+                    return acc + (sub.price * getCount(sub.id));
+                  }, 0);
+                  return subTotalVal > 0 ? (
+                    <div className="text-sm font-extrabold text-slate-900">₹{subTotalVal}</div>
+                  ) : (
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
+                  );
+                }
+                return (
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
+                );
+              })()}
               <button
                 onClick={() => {
-                  if (getCount(selectedServiceDetails.id) === 0) {
-                    addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration);
+                  if (!selectedServiceDetails.subOptions) {
+                    if (getCount(selectedServiceDetails.id) === 0) {
+                      addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration);
+                    }
                   }
                   setSelectedServiceDetails(null);
                 }}

@@ -17,11 +17,15 @@ export function CatalogCategoriesPage() {
     setLoading(true)
     try {
       const res = await apiRequest("/settings/catalog/v2/categories/")
-      if (res.success) setCategories(res.data)
-    } catch {
-      showToast("Failed to load categories", "error")
+      if (res && res.success) setCategories(res.data)
+    } catch (err) {
+      // Suppress 401 auth errors — they self-resolve on login/session refresh
+      if (err?.status !== 401) {
+        showToast("Failed to load categories", "error")
+      }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => { load() }, [])

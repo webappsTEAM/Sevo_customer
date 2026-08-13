@@ -496,12 +496,14 @@ export function TwoWheelerBookingHosurPage() {
       ? tier.includes
       : (VEHICLE_SUITABILITY_MAP[tier.slug]?.suitableFor || [])
     const bestForText = tier.description || VEHICLE_SUITABILITY_MAP[tier.slug]?.bestFor || ""
+    const badgeText = tier.icon || ""
 
     return {
       id: tier.slug,
       name: tier.name,
       capacity: tier.capacity_label,
       description: tier.description,
+      badge: badgeText,
       suitableFor: suitableList,
       bestFor: bestForText,
       price: `₹${Number(tier.starting_price).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
@@ -509,6 +511,7 @@ export function TwoWheelerBookingHosurPage() {
       details: {
         name: tier.name,
         capacity: tier.capacity_label ? `${tier.capacity_label} capacity` : "Standard capacity",
+        badge: badgeText,
         suitableFor: suitableList,
         bestFor: bestForText,
       },
@@ -1066,8 +1069,23 @@ export function TwoWheelerBookingHosurPage() {
             {TWO_WHEELER_VEHICLES.map((vehicle) => (
               <div
                 key={vehicle.id}
-                className="bg-white rounded-xl border border-slate-200/90 p-6 sm:p-7 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between"
+                className="bg-white rounded-xl border border-slate-200/90 p-6 sm:p-7 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between relative"
               >
+                {/* Highlight Badge if configured */}
+                {vehicle.badge && (
+                  <span
+                    className={`absolute top-3.5 right-3.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${
+                      vehicle.badge.toLowerCase().includes("popular")
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : vehicle.badge.toLowerCase().includes("rare")
+                        ? "bg-slate-100 text-slate-700 border-slate-200"
+                        : "bg-blue-50 text-blue-700 border-blue-200"
+                    }`}
+                  >
+                    ★ {vehicle.badge}
+                  </span>
+                )}
+
                 {/* Top Graphic with dimension markings */}
                 <div className="w-full flex justify-center items-center my-1">
                   {vehicle.diagram}

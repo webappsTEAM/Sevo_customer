@@ -699,7 +699,7 @@ class MeView(APIView):
                 user.is_superuser = True
                 user.save(update_fields=["role", "is_staff", "is_superuser"])
 
-            if not getattr(user, "company", None) and user.role != "admin":
+            if not getattr(user, "company", None):
                 try:
                     from companies.models import Company
                     company = Company.objects.filter(slug="demo-v2").first() or Company.objects.filter(slug="demo").first() or Company.objects.first()

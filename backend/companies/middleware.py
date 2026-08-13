@@ -62,6 +62,13 @@ class CompanyMiddleware(MiddlewareMixin):
             except Exception:
                 pass
 
+        if not company:
+            try:
+                from companies.models import Company
+                company = Company.objects.first()
+            except Exception:
+                pass
+
         # ── Fallback for session-based auth (Django admin, etc.) ────────────
         if not company:
             user = getattr(request, 'user', None)

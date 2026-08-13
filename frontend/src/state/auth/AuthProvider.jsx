@@ -52,6 +52,8 @@ export function AuthProvider({ children }) {
         avatar_url:me.avatar_url ?? null,
         two_fa_enabled: me.two_fa_enabled ?? false,
         employee_roles: me.employee_roles ?? [],
+        isCareAgent: me.is_care_agent ?? false,
+        careRole: me.care_role ?? null,
         companyCountry: me.company_country ?? me.companyCountry ?? "IN",
         company_country: me.company_country ?? me.companyCountry ?? "IN",
         companyRegion: me.company_region ?? me.company_country ?? me.companyCountry ?? "IN",

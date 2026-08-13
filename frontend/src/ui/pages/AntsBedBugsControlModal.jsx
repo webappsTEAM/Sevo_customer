@@ -104,7 +104,13 @@ const SERVICE_DETAILS_CONTENT = {
     ],
     faqs: [
       { q: "Is a second visit included in the price?", a: "Yes, the second visit after 14 days is fully included to ensure any hatched nymphs are eliminated." },
-      { q: "Do I need to wash my bedsheets?", a: "Yes, we highly recommend washing all bedsheets, linens, and curtains in hot water post-service." }
+      { q: "Do I need to wash my bedsheets?", a: "Yes, we highly recommend washing all bedsheets, linens, and curtains in hot water post-service." },
+      { q: "How long should we vacate the house?", a: "We recommend vacating the treated rooms for 3 to 4 hours post-service to allow the chemical spray to dry completely." },
+      { q: "Do we need to throw away infested mattresses?", a: "No, our steam extraction and chemical spray are designed to eradicate bed bugs inside mattresses, making them reusable." },
+      { q: "Where do bed bugs hide?", a: "They hide in mattress seams, bed frames, headboards, wall cracks, electrical outlets, and nearby furniture joints." },
+      { q: "What chemicals do you use?", a: "We use synthetic pyrethroids and insect growth regulators which are target-specific and low-hazard to humans." },
+      { q: "Can we sleep on the mattress immediately?", a: "Wait at least 4 hours. Ensure the mattress is completely dry and cover it with fresh bedsheets before sleeping." },
+      { q: "Is there a service warranty?", a: "Yes, we provide a 90-day protection warranty from the date of the first treatment visit." }
     ]
   },
   "pest-ant-kb": {
@@ -125,7 +131,14 @@ const SERVICE_DETAILS_CONTENT = {
       { author: "Vijay L.", rating: 5, date: "1 week ago", comment: "Excellent ant control. They sealed the entryway behind the microwave." }
     ],
     faqs: [
-      { q: "How long does the gel take to work?", a: "The gel bait attracts ants within 24 hours. The entire colony is eradicated within 3–5 days." }
+      { q: "How long does the gel take to work?", a: "The gel bait attracts ants within 24 hours. The entire colony is eradicated within 3–5 days." },
+      { q: "Do I need to leave the kitchen during treatment?", a: "No, the treatment is odorless and gel-based, so there is no need to leave the room or vacate." },
+      { q: "Is the ant gel safe for food areas?", a: "The gel is applied in cracks, crevices, and cabinet hinges away from direct food contact, making it perfectly safe." },
+      { q: "What type of ants does this treat?", a: "It treats all common household ants including black ants, red ants, and sugar ants." },
+      { q: "Do you seal the entry holes?", a: "Yes, we seal visible entry crevices along wall margins using paintable silicone sealant." },
+      { q: "Will the ants return after treatment?", a: "The gel destroys the nest. To prevent return, ensure food scraps are cleared and counter tops are wiped clean." },
+      { q: "What should I do if I see ants post-treatment?", a: "Do not spray regular aerosol sprays on the gel, as it repels ants. Let them feed on the gel bait so they carry it to the colony." },
+      { q: "Do you offer a service warranty?", a: "Yes, we provide a 45-day warranty. If ants return during this time, we will provide a free follow-up service." }
     ]
   },
   "pest-ant-apt": {
@@ -147,7 +160,14 @@ const SERVICE_DETAILS_CONTENT = {
       { author: "Nikhil S.", rating: 4, date: "4 days ago", comment: "Good service, but make sure you clear the cabinets yourself before they arrive." }
     ],
     faqs: [
-      { q: "Do you clear the cabinets?", a: "For this plan, the customer must completely empty and clear all kitchen cabinets and drawers before the partner arrives." }
+      { q: "Do you clear the cabinets?", a: "For this plan, the customer must completely empty and clear all kitchen cabinets and drawers before the partner arrives." },
+      { q: "Does the spray leave stains on walls?", a: "No, our water-based chemical spray is non-staining, colorless, and odorless." },
+      { q: "How long does the service take?", a: "An apartment ant extermination service takes about 1 hour to complete." },
+      { q: "Are balcony areas treated?", a: "Yes, we treat balcony skirting borders and drain junctions as they are major ant entry points." },
+      { q: "Is the treatment safe for plants?", a: "Yes, the chemical is sprayed along baseboards and does not harm potted indoor plants." },
+      { q: "Should we clean the floor after treatment?", a: "You can mop the center of the rooms. Avoid washing along the skirting boundaries for 48 hours." },
+      { q: "How long does the residual spray last?", a: "The spray creates a barrier that remains active for up to 90 days if left undisturbed." },
+      { q: "Is a second visit included?", a: "For ant control, a single session with gel and spray is highly effective. If there is a heavy infestation, a follow-up can be booked." }
     ]
   },
   "pest-ant-bung": {
@@ -169,7 +189,14 @@ const SERVICE_DETAILS_CONTENT = {
       { author: "Pradeep J.", rating: 5, date: "1 week ago", comment: "Very thorough ant control for our double floor house. Highly effective." }
     ],
     faqs: [
-      { q: "Is this chemical safe for wooden floors?", a: "Yes, our chemicals are eco-safe and do not stain or harm wood, carpets, or laminates." }
+      { q: "Is this chemical safe for wooden floors?", a: "Yes, our chemicals are eco-safe and do not stain or harm wood, carpets, or laminates." },
+      { q: "Do you cover all floors in a bungalow?", a: "Yes, we spray skirting lines on all floors, balconies, terraces, and immediate foundation borders." },
+      { q: "How long does it take for a bungalow?", a: "It typically takes 1.5 to 2 hours depending on the size of the bungalow." },
+      { q: "Do you treat outdoor gardens for ants?", a: "We do not treat lawns or garden soil, but we apply barrier sprays along porch tiled surfaces and windows." },
+      { q: "Is a warranty provided for bungalow ant treatment?", a: "Yes, we provide a 45-day complete protection warranty from the service date." },
+      { q: "Can we be inside the villa during spraying?", a: "Yes, the chemicals are low-toxicity and odorless. However, we suggest keeping children away from wet sprayed areas until dry." },
+      { q: "Do you treat wooden attics?", a: "Yes, we apply gel bait and dry dusting powder in crevices inside attics or wooden stair structures." },
+      { q: "How many partners handle a bungalow?", a: "We assign 1 to 2 trained service professionals depending on the room count." }
     ]
   }
 };
