@@ -350,7 +350,7 @@ function SavedAddressesModal({
   useEffect(() => {
     async function loadSavedAddresses() {
       try {
-        const res = await apiRequest("/customer/addresses/")
+        const res = await apiRequest("/auth/customer/addresses/")
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
           const list = res.data.map(a => ({
             id: String(a.id),
@@ -774,7 +774,7 @@ export function AddAddressSearchModal({
                       return (
                         <div
                           key={addr.id || idx}
-                          onClick={() => onSelectLocation(displayAddr)}
+                          onClick={() => onSelectLocation(displayAddr, { lat: addr.latitude, lng: addr.longitude })}
                           className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
                         >
                           <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
@@ -856,7 +856,7 @@ export function AddAddressSearchModal({
                 ? addressData
                 : addressData?.formatted_address || [addressData?.flat_house_no, addressData?.locality, addressData?.city].filter(Boolean).join(", ")
               if (typeof onSelectLocation === "function") {
-                onSelectLocation(locStr || addressData)
+                onSelectLocation(locStr || addressData, { lat: addressData?.latitude, lng: addressData?.longitude })
               }
               onClose()
             }}
@@ -2091,9 +2091,14 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
   }, [globalLocation, formData.address])
 
   useEffect(() => {
-    if (!formData.issue_title && cart && cart.length > 0) {
-      const defaultTitle = cart.map(c => c.name).join(', ') + (category ? ` •” ${category.name}` : '');
-      onChange({ target: { name: 'issue_title', value: defaultTitle } })
+    if (cart && cart.length > 0) {
+      const firstName = cart[0].name || category?.name || "Service Item";
+      const defaultTitle = cart.length === 1
+        ? firstName
+        : `${firstName} (+${cart.length - 1} other item${cart.length - 1 > 1 ? 's' : ''})`;
+      if (!formData.issue_title) {
+        onChange({ target: { name: 'issue_title', value: defaultTitle } })
+      }
     }
   }, [cart, category, formData.issue_title])
 
@@ -4252,6 +4257,12 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     })
                     if (saveRes.success || saveRes.data || saveRes.id) {
                       setAddrSuccess('Address pin location updated!')
+                      const finalLat = confirmedPayload.latitude || mapAddress.latitude;
+                      const finalLng = confirmedPayload.longitude || mapAddress.longitude;
+                      if (finalLat && finalLng) {
+                        onChange({ target: { name: "latitude", value: String(finalLat) } });
+                        onChange({ target: { name: "longitude", value: String(finalLng) } });
+                      }
                       fetchAddresses()
                     }
                   } catch (e) {
@@ -6955,8 +6966,15 @@ function StepWorkflowCheckout({
         <SavedAddressesModal
           onClose={() => setShowSavedAddrModal(false)}
           currentAddress={formData.address}
-          onSelectAddress={(addr) => {
-            onChange({ target: { name: "address", value: addr } })
+          onSelectAddress={(addrObj) => {
+            if (typeof addrObj === "object" && addrObj !== null) {
+              const fullAddr = addrObj.formatted_address || [addrObj.address_line1, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(", ");
+              onChange({ target: { name: "address", value: fullAddr } });
+              if (addrObj.latitude) onChange({ target: { name: "latitude", value: String(addrObj.latitude) } });
+              if (addrObj.longitude) onChange({ target: { name: "longitude", value: String(addrObj.longitude) } });
+            } else if (typeof addrObj === "string") {
+              onChange({ target: { name: "address", value: addrObj } });
+            }
           }}
           onAddNewAddress={() => {
             setShowSavedAddrModal(false)
@@ -6968,12 +6986,17 @@ function StepWorkflowCheckout({
       {showAddSearchModal && (
         <AddAddressSearchModal
           onClose={() => setShowAddSearchModal(false)}
-          onSelectLocation={(loc) => {
+          onSelectLocation={(loc, coords) => {
             setShowAddSearchModal(false)
             if (loc) {
-              onChange({ target: { name: "address", value: loc } })
-              if (typeof setLocation === "function") setLocation(loc)
-              localStorage.setItem("calservice_user_location", loc)
+              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
+              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
+              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
+              onChange({ target: { name: "address", value: addrStr } });
+              if (latVal) onChange({ target: { name: "latitude", value: String(latVal) } });
+              if (lngVal) onChange({ target: { name: "longitude", value: String(lngVal) } });
+              if (typeof setLocation === "function") setLocation(addrStr)
+              localStorage.setItem("calservice_user_location", addrStr)
             }
           }}
           onUseCurrentLocation={() => {
@@ -6981,13 +7004,17 @@ function StepWorkflowCheckout({
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(async (pos) => {
                 try {
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                  const lat = pos.coords.latitude;
+                  const lng = pos.coords.longitude;
+                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
                   const data = await res.json();
                   if (data?.features?.[0]?.properties) {
                     const p = data.features[0].properties;
                     const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
                     if (display) {
                       onChange({ target: { name: "address", value: display } });
+                      onChange({ target: { name: "latitude", value: String(lat) } });
+                      onChange({ target: { name: "longitude", value: String(lng) } });
                       if (typeof setLocation === "function") setLocation(display);
                       localStorage.setItem("calservice_user_location", display);
                     }
@@ -7215,7 +7242,7 @@ export function BookingPage() {
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
   const [notes, setNotes] = useState("")
-  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "" })
+  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "", latitude: "", longitude: "" })
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [showPackageModal, setShowPackageModal] = useState(false)
@@ -7415,7 +7442,41 @@ export function BookingPage() {
     data.append("phone", formData.phone)
     data.append("email", formData.email || "")
     data.append("service_category", category?.id || "general")
-    data.append("issue_title", formData.issue_title || `${cart.map(c => c.name).join(', ')} — ${category?.name}`)
+
+    const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
+    const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
+    const defaultTitle = extraCount > 0
+      ? `${firstName} (+${extraCount} other item${extraCount > 1 ? 's' : ''})`
+      : firstName;
+
+    let finalIssueTitle = formData.issue_title || defaultTitle;
+    if (finalIssueTitle.length > 280) {
+      const shortName = firstName.length > 200 ? firstName.slice(0, 200) + "..." : firstName;
+      finalIssueTitle = extraCount > 0
+        ? `${shortName} (+${extraCount} other items)`
+        : shortName;
+    }
+
+    console.log("========== REAL BOOKING SUBMISSION ==========");
+    console.log("CONFIRM BOOKING CLICKED");
+    console.log("API URL: /api/booking/");
+    console.log("METHOD: POST");
+    console.log("customer_name:", formData.customer_name);
+    console.log("phone:", formData.phone);
+    console.log("email:", formData.email);
+    console.log("service_category:", category?.id || "general");
+    console.log("issue_title:", finalIssueTitle);
+    console.log("cart_data item count:", cart?.length || 0);
+    console.log("address:", formData.address);
+    console.log("latitude:", formData.latitude);
+    console.log("longitude:", formData.longitude);
+    console.log("preferred_date:", selDate);
+    console.log("preferred_time:", selTime);
+    console.log("payment_method:", backendPaymentMethod);
+    console.log("total_amount:", cart.reduce((a, c) => a + (c.price * c.quantity), 0));
+    console.log("==============================================");
+
+    data.append("issue_title", finalIssueTitle)
     let finalDesc = formData.description || "";
     if (urgency && urgency !== "Standard") {
       finalDesc += `\n[Urgency: ${urgency}]`;
@@ -7425,10 +7486,12 @@ export function BookingPage() {
     }
     data.append("description", finalDesc);
     data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
+    if (formData.latitude) data.append("latitude", formData.latitude)
+    if (formData.longitude) data.append("longitude", formData.longitude)
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
     data.append("total_amount", cart.reduce((a, c) => a + (c.price * c.quantity), 0))
-    // Serialize cart_data as JSON string •” backend will parse it robustly
+    // Serialize cart_data as JSON string
     data.append("cart_data", JSON.stringify(cart.map(c => ({
       id: c.id, name: c.name, price: c.price, quantity: c.quantity,
       categoryName: c.categoryName || category?.name || ""
@@ -7836,12 +7899,20 @@ export function BookingPage() {
       {showLocPicker && (
         <AddAddressSearchModal
           onClose={() => setShowLocPicker(false)}
-          onSelectLocation={(loc) => {
+          onSelectLocation={(loc, coords) => {
             setShowLocPicker(false)
             if (loc) {
-              setLocation(loc)
-              setFormData(prev => ({ ...prev, address: loc }))
-              localStorage.setItem("calservice_user_location", loc)
+              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
+              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
+              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
+              setLocation(addrStr)
+              setFormData(prev => ({
+                ...prev,
+                address: addrStr,
+                latitude: latVal ? String(latVal) : prev.latitude,
+                longitude: lngVal ? String(lngVal) : prev.longitude
+              }))
+              localStorage.setItem("calservice_user_location", addrStr)
             }
           }}
           onUseCurrentLocation={() => {
@@ -7849,14 +7920,21 @@ export function BookingPage() {
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(async (pos) => {
                 try {
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                  const lat = pos.coords.latitude;
+                  const lng = pos.coords.longitude;
+                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
                   const data = await res.json();
                   if (data?.features?.[0]?.properties) {
                     const p = data.features[0].properties;
                     const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
                     if (display) {
                       setLocation(display);
-                      setFormData(prev => ({ ...prev, address: display }));
+                      setFormData(prev => ({
+                        ...prev,
+                        address: display,
+                        latitude: String(lat),
+                        longitude: String(lng)
+                      }));
                       localStorage.setItem("calservice_user_location", display);
                     }
                   }
