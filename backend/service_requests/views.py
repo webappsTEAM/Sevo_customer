@@ -152,7 +152,10 @@ class CatalogServiceListView(APIView):
         from django.core.cache import cache
 
         cat_id = request.GET.get('category_id') or ''
-        cache_key = f"catalog_services_list_{cat_id}"
+        service_slug = request.GET.get('service_slug') or ''
+        status_filter = request.GET.get('status') or ''
+        
+        cache_key = f"catalog_services_list_{cat_id}_{service_slug}_{status_filter}"
         cached_res = cache.get(cache_key)
         if cached_res is not None:
             return Response(cached_res)
@@ -160,6 +163,10 @@ class CatalogServiceListView(APIView):
         qs = Package.objects.select_related("service").all().order_by('name')
         if cat_id:
             qs = qs.filter(service__category_id=cat_id)
+        if service_slug:
+            qs = qs.filter(service__slug=service_slug)
+        if status_filter:
+            qs = qs.filter(status=status_filter)
         data = CatalogServiceSerializer(qs, many=True).data
 
         tenant = getattr(request, 'tenant', None) or getattr(connection, 'tenant', None)
@@ -180,6 +187,20 @@ class CatalogServiceListView(APIView):
         except Exception:
             pass
         return Response(res_payload)
+
+class CatalogSubServiceListView(APIView):
+    permission_classes = [permissions.AllowAny]
+    def get(self, request):
+        from .models import Service
+        from .serializers import ServiceSerializer
+        
+        category_slug = request.GET.get('category_slug') or ''
+        qs = Service.objects.select_related("category").all().order_by('sort_order', 'name')
+        if category_slug:
+            qs = qs.filter(category__slug=category_slug)
+            
+        data = ServiceSerializer(qs, many=True).data
+        return Response({"success": True, "data": data})
 
 class BookingCreateView(APIView):
     """

@@ -8,7 +8,7 @@ import { validateLoginForm } from "../../utils/validate.js"
 import { routes } from "../routes.js"
 import { useGoogleLogin } from "@react-oauth/google"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
-import { RefreshCcw, AlertCircle, Eye, EyeOff, Mail, Lock, X, ArrowRight, Check, User, ShieldCheck, CheckCircle2, ExternalLink, Sparkles } from "lucide-react"
+import { RefreshCcw, AlertCircle, Eye, EyeOff, Mail, Lock, X, ArrowRight, Check, User, ShieldCheck, CheckCircle2, ExternalLink, Sparkles, KeyRound } from "lucide-react"
 import IntroAnimation from "../../components/ui/scroll-morph-hero"
 
 
@@ -148,7 +148,7 @@ function HoloCard({ card, index, onSelect }) {
    MAIN — LoginPage
    ═══════════════════════════════════════════════════════════════════ */
 export function LoginPage() {
-  const { login, loginWithGoogle, register } = useAuth()
+  const { login, verify2FA, loginWithGoogle, register } = useAuth()
   const navigate = useNavigate()
 
   const [mode, setMode] = useState("signin")
@@ -166,6 +166,9 @@ export function LoginPage() {
   const [selected, setSelected] = useState(null)
   const [agreedUpdates, setAgreedUpdates] = useState(false)
   const [agreedTerms, setAgreedTerms] = useState(false)
+  const [show2FA, setShow2FA] = useState(false)
+  const [totpCode, setTotpCode] = useState("")
+  const [totpError, setTotpError] = useState("")
 
   // Trial Step
   const [startTrial, setStartTrial] = useState(true)
@@ -355,7 +358,14 @@ export function LoginPage() {
       setLoading(true)
 
       try { 
-        const u = await login(username.trim(), password)
+        const result = await login(username.trim(), password)
+        // 2FA required — show TOTP entry screen
+        if (result?.requires2FA) {
+          setShow2FA(true)
+          setLoading(false)
+          return
+        }
+        const u = result
         if (!u) {
           setError("Login failed. Please check your credentials and try again.")
           setFailedIdentity(username)
@@ -413,6 +423,27 @@ export function LoginPage() {
         navigate(postLoginRoute(u), { replace: true })
       } catch (err) { setError(extractAuthError(err, "Registration failed.")) }
       finally { setLoading(false) }
+    }
+  }
+
+  async function onSubmit2FA(e) {
+    if (e) e.preventDefault()
+    if (!totpCode.trim()) { setTotpError("Please enter your 6-digit code."); return }
+    setTotpError("")
+    setLoading(true)
+    try {
+      const u = await verify2FA(totpCode.trim())
+      if (!u) {
+        setTotpError("Invalid or expired code. Please try again.")
+        setTotpCode("")
+        return
+      }
+      navigate(postLoginRoute(u), { replace: true })
+    } catch (err) {
+      setTotpError(extractAuthError(err, "Invalid 2FA code."))
+      setTotpCode("")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -557,7 +588,51 @@ export function LoginPage() {
 
         <div className="w-full max-w-[420px] bg-white border border-slate-200/80 p-8 sm:p-10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.04)] relative z-10 text-slate-800">
 
-          {showFailedLogin ? (
+          {show2FA ? (
+            /* ─── 2FA TOTP Entry Screen ─── */
+            <div className="text-center py-2 space-y-6">
+              <div className="w-16 h-16 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-600 shadow-lg">
+                <ShieldCheck size={30} strokeWidth={2} />
+              </div>
+              <div>
+                <h2 className="text-xl font-display font-black text-slate-800 tracking-tight">Two-Factor Authentication</h2>
+                <p className="text-xs text-slate-500 mt-1">Open your authenticator app and enter the 6-digit code</p>
+              </div>
+              <form onSubmit={onSubmit2FA} className="space-y-4 text-left">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Authenticator Code</label>
+                  <div className="relative">
+                    <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={totpCode}
+                      onChange={e => { setTotpCode(e.target.value.replace(/\D/g,"")); setTotpError("") }}
+                      placeholder="000000"
+                      className="w-full pl-9 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-mono text-center tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
+                      autoFocus
+                    />
+                  </div>
+                  {totpError && <p className="text-xs text-rose-500 mt-2 font-medium">{totpError}</p>}
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading || totpCode.length !== 6}
+                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-bold uppercase tracking-widest rounded-2xl shadow-lg transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {loading ? <RefreshCcw size={14} className="animate-spin" /> : <><ShieldCheck size={14} /> Verify &amp; Sign In</>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShow2FA(false); setTotpCode(""); setTotpError(""); setPassword("") }}
+                  className="w-full py-3 text-slate-500 text-xs font-semibold hover:text-slate-700 transition cursor-pointer"
+                >
+                  Back to login
+                </button>
+              </form>
+            </div>
+          ) : showFailedLogin ? (
             <div className="text-center py-4 space-y-6">
               <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-500 mb-4 shadow-lg animate-pulse">
                 <AlertCircle size={32} strokeWidth={2.5} />

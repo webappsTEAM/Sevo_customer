@@ -27,5 +27,5 @@ class ImageUploadView(APIView):
         filename = f"catalog_{uuid.uuid4().hex}.{ext}"
         path = default_storage.save(f"catalog/{filename}", file)
         
-        url = request.build_absolute_uri(default_storage.url(path))
+        url = default_storage.url(path)
         return Response({"success": True, "url": url})

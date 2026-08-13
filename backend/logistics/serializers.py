@@ -12,6 +12,7 @@ class ServiceTierSerializer(serializers.ModelSerializer):
             "id", "category", "category_display", "city", "slug", "name",
             "weight_class", "capacity_label", "dimensions_label", "description",
             "starting_price", "currency", "includes", "icon", "order",
+            "duration", "updated_at",
         ]
 
 

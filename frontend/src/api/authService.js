@@ -37,11 +37,23 @@ async function fetchJSON(path, options = {}) {
 /**
  * Login — server sets qt_access + qt_refresh httpOnly cookies in response.
  * Returns { success: true } — no tokens in the body.
+ * If 2FA is enabled, returns { success: true, requires_2fa: true } without cookies.
  */
 export async function apiLogin(username, password) {
   return fetchJSON("/auth/login/", {
     method: "POST",
     body: JSON.stringify({ username, password })
+  })
+}
+
+/**
+ * 2FA Challenge — submit TOTP code after login returned requires_2fa: true.
+ * On success the server sets auth cookies and returns { success: true }.
+ */
+export async function apiVerify2FA(code) {
+  return fetchJSON("/auth/2fa/challenge/", {
+    method: "POST",
+    body: JSON.stringify({ code })
   })
 }
 

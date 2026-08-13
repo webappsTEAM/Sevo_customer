@@ -244,10 +244,15 @@ export function CatalogPackagesPage() {
         apiRequest("/settings/catalog/v2/services/"),
         apiRequest("/settings/catalog/v2/packages/"),
       ])
-      if (catRes.success) setCategories(catRes.data)
-      if (svcRes.success) setServices(svcRes.data)
-      if (pkgRes.success) setPackages(pkgRes.data)
-    } catch {
+      if (catRes && catRes.success) setCategories(catRes.data)
+      if (svcRes && svcRes.success) setServices(svcRes.data)
+      if (pkgRes && pkgRes.success) setPackages(pkgRes.data)
+      // Warn if any response indicates failure
+      if (!catRes?.success || !svcRes?.success || !pkgRes?.success) {
+        console.warn("Catalog load partial failure:", { catRes, svcRes, pkgRes })
+      }
+    } catch (err) {
+      console.error("Catalog load error:", err)
       showToast("Failed to load catalog data", "error")
     }
     setLoading(false)
@@ -469,6 +474,7 @@ export function CatalogPackagesPage() {
       base_price: Math.round(Number(pkg.base_price) || 0),
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
       checklist: items,
+      image: pkg.image || "",
     })
     setNewItemText("")
   }
@@ -501,6 +507,7 @@ export function CatalogPackagesPage() {
         popular: isPop,
         duration: quickPriceEditing.duration || "",
         includes: finalIncludes,
+        image: quickPriceEditing.image || "",
         offer_price: null,
       }
       const res = await apiRequest(`/settings/catalog/v2/packages/${quickPriceEditing.id}/`, {
@@ -549,6 +556,7 @@ export function CatalogPackagesPage() {
       base_price: Math.round(Number(pkg.base_price) || 0),
       includes: Array.isArray(pkg.includes) ? pkg.includes.join(", ") : "",
       excludes: Array.isArray(pkg.excludes) ? pkg.excludes.join(", ") : "",
+      image: pkg.image || "",
     })
   }
 
@@ -589,6 +597,33 @@ export function CatalogPackagesPage() {
   }
 
   const ActiveIcon = activePillar.icon
+
+  const selectedServiceId = String(editing?.service?.id || editing?.service || "")
+  const selectedService = services.find((s) => String(s.id) === selectedServiceId)
+  const isVegetableService = Boolean(
+    selectedService?.slug === "vegetables" || 
+    selectedService?.name?.toLowerCase().includes("vegetable")
+  )
+
+  const namePlaceholder = isVegetableService
+    ? "e.g. Tomato (Thakkali), Onion (Vengayam), Potato (Urulaikilangu)"
+    : "e.g. Pickup 8ft, Instant Courier, 1 BHK Shifting"
+
+  const slugPlaceholder = isVegetableService
+    ? "e.g. tomato-thakkali, onion-vengayam"
+    : "e.g. pickup-8ft, instant-courier"
+
+  const descPlaceholder = isVegetableService
+    ? "e.g. Fresh farm-picked organic vegetables with quality assurance..."
+    : "Detailed description of this vehicle or package offering..."
+
+  const includesPlaceholder = isVegetableService
+    ? "e.g. Freshly picked, Organic certified, Quality assured"
+    : "e.g. Closed container, Verified driver, GPS tracking"
+
+  const excludesPlaceholder = isVegetableService
+    ? "e.g. Damage during transit, Rotten parts refund"
+    : "e.g. Heavy toll extra, Helper unassisted"
 
   return (
     <div style={{ animation: "fadeUp 0.3s ease both" }} className="p-4 sm:p-6 lg:p-8 w-full max-w-[1720px] mx-auto font-sans text-slate-800 space-y-5">
@@ -635,13 +670,9 @@ export function CatalogPackagesPage() {
       <div className="bg-white rounded-2xl p-5 sm:p-6 lg:p-7 shadow-sm border border-slate-200/90 mb-5 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="flex items-start gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${activePillar.iconBg} shadow-xs hidden sm:flex`}>
-              <ActiveIcon className="w-6 h-6 text-indigo-600" strokeWidth={2.2} />
-            </div>
-
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-indigo-800 text-xs font-semibold mb-2 border border-blue-200/80 shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Enterprise Service Pillars &amp; Catalog
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-indigo-800 text-xs font-semibold mb-2 border border-blue-200/80 shadow-xs">
+                Enterprise Service Pillars &amp; Catalog
               </div>
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
                 Service Packages &amp; Pricing
@@ -697,8 +728,7 @@ export function CatalogPackagesPage() {
       {activeCategoryServicesWithPackages.length > 0 && (
         <div className="bg-white rounded-2xl p-3.5 shadow-xs border border-slate-200/90 mb-5">
           <div className="flex items-center justify-between gap-3 mb-2 px-1">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+            <div className="flex items-center text-xs font-bold text-slate-700 uppercase tracking-wider">
               <span>Sub-Modules / Services</span>
             </div>
             <span className="text-[11px] text-slate-400 font-normal">Click a module to view its specific packages</span>
@@ -715,7 +745,6 @@ export function CatalogPackagesPage() {
                   : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
               }`}
             >
-              <Layers className="w-3.5 h-3.5" />
               <span>All</span>
               <span
                 className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
@@ -739,14 +768,13 @@ export function CatalogPackagesPage() {
                   key={item.service.id}
                   type="button"
                   onClick={() => setActiveSubServiceKey(item.service.slug || String(item.service.id))}
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                    isSubActive
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                      : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
-                  }`}
-                >
-                  <SubIcon className="w-3.5 h-3.5" />
-                  <span>{item.displayName}</span>
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                  isSubActive
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                    : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
+                }`}
+              >
+                <span>{item.displayName}</span>
                   <span
                     className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
                       isSubActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
@@ -795,9 +823,6 @@ export function CatalogPackagesPage() {
                 {/* Service Sub-Header with Icon, Count & Add Option */}
                 <div className="bg-slate-50/90 px-4 sm:px-5 py-3.5 border-b border-slate-200/80 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs">
-                      <SubIcon className="w-4 h-4 text-indigo-600" />
-                    </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs sm:text-sm font-bold text-slate-900">
@@ -851,7 +876,7 @@ export function CatalogPackagesPage() {
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Package / Option Name</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Starting Fare</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Highlight Badge</th>
-                          <th className="py-3 px-4 sm:px-5 font-extrabold">Duration / ETA</th>
+                          <th className="py-3 px-4 sm:px-5 font-extrabold">{activeCategoryKey === "goods_transports" ? "Badge Duration" : "Duration / ETA"}</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Status</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold text-right">Actions</th>
                         </tr>
@@ -1264,13 +1289,79 @@ export function CatalogPackagesPage() {
                   }
                 />
                 <Input
-                  label="Duration / ETA (e.g. 15 mins, 30 mins)"
-                  placeholder="e.g. 15 mins"
+                  label={activeCategoryKey === "goods_transports" ? "Duration of Badge Display (e.g. 30 days, 6 months, 1 yr)" : "Duration / ETA (e.g. 15 mins, 30 mins)"}
+                  placeholder={activeCategoryKey === "goods_transports" ? "e.g. 30 days, 6 months, 1 yr" : "e.g. 15 mins"}
                   value={quickPriceEditing.duration || ""}
                   onChange={(e) =>
                     setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
                   }
                 />
+              </div>
+            </div>
+
+            {/* ── Image Customization Section ── */}
+            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-800">
+                    Package Image
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                {quickPriceEditing.image ? (
+                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                    <img src={quickPriceEditing.image} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setQuickPriceEditing((prev) => ({ ...prev, image: "" }))}
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                    No Image
+                  </div>
+                )}
+                <div className="flex-1 w-full space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const formData = new FormData()
+                        formData.append("image", file)
+                        try {
+                          const res = await apiRequest("/settings/catalog/upload-image/", {
+                            method: "POST",
+                            body: formData,
+                          })
+                          if (res.success && res.url) {
+                            setQuickPriceEditing((prev) => ({ ...prev, image: res.url }))
+                            showToast("Image uploaded successfully!")
+                          } else {
+                            showToast(res.message || "Upload failed", "error")
+                          }
+                        } catch (err) {
+                          showToast("Upload failed", "error")
+                        }
+                      }
+                    }}
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                  />
+                  <Input
+                    label="Or Image URL"
+                    placeholder="https://images.unsplash.com/..."
+                    value={quickPriceEditing.image || ""}
+                    onChange={(e) => setQuickPriceEditing({ ...quickPriceEditing, image: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
 
@@ -1317,7 +1408,7 @@ export function CatalogPackagesPage() {
               <Input
                 label="Package Name"
                 required
-                placeholder="e.g. Pickup 8ft, Instant Courier, 1 BHK Shifting"
+                placeholder={namePlaceholder}
                 value={editing.name}
                 onChange={(e) => {
                   const val = e.target.value
@@ -1330,7 +1421,7 @@ export function CatalogPackagesPage() {
               <Input
                 label="Slug Identifier"
                 required
-                placeholder="e.g. pickup-8ft, instant-courier"
+                placeholder={slugPlaceholder}
                 value={editing.slug}
                 onChange={(e) => setEditing({ ...editing, slug: e.target.value })}
               />
@@ -1338,7 +1429,7 @@ export function CatalogPackagesPage() {
 
             <TextArea
               label="Short Description"
-              placeholder="Detailed description of this vehicle or package offering..."
+              placeholder={descPlaceholder}
               value={editing.description || ""}
               onChange={(e) => setEditing({ ...editing, description: e.target.value })}
             />
@@ -1353,7 +1444,8 @@ export function CatalogPackagesPage() {
                 onChange={(e) => setEditing({ ...editing, base_price: e.target.value })}
               />
               <Input
-                label="Duration / ETA (e.g. 20 mins, 1 hr)"
+                label={activeCategoryKey === "goods_transports" ? "Duration of Badge Display (e.g. 30 days, 6 months, 1 yr)" : "Duration / ETA (e.g. 20 mins, 1 hr)"}
+                placeholder={activeCategoryKey === "goods_transports" ? "e.g. 30 days, 6 months, 1 yr" : "e.g. 20 mins, 1 hr"}
                 value={editing.duration || ""}
                 onChange={(e) => setEditing({ ...editing, duration: e.target.value })}
               />
@@ -1367,17 +1459,83 @@ export function CatalogPackagesPage() {
 
             <Input
               label="Includes (comma-separated features)"
-              placeholder="e.g. Closed container, Verified driver, GPS tracking"
+              placeholder={includesPlaceholder}
               value={editing.includes}
               onChange={(e) => setEditing({ ...editing, includes: e.target.value })}
             />
 
             <Input
               label="Excludes (comma-separated)"
-              placeholder="e.g. Heavy toll extra, Helper unassisted"
+              placeholder={excludesPlaceholder}
               value={editing.excludes}
               onChange={(e) => setEditing({ ...editing, excludes: e.target.value })}
             />
+
+            {/* ── Image Customization Section ── */}
+            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-800">
+                    Package Image
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                {editing.image ? (
+                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                    <img src={editing.image} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setEditing((prev) => ({ ...prev, image: "" }))}
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                    No Image
+                  </div>
+                )}
+                <div className="flex-1 w-full space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const formData = new FormData()
+                        formData.append("image", file)
+                        try {
+                          const res = await apiRequest("/settings/catalog/upload-image/", {
+                            method: "POST",
+                            body: formData,
+                          })
+                          if (res.success && res.url) {
+                            setEditing((prev) => ({ ...prev, image: res.url }))
+                            showToast("Image uploaded successfully!")
+                          } else {
+                            showToast(res.message || "Upload failed", "error")
+                          }
+                        } catch (err) {
+                          showToast("Upload failed", "error")
+                        }
+                      }
+                    }}
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                  />
+                  <Input
+                    label="Or Image URL"
+                    placeholder="https://images.unsplash.com/..."
+                    value={editing.image || ""}
+                    onChange={(e) => setEditing({ ...editing, image: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
 
             <div className="flex items-center justify-between pt-1">
               <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
