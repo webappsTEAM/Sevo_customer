@@ -26,7 +26,7 @@ import {
   ChevronLeft, ChevronRight, Rocket, ShieldAlert, Globe, Package, Award,
   FolderOpen, GraduationCap, Bell, FileText, CheckCircle, XCircle, Car, X,
   Wrench, MessageSquare, UserCheck, Activity, ArrowUpRight, Repeat2, User,
-  Shield, Palette, CreditCard, Building2, ShieldCheck
+  Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift
 } from "lucide-react"
 
 const ADMIN_NAV_ITEMS = [
@@ -115,6 +115,18 @@ const ADMIN_NAV_ITEMS = [
       { label: "Packages", to: routes.catalog_packages, icon: <Package size={16} />, color: "#3B82F6" },
       { label: "Add-ons", to: routes.catalog_addons, icon: <CheckSquare size={16} />, color: "#3B82F6" },
       { label: "Change Log", to: routes.catalog_change_log, icon: <FileText size={16} />, color: "#3B82F6" },
+    ]
+  },
+  {
+    label: "Marketing",
+    to: routes.marketing_coupons,
+    icon: <Ticket size={20} />,
+    color: "#8B5CF6",
+    adminOnly: true,
+    children: [
+      { label: "Coupons", to: routes.marketing_coupons, icon: <Ticket size={16} />, color: "#8B5CF6" },
+      { label: "Offers", to: routes.marketing_offers, icon: <Gift size={16} />, color: "#F59E0B" },
+      { label: "Referrals", to: routes.marketing_referrals, icon: <Users size={16} />, color: "#10B981" },
     ]
   },
   { label: "Inventory", to: routes.inventory, icon: <Package size={20} />, color: "#8B5CF6" },

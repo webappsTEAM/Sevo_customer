@@ -9,7 +9,10 @@ Three groups of views:
 Business logic is NEVER inline — always delegated to state_machine.apply_transition()
 or service-layer helpers. Views are thin: validate → call service → return response.
 """
+import logging
 import re
+from decimal import Decimal
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Q, F
 from django.utils import timezone
@@ -27,7 +30,7 @@ from .models import (
     JobCompletionProof, ServiceFeedback, ServiceRequest,
     WorkExtension, WorkExtensionItem, JobReschedule, SupplementalInvoice,
     RescheduleRequest, RescheduleAttachment, RescheduleStatus, RescheduleReason, TimeSlotChoices,
-    RefundRequest,
+    RefundRequest, EmployeeResponseChoices,
 )
 from .serializers import (
     AdminAssignSerializer, AdminChangePrioritySerializer,
@@ -52,6 +55,8 @@ from .services.logistics_pricing import resolve_logistics_fare
 from .services.address_service import AddressService
 
 
+logger = logging.getLogger(__name__)
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _success(data=None, message="", status_code=200):
@@ -61,11 +66,11 @@ def _success(data=None, message="", status_code=200):
     )
 
 
-def _error(message, status_code=400):
-    return Response(
-        {"success": False, "message": message},
-        status=status_code,
-    )
+def _error(message, status_code=400, extra=None):
+    body = {"success": False, "message": message}
+    if extra:
+        body.update(extra)
+    return Response(body, status=status_code)
 
 
 def _standard_response(success=True, data=None, error=None, meta=None, status_code=200):
@@ -274,6 +279,47 @@ class BookingCreateView(APIView):
                 total_amount=corrected_fare,
             )
 
+        # Coupon Processing & Usage Snapshot
+        coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
+        if coupon_code:
+            from .models import Coupon, CouponUsage
+            cpn = Coupon.objects.filter(code__iexact=coupon_code, status="Active").first()
+            if cpn:
+                subtotal = float(corrected_fare)
+                if cpn.discount_type == "flat":
+                    calc_disc = float(cpn.discount_value)
+                else:
+                    calc_disc = subtotal * (float(cpn.discount_value) / 100.0)
+
+                if cpn.max_discount > 0:
+                    disc = min(calc_disc, float(cpn.max_discount))
+                else:
+                    disc = calc_disc
+
+                disc = min(subtotal, disc)
+                final_tot = max(0.0, subtotal - disc)
+
+                sr.coupon = cpn
+                sr.coupon_code_snapshot = cpn.code
+                sr.subtotal_amount = subtotal
+                sr.discount_amount = disc
+                sr.final_amount = final_tot
+                sr.save(update_fields=["coupon", "coupon_code_snapshot", "subtotal_amount", "discount_amount", "final_amount"])
+
+                # Atomic Usage Recording
+                with transaction.atomic():
+                    cpn.current_usage += 1
+                    cpn.save(update_fields=["current_usage"])
+
+                    CouponUsage.objects.create(
+                        coupon=cpn,
+                        customer=sr.customer,
+                        booking=sr,
+                        discount_amount=disc,
+                        order_amount=subtotal,
+                        final_amount=final_tot
+                    )
+
         # Send booking confirmation email
         try:
             from .notifications import send_booking_confirmation
@@ -382,7 +428,7 @@ class CustomerBookingRetryPaymentView(APIView):
             apply_transition(sr, ServiceRequest.Status.CONFIRMED, new_payment_status=ServiceRequest.PaymentStatus.PAID)
             sr.payment_method = payment_method
             sr.save()
-        except ValidationError as ve:
+        except (ValidationError, Exception) as ve:
             return _error(str(ve), status_code=status.HTTP_400_BAD_REQUEST)
 
         serializer = ServiceRequestDetailSerializer(sr)
@@ -3012,3 +3058,420 @@ class CustomerReverseGeocodeView(APIView):
             data=result,
             meta={"cached": True},   # cache status is opaque to client
         )
+
+
+# ── Marketing Coupons API Views ──────────────────────────────────────────────
+class AdminCouponAnalyticsView(APIView):
+    """
+    Returns aggregated redemption and financial savings metrics for the Admin Dashboard.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import Coupon, CouponUsage
+        from django.db.models import Sum, Count
+
+        total_coupons = Coupon.objects.count()
+        active_coupons = Coupon.objects.filter(status="Active").count()
+        scheduled_coupons = Coupon.objects.filter(status="Scheduled").count()
+        expired_coupons = Coupon.objects.filter(status="Expired").count()
+        paused_coupons = Coupon.objects.filter(status="Paused").count()
+
+        usages = CouponUsage.objects.all()
+        total_redemptions = usages.count()
+        total_discount = float(usages.aggregate(total=Sum("discount_amount"))["total"] or 0)
+
+        # Find most used coupon
+        most_used_qs = CouponUsage.objects.values("coupon__code").annotate(count=Count("id")).order_by("-count").first()
+        most_used_code = most_used_qs["coupon__code"] if most_used_qs else "N/A"
+
+        return _standard_response(
+            success=True,
+            data={
+                "totalCoupons": total_coupons,
+                "activeCoupons": active_coupons,
+                "scheduledCoupons": scheduled_coupons,
+                "expiredCoupons": expired_coupons,
+                "pausedCoupons": paused_coupons,
+                "totalRedemptions": total_redemptions,
+                "totalDiscountGiven": total_discount,
+                "mostUsedCoupon": most_used_code,
+            }
+        )
+
+
+class CouponListCreateView(APIView):
+    """
+    List all coupons or create a new coupon in database.
+    GET /api/admin/coupons
+    POST /api/admin/coupons
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import Coupon
+        coupons = Coupon.objects.all().order_by("-created_at")
+        data = []
+        for c in coupons:
+            # Check for relations
+            categories = list(c.categories.values_list("category_id", flat=True))
+            services = list(c.services.values_list("service_id", flat=True))
+            packages = list(c.packages.values_list("package_id", flat=True))
+
+            data.append({
+                "id": str(c.id),
+                "code": c.code,
+                "name": c.name,
+                "description": c.description,
+                "discountType": c.discount_type,
+                "discountValue": float(c.discount_value),
+                "maxDiscount": float(c.max_discount),
+                "minBooking": float(c.min_booking),
+                "customerEligibility": c.customer_eligibility,
+                "orderType": c.order_type,
+                "serviceEligibility": c.service_eligibility,
+                "targetCategories": categories,
+                "targetServices": services,
+                "targetPackages": packages,
+                "usagePerCustomer": c.usage_per_customer,
+                "totalUsageLimit": c.total_usage_limit,
+                "currentUsage": c.current_usage,
+                "stacking": c.stacking,
+                "startDate": str(c.start_date) if c.start_date else "",
+                "endDate": str(c.end_date) if c.end_date else "",
+                "status": c.status,
+            })
+        return _standard_response(success=True, data=data, meta={"count": len(data)})
+
+    def post(self, request):
+        try:
+            from .models import Coupon, CouponCategory, CouponService, CouponPackage
+            d = request.data
+            code = str(d.get("code", "")).strip().upper()
+            if not code:
+                return _standard_response(success=False, error={"code": "REQUIRED", "message": "Coupon code is required"}, status_code=400)
+            
+            def _clean_num(val, default=0.0):
+                if val in (None, "", "null", "NaN"):
+                    return default
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return default
+
+            def _clean_int(val, default=0):
+                if val in (None, "", "null", "NaN"):
+                    return default
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    return default
+
+            disc_val = _clean_num(d.get("discountValue"), 0.0)
+            max_disc = _clean_num(d.get("maxDiscount"), 0.0)
+            min_book = _clean_num(d.get("minBooking"), 0.0)
+            usage_cust = _clean_int(d.get("usagePerCustomer"), 1)
+            total_limit = _clean_int(d.get("totalUsageLimit"), 1000)
+
+            start_dt = d.get("startDate") if d.get("startDate") and str(d.get("startDate")).strip() else None
+            end_dt = d.get("endDate") if d.get("endDate") and str(d.get("endDate")).strip() else None
+
+            c, created = Coupon.objects.get_or_create(
+                code=code,
+                defaults={
+                    "name": d.get("name") or code,
+                    "description": d.get("description", ""),
+                    "discount_type": d.get("discountType", "flat"),
+                    "discount_value": disc_val,
+                    "max_discount": max_disc,
+                    "customer_eligibility": d.get("customerEligibility", "All Customers"),
+                    "order_type": d.get("orderType", "Any Order"),
+                    "service_eligibility": d.get("serviceEligibility", "All Services"),
+                    "min_booking": min_book,
+                    "usage_per_customer": usage_cust,
+                    "total_usage_limit": total_limit,
+                    "stacking": d.get("stacking", "No"),
+                    "start_date": start_dt,
+                    "end_date": end_dt,
+                    "status": d.get("status", "Active"),
+                }
+            )
+
+            if not created:
+                # Update fields if existed
+                c.name = d.get("name") or c.name
+                c.description = d.get("description", c.description)
+                c.discount_type = d.get("discountType", c.discount_type)
+                c.discount_value = disc_val
+                c.max_discount = max_disc
+                c.min_booking = min_book
+                c.customer_eligibility = d.get("customerEligibility", c.customer_eligibility)
+                c.service_eligibility = d.get("serviceEligibility", c.service_eligibility)
+                if start_dt:
+                    c.start_date = start_dt
+                if end_dt:
+                    c.end_date = end_dt
+                c.status = d.get("status", c.status)
+                c.save()
+
+            # Update Target Relations
+            target_cats = d.get("targetCategories", [])
+            if target_cats:
+                CouponCategory.objects.filter(coupon=c).delete()
+                for cat_id in target_cats:
+                    CouponCategory.objects.create(coupon=c, category_id=cat_id)
+
+            target_svcs = d.get("targetServices", [])
+            if target_svcs:
+                CouponService.objects.filter(coupon=c).delete()
+                for svc_id in target_svcs:
+                    CouponService.objects.create(coupon=c, service_id=svc_id)
+
+            target_pkgs = d.get("targetPackages", [])
+            if target_pkgs:
+                CouponPackage.objects.filter(coupon=c).delete()
+                for pkg_id in target_pkgs:
+                    CouponPackage.objects.create(coupon=c, package_id=pkg_id)
+
+            return _standard_response(success=True, data={"id": str(c.id), "code": c.code}, status_code=201)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to create/update coupon: {e}", exc_info=True)
+            return _standard_response(success=False, error={"code": "SERVER_ERROR", "message": str(e)}, status_code=400)
+
+
+class CouponDetailView(APIView):
+    """
+    Get detail, update or delete a specific coupon.
+    GET /api/admin/coupons/:id
+    PUT/PATCH /api/admin/coupons/:id
+    DELETE /api/admin/coupons/:id
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk):
+        from .models import Coupon
+        try:
+            c = Coupon.objects.get(pk=pk)
+        except Coupon.DoesNotExist:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Coupon not found"}, status_code=404)
+
+        data = {
+            "id": str(c.id),
+            "code": c.code,
+            "name": c.name,
+            "description": c.description,
+            "discountType": c.discount_type,
+            "discountValue": float(c.discount_value),
+            "maxDiscount": float(c.max_discount),
+            "minBooking": float(c.min_booking),
+            "customerEligibility": c.customer_eligibility,
+            "orderType": c.order_type,
+            "serviceEligibility": c.service_eligibility,
+            "targetCategories": list(c.categories.values_list("category_id", flat=True)),
+            "targetServices": list(c.services.values_list("service_id", flat=True)),
+            "targetPackages": list(c.packages.values_list("package_id", flat=True)),
+            "usagePerCustomer": c.usage_per_customer,
+            "totalUsageLimit": c.total_usage_limit,
+            "currentUsage": c.current_usage,
+            "stacking": c.stacking,
+            "startDate": str(c.start_date) if c.start_date else "",
+            "endDate": str(c.end_date) if c.end_date else "",
+            "status": c.status,
+        }
+        return _standard_response(success=True, data=data)
+
+    def patch(self, request, pk):
+        from .models import Coupon, CouponCategory, CouponService, CouponPackage
+        try:
+            c = Coupon.objects.get(pk=pk)
+        except Coupon.DoesNotExist:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Coupon not found"}, status_code=404)
+
+        d = request.data
+        if "status" in d:
+            c.status = d["status"]
+        if "name" in d:
+            c.name = d["name"]
+        if "description" in d:
+            c.description = d["description"]
+        if "discountType" in d:
+            c.discount_type = d["discountType"]
+        if "discountValue" in d:
+            c.discount_value = d["discountValue"]
+        if "maxDiscount" in d:
+            c.max_discount = d["maxDiscount"]
+        if "minBooking" in d:
+            c.min_booking = d["minBooking"]
+        if "customerEligibility" in d:
+            c.customer_eligibility = d["customerEligibility"]
+        if "serviceEligibility" in d:
+            c.service_eligibility = d["serviceEligibility"]
+        c.save()
+
+        if "targetCategories" in d:
+            CouponCategory.objects.filter(coupon=c).delete()
+            for cat_id in d["targetCategories"]:
+                CouponCategory.objects.create(coupon=c, category_id=cat_id)
+
+        return _standard_response(success=True, data={"id": str(c.id), "code": c.code, "status": c.status})
+
+    def delete(self, request, pk):
+        from .models import Coupon
+        try:
+            c = Coupon.objects.get(pk=pk)
+            c.delete()
+            return _standard_response(success=True, meta={"message": "Coupon deleted successfully"})
+        except Coupon.DoesNotExist:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Coupon not found"}, status_code=404)
+
+
+class CustomerCouponListView(APIView):
+    """
+    Returns only coupons that are eligible for the customer.
+    Evaluates FIRST_ORDER_ONLY rules by checking user's past bookings in database.
+    GET /api/customer/coupons
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import Coupon, ServiceRequest
+        from django.utils import timezone
+
+        user = request.user if request.user and request.user.is_authenticated else None
+        completed_bookings_count = 0
+        if user:
+            completed_bookings_count = ServiceRequest.objects.filter(
+                customer=user,
+                status__in=[ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]
+            ).count()
+
+        today = timezone.now().date()
+        coupons = Coupon.objects.filter(status="Active").order_by("-created_at")
+        
+        data = []
+        for c in coupons:
+            # Check expiry dates
+            if c.start_date and c.start_date > today:
+                continue
+            if c.end_date and c.end_date < today:
+                continue
+
+            # Check eligibility
+            is_first_order_rule = (c.customer_eligibility == "First Order Only" or c.order_type == "First Order Only" or "New Customers" in c.customer_eligibility)
+            if is_first_order_rule and completed_bookings_count > 0:
+                # Customer has prior completed orders, not eligible
+                continue
+
+            # Check usage limit
+            if c.total_usage_limit > 0 and c.current_usage >= c.total_usage_limit:
+                continue
+
+            data.append({
+                "id": str(c.id),
+                "code": c.code,
+                "name": c.name,
+                "description": c.description,
+                "discountType": c.discount_type,
+                "discountValue": float(c.discount_value),
+                "maxDiscount": float(c.max_discount),
+                "minBooking": float(c.min_booking),
+                "customerEligibility": c.customer_eligibility,
+                "serviceEligibility": c.service_eligibility,
+                "eligible": True,
+            })
+
+        return _standard_response(success=True, data=data, meta={"count": len(data)})
+
+
+class CustomerCouponValidateView(APIView):
+    """
+    Authoritative backend validation API.
+    POST /api/customer/coupons/validate
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from .models import Coupon, ServiceRequest
+        code = str(request.data.get("code", "")).strip().upper()
+        cart_total = float(request.data.get("cart_total", 0) or request.data.get("order_amount", 0))
+
+        if not code:
+            return _standard_response(success=False, error={"code": "MISSING_CODE", "message": "Coupon code is required"}, status_code=400)
+
+        coupon = Coupon.objects.filter(code__iexact=code).first()
+        if not coupon:
+            return _standard_response(
+                success=False,
+                error={"code": "INVALID_COUPON", "message": f"Coupon code '{code}' does not exist."},
+                status_code=400
+            )
+
+        if coupon.status != "Active":
+            return _standard_response(
+                success=False,
+                error={"code": "INACTIVE_COUPON", "message": f"Coupon '{code}' is currently {coupon.status.lower()}."},
+                status_code=400
+            )
+
+        # Check First Order rule
+        user = request.user if request.user and request.user.is_authenticated else None
+        is_first_order_rule = (coupon.customer_eligibility == "First Order Only" or coupon.order_type == "First Order Only" or "New Customers" in coupon.customer_eligibility)
+        if is_first_order_rule and user:
+            past_count = ServiceRequest.objects.filter(
+                customer=user,
+                status__in=[ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]
+            ).count()
+            if past_count > 0:
+                return _standard_response(
+                    success=False,
+                    error={"code": "FIRST_ORDER_ONLY", "message": f"Coupon {code} is restricted to new customers on their first order."},
+                    status_code=400
+                )
+
+        min_req = float(coupon.min_booking)
+        if cart_total < min_req:
+            diff = min_req - cart_total
+            return _standard_response(
+                success=False,
+                error={
+                    "code": "MIN_BOOKING_NOT_MET",
+                    "message": f"Add ₹{diff:.0f} more to apply {coupon.code} (Min booking ₹{min_req:.0f})",
+                    "min_booking": min_req,
+                    "diff": diff
+                },
+                status_code=400
+            )
+
+        if coupon.discount_type == "flat":
+            calc_disc = float(coupon.discount_value)
+        else:
+            calc_disc = cart_total * (float(coupon.discount_value) / 100.0)
+
+        if coupon.max_discount > 0:
+            discount = min(calc_disc, float(coupon.max_discount))
+        else:
+            discount = calc_disc
+
+        discount = min(cart_total, discount)
+        final_amount = max(0.0, cart_total - discount)
+
+        return _standard_response(
+            success=True,
+            data={
+                "coupon_id": str(coupon.id),
+                "coupon_code": coupon.code,
+                "code": coupon.code,
+                "name": coupon.name,
+                "discountType": coupon.discount_type,
+                "discountValue": float(coupon.discount_value),
+                "maxDiscount": float(coupon.max_discount),
+                "minBooking": float(coupon.min_booking),
+                "discountAmount": round(discount, 2),
+                "subtotal": round(cart_total, 2),
+                "final_amount": round(final_amount, 2),
+            },
+            meta={"message": f"🎉 {coupon.code} applied! Saved ₹{round(discount)}"}
+        )
+
+

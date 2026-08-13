@@ -141,8 +141,8 @@ export async function apiFetchMe() {
       signal: controller.signal,
     })
 
-    // If access token is expired (401), attempt a silent refresh using the refresh cookie
-    if (res.status === 401) {
+    // If access token is expired or forbidden (401 or 403), attempt a silent refresh using the refresh cookie
+    if (res.status === 401 || res.status === 403) {
       const refreshed = await apiRefreshToken()
       if (refreshed) {
         res = await fetch(url, {
@@ -157,7 +157,7 @@ export async function apiFetchMe() {
     let data
     try { data = JSON.parse(text) } catch { data = text || null }
     if (!res.ok) {
-      if (res.status === 401) {
+      if (res.status === 401 || res.status === 403) {
         _knownUnauthenticated = true
       } else {
         console.warn("apiFetchMe failed with status:", res.status, text)
