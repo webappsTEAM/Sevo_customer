@@ -7367,7 +7367,6 @@ export function BookingPage() {
     // Auto open location picker if triggerLocPicker was passed in navigation state
     if (routerLocation.state?.triggerLocPicker) {
       setShowLocPicker(true);
-      setShowPackageModal(true);
     }
     // Fallback if null or manual entry skipped
     setLocation("Set location")
@@ -7649,7 +7648,7 @@ export function BookingPage() {
               <div className="uc-step-container">
                 <StepLogin
                   category={category}
-                  onBack={() => { setShowPackageModal(true); }}
+                  onBack={() => { navigate(routes.landing); }}
                   onVerified={data => {
                     setFormData(p => ({
                       ...p,
@@ -7682,12 +7681,8 @@ export function BookingPage() {
                 error={error}
                 onBack={() => {
                   let activeCat = resolveCategoryFromCart(category, cart);
-                  setCategory(activeCat);
-                  if (activeCat) {
-                    setShowPackageModal(true);
-                  } else {
-                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
-                  }
+                  const catId = activeCat?.id || activeCat?.slug || "cleaning";
+                  navigate(`/?category=${encodeURIComponent(catId)}`);
                 }}
               />
             </motion.div>
@@ -7807,7 +7802,7 @@ export function BookingPage() {
 
       {/* Package Selection Modal Overlay */}
       <AnimatePresence>
-        {showPackageModal && category && (
+        {step < 3 && showPackageModal && category && (
           (category.id === "painting" || category.slug === "painting" || String(category.id) === "painting" || category.name?.toLowerCase() === "painting") ? (
             <PaintingPackageModal
               category={category}
@@ -11850,10 +11845,14 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { id: "ext-furn-1", name: "Scratch Repair & Wood Polish Touchup", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Wax crayon filler & lacquer touchup for wooden furniture scratches." }
     ],
     "Doors & Windows": [
-      { id: "ext-dr-1", name: "Heavy Duty Door Weatherstrip Seal", price: 199, origPrice: 299, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Bottom rubber draft stopper to prevent dust & insect entry." }
+      { id: "ext-dr-1", name: "Heavy Duty Door Weatherstrip Seal", price: 199, origPrice: 299, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Bottom rubber draft stopper to prevent dust & insect entry." },
+      { id: "ext-dr-2", name: "Sliding Window Roller Wheel Lubrication", price: 249, origPrice: 399, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Cleaning aluminum window track & lubricating roller bearings." },
+      { id: "ext-dr-3", name: "Window Latch Safety Lock Fitting", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Stainless steel window latch & tower bolt fitting." }
     ],
     "Drill & Hanging": [
-      { id: "ext-drl-1", name: "Heavy Duty Toggle Bolt Anchor Fit", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop", description: "High-capacity metallic toggle anchors for hollow wall mounting." }
+      { id: "ext-drl-1", name: "Heavy Duty Toggle Bolt Anchor Fit", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop", description: "High-capacity metallic toggle anchors for hollow wall mounting." },
+      { id: "ext-drl-2", name: "TV Wall Mount Bracket Fitting", price: 349, origPrice: 499, duration: "30 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Fixed / Swivel LED TV bracket wall mounting with level balance." },
+      { id: "ext-drl-3", name: "Curtain Rod Bracket Fitting & Alignment", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Precision drilling & mounting curtain rod end brackets." }
     ],
     "Carpenter On-Demand": [
       { id: "ext-cod-1", name: "Wood Joint Glue Reinforcement", price: 149, origPrice: 249, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "High-strength PVA wood adhesive joint clamping." }
@@ -11862,16 +11861,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { id: "ext-fur-1", name: "Hydraulic Bed Lifter Alignment", price: 299, origPrice: 449, duration: "25 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Gas spring hydraulic pump adjustment for smooth bed lift." },
       { id: "ext-fur-2", name: "Drawer Telescopic Roller Channel Lubrication", price: 149, origPrice: 249, duration: "15 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Silicon grease lubrication for smooth sliding drawers." },
       { id: "ext-fur-3", name: "Wood Scratch Wax Polish Touch-Up", price: 199, origPrice: 299, duration: "20 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Wood wax polishing to conceal minor table & sofa scratches." }
-    ],
-    "Doors & Windows": [
-      { id: "ext-dr-1", name: "Door Bottom Weather Strip / Dust Sealer Fitting", price: 199, origPrice: 299, duration: "15 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", description: "Aluminium & brush strip fit under door to stop insect & dust entry." },
-      { id: "ext-dr-2", name: "Sliding Window Roller Wheel Lubrication", price: 249, origPrice: 399, duration: "20 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Cleaning aluminum window track & lubricating roller bearings." },
-      { id: "ext-dr-3", name: "Window Latch Safety Lock Fitting", price: 149, origPrice: 249, duration: "15 mins", rating: "4.7", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", description: "Stainless steel window latch & tower bolt fitting." }
-    ],
-    "Drill & Hanging": [
-      { id: "ext-drl-1", name: "Precision Drill & Wall Hanging (Up to 3 items)", price: 199, origPrice: 349, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop", description: "Hanging mirrors, photo frames, or wall clocks using heavy-duty anchors." },
-      { id: "ext-drl-2", name: "TV Wall Mount Bracket Fitting", price: 349, origPrice: 499, duration: "30 mins", rating: "4.9", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", description: "Fixed / Swivel LED TV bracket wall mounting with level balance." },
-      { id: "ext-drl-3", name: "Curtain Rod Bracket Fitting & Alignment", price: 249, origPrice: 399, duration: "20 mins", rating: "4.8", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", description: "Precision drilling & mounting curtain rod end brackets." }
     ]
   };
 
@@ -12057,7 +12046,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const urlParams = new URLSearchParams(window.location.search);
   let subtabParam = urlParams.get("subtab") || urlParams.get("subTab");
-  if (subtabParam === "Full apartment") subtabParam = "Occupied Apartment";
+  if (subtabParam === "Full apartment" || subtabParam === "Full House Cleaning" || subtabParam === "Full House Deep Cleaning" || subtabParam === "Full house cleaning" || subtabParam === "Home Cleaning" || subtabParam === "cleaning") subtabParam = "Occupied Apartment";
   if (subtabParam === "Full bungalow/duplex") subtabParam = "Occupied Bungalow/duplex";
 
   const [activeSubTab, setActiveSubTab] = useState(() => {
@@ -12069,6 +12058,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (subtabParam === "Electrician" || subtabParam === "electrical") return "Switches & Sockets";
     if (subtabParam === "Plumber" || subtabParam === "plumbing") return "Tap & Mixer";
     if (subtabParam === "Carpentry" || subtabParam === "carpentry") return "Lock & Handle";
+    if (subtabParam === "Full House Cleaning" || subtabParam === "Full House Deep Cleaning" || subtabParam === "Full house cleaning" || subtabParam === "Home Cleaning" || subtabParam === "cleaning") return "Occupied Apartment";
     if (subtabParam) return subtabParam;
     // No URL param — derive default from normalizedKey / category / cart
     const nk = normalizedKey || (category && (category.id || category.slug)) || "";
@@ -12134,7 +12124,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     let param = urlParams.get("subtab") || urlParams.get("subTab");
-    if (param === "Full apartment") param = "Occupied Apartment";
+    if (param === "Full apartment" || param === "Full House Cleaning" || param === "Full House Deep Cleaning" || param === "Full house cleaning" || param === "Home Cleaning" || param === "cleaning") param = "Occupied Apartment";
     if (param === "Full bungalow/duplex") param = "Occupied Bungalow/duplex";
 
     if (param) {
@@ -12150,6 +12140,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         setActiveSubTab("Taps & Mixers");
       } else if (param === "Carpentry" || param === "carpentry") {
         setActiveSubTab("Lock & Handle");
+      } else if (param === "Full House Cleaning" || param === "Full House Deep Cleaning" || param === "Full house cleaning" || param === "Home Cleaning" || param === "cleaning") {
+        setActiveSubTab("Occupied Apartment");
       } else {
         setActiveSubTab(param);
       }
@@ -12616,29 +12608,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         { id: "tv-prt-6", name: "Capacitor & Component Replacement", price: 399, duration: "45 mins", badge: "Component Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Metalized film & electrolytic capacitor replacement on TV boards.", includes: ["Capacitor microfarad audit", "Low-ESR capacitor swap", "Circuit stress test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
       ]
     },
-    electrical: {
-      "Switches & Sockets": [
-        { id: "elec-sw-1", name: "Switch / Socket Replacement", price: 149, duration: "30 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacement or new fitting of modular switch, 6A/16A socket, or regulator.", includes: ["Old socket removal & new fit", "Earth voltage verification", "30-day warranty"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-2", name: "Heavy Appliance Socket (16A/25A)", price: 249, duration: "45 mins", badge: "Heavy Load", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High-grade 16A power socket installation for AC, Geyser, Washing Machine, or Oven.", includes: ["Heavy wire stripping & terminal clamp", "MCB safety check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-sw-3", name: "Bedside Switchboard / 3-Pin Socket Fix", price: 199, duration: "30 mins", badge: "Daily Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fix loose contact socket, burnt switch plate, or add new extension point.", includes: ["Internal wire tightening", "Insulation sleeve fit", "Voltage load check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" }
-      ],
-      "Fan & Lighting": [
-        { id: "elec-fan-1", name: "Ceiling Fan Repair / Fitting", price: 249, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Ceiling fan installation, downrod assembly, canopy alignment & safety wire hook mounting.", includes: ["New fan mounting & downrod fit", "Safety wire hook installation", "Speed & balance test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-2", name: "Fan Regulator / Speed Switch Replacement", price: 149, duration: "30 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replace burnt or non-working step regulator knob to restore 5-speed fan control.", includes: ["Modular regulator replace", "Terminal insulation check", "5-speed current test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-fan-3", name: "Fan Noise, Wobble & Bearing Repair", price: 199, duration: "45 mins", badge: "Troubleshooting", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fix squeaking/humming fan noise, bearing lubrication, blade angle adjustment & wobble clamp.", includes: ["Bearing greasing/lubrication", "Blade pitch alignment", "Noise & wobble elimination"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-4", name: "Fan Slow Speed / Capacitor Change", price: 299, duration: "45 mins", badge: "Essential", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix slow rotating fan caused by degraded capacitor or coil resistance.", includes: ["Heavy capacitor replacement", "Winding resistance test", "High speed rotation verification"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-fan-5", name: "Exhaust Fan Installation / Repair", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Kitchen or bathroom exhaust fan wall mounting, shutter flap adjustment, and motor wiring.", includes: ["Exhaust fan wall fit", "Vibration pad insertion", "Air flow test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "elec-fan-6", name: "LED Spot Light / Panel Light Fitting", price: 149, duration: "30 mins", badge: "Lighting", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "False ceiling LED panel cut-out fitting, driver replacement, or tube light mounting.", includes: ["LED driver connection", "Spring clip flush fit", "Illumination check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "elec-fan-7", name: "Decorative Chandelier & Hanging Lamp", price: 499, duration: "1 hr", badge: "Heavy Decor", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Heavy ceiling fastener anchor drilling, chandelier wire assembly, and glass shade assembly.", includes: ["Ceiling anchor bolt fitting", "Wire harness connection", "Weight load check"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" }
-      ],
-      "MCB & Wiring": [
-        { id: "elec-mcb-1", name: "MCB Fuse Breaker Replacement", price: 399, duration: "45 mins", badge: "Safety Essential", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Single/Double pole MCB replacement to stop frequent tripping & electrical overload.", includes: ["Tripping diagnosis", "Single/Double Pole MCB fit", "Distribution board check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-2", name: "Full Room Safety Wiring Check", price: 699, duration: "1.5 hrs", badge: "Comprehensive", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Complete earthing verification, phase leakage test, and heavy load cabling report.", includes: ["Neutral & Earth leakage test", "Short circuit safety scan", "Digital safety report"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" }
-      ],
-      "Inverter & Heavy Appliance": [
-        { id: "elec-inv-1", name: "Inverter & Battery Setup", price: 499, duration: "1 hr", badge: "Heavy Power", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Inverter wall connection, battery terminal grease, bypass switch setup & load division.", includes: ["Heavy terminal wiring", "Distilled water top-up check", "Automatic switchover test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
-      ]
-    },
     plumbing: {
       "Tap & Mixer": [
         { id: "plum-tap-1", name: "Tap Repair", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or internal seal tuning.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
@@ -12973,8 +12942,9 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   if (activeSubTab === "Bathroom Cleaning") {
     return <BathroomCleaningModal category={{ id: "bathroom_cleaning", name: "Bathroom Cleaning" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
-  if (activeSubTab === "Occupied Apartment" || activeSubTab === "Unoccupied Apartment" || activeSubTab === "Occupied Bungalow/duplex" || activeSubTab === "Unoccupied Bungalow/duplex" || activeSubTab === "quick extra service") {
-    return <FullHouseCleaningModal activeSubTab={activeSubTab} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  if (activeSubTab === "Occupied Apartment" || activeSubTab === "Unoccupied Apartment" || activeSubTab === "Occupied Bungalow/duplex" || activeSubTab === "Unoccupied Bungalow/duplex" || activeSubTab === "quick extra service" || activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning") {
+    const effectiveSubTab = (activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning") ? "Occupied Apartment" : activeSubTab;
+    return <FullHouseCleaningModal activeSubTab={effectiveSubTab} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
   if (activeSubTab === "Cockroach & Termite Control") {
     return <CockroachControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;

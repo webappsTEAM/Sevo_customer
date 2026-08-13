@@ -1722,8 +1722,12 @@ export function LandingPage() {
                             navigate(`?category=kitchen_cleaning`)
                           } else if (item.name === "Sofa Cleaning") {
                             navigate(`?category=sofa_cleaning`)
+                          } else if (item.name === "Bathroom Cleaning") {
+                            navigate(`?category=bathroom_cleaning`)
+                          } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
+                            navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
                           } else {
-                            navigate(`?category=${item.categoryId}`)
+                            navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
                           }
                         }}
                         className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
@@ -2423,6 +2427,10 @@ export function LandingPage() {
                           navigate(`?category=kitchen_cleaning`)
                         } else if (item.name === "Sofa Cleaning") {
                           navigate(`?category=sofa_cleaning`)
+                        } else if (item.name === "Bathroom Cleaning") {
+                          navigate(`?category=bathroom_cleaning`)
+                        } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
+                          navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
                         } else {
                           navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
                         }
