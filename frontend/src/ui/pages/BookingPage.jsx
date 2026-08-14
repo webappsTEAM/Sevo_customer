@@ -11395,6 +11395,12 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
 function getCategoryFaqsAndReviews(pkg) {
   if (!pkg) return { reviews: [], faqs: [] };
+  if (Array.isArray(pkg.reviews) && pkg.reviews.length > 0 && Array.isArray(pkg.faqs) && pkg.faqs.length > 0) {
+    return {
+      reviews: pkg.reviews,
+      faqs: pkg.faqs
+    };
+  }
   const name = (pkg.name || "").toLowerCase();
   const desc = (pkg.description || "").toLowerCase();
 
@@ -12096,6 +12102,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [selectedMasonDetail, setSelectedMasonDetail] = useState(null);
   const [selectedPackageDetail, setSelectedPackageDetail] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [dbCatalogPackages, setDbCatalogPackages] = useState([]);
+
+  useEffect(() => {
+    apiRequest("/settings/catalog/public/packages/")
+      .then((res) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setDbCatalogPackages(res.data);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch public catalog packages:", err));
+  }, []);
 
   // Disable background page scrolling when detailed modal is open
   useEffect(() => {
@@ -12811,13 +12828,78 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   };
 
   const isApartmentVilla = normalizedKey === "cleaning" && ["Furnished Apartment", "Unfurnished Apartment", "Furnished Villa", "Unfurnished Villa"].includes(activeSubTab);
-  const currentOtherPlans = (OTHER_SERVICES[effectiveKey] && OTHER_SERVICES[effectiveKey][activeSubTab]) ||
+  const rawOtherPlans = (OTHER_SERVICES[effectiveKey] && OTHER_SERVICES[effectiveKey][activeSubTab]) ||
     (OTHER_SERVICES["electrical"] && OTHER_SERVICES["electrical"][activeSubTab]) ||
     (OTHER_SERVICES["refrigerator"] && OTHER_SERVICES["refrigerator"][activeSubTab]) ||
     (OTHER_SERVICES["tv_display"] && OTHER_SERVICES["tv_display"][activeSubTab]) ||
     (OTHER_SERVICES["washing_machine"] && OTHER_SERVICES["washing_machine"][activeSubTab]) ||
     (OTHER_SERVICES["hvac"] && OTHER_SERVICES["hvac"][activeSubTab]) ||
     (OTHER_SERVICES["appliance_repair"] && OTHER_SERVICES["appliance_repair"][activeSubTab]) || [];
+
+  const currentOtherPlans = useMemo(() => {
+    if (!dbCatalogPackages || dbCatalogPackages.length === 0) return rawOtherPlans;
+
+    // 1. Map existing catalog items with latest DB values (100% DB-driven)
+    const seenIds = new Set();
+    const mapped = rawOtherPlans.map(plan => {
+      const normPlanName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const dbMatch = dbCatalogPackages.find(p => {
+        if (p.slug && (p.slug === plan.slug || p.slug === plan.id)) return true;
+        if (String(p.id) === String(plan.id)) return true;
+        const normDbName = (p.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return normDbName && normPlanName && (normDbName.includes(normPlanName) || normPlanName.includes(normDbName));
+      });
+      if (!dbMatch) return plan;
+      seenIds.add(String(dbMatch.id));
+      if (dbMatch.slug) seenIds.add(dbMatch.slug);
+      return {
+        ...plan,
+        ...dbMatch,
+        id: plan.id || dbMatch.id,
+        name: dbMatch.name,
+        price: Math.round(Number(dbMatch.base_price) || plan.price),
+        duration: dbMatch.duration || plan.duration,
+        description: dbMatch.description || plan.description,
+        includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : plan.includes,
+        image: dbMatch.image || plan.image,
+        badge: dbMatch.tag || plan.badge,
+        tools: dbMatch.tools,
+        ready: dbMatch.ready,
+        reviews: dbMatch.reviews,
+        faqs: dbMatch.faqs,
+      };
+    });
+
+    // 2. Append any extra packages created in database for this service / subtab
+    const extraDbPackages = dbCatalogPackages.filter(p => {
+      if (seenIds.has(String(p.id)) || (p.slug && seenIds.has(p.slug))) return false;
+      const sSlug = (p.service_slug || (p.service && p.service.slug) || "").toLowerCase();
+      const sName = (p.service_name || (p.service && p.service.name) || "").toLowerCase();
+      const pName = (p.name || "").toLowerCase();
+      const eff = (effectiveKey || "").toLowerCase();
+      const tab = (activeSubTab || "").toLowerCase();
+      
+      const matchesService = sSlug === eff || sName.includes(eff) || eff.includes(sSlug);
+      const matchesTab = sName.includes(tab) || tab.includes(sName) || pName.includes(tab) || tab.includes(pName);
+      return matchesService || matchesTab;
+    }).map(p => ({
+      id: p.slug || p.id,
+      name: p.name,
+      price: Math.round(Number(p.base_price) || 0),
+      duration: p.duration || "30 mins",
+      description: p.description || "",
+      includes: Array.isArray(p.includes) ? p.includes : [],
+      image: p.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+      badge: p.tag || "Standard",
+      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+      tools: p.tools,
+      ready: p.ready,
+      reviews: p.reviews,
+      faqs: p.faqs,
+    }));
+
+    return [...mapped, ...extraDbPackages];
+  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
   const isWmTab = washingMachineSubtabs.includes(activeSubTab);
@@ -14030,14 +14112,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                 <div className="space-y-2">
-                  {(selectedPackageDetail.includes && selectedPackageDetail.includes.length > 0
-                    ? selectedPackageDetail.includes
-                    : [
-                      "Professional grade safety & service tools",
-                      "Microfiber cloths & non-abrasive scrubbers",
-                      "High performance diagnostic equipment",
-                      "Safety gear & protective floor covers"
-                    ]
+                  {((Array.isArray(selectedPackageDetail.tools) && selectedPackageDetail.tools.length > 0)
+                    ? selectedPackageDetail.tools
+                    : (Array.isArray(selectedPackageDetail.includes) && selectedPackageDetail.includes.length > 0
+                      ? selectedPackageDetail.includes
+                      : [
+                        "Professional grade safety & service tools",
+                        "Microfiber cloths & non-abrasive scrubbers",
+                        "High performance diagnostic equipment",
+                        "Safety gear & protective floor covers"
+                      ]
+                    )
                   ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
@@ -14051,12 +14136,15 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
                 <div className="space-y-2">
-                  {[
-                    "Continuous water supply",
-                    "Working power connection",
-                    "Service area accessible and cleared",
-                    "Fragile items and valuables kept safely"
-                  ].map((item, i) => (
+                  {((Array.isArray(selectedPackageDetail.ready) && selectedPackageDetail.ready.length > 0)
+                    ? selectedPackageDetail.ready
+                    : [
+                      "Continuous water supply",
+                      "Working power connection",
+                      "Service area accessible and cleared",
+                      "Fragile items and valuables kept safely"
+                    ]
+                  ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
                       <span className="leading-relaxed">{item}</span>
