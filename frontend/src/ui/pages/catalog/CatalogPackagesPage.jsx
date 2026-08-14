@@ -1275,7 +1275,7 @@ export function CatalogPackagesPage() {
       base_price: Math.round(Number(pkg.base_price) || 0),
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
       checklist: items,
-<<<<<<< HEAD
+      image: pkg.image || "",
       editingItemId: null,
       _vdOpen: true,
       viewDetails: {
@@ -1284,9 +1284,6 @@ export function CatalogPackagesPage() {
         reviews: Array.isArray(pkg.reviews) && pkg.reviews.length > 0 ? pkg.reviews : (staticData.reviews || []),
         faqs: Array.isArray(pkg.faqs) && pkg.faqs.length > 0 ? pkg.faqs : (staticData.faqs || []),
       },
-=======
-      image: pkg.image || "",
->>>>>>> 8a242d99f99d62ed0fb9e5c249c0cba4839ce856
     })
     setNewItemText("")
   }
@@ -1606,7 +1603,6 @@ export function CatalogPackagesPage() {
                 return true
               })
 
-<<<<<<< HEAD
               return uniqueItems.map((item) => {
                 const serviceKey = item.service.realServiceId || item.service.slug || item.service.id
                 const totalCount = activeCategoryServicesWithPackages
@@ -1630,23 +1626,6 @@ export function CatalogPackagesPage() {
                       isSubActive
                         ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
                         : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
-=======
-              return (
-                <button
-                  key={item.service.id}
-                  type="button"
-                  onClick={() => setActiveSubServiceKey(item.service.slug || String(item.service.id))}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                  isSubActive
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                    : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
-                }`}
-              >
-                <span>{item.displayName}</span>
-                  <span
-                    className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
-                      isSubActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
->>>>>>> 8a242d99f99d62ed0fb9e5c249c0cba4839ce856
                     }`}
                   >
                     <SubIcon className="w-3.5 h-3.5" />
@@ -2312,7 +2291,72 @@ export function CatalogPackagesPage() {
               </div>
             </div>
 
-<<<<<<< HEAD
+            {/* ── Image Customization Section ── */}
+            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-800">
+                    Package Image
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                {quickPriceEditing.image ? (
+                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                    <img src={quickPriceEditing.image} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setQuickPriceEditing((prev) => ({ ...prev, image: "" }))}
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                    No Image
+                  </div>
+                )}
+                <div className="flex-1 w-full space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const formData = new FormData()
+                        formData.append("image", file)
+                        try {
+                          const res = await apiRequest("/settings/catalog/upload-image/", {
+                            method: "POST",
+                            body: formData,
+                          })
+                          if (res.success && res.url) {
+                            setQuickPriceEditing((prev) => ({ ...prev, image: res.url }))
+                            showToast("Image uploaded successfully!")
+                          } else {
+                            showToast(res.message || "Upload failed", "error")
+                          }
+                        } catch (err) {
+                          showToast("Upload failed", "error")
+                        }
+                      }
+                    }}
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                  />
+                  <Input
+                    label="Or Image URL"
+                    placeholder="https://images.unsplash.com/..."
+                    value={quickPriceEditing.image || ""}
+                    onChange={(e) => setQuickPriceEditing({ ...quickPriceEditing, image: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* ── View Details Content Section (only for Home Services & Pest Control) ── */}
             {activePillar?.key === "home_pest_control" && (() => {
               const vd = quickPriceEditing.viewDetails || { tools: [], ready: [], reviews: [], faqs: [] }
@@ -2402,73 +2446,6 @@ export function CatalogPackagesPage() {
                 </div>
               )
             })()}
-=======
-            {/* ── Image Customization Section ── */}
-            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <span className="text-xs font-bold text-slate-800">
-                    Package Image
-                  </span>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                {quickPriceEditing.image ? (
-                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
-                    <img src={quickPriceEditing.image} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setQuickPriceEditing((prev) => ({ ...prev, image: "" }))}
-                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
-                    No Image
-                  </div>
-                )}
-                <div className="flex-1 w-full space-y-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        const formData = new FormData()
-                        formData.append("image", file)
-                        try {
-                          const res = await apiRequest("/settings/catalog/upload-image/", {
-                            method: "POST",
-                            body: formData,
-                          })
-                          if (res.success && res.url) {
-                            setQuickPriceEditing((prev) => ({ ...prev, image: res.url }))
-                            showToast("Image uploaded successfully!")
-                          } else {
-                            showToast(res.message || "Upload failed", "error")
-                          }
-                        } catch (err) {
-                          showToast("Upload failed", "error")
-                        }
-                      }
-                    }}
-                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                  />
-                  <Input
-                    label="Or Image URL"
-                    placeholder="https://images.unsplash.com/..."
-                    value={quickPriceEditing.image || ""}
-                    onChange={(e) => setQuickPriceEditing({ ...quickPriceEditing, image: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
->>>>>>> 8a242d99f99d62ed0fb9e5c249c0cba4839ce856
 
             <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-slate-100">
               <button

@@ -19,9 +19,18 @@ from .views import (
     DataExportView, AccountDeletionView, WorkspaceDeletionView, OwnerTransferView,
 )
 
+from .views_homepage import (
+    HomePageConfigAPIView,
+    HomePageImageUploadAPIView,
+    HomePageImageDeleteAPIView,
+)
 from service_requests.payment_views import InvoiceDownloadView
 
 urlpatterns = [
+    # Homepage Config & Storage APIs
+    path("homepage/", HomePageConfigAPIView.as_view(), name="settings-homepage-config"),
+    path("homepage/upload-image/", HomePageImageUploadAPIView.as_view(), name="settings-homepage-upload-image"),
+    path("homepage/images/<uuid:media_id>/", HomePageImageDeleteAPIView.as_view(), name="settings-homepage-image-delete"),
     # Notifications
     path("notifications/", NotificationPreferenceView.as_view(), name="notification-prefs"),
 

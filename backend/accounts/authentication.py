@@ -50,8 +50,13 @@ class CookieJWTAuthentication(JWTAuthentication):
         if header is not None:
             raw_token = self.get_raw_token(header)
             if raw_token is not None:
-                validated = self.get_validated_token(raw_token)
-                return self.get_user(validated), validated
+                try:
+                    validated = self.get_validated_token(raw_token)
+                    user = self.get_user(validated)
+                    if user:
+                        return user, validated
+                except Exception:
+                    pass
 
         # 2. Fall back to the httpOnly cookie
         cookie_name = getattr(settings, "AUTH_COOKIE", "qt_access")
@@ -61,7 +66,10 @@ class CookieJWTAuthentication(JWTAuthentication):
 
         try:
             validated = self.get_validated_token(raw_token)
-            return self.get_user(validated), validated
+            user = self.get_user(validated)
+            if user:
+                return user, validated
+            return None
         except Exception:
-            # Expired / tampered cookie — return None so the view gets 401
+            # Expired / tampered cookie — return None so the view gets AnonymousUser
             return None
