@@ -7,4 +7,6 @@ from .ticket_serializers import (
     CommunicationLogSerializer,
     TicketListSerializer,
     TicketDetailSerializer,
+    MessageTemplateSerializer,
+    CancellationRequestSerializer,
 )

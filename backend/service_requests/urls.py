@@ -30,12 +30,15 @@ from .views import (
     # Employee
     EmployeeJobListView,
     EmployeeJobDetailView,
+    EmployeeJobReceiveView,
     EmployeeJobAcceptView,
     EmployeeJobRejectView,
+    EmployeeJobArrivedView,
     EmployeeJobStartView,
     EmployeeJobCompleteView,
     EmployeeJobProofView,
     EmployeePerformanceView,
+    CustomerBookingLiveLocationView,
 
     # WorkExtension Ecosystem
     EmployeeReportExtraWorkView,
@@ -131,6 +134,7 @@ urlpatterns = [
     path("booking/my-bookings/",             CustomerMyBookingsView.as_view(), name="sr-my-bookings"),
     path("booking/<int:pk>/retry-payment/",  CustomerBookingRetryPaymentView.as_view(), name="sr-retry-payment"),
     path("booking/<int:pk>/invoice/",        InvoiceDownloadView.as_view(),  name="sr-invoice"),
+    path("booking/<int:pk>/live-location/",  CustomerBookingLiveLocationView.as_view(), name="sr-booking-live-location"),
     path("feedback/<uuid:token>/",           FeedbackTokenView.as_view(),    name="sr-feedback-token"),
     path("public/feedback/",                 PublicFeedbackListView.as_view(), name="sr-public-feedback"),
 
@@ -162,9 +166,11 @@ urlpatterns = [
     # ── Employee ──────────────────────────────────────────────────────────────
     path("employee/jobs/",                          EmployeeJobListView.as_view(),     name="sr-emp-jobs"),
     path("employee/jobs/<int:pk>/",                 EmployeeJobDetailView.as_view(),   name="sr-emp-job-detail"),
+    path("employee/jobs/<int:pk>/receive/",         EmployeeJobReceiveView.as_view(),  name="sr-emp-receive"),
     path("employee/jobs/<int:pk>/accept/",          EmployeeJobAcceptView.as_view(),   name="sr-emp-accept"),
     path("employee/jobs/<int:pk>/reject/",          EmployeeJobRejectView.as_view(),   name="sr-emp-reject"),
     path("employee/jobs/<int:pk>/on-the-way/",      EmployeeJobOnTheWayView.as_view(), name="sr-emp-on-the-way"),
+    path("employee/jobs/<int:pk>/arrived/",         EmployeeJobArrivedView.as_view(),   name="sr-emp-arrived"),
     path("employee/jobs/<int:pk>/start/",           EmployeeJobStartView.as_view(),    name="sr-emp-start"),
     path("employee/jobs/<int:pk>/complete/",        EmployeeJobCompleteView.as_view(), name="sr-emp-complete"),
     path("employee/jobs/<int:pk>/collect-cash/",    EmployeeCashCollectView.as_view(), name="sr-emp-collect-cash"),

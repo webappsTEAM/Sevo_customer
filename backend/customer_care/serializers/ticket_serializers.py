@@ -8,6 +8,8 @@ from customer_care.models import (
     Escalation,
     CommunicationLog,
     CareAgentProfile,
+    MessageTemplate,
+    CancellationRequest,
 )
 
 User = get_user_model()
@@ -157,12 +159,56 @@ class TicketListSerializer(serializers.ModelSerializer):
             "closed_at",
         )
 
+class CancellationRequestSerializer(serializers.ModelSerializer):
+    requested_by_username = serializers.CharField(source="requested_by.username", read_only=True)
+    approved_by_username = serializers.CharField(source="approved_by.username", read_only=True)
+    refund_request_refund_id = serializers.CharField(source="refund_request.refund_id", read_only=True)
+
+    class Meta:
+        model = CancellationRequest
+        fields = (
+            "id",
+            "ticket",
+            "booking",
+            "reason",
+            "reason_note",
+            "retention_offered",
+            "retention_outcome",
+            "refund_request",
+            "refund_request_refund_id",
+            "requested_by",
+            "requested_by_username",
+            "approved_by",
+            "approved_by_username",
+            "status",
+            "created_at",
+            "decided_at",
+        )
+
+class MessageTemplateSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+
+    class Meta:
+        model = MessageTemplate
+        fields = (
+            "id",
+            "name",
+            "channel",
+            "category",
+            "body",
+            "is_active",
+            "created_by",
+            "created_by_username",
+            "created_at",
+        )
+
 class TicketDetailSerializer(TicketListSerializer):
     messages = serializers.SerializerMethodField()
     attachments = TicketAttachmentSerializer(many=True, read_only=True)
     activities = TicketActivitySerializer(many=True, read_only=True)
     escalations = EscalationSerializer(many=True, read_only=True)
     communication_logs = CommunicationLogSerializer(many=True, read_only=True)
+    cancellation_requests = CancellationRequestSerializer(many=True, read_only=True)
 
     class Meta(TicketListSerializer.Meta):
         fields = TicketListSerializer.Meta.fields + (
@@ -171,6 +217,7 @@ class TicketDetailSerializer(TicketListSerializer):
             "activities",
             "escalations",
             "communication_logs",
+            "cancellation_requests",
             "resolution_summary",
         )
 

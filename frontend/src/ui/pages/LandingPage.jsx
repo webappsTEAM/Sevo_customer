@@ -8,7 +8,7 @@ import {
   Star, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight,
   Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart,
-  Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check,
+  Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2,
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
@@ -21,6 +21,7 @@ import { apiUpdateCustomerLastLocation } from "../../api/authService.js"
 import { apiRequest } from "../../api/client.js"
 import { getAddress } from "../../api/geocoding.js"
 import { motion, AnimatePresence } from "framer-motion"
+import { getHomePageConfig, fetchPublishedHomePageConfig } from "../../config/homePageConfig.js"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -663,16 +664,6 @@ function getFoodItemPhoto(name = "", isGrocery = false) {
     if (n.includes("egg")) {
       return "https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=400&auto=format&fit=crop&q=80"
     }
-    if (n.includes("tea") || n.includes("coffee")) {
-      return "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=400&auto=format&fit=crop&q=80"
-    }
-    if (n.includes("spices") || n.includes("turmeric") || n.includes("chilli powder") || n.includes("masala") || n.includes("sugar") || n.includes("salt")) {
-      return "https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=400&auto=format&fit=crop&q=80"
-    }
-    if (n.includes("detergent") || n.includes("dishwash")) {
-      return "https://images.unsplash.com/photo-1585421514738-01798e348b17?w=400&auto=format&fit=crop&q=80"
-    }
-    return "/mockups/category_food_health.png"
   }
 
   // 100% Accurate Verified Photographic Matches for Tamil & English Vegetable Names
@@ -706,7 +697,7 @@ function getFoodItemPhoto(name = "", isGrocery = false) {
   
   // Specific Bell Peppers & Capsicum MUST be checked before general chilli
   if (n.includes("red bell pepper") || n.includes("sigappu")) return "/mockups/veg/red_bell_pepper.jpg"
-  if (n.includes("yellow bell pepper") || n.includes("manjal kuda")) return "/mockups/veg/yellow_bell_pepper.jpg"
+  if (n.includes("yellow bell pepper") || n.includes("manjal")) return "/mockups/veg/yellow_bell_pepper.jpg"
   if (n.includes("capsicum") || n.includes("kuda milagai") || n.includes("shimla")) return "/mockups/veg_capsicum_green.png"
   if (n.includes("chilli") || n.includes("milagai") || n.includes("mirch")) return "/mockups/veg/green_chilli.jpg"
   
@@ -1028,6 +1019,59 @@ export function LandingPage() {
   const [activeLocationLabel, setActiveLocationLabel] = useState(() => {
     return localStorage.getItem("calservice_user_location") || null;
   })
+  const [packagesData, setPackagesData] = useState({})
+
+  useEffect(() => {
+    async function loadCatalog() {
+      try {
+        const svcRes = await apiRequest("/catalog/services/")
+        if (svcRes.success) {
+          const pkgs = {}
+          svcRes.data.forEach(s => {
+            const cid = s.category.toString()
+            if (!pkgs[cid]) pkgs[cid] = []
+            pkgs[cid].push({
+              id: s.id.toString(),
+              name: s.name,
+              price: parseFloat(s.price),
+              priceStr: "₹" + s.price,
+              duration: s.duration || "1 hr",
+              payment_policy: s.payment_policy,
+              image: s.image,
+              includes: s.includes || [],
+              excludes: s.excludes || [],
+              popular: !!s.popular,
+              tag: s.tag || ""
+            })
+          })
+          setPackagesData(pkgs)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    loadCatalog()
+  }, [])
+
+  const [homeConfig, setHomeConfig] = useState(() => getHomePageConfig())
+
+  useEffect(() => {
+    let isMounted = true
+    fetchPublishedHomePageConfig().then((cfg) => {
+      if (cfg && isMounted) {
+        setHomeConfig(cfg)
+      }
+    })
+
+    const handleConfigUpdate = (e) => {
+      setHomeConfig(e.detail || getHomePageConfig())
+    }
+    window.addEventListener("calservices:homepage_updated", handleConfigUpdate)
+    return () => {
+      isMounted = false
+      window.removeEventListener("calservices:homepage_updated", handleConfigUpdate)
+    }
+  }, [])
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -1261,13 +1305,13 @@ export function LandingPage() {
     { id: "sc-1", name: "Sofa Deep Cleaning & Shampooing", price: 799, categoryName: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&q=80&fit=crop", catId: "sofa_cleaning" },
     { id: "bc-1", name: "Bathroom Deep Cleaning & Sanitization", price: 499, categoryName: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "bathroom_cleaning" },
     { id: "ac-1", name: "Power Jet AC Foam Service", price: 599, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=400&q=80&fit=crop", catId: "hvac" },
-    { id: "ac-2", name: "Anti-Rust Protective Coating", price: 249, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80&fit=crop", catId: "hvac" },
-    { id: "ac-3", name: "AC Gas Leak Audit & Refill", price: 899, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&q=80&fit=crop", catId: "hvac" },
-    { id: "el-1", name: "Fan Repair & Installation", price: 149, categoryName: "Electrical", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=400&q=80&fit=crop", catId: "electrical" },
-    { id: "pl-1", name: "Tap & Basin Leak Repair", price: 199, categoryName: "Plumbing", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=400&q=80&fit=crop", catId: "plumbing" },
-    { id: "cp-1", name: "Furniture Repair & Assembly", price: 299, categoryName: "Carpentry", image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=400&q=80&fit=crop", catId: "carpentry" },
-    { id: "pc-1", name: "Cockroach & Ant Pest Control", price: 699, categoryName: "Pest Control", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=400&q=80&fit=crop", catId: "pest_control" },
-    { id: "app-1", name: "Automatic Washing Machine Service", price: 499, categoryName: "Appliance Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=400&q=80&fit=crop", catId: "appliance_repair" }
+    { id: "ac-2", name: "Anti-Rust Protective Coating", price: 249, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=400&q=80&fit=crop", catId: "hvac" },
+    { id: "ac-3", name: "AC Gas Leak Audit & Refill", price: 899, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=400&q=80&fit=crop", catId: "hvac" },
+    { id: "el-1", name: "Fan Repair & Installation", price: 149, categoryName: "Electrical", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=400&q=80&fit=crop", catId: "electrical" },
+    { id: "pl-1", name: "Tap & Basin Leak Repair", price: 199, categoryName: "Plumbing", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "plumbing" },
+    { id: "cp-1", name: "Furniture Repair & Assembly", price: 299, categoryName: "Carpentry", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=400&q=80&fit=crop", catId: "carpentry" },
+    { id: "pc-1", name: "Cockroach & Ant Pest Control", price: 699, categoryName: "Pest Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "pest_control" },
+    { id: "app-1", name: "Automatic Washing Machine Service", price: 499, categoryName: "Appliance Repair", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=400&q=80&fit=crop", catId: "appliance_repair" }
   ], []);
 
   const searchResults = useMemo(() => {
@@ -1433,6 +1477,25 @@ export function LandingPage() {
                   category={activeCategory}
                   cart={modalCart}
                   setCart={setModalCart}
+                  packagesData={packagesData}
+                  onClose={handleCloseCategory}
+                  onCheckout={(customCart) => {
+                    const finalCart = resolveCartArg(customCart);
+                    setModalCart(cleanConsultationItems(finalCart));
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                  }}
+                  onGetEstimate={(customCart) => {
+                    const finalCart = resolveCartArg(customCart);
+                    setModalCart(cleanConsultationItems(finalCart));
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+                  }}
+                />
+              ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+                <MasonPackageModal
+                  category={activeCategory}
+                  cart={modalCart}
+                  setCart={setModalCart}
+                  packagesData={packagesData}
                   onClose={handleCloseCategory}
                   onCheckout={(customCart) => {
                     const finalCart = resolveCartArg(customCart);
@@ -1609,15 +1672,15 @@ export function LandingPage() {
         <section id="home" className="max-w-7xl mx-auto px-6 pt-14 pb-16 grid lg:grid-cols-2 gap-12 items-center">
           <div>
             <p className="text-sm font-medium text-teal-600 mb-4">
-              Reliable. Affordable. Right at Your Doorstep.
+              {homeConfig.hero?.badge || "Reliable. Affordable. Right at Your Doorstep."}
             </p>
             <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight text-slate-900 mb-5">
-              Professional<br />
-              <span className="text-teal-600">Services</span><br />
-              Made Simple
+              {homeConfig.hero?.mainHeadingFirst || "Professional"}<br />
+              <span className="text-teal-600">{homeConfig.hero?.mainHeadingHighlight || "Services"}</span><br />
+              {homeConfig.hero?.mainHeadingLast || "Made Simple"}
             </h1>
             <p className="text-slate-500 text-base mb-8 max-w-md">
-              Quick booking. Quality work. Guaranteed satisfaction.
+              {homeConfig.hero?.subtitle || "Quick booking. Quality work. Guaranteed satisfaction."}
             </p>
 
             <form
@@ -1627,7 +1690,7 @@ export function LandingPage() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="What service do you need?"
+                placeholder={homeConfig.hero?.searchPlaceholder || "What service do you need?"}
                 className="flex-1 bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-slate-400"
               />
               <LocationDropdown className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3" />
@@ -1641,10 +1704,15 @@ export function LandingPage() {
             </form>
 
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs font-medium text-slate-500">
-              <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-teal-600" /> Verified Pros</span>
-              <span className="inline-flex items-center gap-1.5"><Star className="w-4 h-4 text-amber-500" /> 4.8★ Rated</span>
-              <span className="inline-flex items-center gap-1.5"><Award className="w-4 h-4 text-rose-500" /> 1M+ Happy Homes</span>
-              <span className="inline-flex items-center gap-1.5"><Clock className="w-4 h-4 text-violet-500" /> 30-Day Guarantee</span>
+              {(homeConfig.hero?.quickBadges || []).map((badge, idx) => (
+                <span key={badge.id || idx} className="inline-flex items-center gap-1.5">
+                  {idx === 0 && <ShieldCheck className="w-4 h-4 text-teal-600" />}
+                  {idx === 1 && <Star className="w-4 h-4 text-amber-500" />}
+                  {idx === 2 && <Award className="w-4 h-4 text-rose-500" />}
+                  {idx === 3 && <Clock className="w-4 h-4 text-violet-500" />}
+                  {badge.text}
+                </span>
+              ))}
             </div>
           </div>
 
@@ -1652,23 +1720,27 @@ export function LandingPage() {
           <div className="relative h-[420px] hidden sm:block">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 via-violet-50 to-orange-50 rounded-[3rem] -z-10" />
             <img
-              src="/mockups/service_hvac.png"
-              alt="Technician servicing an AC unit"
+              src={homeConfig.hero?.collageImages_url?.[0] || homeConfig.hero?.collageImages?.[0] || "/assets/generic_image_placeholder.svg"}
+              onError={(e) => { e.currentTarget.src = "/assets/generic_image_placeholder.svg" }}
+              alt="Service photo 1"
               className="absolute top-0 left-0 w-[62%] h-[65%] object-cover rounded-3xl shadow-lg border-4 border-white"
             />
             <img
-              src="/mockups/service_electrical.png"
-              alt="Electrician at work"
+              src={homeConfig.hero?.collageImages_url?.[1] || homeConfig.hero?.collageImages?.[1] || "/assets/generic_image_placeholder.svg"}
+              onError={(e) => { e.currentTarget.src = "/assets/generic_image_placeholder.svg" }}
+              alt="Service photo 2"
               className="absolute bottom-0 left-[8%] w-[48%] h-[45%] object-cover rounded-3xl shadow-lg border-4 border-white"
             />
             <img
-              src="/mockups/service_cleaning.png"
-              alt="Home cleaning professional"
+              src={homeConfig.hero?.collageImages_url?.[2] || homeConfig.hero?.collageImages?.[2] || "/assets/generic_image_placeholder.svg"}
+              onError={(e) => { e.currentTarget.src = "/assets/generic_image_placeholder.svg" }}
+              alt="Service photo 3"
               className="absolute top-[8%] right-0 w-[46%] h-[52%] object-cover rounded-3xl shadow-lg border-4 border-white"
             />
             <img
-              src="/mockups/service_plumbing.png"
-              alt="Plumber fixing a sink"
+              src={homeConfig.hero?.collageImages_url?.[3] || homeConfig.hero?.collageImages?.[3] || "/assets/generic_image_placeholder.svg"}
+              onError={(e) => { e.currentTarget.src = "/assets/generic_image_placeholder.svg" }}
+              alt="Service photo 4"
               className="absolute bottom-[4%] right-[2%] w-[42%] h-[42%] object-cover rounded-3xl shadow-lg border-4 border-white"
             />
           </div>
@@ -1680,88 +1752,45 @@ export function LandingPage() {
             <h2 className="text-xl font-bold text-slate-900">Browse by Category</h2>
           </div>
 
-          {/* 3 Compact & Attractive Category Cards */}
+          {/* Dynamic Category Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl">
-            {/* Card 1: For You */}
-            <button
-              type="button"
-              onClick={() => setIsForYouModalOpen(true)}
-              className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-emerald-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-            >
-              <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
-                <img
-                  src="/mockups/category_for_you.png"
-                  alt="For You"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <span className="absolute top-2 left-2 bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                  ✦ For You
-                </span>
-              </div>
-              <div className="p-3">
-                <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors block">
-                  For You
-                </span>
-                <span className="text-[11px] text-slate-500 font-medium mt-0.5 block">
-                  Curated services &amp; recommendations
-                </span>
-              </div>
-            </button>
-
-            {/* Card 2: Food and Health */}
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedFoodSubModuleId(null)
-                setIsFoodHealthModalOpen(true)
-              }}
-              className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-amber-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-            >
-              <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
-                <img
-                  src="/mockups/category_food_health.png"
-                  alt="Food and Health"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <span className="absolute top-2 left-2 bg-amber-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                  🥦 Groceries &amp; Veggies
-                </span>
-              </div>
-              <div className="p-3">
-                <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-amber-800 transition-colors block">
-                  Food and Health
-                </span>
-                <span className="text-[11px] text-slate-500 font-medium mt-0.5 block">
-                  Groceries &amp; farm-fresh vegetables
-                </span>
-              </div>
-            </button>
-
-            {/* Card 3: Home, Repair & Transport Services */}
-            <button
-              type="button"
-              onClick={() => setIsHomeServicesCombinedModalOpen(true)}
-              className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-teal-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-            >
-              <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
-                <img
-                  src="/mockups/category_home_transport.png"
-                  alt="Home, Repair & Transport Services"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <span className="absolute top-2 left-2 bg-teal-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                  ⚡ 6 Services
-                </span>
-              </div>
-              <div className="p-3">
-                <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-teal-800 transition-colors block truncate">
-                  Home, Repair &amp; Transport Services
-                </span>
-                <span className="text-[11px] text-slate-500 font-medium mt-0.5 block truncate">
-                  Cleaning, repairs, painting &amp; logistics
-                </span>
-              </div>
-            </button>
+            {(homeConfig.categories || []).filter(c => c.enabled !== false && c.is_enabled !== false).map((cat, idx) => {
+              const displayImg = cat.image_url || cat.image || "/assets/generic_image_placeholder.svg"
+              return (
+                <button
+                  key={cat.id || idx}
+                  type="button"
+                  onClick={() => {
+                    if (idx === 0) setIsForYouModalOpen(true)
+                    else if (idx === 1) { setSelectedFoodSubModuleId(null); setIsFoodHealthModalOpen(true) }
+                    else setIsHomeServicesCombinedModalOpen(true)
+                  }}
+                  className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-emerald-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+                >
+                  <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
+                    <img
+                      src={displayImg}
+                      onError={(e) => { e.currentTarget.src = "/assets/generic_image_placeholder.svg" }}
+                      alt={cat.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    {cat.badge && (
+                      <span className="absolute top-2 left-2 bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                        {cat.badge}
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors block truncate">
+                      {cat.title}
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-medium mt-0.5 block truncate">
+                      {cat.subtitle}
+                    </span>
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </section>
 
@@ -1856,7 +1885,7 @@ export function LandingPage() {
                         onClick={() => {
                           setIsHomePestModalOpen(false)
                           document.body.style.overflow = "unset"
-                          navigate(`?category=${item.categoryId}`)
+                          navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
                         }}
                         className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
                       >
@@ -1928,13 +1957,13 @@ export function LandingPage() {
                       document.body.style.overflow = "unset"
                       navigate(routes.truck_booking_hosur)
                     }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
                       <TruckGraphic className="w-full h-full" />
                     </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                      Truck
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      Mini Truck (Hosur)
                     </span>
                   </button>
 
@@ -1946,13 +1975,13 @@ export function LandingPage() {
                       document.body.style.overflow = "unset"
                       navigate(routes.two_wheeler_booking_hosur)
                     }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
                       <TwoWheelerGraphic className="w-full h-full" />
                     </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                      Two Wheeler
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      2-Wheeler (Hosur)
                     </span>
                   </button>
 
@@ -1964,17 +1993,17 @@ export function LandingPage() {
                       document.body.style.overflow = "unset"
                       navigate(routes.packers_movers_booking_hosur)
                     }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-emerald-500 hover:bg-emerald-50/50 hover:shadow-md"
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
                       <PackersMoversGraphic className="w-full h-full" />
                     </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
                       Packers &amp; Movers
                     </span>
                   </button>
 
-                  {/* Option 4: Get an Estimate card/button in Landing Page Emerald theme */}
+                  {/* Option 4: All Transports */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1982,19 +2011,14 @@ export function LandingPage() {
                       document.body.style.overflow = "unset"
                       navigate(routes.truck_booking_hosur)
                     }}
-                    className="group flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-[0.98] text-white shadow-lg shadow-emerald-600/25 transition-all text-left cursor-pointer min-h-[140px]"
+                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
                   >
-                    <div>
-                      <p className="text-lg sm:text-xl font-extrabold leading-tight tracking-tight">
-                        Get an<br />Estimate
-                      </p>
-                      <p className="text-xs text-emerald-100 font-medium mt-2 opacity-95">
-                        (takes ~2 mins)
-                      </p>
+                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-[#059669] border border-emerald-600 group-hover:bg-emerald-700 flex items-center justify-center p-2 group-hover:scale-105 transition-all text-white font-bold text-xs">
+                      View All
                     </div>
-                    <div className="pt-4 flex items-center">
-                      <ArrowRight className="w-6 h-6 text-white stroke-[2.5] group-hover:translate-x-1.5 transition-transform" />
-                    </div>
+                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
+                      All Options
+                    </span>
                   </button>
                 </div>
               </div>
@@ -2239,13 +2263,13 @@ export function LandingPage() {
         {/* ── Trust strip ────────────────────────────────────── */}
         <section className="max-w-7xl mx-auto px-6">
           <div className="bg-slate-50 border border-slate-200 rounded-3xl grid sm:grid-cols-2 lg:grid-cols-5 gap-6 p-8">
-            {TRUST_STRIP.map(({ icon: Icon, title, body }, idx) => {
+            {(homeConfig.trustBadges || []).filter(b => b.enabled !== false).map((badge, idx) => {
               const iconColors = ["text-teal-600", "text-rose-500", "text-violet-600", "text-amber-500", "text-sky-500"]
               return (
-                <div key={title} className="flex flex-col items-start gap-2">
-                  <Icon className={`w-6 h-6 ${iconColors[idx % iconColors.length]}`} strokeWidth={1.75} />
-                  <p className="text-sm font-bold text-slate-800 leading-snug">{title}</p>
-                  <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
+                <div key={badge.id || idx} className="flex flex-col items-start gap-2">
+                  <ShieldCheck className={`w-6 h-6 ${iconColors[idx % iconColors.length]}`} strokeWidth={1.75} />
+                  <p className="text-sm font-bold text-slate-800 leading-snug">{badge.title}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{badge.description}</p>
                 </div>
               )
             })}
@@ -2255,37 +2279,45 @@ export function LandingPage() {
         {/* ── Offers ─────────────────────────────────────────── */}
         <section className="max-w-7xl mx-auto px-6 py-14 grid lg:grid-cols-[220px_1fr] gap-6 items-stretch">
           <div className="bg-gradient-to-br from-teal-600 to-emerald-700 rounded-3xl p-6 flex flex-col justify-center">
-            <p className="text-lg font-extrabold text-white mb-1">Limited Time Offers!</p>
-            <p className="text-xs text-teal-100 mb-4">Great deals on services you love.</p>
+            <p className="text-lg font-extrabold text-white mb-1">{homeConfig.offers?.mainCard?.title || "Limited Time Offers!"}</p>
+            <p className="text-xs text-teal-100 mb-4">{homeConfig.offers?.mainCard?.subtitle || "Great deals on services you love."}</p>
             <button onClick={goToBooking} className="bg-white text-teal-700 hover:bg-teal-50 text-xs font-bold px-4 py-2 rounded-full self-start transition-colors">
-              Explore Offers
+              {homeConfig.offers?.mainCard?.buttonText || "Explore Offers"}
             </button>
           </div>
           <div className="grid sm:grid-cols-3 gap-4">
-            {[
-              { tag: "UPTO", big: "20% OFF", sub: "on Home Cleaning", bg: "bg-amber-50 hover:bg-amber-100", tag_color: "text-amber-600", link_color: "text-amber-700" },
-              { tag: "FLAT", big: "15% OFF", sub: "on Painting", bg: "bg-rose-50 hover:bg-rose-100", tag_color: "text-rose-600", link_color: "text-rose-700" },
-              { tag: "UPTO", big: "₹500 OFF", sub: "on AC Service", bg: "bg-violet-50 hover:bg-violet-100", tag_color: "text-violet-600", link_color: "text-violet-700" },
-            ].map((offer) => (
-              <button
-                key={offer.sub}
-                onClick={goToBooking}
-                className={`${offer.bg} rounded-3xl p-6 text-left hover:shadow-md transition-all`}
-              >
-                <p className={`text-[11px] font-bold tracking-wide ${offer.tag_color}`}>{offer.tag}</p>
-                <p className="text-2xl font-extrabold text-slate-900 mb-1">{offer.big}</p>
-                <p className="text-sm text-slate-600 mb-4">{offer.sub}</p>
-                <span className={`text-xs font-semibold ${offer.link_color}`}>Book Now &rarr;</span>
-              </button>
-            ))}
+            {(homeConfig.offers?.items || []).filter(o => o.enabled !== false).map((offer, idx) => {
+              const bgStyles = [
+                "bg-amber-50 hover:bg-amber-100 text-amber-900",
+                "bg-rose-50 hover:bg-rose-100 text-rose-900",
+                "bg-violet-50 hover:bg-violet-100 text-violet-900"
+              ]
+              const tagColors = ["text-amber-600", "text-rose-600", "text-violet-600"]
+              const linkColors = ["text-amber-700", "text-rose-700", "text-violet-700"]
+              const currentBg = bgStyles[idx % bgStyles.length]
+              const currentTag = tagColors[idx % tagColors.length]
+              const currentLink = linkColors[idx % linkColors.length]
+              return (
+                <button
+                  key={offer.id || idx}
+                  onClick={goToBooking}
+                  className={`${currentBg} rounded-3xl p-6 text-left hover:shadow-md transition-all border border-slate-100`}
+                >
+                  <p className={`text-[11px] font-bold tracking-wide ${currentTag}`}>{offer.tag}</p>
+                  <p className="text-2xl font-extrabold text-slate-900 mb-1">{offer.discount}</p>
+                  <p className="text-sm text-slate-600 mb-4">{offer.title}</p>
+                  <span className={`text-xs font-semibold ${currentLink}`}>{offer.cta || "Book Now →"}</span>
+                </button>
+              )
+            })}
           </div>
         </section>
 
         {/* ── How It Works ───────────────────────────────────── */}
         <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-10">
-          <h2 className="text-xl font-bold text-slate-900 text-center mb-10">How It Works</h2>
+          <h2 className="text-xl font-bold text-slate-900 text-center mb-10">{homeConfig.howItWorks?.heading || "How It Works"}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-8">
-            {STEPS.map(({ icon: Icon, title, body }, i) => {
+            {(homeConfig.howItWorks?.steps || []).map((step, i) => {
               const stepColors = [
                 { bg: "bg-teal-50", icon: "text-teal-600", badge: "bg-teal-600" },
                 { bg: "bg-rose-50", icon: "text-rose-500", badge: "bg-rose-500" },
@@ -2295,17 +2327,17 @@ export function LandingPage() {
               ]
               const c = stepColors[i % stepColors.length]
               return (
-                <div key={title} className="flex flex-col items-center text-center gap-3">
+                <div key={step.num || i} className="flex flex-col items-center text-center gap-3">
                   <div className="relative">
                     <div className={`w-16 h-16 rounded-full ${c.bg} flex items-center justify-center`}>
-                      <Icon className={`w-7 h-7 ${c.icon}`} strokeWidth={1.75} />
+                      <Repeat2 className={`w-7 h-7 ${c.icon}`} strokeWidth={1.75} />
                     </div>
                     <span className={`absolute -top-1 -left-1 w-5 h-5 rounded-full ${c.badge} text-white text-[10px] font-bold flex items-center justify-center`}>
-                      {i + 1}
+                      {step.num || i + 1}
                     </span>
                   </div>
-                  <p className="text-sm font-bold text-slate-800">{title}</p>
-                  <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
+                  <p className="text-sm font-bold text-slate-800">{step.title}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{step.description}</p>
                 </div>
               )
             })}
@@ -2315,10 +2347,10 @@ export function LandingPage() {
         {/* ── Stats ──────────────────────────────────────────── */}
         <section className="bg-slate-800 py-10">
           <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-5 gap-6 text-center text-white">
-            {STATS.map((s) => (
-              <div key={s.label}>
-                <p className="text-2xl font-extrabold">{s.value}</p>
-                <p className="text-xs text-slate-300">{s.label}</p>
+            {(homeConfig.statsBar || []).map((s, idx) => (
+              <div key={s.id || idx}>
+                <p className="text-2xl font-extrabold text-amber-400">{s.number}</p>
+                <p className="text-xs text-slate-300 font-medium">{s.label}</p>
               </div>
             ))}
           </div>
@@ -2326,20 +2358,25 @@ export function LandingPage() {
 
         {/* ── Featured Professionals ─────────────────────────── */}
         <section id="professionals" className="max-w-7xl mx-auto px-6 py-14">
-          <h2 className="text-xl font-bold text-slate-900 text-center mb-2">Featured Professionals</h2>
-          <p className="text-sm text-slate-500 text-center mb-10">Top-rated experts ready to help</p>
+          <h2 className="text-xl font-bold text-slate-900 text-center mb-2">{homeConfig.featuredPros?.title || "Featured Professionals"}</h2>
+          <p className="text-sm text-slate-500 text-center mb-10">{homeConfig.featuredPros?.subtitle || "Top-rated experts ready to help"}</p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-            {PROFESSIONALS.map((p) => (
-              <div key={p.name} className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
-                <img src={p.photo} alt={p.name} className="w-full h-36 object-cover" />
+            {(homeConfig.featuredPros?.pros || []).map((p, idx) => (
+              <div key={p.id || idx} className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
+                <img
+                  src={p.image_url || p.image || "/assets/generic_avatar_placeholder.svg"}
+                  onError={(e) => { e.currentTarget.src = "/assets/generic_avatar_placeholder.svg" }}
+                  alt={p.name}
+                  className="w-full h-36 object-cover"
+                />
                 <div className="p-4">
                   <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                  <p className="text-xs text-slate-500 mb-2">{p.role}</p>
+                  <p className="text-xs text-slate-500 mb-2">{p.title}</p>
                   <div className="flex items-center justify-between text-xs">
                     <span className="inline-flex items-center gap-1 font-semibold text-amber-500">
                       <Star className="w-3.5 h-3.5 fill-current" /> {p.rating}
                     </span>
-                    <span className="text-slate-400">{p.jobs}</span>
+                    <span className="text-slate-400 font-medium">{p.jobs} jobs</span>
                   </div>
                 </div>
               </div>
@@ -2350,25 +2387,25 @@ export function LandingPage() {
         {/* ── Testimonials ───────────────────────────────────── */}
         <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
           <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">What Our Customers Say</h2>
-            <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">View all reviews &rarr;</a>
+            <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">{homeConfig.testimonials?.title || "What Our Customers Say"}</h2>
+            <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">{homeConfig.testimonials?.viewAllText || "View all reviews →"}</a>
           </div>
           <div className="flex items-center gap-4">
             <button
-              onClick={() => setTestimonialIdx((i) => (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)}
-              className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
+              onClick={() => setTestimonialIdx((i) => (i - 1 + (homeConfig.testimonials?.reviews?.length || 1)) % (homeConfig.testimonials?.reviews?.length || 1))}
+              className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <div className="grid sm:grid-cols-3 gap-5 flex-1">
-              {TESTIMONIALS.map((t, i) => (
-                <div key={t.name} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
+              {(homeConfig.testimonials?.reviews || []).map((t, i) => (
+                <div key={t.id || i} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
                       {t.initials}
                     </span>
                     <div className="flex gap-0.5 text-amber-400">
-                      {Array.from({ length: 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
+                      {Array.from({ length: t.rating || 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
                     </div>
                   </div>
                   <p className="text-sm text-slate-600 mb-3 leading-relaxed">{t.text}</p>
@@ -2442,6 +2479,25 @@ export function LandingPage() {
             category={activeCategory}
             cart={modalCart}
             setCart={setModalCart}
+            packagesData={packagesData}
+            onClose={() => navigate("/home")}
+            onCheckout={(customCart) => {
+              const finalCart = resolveCartArg(customCart);
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+            }}
+            onGetEstimate={(customCart) => {
+              const finalCart = resolveCartArg(customCart);
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+            }}
+          />
+        ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+          <MasonPackageModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            packagesData={packagesData}
             onClose={() => navigate("/home")}
             onCheckout={(customCart) => {
               const finalCart = resolveCartArg(customCart);
@@ -4001,10 +4057,10 @@ export function LandingPage() {
               <div className="w-9 h-9 rounded-xl bg-teal-500 flex items-center justify-center text-white">
                 <Home className="w-5 h-5" strokeWidth={2.5} />
               </div>
-              <span className="text-lg font-extrabold tracking-tight text-white">CalServices</span>
+              <span className="text-lg font-extrabold tracking-tight text-white">{homeConfig.footer?.brandName || "CalServices"}</span>
             </div>
             <p className="text-xs text-slate-400 mt-3 leading-relaxed max-w-[220px]">
-              Your trusted partner for all home services. Quality you can count on.
+              {homeConfig.footer?.tagline || "Your trusted partner for all home services. Quality you can count on."}
             </p>
             <div className="flex gap-3 mt-4 text-slate-400 hover:[&>*]:text-teal-400">
               <FacebookMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
@@ -4014,26 +4070,27 @@ export function LandingPage() {
             </div>
           </div>
           <div>
-            <p className="text-sm font-bold text-white mb-3">Services</p>
+            <p className="text-sm font-bold text-white mb-3">{homeConfig.footer?.servicesColTitle || "Services"}</p>
             <ul className="space-y-2 text-xs text-slate-400">
-              {CATEGORIES.slice(0, 4).map((c) => <li key={c.label} className="hover:text-white cursor-pointer transition-colors">{c.label}</li>)}
+              {(homeConfig.footer?.servicesLinks || ["Home Services & Pest Control", "Paintings", "Mason", "AC & Appliance"]).map((link, idx) => (
+                <li key={idx} className="hover:text-white cursor-pointer transition-colors">{link}</li>
+              ))}
             </ul>
           </div>
           <div>
-            <p className="text-sm font-bold text-white mb-3">Company</p>
+            <p className="text-sm font-bold text-white mb-3">{homeConfig.footer?.companyColTitle || "Company"}</p>
             <ul className="space-y-2 text-xs text-slate-400">
-              <li className="hover:text-white cursor-pointer transition-colors">About Us</li>
-              <li className="hover:text-white cursor-pointer transition-colors">Careers</li>
-              <li className="hover:text-white cursor-pointer transition-colors">Blog</li>
-              <li className="hover:text-white cursor-pointer transition-colors">Become a Partner</li>
+              {(homeConfig.footer?.companyLinks || ["About Us", "Careers", "Blog", "Become a Partner"]).map((link, idx) => (
+                <li key={idx} className="hover:text-white cursor-pointer transition-colors">{link}</li>
+              ))}
             </ul>
           </div>
           <div>
-            <p className="text-sm font-bold text-white mb-3">Need Help?</p>
+            <p className="text-sm font-bold text-white mb-3">{homeConfig.footer?.helpColTitle || "Need Help?"}</p>
             <ul className="space-y-2 text-xs text-slate-400">
-              <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-teal-400" /> +91 98765 43210</li>
-              <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-teal-400" /> support@calservices.com</li>
-              <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-teal-400" /> Mon &ndash; Sun (8 AM &ndash; 8 PM)</li>
+              <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-teal-400" /> {homeConfig.footer?.phone || "+91 98765 43210"}</li>
+              <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-teal-400" /> {homeConfig.footer?.email || "support@calservices.com"}</li>
+              <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-teal-400" /> {homeConfig.footer?.workingHours || "Mon – Sun (8 AM – 8 PM)"}</li>
             </ul>
           </div>
         </div>
@@ -4071,6 +4128,25 @@ export function LandingPage() {
           category={activeCategory}
           cart={modalCart}
           setCart={setModalCart}
+          packagesData={packagesData}
+          onClose={() => navigate("/home")}
+          onCheckout={(customCart) => {
+            const finalCart = resolveCartArg(customCart);
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+          }}
+          onGetEstimate={(customCart) => {
+            const finalCart = resolveCartArg(customCart);
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+          }}
+        />
+      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+        <MasonPackageModal
+          category={activeCategory}
+          cart={modalCart}
+          setCart={setModalCart}
+          packagesData={packagesData}
           onClose={() => navigate("/home")}
           onCheckout={(customCart) => {
             const finalCart = resolveCartArg(customCart);

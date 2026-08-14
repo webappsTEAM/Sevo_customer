@@ -1,0 +1,26 @@
+ID: 2 | Username: Swathi | Email: swanattudurai@gmail.com | First: Swathi | Last: N
+ID: 8 | Username: customer_109147 | Email: thejathangavel5@gmail.com | First: Thejj | Last: 
+ID: 9 | Username: customer_256624 | Email:  | First: thej | Last: 
+ID: 6 | Username: vignesh@caldim.in | Email: vignesh@caldim.in | First: vignesh | Last: G
+ID: 7 | Username: gogou@gmail.com | Email: gogou@gmail.com | First: ytrr | Last: r
+ID: 13 | Username: cust_6465432345 | Email: surya@gmail..com | First: surya | Last: 
+ID: 11 | Username: cust_6369505772 | Email: sasvanthkumaresan@gmail.com | First: Lokeshwari | Last: 
+ID: 12 | Username: Loga_Prasath | Email: loga@gmail.com | First: Loga | Last: Prasath
+ID: 23 | Username: caldiminternship | Email: caldiminternship@gmail.com | First: Aashif | Last: A
+ID: 16 | Username: cust_9943033682 | Email: naveenswathi1811@gmail.com | First: Swathi | Last: 
+ID: 20 | Username: candidate_suresh | Email: candidate@caldim.in | First: Suresh | Last: Reddy
+ID: 14 | Username: logeshwarikarthika | Email: logeshwarikarthika@gmail.com | First: LOKESHWARI | Last: K
+ID: 21 | Username: customer_anita | Email: anita.customer@gmail.com | First: Anita | Last: Sharma
+ID: 22 | Username: pradeepmuthuselvan08 | Email: pradeepmuthuselvan08@gmail.com | First: Pradeep | Last: M
+ID: 10 | Username: cust_9150632938 | Email: suryaramya111111@gmail.com | First: surya | Last: 
+ID: 18 | Username: admin | Email: admin@caldim.in | First: Operations | Last: Admin
+ID: 19 | Username: employee | Email: employee@caldim.in | First: Demo | Last: Employee
+ID: 15 | Username: gokulcaldim | Email: gokulcaldim@gmail.com | First: gokul | Last: K
+ID: 28 | Username: tech_phase4 | Email: tech_phase4@example.com | First: Tech | Last: Field
+ID: 5 | Username: Lokeshwari | Email: lokeshwarikumaresan2910@gmail.com | First: LOKESHWARI | Last: K
+ID: 24 | Username: admin_platform_test | Email: admin_platform@test.com | First: Chief | Last: Admin
+ID: 25 | Username: tech_platform_test | Email: tech_platform@test.com | First: Marcus | Last: Vance
+ID: 29 | Username: tech2_phase4 | Email: tech2_phase4@example.com | First: Tech2 | Last: Field
+ID: 1 | Username: suryaramya111111@gmail.com | Email: suryaramya111111@gmail.com | First: Marcus-Alexander | Last: S
+ID: 26 | Username: cust_phase4 | Email: cust_phase4@example.com | First: Customer | Last: Phase4
+ID: 27 | Username: admin_phase4 | Email: admin_phase4@example.com | First: Admin | Last: User

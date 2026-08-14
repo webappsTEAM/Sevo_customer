@@ -152,6 +152,12 @@ export function CatalogServicesPage() {
         }
       }
 
+      if (catObj && catObj.slug === "home_pest_control") {
+        if (["general", "security"].includes(s.slug)) {
+          return
+        }
+      }
+
       map[catId].push(s)
     })
     return map

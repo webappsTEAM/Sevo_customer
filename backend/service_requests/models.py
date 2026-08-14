@@ -14,14 +14,12 @@ from django.utils import timezone
 def _generate_request_id():
     """Generate SR-XXXX style human-readable ID."""
     last = ServiceRequest.objects.order_by("-id").first()
-    if last and last.request_id:
-        try:
-            num = int(last.request_id.split("-")[1]) + 1
-        except (IndexError, ValueError):
-            num = 1
-    else:
-        num = 1
-    return f"SR-{str(num).zfill(4)}"
+    num = (last.id + 1) if last and last.id else 1
+    req_id = f"SR-{str(num).zfill(4)}"
+    while ServiceRequest.objects.filter(request_id=req_id).exists():
+        num += 1
+        req_id = f"SR-{str(num).zfill(4)}"
+    return req_id
 
 
 # ── Service categories (static list) ─────────────────────────────────────────
@@ -50,8 +48,10 @@ class ServiceRequest(models.Model):
         CONFIRMED             = "confirmed",             "Confirmed"
         REVIEWED              = "reviewed",              "Reviewed"
         ASSIGNED              = "assigned",              "Assigned"
+        RECEIVED              = "received",              "Received"
         ACCEPTED              = "accepted",              "Accepted"
         ON_THE_WAY            = "on_the_way",            "On The Way"
+        ARRIVED               = "arrived",               "Arrived"
         IN_PROGRESS           = "in_progress",           "In Progress"
         COMPLETED             = "completed",             "Completed"
         AWAITING_VERIFICATION = "awaiting_verification", "Awaiting Verification"
@@ -112,6 +112,8 @@ class ServiceRequest(models.Model):
     issue_title      = models.CharField(max_length=300)
     description      = models.TextField(blank=True, default="")
     address          = models.TextField()
+    latitude         = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude        = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     preferred_date   = models.DateField()
     preferred_time   = models.CharField(max_length=50, blank=True, null=True)
     photo            = models.ImageField(upload_to="service_requests/photos/", null=True, blank=True)
@@ -238,8 +240,10 @@ class EmployeeJob(models.Model):
 
     class Status(models.TextChoices):
         ASSIGNED           = "assigned",           "Assigned"
+        RECEIVED           = "received",           "Received"
         ACCEPTED           = "accepted",           "Accepted"
         ON_THE_WAY         = "on_the_way",         "On The Way"
+        ARRIVED            = "arrived",            "Arrived"
         IN_PROGRESS        = "in_progress",        "In Progress"
         AWAITING_PARTS     = "awaiting_parts",     "Awaiting Parts"
         COMPLETED          = "completed",          "Completed"
@@ -672,6 +676,10 @@ class Package(models.Model):
     tag            = models.CharField(max_length=50, blank=True)
     includes       = models.JSONField(default=list, blank=True)
     excludes       = models.JSONField(default=list, blank=True)
+    tools          = models.JSONField(default=list, blank=True)   # Tools & Products We Use (shown in View Details)
+    ready          = models.JSONField(default=list, blank=True)   # What You Need to Keep Ready
+    reviews        = models.JSONField(default=list, blank=True)   # Customer Reviews [{name, rating, text}]
+    faqs           = models.JSONField(default=list, blank=True)   # FAQ [{q, a}]
     payment_policy = models.CharField(max_length=20, choices=PaymentPolicy.choices, default=PaymentPolicy.BOTH)
     status         = models.CharField(max_length=20, choices=PackageStatus.choices, default=PackageStatus.DRAFT)
     version        = models.PositiveIntegerField(default=1)

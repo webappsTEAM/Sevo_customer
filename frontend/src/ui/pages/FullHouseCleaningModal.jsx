@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, Search, ShoppingCart, Star, Check, X } from "lucide-react";
+import { apiRequest } from "../../api/client.js";
+import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
@@ -692,13 +694,28 @@ const HOUSE_DETAILS_CONTENT = {
 export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, setCart, onClose, onCheckout }) {
   const [activeTab, setActiveTab] = useState(
     propActiveSubTab === "Occupied Apartment" ? "full_apartment" :
-    propActiveSubTab === "Unoccupied Apartment" ? "unoccupied_apartment" :
-    propActiveSubTab === "Occupied Bungalow/duplex" ? "full_bungalow" :
-    propActiveSubTab === "Unoccupied Bungalow/duplex" ? "unoccupied_bungalow" : "partial_home"
+      propActiveSubTab === "Unoccupied Apartment" ? "unoccupied_apartment" :
+        propActiveSubTab === "Occupied Bungalow/duplex" ? "full_bungalow" :
+          propActiveSubTab === "Unoccupied Bungalow/duplex" ? "unoccupied_bungalow" : "partial_home"
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [dbPackages, setDbPackages] = useState([]);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      try {
+        const res = await apiRequest("/settings/catalog/public/packages/?service_slug=full-house-cleaning");
+        if (res.success && Array.isArray(res.data)) {
+          setDbPackages(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch full house packages:", err);
+      }
+    };
+    fetchPackages();
+  }, []);
 
   useEffect(() => {
     if (selectedServiceDetails) {
@@ -731,7 +748,54 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
   };
 
   const getActiveServices = () => {
-    const list = FULL_HOUSE_SERVICES[activeTab] || [];
+    let list = FULL_HOUSE_SERVICES[activeTab] || [];
+    list = JSON.parse(JSON.stringify(list));
+
+    if (dbPackages.length > 0) {
+      list = list.map(item => {
+        if (Array.isArray(item.subOptions)) {
+          item.subOptions = item.subOptions.map(subOpt => {
+            const dbMatch = dbPackages.find(p => p.slug === subOpt.id || p.id === subOpt.id);
+            if (dbMatch) {
+              return {
+                ...subOpt,
+                ...dbMatch,
+                name: dbMatch.name,
+                price: Math.round(Number(dbMatch.base_price) || subOpt.price),
+                duration: dbMatch.duration || subOpt.duration,
+                includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : subOpt.includes,
+                tools: dbMatch.tools,
+                ready: dbMatch.ready,
+                reviews: dbMatch.reviews,
+                faqs: dbMatch.faqs,
+                image: dbMatch.image || subOpt.image,
+              };
+            }
+            return subOpt;
+          });
+          if (item.subOptions.length > 0) {
+            item.price = item.subOptions[0].price;
+          }
+        } else {
+          const dbMatch = dbPackages.find(p => p.slug === item.id || p.id === item.id);
+          if (dbMatch) {
+            item.name = dbMatch.name;
+            item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.duration = dbMatch.duration || item.duration;
+            item.description = dbMatch.description || item.description;
+            item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : item.includes;
+            item.tools = dbMatch.tools;
+            item.ready = dbMatch.ready;
+            item.reviews = dbMatch.reviews;
+            item.faqs = dbMatch.faqs;
+            item.image = dbMatch.image || item.image;
+            item.badge = dbMatch.tag || item.badge;
+          }
+        }
+        return item;
+      });
+    }
+
     if (!searchQuery) return list;
     return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()) || a.includes.some(inc => inc.toLowerCase().includes(searchQuery.toLowerCase())));
   };
@@ -763,7 +827,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
   const getModalPrice = () => {
     if (!selectedServiceDetails) return 0;
     const details = HOUSE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-    
+
     let basePrice = selectedServiceDetails.price;
     if (details.apartmentSizes) {
       basePrice = details.apartmentSizes[selectedSizeIdx]?.price || basePrice;
@@ -784,7 +848,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
   const handleProceedFromModal = () => {
     if (!selectedServiceDetails) return;
     const details = HOUSE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-    
+
     let baseLabel = "";
     if (details.apartmentSizes) {
       baseLabel = details.apartmentSizes[selectedSizeIdx]?.label || "";
@@ -798,7 +862,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
     if (selectedSofaOpt && selectedSofaOpt.price > 0) detailParts.push(selectedSofaOpt.name);
     if (selectedCupboardOpt && selectedCupboardOpt.price > 0) detailParts.push(selectedCupboardOpt.name);
     if (selectedFloorOpt && selectedFloorOpt.price > 0) detailParts.push(selectedFloorOpt.name);
-    
+
     selectedExtraOpts.forEach(opt => detailParts.push(opt.name));
     selectedPartialOpts.forEach(opt => detailParts.push(opt.name));
 
@@ -814,12 +878,12 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
       {/* Sticky Header + Tabs */}
       <div className="sticky top-16 z-20 bg-white shadow-sm border-b border-slate-100">
         <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4 px-6">
-          <div>
+          <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-2 text-xs transition-colors border-none bg-transparent cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
-              <ChevronLeft size={16} /> Back to Services
+              <ChevronLeft size={14} /> Back to Services
             </button>
             <h2 className="text-xl font-black text-slate-900">Full Home Cleaning</h2>
           </div>
@@ -875,7 +939,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
             const bannerUrl = banners[activeTab];
             if (!bannerUrl) return null;
             return (
-              <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5">
+              <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/60">
                 <img
                   src={bannerUrl}
                   alt={getSectionTitle()}
@@ -1000,13 +1064,15 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
         </div>
       </div>
 
+      <AppBannerAndFooter />
+
       {/* View Details Drawer/Modal */}
       {selectedServiceDetails && createPortal(
-        <div 
+        <div
           onClick={() => setSelectedServiceDetails(null)}
           className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
           >
@@ -1032,9 +1098,9 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
               {/* Title & Ratings */}
               <div className="border-b border-slate-100 pb-5">
                 <h3 className="text-base font-extrabold text-slate-900 mb-1">
-                  {activeTab === "full_apartment" ? `Occupied Apartment - ${selectedServiceDetails.name}` : 
-                   activeTab === "full_bungalow" ? `Occupied Bungalow - ${selectedServiceDetails.name}` : 
-                   selectedServiceDetails.name}
+                  {activeTab === "full_apartment" ? `Occupied Apartment - ${selectedServiceDetails.name}` :
+                    activeTab === "full_bungalow" ? `Occupied Bungalow - ${selectedServiceDetails.name}` :
+                      selectedServiceDetails.name}
                 </h3>
                 {activeTab !== "full_apartment" && activeTab !== "unoccupied_apartment" && activeTab !== "full_bungalow" && activeTab !== "unoccupied_bungalow" && (
                   <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-2">
@@ -1047,6 +1113,24 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                   {(activeTab === "full_apartment" || activeTab === "unoccupied_apartment" || activeTab === "full_bungalow" || activeTab === "unoccupied_bungalow") ? "" : "Starts at "}₹{selectedServiceDetails.price} • {selectedServiceDetails.duration}
                 </p>
               </div>
+
+              {/* Inclusions Box */}
+              {selectedServiceDetails.includes && selectedServiceDetails.includes.length > 0 && (
+                <div className="bg-emerald-50/40 border border-emerald-100/80 rounded-2xl p-4 text-left">
+                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    What's included
+                  </h4>
+                  <ul className="space-y-1 text-xs text-slate-600 font-medium">
+                    {selectedServiceDetails.includes.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-1.5">
+                        <span className="text-emerald-500 font-bold">✓</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Requirements selection section */}
               {(() => {
@@ -1064,11 +1148,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                             <button
                               key={idx}
                               onClick={() => setSelectedSizeIdx(idx)}
-                              className={`px-4 py-2.5 text-xs font-bold border rounded-xl transition-all cursor-pointer border-solid ${
-                                selectedSizeIdx === idx
+                              className={`px-4 py-2.5 text-xs font-bold border rounded-xl transition-all cursor-pointer border-solid ${selectedSizeIdx === idx
                                   ? "border-emerald-600 bg-emerald-50/50 text-emerald-800 font-black scale-[1.02]"
                                   : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                              }`}
+                                }`}
                             >
                               <div>{size.label}</div>
                               <div className="text-[10px] text-slate-400 mt-0.5">₹{size.price}</div>
@@ -1088,11 +1171,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                               <button
                                 key={idx}
                                 onClick={() => setSelectedSizeIdx(idx)}
-                                className={`px-3 py-2 text-xs font-bold border rounded-xl transition-all cursor-pointer border-solid ${
-                                  isChosen
+                                className={`px-3 py-2 text-xs font-bold border rounded-xl transition-all cursor-pointer border-solid ${isChosen
                                     ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                     : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                                }`}
+                                  }`}
                               >
                                 <div>{sz.label}</div>
                                 <div className="text-[10px] text-slate-400 mt-0.5">₹{sz.price}</div>
@@ -1112,11 +1194,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                             <button
                               key={opt.id}
                               onClick={() => setSelectedFloorOpt(opt)}
-                              className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${
-                                selectedFloorOpt?.id === opt.id
+                              className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${selectedFloorOpt?.id === opt.id
                                   ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                   : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                              }`}
+                                }`}
                             >
                               <div>{opt.name}</div>
                               <div className="text-[10px] text-slate-400 mt-0.5">+{opt.price > 0 ? `₹${opt.price}` : "Free"}</div>
@@ -1137,11 +1218,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                               <button
                                 key={opt.id}
                                 onClick={() => setSelectedKitchenOpt(opt)}
-                                className={`p-3 text-left border rounded-xl transition-all cursor-pointer border-solid ${
-                                  isSelected
+                                className={`p-3 text-left border rounded-xl transition-all cursor-pointer border-solid ${isSelected
                                     ? "border-emerald-600 bg-emerald-50/30 text-emerald-800"
                                     : "border-slate-100 hover:bg-slate-50 text-slate-700"
-                                }`}
+                                  }`}
                               >
                                 <div className="text-xs font-bold">{opt.name}</div>
                                 <div className="text-[10px] text-slate-500 mt-1">
@@ -1163,11 +1243,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                             <button
                               key={opt.id}
                               onClick={() => setSelectedSofaOpt(opt)}
-                              className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${
-                                selectedSofaOpt?.id === opt.id
+                              className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${selectedSofaOpt?.id === opt.id
                                   ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                   : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                              }`}
+                                }`}
                             >
                               <div>{opt.name}</div>
                               <div className="text-[10px] text-slate-400 mt-0.5">+{opt.price > 0 ? `₹${opt.price}/visit` : "Free"}</div>
@@ -1188,11 +1267,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                               <button
                                 key={opt.id}
                                 onClick={() => setSelectedCupboardOpt(opt)}
-                                className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${
-                                  isChosen
+                                className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${isChosen
                                     ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                     : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                                }`}
+                                  }`}
                               >
                                 <div>{opt.name}</div>
                                 <div className="text-[10px] text-slate-400 mt-0.5">+{opt.price > 0 ? `₹${opt.price}/visit` : "Free"}</div>
@@ -1213,9 +1291,8 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                             return (
                               <div
                                 key={opt.id}
-                                className={`flex justify-between items-center p-3 border rounded-xl transition-all ${
-                                  isSelected ? "border-emerald-600 bg-emerald-50/30" : "border-slate-100"
-                                }`}
+                                className={`flex justify-between items-center p-3 border rounded-xl transition-all ${isSelected ? "border-emerald-600 bg-emerald-50/30" : "border-slate-100"
+                                  }`}
                               >
                                 <span className="text-xs font-medium text-slate-700">{opt.name}</span>
                                 <div className="flex items-center gap-3">
@@ -1228,11 +1305,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                                         setSelectedExtraOpts(prev => [...prev, opt]);
                                       }
                                     }}
-                                    className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer border ${
-                                      isSelected
+                                    className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer border ${isSelected
                                         ? "bg-emerald-600 border-emerald-600 text-white"
                                         : "bg-white border-slate-200 text-emerald-600 hover:bg-slate-50"
-                                    }`}
+                                      }`}
                                   >
                                     {isSelected ? "✓" : "+"}
                                   </button>
@@ -1267,11 +1343,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                                         });
                                       }
                                     }}
-                                    className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${
-                                      isSelected
+                                    className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${isSelected
                                         ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                         : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                                    }`}
+                                      }`}
                                   >
                                     <div>{opt.name}</div>
                                     <div className="text-[10px] text-slate-500 mt-0.5">
@@ -1304,11 +1379,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                                         });
                                       }
                                     }}
-                                    className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${
-                                      isSelected
+                                    className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${isSelected
                                         ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                         : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                                    }`}
+                                      }`}
                                   >
                                     <div>{opt.name}</div>
                                     <div className="text-[10px] text-slate-500 mt-0.5">
@@ -1350,11 +1424,10 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                                         });
                                       }
                                     }}
-                                    className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${
-                                      isSelected
+                                    className={`px-3 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer border-solid ${isSelected
                                         ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                         : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                                    }`}
+                                      }`}
                                   >
                                     <div>{opt.name}</div>
                                     <div className="text-[10px] text-slate-500 mt-0.5">

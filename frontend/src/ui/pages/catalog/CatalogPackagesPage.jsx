@@ -91,6 +91,294 @@ const DEFAULT_SUITABLE_PRESETS = {
     "Dedicated relocation manager",
     "End-to-end unpacking & setup",
   ],
+  "int-single-wall": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "int-one-room": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "int-multi-room": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "int-full-home": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "int-ceiling": [
+    "Ceiling sanding & crack repairs",
+    "Double coat flat white ceiling paint",
+    "Stain blocking primer (where needed)",
+    "Complete furniture & floor masking",
+  ],
+  "interior-painting": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "paint-interior": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "ext-wall": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "ext-building": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "ext-compound": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "ext-terrace": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "exterior-painting": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "paint-exterior": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "wp-terrace": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "wp-bathroom": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "wp-wall": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "wp-roof": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "wp-crack": [
+    "V-groove crack widening",
+    "Polymer-modified crack filler application",
+    "Reinforcing fiber mesh (for deep cracks)",
+    "Sanding & leveling smooth surface",
+  ],
+  "waterproofing": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "paint-waterproofing": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "waterproof-coating": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "wm-doors": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "wm-windows": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "wm-grills": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "wm-cabinets": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "wm-gates": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "wood-metal": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "paint-wood-metal": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "td-texture": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "td-designer": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "td-stencil": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "td-accent": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "texture-decor": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "paint-texture": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "texture-painting": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "fridge-parent": [
+    "Interior & exterior cleaning",
+    "Shelves, trays & compartments cleaning",
+    "Door seal & stain cleaning"
+  ],
+  "fridge-single": [
+    "Interior & exterior cleaning",
+    "Shelves, trays & compartments cleaning",
+    "Door seal & stain cleaning"
+  ],
+  "fridge-double": [
+    "Interior & exterior cleaning",
+    "Shelves, trays & compartments cleaning",
+    "Door seal & stain cleaning"
+  ],
+  "fridge-triple": [
+    "Interior & exterior cleaning",
+    "Shelves, trays & compartments cleaning",
+    "Door seal & stain cleaning"
+  ],
+  "stove-parent": [
+    "Stove / hob surface cleaning",
+    "Burner & knob cleaning",
+    "Grease & food stain removal"
+  ],
+  "stove-2b": [
+    "Stove / hob surface cleaning",
+    "Burner & knob cleaning",
+    "Grease & food stain removal"
+  ],
+  "stove-3b": [
+    "Stove / hob surface cleaning",
+    "Burner & knob cleaning",
+    "Grease & food stain removal"
+  ],
+  "stove-4b": [
+    "Stove / hob surface cleaning",
+    "Burner & knob cleaning",
+    "Grease & food stain removal"
+  ]
 }
 
 const EMPTY_PACKAGE = {
@@ -234,6 +522,7 @@ export function CatalogPackagesPage() {
   const [quickPriceEditing, setQuickPriceEditing] = useState(null)
   const [newItemText, setNewItemText] = useState("")
   const [serviceEditing, setServiceEditing] = useState(null)
+  const [expandedPackages, setExpandedPackages] = useState(new Set())
   const [toast, showToast] = useToast()
 
   const loadData = async () => {
@@ -294,8 +583,19 @@ export function CatalogPackagesPage() {
       (s) => (catId && String(s.category) === String(catId)) || (s.category_slug && s.category_slug === activeCategoryKey)
     )
 
+    if (activeCategoryKey === "home_pest_control") {
+      catServices = catServices.filter(
+        (s) => s.slug !== "general" && s.slug !== "security"
+      )
+    }
+
     if (catServices.length === 0 && currentDbCat) {
       catServices = services.filter((s) => s.category_id === catId || s.category === catId)
+      if (activeCategoryKey === "home_pest_control") {
+        catServices = catServices.filter(
+          (s) => s.slug !== "general" && s.slug !== "security"
+        )
+      }
     }
 
     // Goods & Transports specific ordering: 2 Wheeler, Truck, Packers & Movers
@@ -311,11 +611,25 @@ export function CatalogPackagesPage() {
     const q = searchQuery.trim().toLowerCase()
 
     // Map each service to its packages list
-    const result = catServices.map((svc) => {
-      const allSvcPkgs = packages.filter((p) => {
+    const result = catServices.flatMap((svc) => {
+      let allSvcPkgs = packages.filter((p) => {
         const pkgSvcId = p.service?.id || p.service || p.service_id
         return String(pkgSvcId) === String(svc.id)
       })
+
+      if (svc.slug === "sofa-cleaning") {
+        const addonPkgs = packages.filter((p) =>
+          p.slug.startsWith("quick-") ||
+          p.slug.startsWith("fridge-") ||
+          p.slug.startsWith("sink-") ||
+          p.slug.startsWith("dining-") ||
+          p.slug.startsWith("fan-") ||
+          p.slug.startsWith("balcony-")
+        )
+        const seenIds = new Set(allSvcPkgs.map(p => p.id))
+        const uniqueAddons = addonPkgs.filter(p => !seenIds.has(p.id))
+        allSvcPkgs = [...allSvcPkgs, ...uniqueAddons]
+      }
 
       // Custom sorting for Goods & Transports modules
       let sortedPkgs = allSvcPkgs
@@ -331,15 +645,261 @@ export function CatalogPackagesPage() {
       }
 
       // Filter by search query if present
-      const filteredPkgs = !q
-        ? sortedPkgs
-        : sortedPkgs.filter(
-            (p) =>
-              p.name.toLowerCase().includes(q) ||
-              (p.tag && p.tag.toLowerCase().includes(q)) ||
-              (p.description && p.description.toLowerCase().includes(q)) ||
-              svc.name.toLowerCase().includes(q)
-          )
+      const getFilteredPkgs = (pkgs) => {
+        const q = searchQuery.trim().toLowerCase()
+        if (!q) return pkgs
+        return pkgs.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            (p.tag && p.tag.toLowerCase().includes(q)) ||
+            (p.description && p.description.toLowerCase().includes(q)) ||
+            svc.name.toLowerCase().includes(q)
+        )
+      }
+
+      if (svc.slug === "kitchen-cleaning") {
+        const groups = [
+          {
+            subSlug: "packages",
+            displayName: "Full Kitchen Packages",
+            filterFn: (p) => p.slug.startsWith("occ-") || p.slug.startsWith("empty-"),
+          },
+          {
+            subSlug: "appliance",
+            displayName: "single appliance cleaning",
+            filterFn: (p) =>
+              p.slug.includes("fridge") ||
+              p.slug.includes("microwave") ||
+              p.slug.includes("chimney") ||
+              p.slug.includes("stove") ||
+              p.slug.includes("dishwasher") ||
+              p.slug.includes("air-fryer") ||
+              p.slug.includes("otg") ||
+              p.slug.includes("sandwich"),
+            transformFn: (pkgs, getFilteredPkgs) => {
+              // Group fridge and stove items
+              const finalPkgs = [];
+              const fridgeSub = pkgs.filter(p => p.slug.startsWith("fridge-"));
+              const stoveSub = pkgs.filter(p => p.slug.startsWith("stove-"));
+              const remaining = pkgs.filter(p => !p.slug.startsWith("fridge-") && !p.slug.startsWith("stove-"));
+
+              if (fridgeSub.length > 0) {
+                finalPkgs.push({
+                  id: "fridge-parent",
+                  name: "Fridge cleaning",
+                  slug: "fridge-parent",
+                  description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
+                  base_price: Math.min(...fridgeSub.map(p => Number(p.base_price) || 0)),
+                  duration: fridgeSub[0]?.duration || "1.5 hrs",
+                  status: fridgeSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                  subOptions: fridgeSub,
+                });
+              }
+
+              if (stoveSub.length > 0) {
+                finalPkgs.push({
+                  id: "stove-parent",
+                  name: "Gas stove cleaning",
+                  slug: "stove-parent",
+                  description: "Surface cleaning of gas stove burners and knobs to remove grease.",
+                  base_price: Math.min(...stoveSub.map(p => Number(p.base_price) || 0)),
+                  duration: stoveSub[0]?.duration || "45 mins",
+                  status: stoveSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                  subOptions: stoveSub,
+                });
+              }
+
+              finalPkgs.push(...remaining);
+
+              // Sort finalPkgs to match KITCHEN_SLUG_ORDER
+              finalPkgs.sort((a, b) => {
+                const idxA = KITCHEN_SLUG_ORDER.indexOf(a.slug);
+                const idxB = KITCHEN_SLUG_ORDER.indexOf(b.slug);
+                const orderA = idxA !== -1 ? idxA : 999;
+                const orderB = idxB !== -1 ? idxB : 999;
+                return orderA - orderB;
+              });
+
+              return getFilteredPkgs(finalPkgs);
+            }
+          },
+          {
+            subSlug: "cabinet_tile",
+            displayName: "Cabinet & Tile Care",
+            filterFn: (p) => p.slug.startsWith("kitchen-") || p.slug.startsWith("cabinet-"),
+          },
+          {
+            subSlug: "addons",
+            displayName: "Quick Extra Services",
+            filterFn: (p) =>
+              p.slug.startsWith("quick-") ||
+              p.slug.startsWith("sink-") ||
+              p.slug.startsWith("dining-") ||
+              p.slug.startsWith("fan-") ||
+              p.slug.startsWith("balcony-"),
+          },
+        ]
+
+        const KITCHEN_SLUG_ORDER = [
+          "occ-basic",
+          "occ-deep",
+          "empty-kitchen",
+          "fridge-parent",
+          "fridge-single",
+          "fridge-double",
+          "fridge-triple",
+          "microwave-clean",
+          "chimney-clean",
+          "chimney-stove-clean",
+          "stove-parent",
+          "stove-2b",
+          "stove-3b",
+          "stove-4b",
+          "dishwasher-clean",
+          "air-fryer-clean",
+          "otg-clean",
+          "sandwich-clean",
+          "kitchen-tiles-slabs",
+          "cabinet-trolley-clean",
+          "quick-sink-under-sink",
+          "quick-kitchen-window",
+          "quick-dining-table",
+          "quick-fan-clean",
+          "quick-exhaust-fan-clean",
+          "quick-balcony-upto-4ft",
+          "quick-balcony-above-4ft",
+          "quick-door-clean"
+        ]
+
+        return groups.map((g) => {
+          let groupPkgs = allSvcPkgs.filter(g.filterFn)
+          groupPkgs = [...groupPkgs].sort((a, b) => {
+            const idxA = KITCHEN_SLUG_ORDER.indexOf(a.slug)
+            const idxB = KITCHEN_SLUG_ORDER.indexOf(b.slug)
+            const orderA = idxA !== -1 ? idxA : 999
+            const orderB = idxB !== -1 ? idxB : 999
+            return orderA - orderB
+          })
+          const finalPkgs = g.transformFn ? g.transformFn(groupPkgs, getFilteredPkgs) : getFilteredPkgs(groupPkgs);
+          return {
+            service: {
+              ...svc,
+              id: `${svc.id}-${g.subSlug}`,
+              virtualSlug: g.subSlug,
+              realServiceId: svc.id,
+            },
+            displayName: g.displayName,
+            icon: getServiceIcon(g.subSlug, g.displayName),
+            totalPackages: finalPkgs.length,
+            packages: finalPkgs,
+          }
+        })
+      }
+
+      if (svc.slug === "sofa-cleaning") {
+        const groups = [
+          {
+            subSlug: "sofa",
+            displayName: "Sofa Cleaning",
+            filterFn: (p) => p.slug.includes("sofa-"),
+          },
+          {
+            subSlug: "mattress",
+            displayName: "Mattress Cleaning",
+            filterFn: (p) => p.slug.startsWith("mattress-"),
+          },
+          {
+            subSlug: "carpet",
+            displayName: "Carpet Cleaning",
+            filterFn: (p) => p.slug.startsWith("carpet-"),
+          },
+          {
+            subSlug: "addons",
+            displayName: "Quick Extra Services",
+            filterFn: (p) =>
+              p.slug === "quick-dining-table" ||
+              p.slug === "quick-fan-clean" ||
+              p.slug === "quick-door-clean" ||
+              p.slug === "quick-balcony-upto-4ft" ||
+              p.slug === "quick-balcony-above-4ft" ||
+              p.slug.startsWith("fridge-"),
+            transformFn: (pkgs, getFilteredPkgs) => {
+              // Group fridge parent if subOptions exist
+              const finalPkgs = [];
+              const fridgeSub = pkgs.filter(p => p.slug.startsWith("fridge-"));
+              const remaining = pkgs.filter(p => !p.slug.startsWith("fridge-"));
+
+              if (fridgeSub.length > 0) {
+                finalPkgs.push({
+                  id: "fridge-parent",
+                  name: "Fridge cleaning",
+                  slug: "fridge-parent",
+                  description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
+                  base_price: Math.min(...fridgeSub.map(p => Number(p.base_price) || 0)),
+                  duration: fridgeSub[0]?.duration || "1.5 hrs",
+                  status: fridgeSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                  subOptions: fridgeSub,
+                });
+              }
+              finalPkgs.push(...remaining);
+
+              // Sort finalPkgs to match SOFA_SLUG_ORDER
+              finalPkgs.sort((a, b) => {
+                const idxA = SOFA_SLUG_ORDER.indexOf(a.slug);
+                const idxB = SOFA_SLUG_ORDER.indexOf(b.slug);
+                const orderA = idxA !== -1 ? idxA : 999;
+                const orderB = idxB !== -1 ? idxB : 999;
+                return orderA - orderB;
+              });
+
+              return getFilteredPkgs(finalPkgs);
+            }
+          },
+        ]
+
+        const SOFA_SLUG_ORDER = [
+          "fabric-sofa-clean",
+          "fabric-sofa-cushion-clean",
+          "leather-sofa-clean",
+          "leather-sofa-cushion-clean",
+          "mattress-deep",
+          "mattress-pillow-refresh",
+          "carpet-deep",
+          "quick-dining-table",
+          "quick-fan-clean",
+          "quick-door-clean",
+          "fridge-parent",
+          "fridge-single",
+          "fridge-double",
+          "fridge-triple",
+          "quick-balcony-upto-4ft",
+          "quick-balcony-above-4ft"
+        ]
+
+        return groups.map((g) => {
+          let groupPkgs = allSvcPkgs.filter(g.filterFn)
+          groupPkgs = [...groupPkgs].sort((a, b) => {
+            const idxA = SOFA_SLUG_ORDER.indexOf(a.slug)
+            const idxB = SOFA_SLUG_ORDER.indexOf(b.slug)
+            const orderA = idxA !== -1 ? idxA : 999
+            const orderB = idxB !== -1 ? idxB : 999
+            return orderA - orderB
+          })
+          const finalPkgs = g.transformFn ? g.transformFn(groupPkgs, getFilteredPkgs) : getFilteredPkgs(groupPkgs);
+          return {
+            service: {
+              ...svc,
+              id: `${svc.id}-${g.subSlug}`,
+              virtualSlug: g.subSlug,
+              realServiceId: svc.id,
+            },
+            displayName: g.displayName,
+            icon: getServiceIcon(g.subSlug, g.displayName),
+            totalPackages: finalPkgs.length,
+            packages: finalPkgs,
+          }
+        })
+      }
 
       // Friendly display name formatting (e.g. "Two Wheeler" -> "2 Wheeler")
       let displayName = svc.name
@@ -347,13 +907,13 @@ export function CatalogPackagesPage() {
       if (svc.slug === "truck") displayName = "Truck"
       if (svc.slug === "packers-movers") displayName = "Packers & Movers"
 
-      return {
+      return [{
         service: svc,
         displayName,
         icon: getServiceIcon(svc.slug, svc.name),
         totalPackages: allSvcPkgs.length,
-        packages: filteredPkgs,
-      }
+        packages: getFilteredPkgs(sortedPkgs),
+      }]
     })
 
     return result
@@ -368,9 +928,14 @@ export function CatalogPackagesPage() {
         counts[pillar.key] = 0
         return
       }
-      const catServices = services.filter(
+      let catServices = services.filter(
         (s) => String(s.category) === String(dbCat.id) || s.category_id === dbCat.id || s.category_slug === pillar.key
       )
+      if (pillar.key === "home_pest_control") {
+        catServices = catServices.filter(
+          (s) => s.slug !== "general" && s.slug !== "security"
+        )
+      }
       const serviceIds = new Set(catServices.map((s) => String(s.id)))
       const total = packages.filter((p) => {
         const svcId = String(p.service?.id || p.service || p.service_id)
@@ -394,7 +959,9 @@ export function CatalogPackagesPage() {
     return activeCategoryServicesWithPackages.filter(
       (item) =>
         item.service.slug === activeSubServiceKey ||
+        item.service.virtualSlug === activeSubServiceKey ||
         String(item.service.id) === String(activeSubServiceKey) ||
+        String(item.service.realServiceId) === String(activeSubServiceKey) ||
         item.displayName.toLowerCase().replace(/[^a-z0-9]/g, "") === activeSubServiceKey.toLowerCase().replace(/[^a-z0-9]/g, "")
     )
   }, [activeSubServiceKey, activeCategoryServicesWithPackages])
@@ -436,9 +1003,15 @@ export function CatalogPackagesPage() {
   }
 
   const openQuickPriceEdit = (pkg) => {
-    const slug = pkg.slug || ""
-    const presets = DEFAULT_SUITABLE_PRESETS[slug] || []
-    const existingIncludes = Array.isArray(pkg.includes) ? pkg.includes : []
+    const slug = pkg.slug || pkg.id || ""
+    const presets = DEFAULT_SUITABLE_PRESETS[slug] || DEFAULT_SUITABLE_PRESETS[pkg.id] || []
+
+    // For virtual parent rows (fridge-parent, stove-parent), pull includes from first subOption
+    let existingIncludes = Array.isArray(pkg.includes) ? pkg.includes : []
+    if (existingIncludes.length === 0 && Array.isArray(pkg.subOptions) && pkg.subOptions.length > 0) {
+      const firstSub = pkg.subOptions[0]
+      existingIncludes = Array.isArray(firstSub.includes) ? firstSub.includes : []
+    }
 
     const items = []
     const seen = new Set()
@@ -475,6 +1048,14 @@ export function CatalogPackagesPage() {
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
       checklist: items,
       image: pkg.image || "",
+      editingItemId: null,
+      _vdOpen: true,
+      viewDetails: {
+        tools: Array.isArray(pkg.tools) ? pkg.tools : [],
+        ready: Array.isArray(pkg.ready) ? pkg.ready : [],
+        reviews: Array.isArray(pkg.reviews) ? pkg.reviews : [],
+        faqs: Array.isArray(pkg.faqs) ? pkg.faqs : [],
+      },
     })
     setNewItemText("")
   }
@@ -499,6 +1080,7 @@ export function CatalogPackagesPage() {
         quickPriceEditing.tag.toLowerCase().includes("popular")
       )
 
+      const vd = quickPriceEditing.viewDetails || {}
       const payload = {
         name: quickPriceEditing.name,
         description: quickPriceEditing.description || "",
@@ -509,19 +1091,49 @@ export function CatalogPackagesPage() {
         includes: finalIncludes,
         image: quickPriceEditing.image || "",
         offer_price: null,
+        tools: Array.isArray(vd.tools) ? vd.tools.filter(Boolean) : [],
+        ready: Array.isArray(vd.ready) ? vd.ready.filter(Boolean) : [],
+        reviews: Array.isArray(vd.reviews) ? vd.reviews.filter(r => r.name || r.text) : [],
+        faqs: Array.isArray(vd.faqs) ? vd.faqs.filter(f => f.q || f.a) : [],
       }
-      const res = await apiRequest(`/settings/catalog/v2/packages/${quickPriceEditing.id}/`, {
+
+      // Handle virtual parent rows (fridge-parent, stove-parent) — save includes to each sub-option
+      const isVirtualParent = (quickPriceEditing.id === "fridge-parent" || quickPriceEditing.id === "stove-parent") && Array.isArray(quickPriceEditing.subOptions)
+      if (isVirtualParent) {
+        const subIds = quickPriceEditing.subOptions.map(s => s.id).filter(Boolean)
+        const results = await Promise.all(
+          subIds.map(subId =>
+            apiRequest(`/settings/catalog/v2/packages/${subId}/`, {
+              method: "PUT",
+              json: { includes: finalIncludes, description: payload.description },
+            })
+          )
+        )
+        const allOk = results.every(r => r.success)
+        if (allOk) {
+          showToast(`Includes updated for all ${quickPriceEditing.name} variants`)
+          setQuickPriceEditing(null)
+          loadData()
+        } else {
+          showToast("Some updates failed", "error")
+        }
+        return
+      }
+
+      const targetId = quickPriceEditing.realPackageId || quickPriceEditing.id || quickPriceEditing.slug
+      const res = await apiRequest(`/settings/catalog/v2/packages/${targetId}/`, {
         method: "PUT",
         json: payload,
       })
-      if (res.success) {
+      if (res && res.success) {
         showToast(`Changes published for "${quickPriceEditing.name}"`)
         setQuickPriceEditing(null)
         loadData()
       } else {
-        showToast(res.message || "Update failed", "error")
+        showToast(res?.message || "Update failed", "error")
       }
-    } catch {
+    } catch (err) {
+      console.error("Save failed:", err)
       showToast("Update failed", "error")
     }
   }
@@ -756,35 +1368,53 @@ export function CatalogPackagesPage() {
             </button>
 
             {/* Individual Sub-Service Tabs (e.g. 2 Wheeler, Truck, Packers & Movers) */}
-            {activeCategoryServicesWithPackages.map((item) => {
-              const SubIcon = item.icon
-              const isSubActive =
-                activeSubServiceKey === item.service.slug ||
-                String(activeSubServiceKey) === String(item.service.id) ||
-                activeSubServiceKey.toLowerCase() === item.displayName.toLowerCase().replace(/[^a-z0-9]/g, "")
+            {(() => {
+              const seen = new Set()
+              const uniqueItems = activeCategoryServicesWithPackages.filter((item) => {
+                const key = item.service.realServiceId || item.service.slug || item.service.id
+                if (seen.has(key)) return false
+                seen.add(key)
+                return true
+              })
 
-              return (
-                <button
-                  key={item.service.id}
-                  type="button"
-                  onClick={() => setActiveSubServiceKey(item.service.slug || String(item.service.id))}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                  isSubActive
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                    : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
-                }`}
-              >
-                <span>{item.displayName}</span>
-                  <span
-                    className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
-                      isSubActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+              return uniqueItems.map((item) => {
+                const serviceKey = item.service.realServiceId || item.service.slug || item.service.id
+                const totalCount = activeCategoryServicesWithPackages
+                  .filter(x => (x.service.realServiceId || x.service.slug || x.service.id) === serviceKey)
+                  .reduce((acc, x) => acc + x.totalPackages, 0)
+                
+                const SubIcon = item.icon
+                const isSubActive =
+                  activeSubServiceKey === item.service.slug ||
+                  activeSubServiceKey === item.service.virtualSlug ||
+                  String(activeSubServiceKey) === String(item.service.id) ||
+                  String(activeSubServiceKey) === String(item.service.realServiceId) ||
+                  item.displayName.toLowerCase().replace(/[^a-z0-9]/g, "") === activeSubServiceKey.toLowerCase().replace(/[^a-z0-9]/g, "")
+
+                return (
+                  <button
+                    key={item.service.id}
+                    type="button"
+                    onClick={() => setActiveSubServiceKey(item.service.slug || String(item.service.id))}
+                    className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                      isSubActive
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                        : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
                     }`}
                   >
-                    {item.totalPackages}
-                  </span>
-                </button>
-              )
-            })}
+                    <SubIcon className="w-3.5 h-3.5" />
+                    <span>{item.displayName}</span>
+                    <span
+                      className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
+                        isSubActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {totalCount}
+                    </span>
+                  </button>
+                )
+              })
+            })()}
           </div>
         </div>
       )}
@@ -853,7 +1483,7 @@ export function CatalogPackagesPage() {
                     onClick={() => {
                       setEditing({
                         ...EMPTY_PACKAGE,
-                        service: String(svcItem.service.id),
+                        service: String(svcItem.service.realServiceId || svcItem.service.id),
                       })
                     }}
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100/80 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-indigo-200/60"
@@ -882,106 +1512,196 @@ export function CatalogPackagesPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
-                        {pkgList.map((pkg) => (
-                          <tr key={pkg.id} className="hover:bg-slate-50/80 transition-colors group">
-                            {/* Package Name & Description */}
-                            <td className="py-3.5 px-4 sm:px-5 max-w-xs sm:max-w-md">
-                              <div className="font-bold text-slate-900 text-xs sm:text-sm">{pkg.name}</div>
-                              {pkg.description ? (
-                                <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
-                                  {pkg.description}
-                                </p>
-                              ) : (
-                                <p className="text-[11px] text-slate-400 italic mt-0.5">No description set</p>
-                              )}
-                            </td>
+                        {pkgList.flatMap((pkg) => {
+                          const isParent = !!pkg.subOptions;
+                          const isExpanded = expandedPackages.has(pkg.id);
+                          const rows = [];
 
-                            {/* Starting Fare / Price */}
-                            <td className="py-3.5 px-4 sm:px-5">
-                              <div className="inline-flex items-center gap-1 text-sm font-extrabold text-indigo-700 bg-blue-50/80 border border-indigo-200/90 px-2.5 py-1 rounded-lg">
-                                <span>₹{Math.round(Number(pkg.base_price) || 0).toLocaleString("en-IN")}</span>
-                              </div>
-                            </td>
+                          rows.push(
+                            <tr key={pkg.id} className="hover:bg-slate-50/80 transition-colors group">
+                              {/* Package Name & Description */}
+                              <td className="py-3.5 px-4 sm:px-5 max-w-xs sm:max-w-md">
+                                <div className="flex items-center gap-2">
+                                  {isParent && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        const newSet = new Set(expandedPackages);
+                                        if (newSet.has(pkg.id)) {
+                                          newSet.delete(pkg.id);
+                                        } else {
+                                          newSet.add(pkg.id);
+                                        }
+                                        setExpandedPackages(newSet);
+                                      }}
+                                      className="p-1 rounded hover:bg-slate-200 text-slate-500"
+                                    >
+                                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                    </button>
+                                  )}
+                                  <div className="font-bold text-slate-900 text-xs sm:text-sm">{pkg.name}</div>
+                                </div>
+                                {pkg.description ? (
+                                  <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 ml-6">
+                                    {pkg.description}
+                                  </p>
+                                ) : (
+                                  <p className="text-[11px] text-slate-400 italic mt-0.5 ml-6">No description set</p>
+                                )}
+                              </td>
 
-                            {/* Highlight / Popularity Badge */}
-                            <td className="py-3.5 px-4 sm:px-5">
-                              {pkg.tag || pkg.popular ? (
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${
-                                    (pkg.tag || "").toLowerCase().includes("popular") || pkg.popular
-                                      ? "bg-amber-50 text-amber-700 border-amber-200/90"
-                                      : (pkg.tag || "").toLowerCase().includes("rare")
-                                      ? "bg-slate-100 text-slate-700 border-slate-200"
-                                      : (pkg.tag || "").toLowerCase().includes("best")
-                                      ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                      : "bg-blue-50 text-blue-700 border-blue-200"
-                                  }`}
-                                >
-                                  ★ {pkg.tag || "Popular"}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300 text-xs font-medium">—</span>
-                              )}
-                            </td>
+                              {/* Starting Fare / Price */}
+                              <td className="py-3.5 px-4 sm:px-5">
+                                <div className="inline-flex items-center gap-1 text-sm font-extrabold text-indigo-700 bg-blue-50/80 border border-indigo-200/90 px-2.5 py-1 rounded-lg">
+                                  <span>₹{Math.round(Number(pkg.base_price) || 0).toLocaleString("en-IN")}</span>
+                                </div>
+                              </td>
 
-                            {/* Duration / ETA */}
-                            <td className="py-3.5 px-4 sm:px-5">
-                              {pkg.duration ? (
-                                <span className="text-slate-600 font-medium">{pkg.duration}</span>
-                              ) : (
-                                <span className="text-slate-300 text-xs">—</span>
-                              )}
-                            </td>
+                              {/* Highlight / Popularity Badge */}
+                              <td className="py-3.5 px-4 sm:px-5">
+                                {pkg.tag || pkg.popular ? (
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${
+                                      (pkg.tag || "").toLowerCase().includes("popular") || pkg.popular
+                                        ? "bg-amber-50 text-amber-700 border-amber-200/90"
+                                        : (pkg.tag || "").toLowerCase().includes("rare")
+                                        ? "bg-slate-100 text-slate-700 border-slate-200"
+                                        : (pkg.tag || "").toLowerCase().includes("best")
+                                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                        : "bg-blue-50 text-blue-700 border-blue-200"
+                                    }`}
+                                  >
+                                    ★ {pkg.tag || "Popular"}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 text-xs font-medium">—</span>
+                                )}
+                              </td>
 
-                            {/* Status (Clickable Toggle) */}
-                            <td className="py-3.5 px-4 sm:px-5">
-                              <button
-                                type="button"
-                                onClick={() => handleToggleStatus(pkg)}
-                                title={`Click to set ${pkg.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"}`}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase border transition-all cursor-pointer ${
-                                  pkg.status === "ACTIVE"
-                                    ? "bg-blue-50 text-blue-700 border-blue-200/90 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"
-                                    : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200"
-                                }`}
-                              >
-                                <span
-                                  className={`w-1.5 h-1.5 rounded-full ${
+                              {/* Duration / ETA */}
+                              <td className="py-3.5 px-4 sm:px-5">
+                                {pkg.duration ? (
+                                  <span className="text-slate-600 font-medium">{pkg.duration}</span>
+                                ) : (
+                                  <span className="text-slate-300 text-xs">—</span>
+                                )}
+                              </td>
+
+                              {/* Status (Clickable Toggle) */}
+                              <td className="py-3.5 px-4 sm:px-5">
+                                <button
+                                  type="button"
+                                  onClick={() => !isParent && handleToggleStatus(pkg)}
+                                  title={isParent ? "" : `Click to set ${pkg.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"}`}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase border transition-all cursor-pointer ${
                                     pkg.status === "ACTIVE"
-                                      ? "bg-emerald-500"
-                                      : "bg-slate-400"
+                                      ? "bg-blue-50 text-blue-700 border-blue-200/90"
+                                      : "bg-slate-100 text-slate-600 border-slate-200"
                                   }`}
-                                />
-                                <span>{pkg.status}</span>
-                              </button>
-                            </td>
-
-                            {/* Actions */}
-                            <td className="py-3.5 px-4 sm:px-5 text-right">
-                              <div className="inline-flex items-center justify-end gap-2">
-                                {/* Customise Details & Price Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => openQuickPriceEdit(pkg)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
                                 >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                  <span>Customise</span>
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${
+                                      pkg.status === "ACTIVE"
+                                        ? "bg-emerald-500"
+                                        : "bg-slate-400"
+                                    }`}
+                                  />
+                                  <span>{pkg.status}</span>
                                 </button>
+                              </td>
 
-                                {/* Full Edit Modal */}
-                                <button
-                                  type="button"
-                                  onClick={() => openEdit(pkg)}
-                                  title="Edit Package Details"
-                                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                                >
-                                  <SlidersHorizontal className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                              {/* Actions */}
+                              <td className="py-3.5 px-4 sm:px-5 text-right">
+                                {isParent ? (
+                                  <div className="inline-flex items-center justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => openQuickPriceEdit(pkg)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                      <span>Customise</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="inline-flex items-center justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => openQuickPriceEdit(pkg)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                      <span>Customise</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openEdit(pkg)}
+                                      title="Edit Package Details"
+                                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                                    >
+                                      <SlidersHorizontal className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+
+                          if (isParent && isExpanded) {
+                            pkg.subOptions.forEach((sub) => {
+                              rows.push(
+                                <tr key={sub.id} className="bg-slate-50/50 hover:bg-slate-100/60 transition-colors border-l-4 border-indigo-500">
+                                  <td className="py-3.5 pl-12 pr-4 sm:pr-5">
+                                    <div className="font-bold text-slate-700 text-xs">{sub.name}</div>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">{sub.description || "Sub-variant option"}</p>
+                                  </td>
+                                  <td className="py-3.5 px-4 sm:px-5">
+                                    <span className="text-xs font-bold text-slate-600">₹{Math.round(Number(sub.base_price) || 0)}</span>
+                                  </td>
+                                  <td className="py-3.5 px-4 sm:px-5">
+                                    {sub.tag ? <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-700 px-2 py-0.5 rounded font-bold">★ {sub.tag}</span> : "—"}
+                                  </td>
+                                  <td className="py-3.5 px-4 sm:px-5 text-slate-500 text-xs">
+                                    {sub.duration}
+                                  </td>
+                                  <td className="py-3.5 px-4 sm:px-5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleStatus(sub)}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                                        sub.status === "ACTIVE" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-100 text-slate-600 border-slate-200"
+                                      }`}
+                                    >
+                                      {sub.status}
+                                    </button>
+                                  </td>
+                                  <td className="py-3.5 px-4 sm:px-5 text-right">
+                                    <div className="inline-flex items-center justify-end gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => openQuickPriceEdit(sub)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-[11px] font-bold border border-indigo-200/50 cursor-pointer"
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                        <span>Customise</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => openEdit(sub)}
+                                        className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                      >
+                                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          }
+
+                          return rows;
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1142,14 +1862,59 @@ export function CatalogPackagesPage() {
                           }}
                           className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
                         />
-                        <span
-                          className={`text-xs font-semibold ${
-                            item.checked ? "text-slate-800" : "text-slate-500 line-through"
+                        {quickPriceEditing.editingItemId === item.id ? (
+                          <input
+                            type="text"
+                            value={item.text}
+                            onChange={(e) => {
+                              const updated = quickPriceEditing.checklist.map((ci) =>
+                                ci.id === item.id ? { ...ci, text: e.target.value } : ci
+                              )
+                              setQuickPriceEditing({ ...quickPriceEditing, checklist: updated })
+                            }}
+                            onBlur={() => setQuickPriceEditing({ ...quickPriceEditing, editingItemId: null })}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                setQuickPriceEditing({ ...quickPriceEditing, editingItemId: null })
+                              }
+                            }}
+                            autoFocus
+                            className="bg-white border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1.5 py-0.5 text-xs font-semibold flex-1 text-slate-800"
+                          />
+                        ) : (
+                          <span
+                            onClick={() => {
+                              // By request, clicking the row text directly does not trigger edit, must click the edit icon.
+                              // Clicking the checkbox still toggles, but span does nothing.
+                            }}
+                            className={`text-xs font-semibold px-1.5 py-0.5 flex-1 select-none ${
+                              item.checked ? "text-slate-800" : "text-slate-500 line-through"
+                            }`}
+                          >
+                            {item.text}
+                          </span>
+                        )}
+                      </label>
+
+                      <div className="flex items-center gap-1">
+                        {/* Edit indicator/button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuickPriceEditing({
+                              ...quickPriceEditing,
+                              editingItemId: item.id
+                            })
+                          }}
+                          title="Rename item"
+                          className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                            quickPriceEditing.editingItemId === item.id
+                              ? "text-blue-600 bg-blue-50"
+                              : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"
                           }`}
                         >
-                          {item.text}
-                        </span>
-                      </label>
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
 
                       {/* Remove item button */}
                       <button
@@ -1163,6 +1928,7 @@ export function CatalogPackagesPage() {
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -1301,6 +2067,162 @@ export function CatalogPackagesPage() {
 
             {/* ── Image Customization Section ── */}
             <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-800">
+                    Package Image
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                {quickPriceEditing.image ? (
+                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                    <img src={quickPriceEditing.image} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setQuickPriceEditing((prev) => ({ ...prev, image: "" }))}
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                    No Image
+                  </div>
+                )}
+                <div className="flex-1 w-full space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const formData = new FormData()
+                        formData.append("image", file)
+                        try {
+                          const res = await apiRequest("/settings/catalog/upload-image/", {
+                            method: "POST",
+                            body: formData,
+                          })
+                          if (res.success && res.url) {
+                            setQuickPriceEditing((prev) => ({ ...prev, image: res.url }))
+                            showToast("Image uploaded successfully!")
+                          } else {
+                            showToast(res.message || "Upload failed", "error")
+                          }
+                        } catch (err) {
+                          showToast("Upload failed", "error")
+                        }
+                      }
+                    }}
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                  />
+                  <Input
+                    label="Or Image URL"
+                    placeholder="https://images.unsplash.com/..."
+                    value={quickPriceEditing.image || ""}
+                    onChange={(e) => setQuickPriceEditing({ ...quickPriceEditing, image: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ── View Details Content Section (Tools, Ready, Reviews, FAQs) ── */}
+            {Boolean(quickPriceEditing) && (() => {
+              const vd = quickPriceEditing.viewDetails || { tools: [], ready: [], reviews: [], faqs: [] }
+              const setVd = (updates) => setQuickPriceEditing({ ...quickPriceEditing, viewDetails: { ...vd, ...updates } })
+              return (
+                <div className="rounded-2xl border border-emerald-100/90 overflow-hidden bg-gradient-to-b from-emerald-50/30 to-slate-50/40">
+                  <button
+                    type="button"
+                    onClick={() => setQuickPriceEditing({ ...quickPriceEditing, _vdOpen: !quickPriceEditing._vdOpen })}
+                    className="w-full flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-emerald-50/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800">View Details Content</span>
+                      <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200/90">Shown in app popup</span>
+                    </div>
+                    <span className="text-slate-400 text-sm font-bold">{quickPriceEditing._vdOpen ? "−" : "+"}</span>
+                  </button>
+
+                  {quickPriceEditing._vdOpen && (
+                    <div className="px-5 pb-5 space-y-5 border-t border-emerald-100">
+
+                      {/* Tools & Products We Use */}
+                      <div className="pt-4">
+                        <div className="text-xs font-bold text-slate-700 mb-2">🔧 Tools &amp; Products We Use</div>
+                        <div className="space-y-1.5 mb-2">
+                          {(vd.tools || []).map((t, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <input type="text" value={t} onChange={(e) => { const a = [...(vd.tools || [])]; a[i] = e.target.value; setVd({ tools: a }) }} className="flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 outline-none" />
+                              <button type="button" onClick={() => { const a = [...(vd.tools || [])]; a.splice(i, 1); setVd({ tools: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setVd({ tools: [...(vd.tools || []), ""] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add tool / product</button>
+                      </div>
+
+                      {/* What You Need to Keep Ready */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <div className="text-xs font-bold text-slate-700 mb-2">✅ What You Need to Keep Ready</div>
+                        <div className="space-y-1.5 mb-2">
+                          {(vd.ready || []).map((r, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <input type="text" value={r} onChange={(e) => { const a = [...(vd.ready || [])]; a[i] = e.target.value; setVd({ ready: a }) }} className="flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 outline-none" />
+                              <button type="button" onClick={() => { const a = [...(vd.ready || [])]; a.splice(i, 1); setVd({ ready: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setVd({ ready: [...(vd.ready || []), ""] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add item</button>
+                      </div>
+
+                      {/* Customer Reviews */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <div className="text-xs font-bold text-slate-700 mb-2">⭐ Customer Reviews</div>
+                        <div className="space-y-2.5 mb-2">
+                          {(vd.reviews || []).map((rev, i) => (
+                            <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
+                              <div className="flex gap-2">
+                                <input type="text" placeholder="Name" value={rev.name || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], name: e.target.value }; setVd({ reviews: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
+                                <input type="text" placeholder="Rating (e.g. 4.9)" value={rev.rating || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], rating: e.target.value }; setVd({ reviews: a }) }} className="w-24 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
+                                <button type="button" onClick={() => { const a = [...(vd.reviews || [])]; a.splice(i, 1); setVd({ reviews: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                              <textarea placeholder="Review text..." value={rev.text || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], text: e.target.value }; setVd({ reviews: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setVd({ reviews: [...(vd.reviews || []), { name: "", rating: "5.0", text: "" }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add review</button>
+                      </div>
+
+                      {/* FAQs */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <div className="text-xs font-bold text-slate-700 mb-2">❓ Frequently Asked Questions</div>
+                        <div className="space-y-2.5 mb-2">
+                          {(vd.faqs || []).map((faq, i) => (
+                            <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
+                              <div className="flex gap-2">
+                                <input type="text" placeholder="Question" value={faq.q || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], q: e.target.value }; setVd({ faqs: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
+                                <button type="button" onClick={() => { const a = [...(vd.faqs || [])]; a.splice(i, 1); setVd({ faqs: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                              <textarea placeholder="Answer text..." value={faq.a || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], a: e.target.value }; setVd({ faqs: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setVd({ faqs: [...(vd.faqs || []), { q: "", a: "" }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add FAQ</button>
+                      </div>
+
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* ── Image Customization Section ── */}
+            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3 mt-4">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <span className="text-xs font-bold text-slate-800">
