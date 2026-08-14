@@ -1025,10 +1025,34 @@ export function PackersMoversBookingHosurPage() {
     ]
   }
 
+  function isBadgeActive(durationStr, updatedAtStr) {
+    if (!durationStr || !updatedAtStr) return true
+    const norm = durationStr.toLowerCase().trim()
+    let durationMs = 0
+    if (norm.includes("day")) {
+      const num = parseInt(norm) || 0
+      durationMs = num * 24 * 60 * 60 * 1000
+    } else if (norm.includes("month")) {
+      const num = parseInt(norm) || 0
+      durationMs = num * 30 * 24 * 60 * 60 * 1000
+    } else if (norm.includes("yr") || norm.includes("year")) {
+      const num = parseInt(norm) || 0
+      durationMs = num * 365 * 24 * 60 * 60 * 1000
+    } else if (norm.includes("min")) {
+      const num = parseInt(norm) || 0
+      durationMs = num * 60 * 1000
+    } else {
+      return true
+    }
+    const updatedTime = new Date(updatedAtStr).getTime()
+    return (Date.now() - updatedTime) <= durationMs
+  }
+
   // Adapt backend ServiceTier rows to the { id, name, capacity, price,
   // diagram, details } shape the rest of this page already renders.
   function tierToPackage(tier) {
-    const badgeText = tier.icon || ""
+    const isBadgeValid = isBadgeActive(tier.duration, tier.updated_at)
+    const badgeText = isBadgeValid ? (tier.icon || "") : ""
     const suitableList = (Array.isArray(tier.includes) && tier.includes.length > 0)
       ? tier.includes
       : (PACKERS_SUITABILITY_MAP[tier.slug] || [])

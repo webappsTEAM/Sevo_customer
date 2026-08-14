@@ -85,7 +85,7 @@ class ServiceTier(models.Model):
 
     includes = models.JSONField(default=list, blank=True)   # value-added inclusions, movers mainly
     icon = models.CharField(max_length=100, blank=True, default="")  # lucide-react icon name used by frontend
-
+    duration = models.CharField(max_length=50, blank=True, default="")
     order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
 

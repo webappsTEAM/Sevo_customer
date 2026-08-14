@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, Search, ShoppingCart, Star, Check, X, ShieldAlert, ChevronDown, ChevronUp } from "lucide-react";
+import { apiRequest } from "../../api/client.js";
+import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
@@ -295,9 +297,30 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [dbPackages, setDbPackages] = useState([]);
 
   // States for options in details view
   const [selectedRateIdx, setSelectedRateIdx] = useState(0);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      try {
+        // Fetch cockroach and termite packages using public endpoint
+        const [cockroachRes, termiteRes] = await Promise.all([
+          apiRequest("/settings/catalog/public/packages/?service_slug=cockroach-control"),
+          apiRequest("/settings/catalog/public/packages/?service_slug=termite-control"),
+        ]);
+        const allPkgs = [
+          ...(cockroachRes?.success && Array.isArray(cockroachRes.data) ? cockroachRes.data : []),
+          ...(termiteRes?.success && Array.isArray(termiteRes.data) ? termiteRes.data : []),
+        ];
+        setDbPackages(allPkgs);
+      } catch (err) {
+        console.error("Failed to fetch pest packages:", err);
+      }
+    };
+    fetchPackages();
+  }, []);
 
   useEffect(() => {
     if (selectedServiceDetails) {
@@ -335,6 +358,28 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
 
+  const getDynamicPestServices = () => {
+    let services = JSON.parse(JSON.stringify(PEST_SERVICES));
+    if (dbPackages.length > 0) {
+      Object.keys(services).forEach(key => {
+        services[key] = services[key].map(item => {
+          const dbMatch = dbPackages.find(p => p.slug === item.id);
+          if (dbMatch) {
+            item.name = dbMatch.name;
+            item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.duration = dbMatch.duration || item.duration;
+            item.description = dbMatch.description || item.description;
+            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+          }
+          return item;
+        });
+      });
+    }
+    return services;
+  };
+
+  const dynamicPestServices = getDynamicPestServices();
+
   const getModalPrice = () => {
     if (!selectedServiceDetails) return 0;
     const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
@@ -371,11 +416,11 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
     );
   };
 
-  const filteredKB = filterList(PEST_SERVICES.kitchen_bathroom);
-  const filteredAB = filterList(PEST_SERVICES.apartment_bungalow);
+  const filteredKB = filterList(dynamicPestServices.kitchen_bathroom);
+  const filteredAB = filterList(dynamicPestServices.apartment_bungalow);
   
-  const filteredTermiteKB = filterList(PEST_SERVICES.termite_kitchen_bathroom);
-  const filteredTermiteAB = filterList(PEST_SERVICES.termite_apartment_bungalow);
+  const filteredTermiteKB = filterList(dynamicPestServices.termite_kitchen_bathroom);
+  const filteredTermiteAB = filterList(dynamicPestServices.termite_apartment_bungalow);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
@@ -387,18 +432,16 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="p-2 rounded-full hover:bg-slate-100 transition-colors border-none bg-transparent cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
-              <ChevronLeft size={20} className="text-slate-800" />
+              <ChevronLeft size={14} /> Back to Services
             </button>
             <div>
               <h2 className="text-xl font-black text-slate-900 tracking-tight">Cockroach & Termite Control</h2>
               <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Pest Control Services</p>
             </div>
           </div>
-
           <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
               value={searchQuery}
@@ -801,6 +844,8 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
         </div>
       </div>
 
+      <AppBannerAndFooter />
+
       {/* Details View Modal */}
       {selectedServiceDetails && createPortal(
         <div 
@@ -839,6 +884,24 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                 </div>
                 <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Starts at ₹{selectedServiceDetails.price} • {selectedServiceDetails.duration}</p>
               </div>
+
+              {/* Inclusions Box */}
+              {selectedServiceDetails.includes && selectedServiceDetails.includes.length > 0 && (
+                <div className="bg-emerald-50/40 border border-emerald-100/80 rounded-2xl p-4 text-left">
+                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    What's included
+                  </h4>
+                  <ul className="space-y-1 text-xs text-slate-600 font-medium">
+                    {selectedServiceDetails.includes.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-1.5">
+                        <span className="text-emerald-500 font-bold">✓</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Requirements / Sizes list */}
               {(() => {

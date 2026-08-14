@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, Search, ShoppingCart, Star, Check, X } from "lucide-react";
+import { apiRequest } from "../../api/client.js";
+import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
@@ -699,6 +701,21 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [dbPackages, setDbPackages] = useState([]);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      try {
+        const res = await apiRequest("/settings/catalog/public/packages/?service_slug=full-house-cleaning");
+        if (res.success && Array.isArray(res.data)) {
+          setDbPackages(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch full house packages:", err);
+      }
+    };
+    fetchPackages();
+  }, []);
 
   useEffect(() => {
     if (selectedServiceDetails) {
@@ -731,7 +748,42 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
   };
 
   const getActiveServices = () => {
-    const list = FULL_HOUSE_SERVICES[activeTab] || [];
+    let list = FULL_HOUSE_SERVICES[activeTab] || [];
+    list = JSON.parse(JSON.stringify(list));
+
+    if (dbPackages.length > 0) {
+      list = list.map(item => {
+        if (Array.isArray(item.subOptions)) {
+          item.subOptions = item.subOptions.map(subOpt => {
+            const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
+            if (dbMatch) {
+              return {
+                ...subOpt,
+                name: dbMatch.name,
+                price: Math.round(Number(dbMatch.base_price) || subOpt.price),
+                duration: dbMatch.duration || subOpt.duration,
+                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : subOpt.includes
+              };
+            }
+            return subOpt;
+          });
+          if (item.subOptions.length > 0) {
+            item.price = item.subOptions[0].price;
+          }
+        } else {
+          const dbMatch = dbPackages.find(p => p.slug === item.id);
+          if (dbMatch) {
+            item.name = dbMatch.name;
+            item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.duration = dbMatch.duration || item.duration;
+            item.description = dbMatch.description || item.description;
+            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+          }
+        }
+        return item;
+      });
+    }
+
     if (!searchQuery) return list;
     return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()) || a.includes.some(inc => inc.toLowerCase().includes(searchQuery.toLowerCase())));
   };
@@ -814,12 +866,12 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
       {/* Sticky Header + Tabs */}
       <div className="sticky top-16 z-20 bg-white shadow-sm border-b border-slate-100">
         <div className="p-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4 px-6">
-          <div>
+          <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-2 text-xs transition-colors border-none bg-transparent cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
-              <ChevronLeft size={16} /> Back to Services
+              <ChevronLeft size={14} /> Back to Services
             </button>
             <h2 className="text-xl font-black text-slate-900">Full Home Cleaning</h2>
           </div>
@@ -1000,6 +1052,8 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
         </div>
       </div>
 
+      <AppBannerAndFooter />
+
       {/* View Details Drawer/Modal */}
       {selectedServiceDetails && createPortal(
         <div
@@ -1047,6 +1101,24 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                   {(activeTab === "full_apartment" || activeTab === "unoccupied_apartment" || activeTab === "full_bungalow" || activeTab === "unoccupied_bungalow") ? "" : "Starts at "}₹{selectedServiceDetails.price} • {selectedServiceDetails.duration}
                 </p>
               </div>
+
+              {/* Inclusions Box */}
+              {selectedServiceDetails.includes && selectedServiceDetails.includes.length > 0 && (
+                <div className="bg-emerald-50/40 border border-emerald-100/80 rounded-2xl p-4 text-left">
+                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    What's included
+                  </h4>
+                  <ul className="space-y-1 text-xs text-slate-600 font-medium">
+                    {selectedServiceDetails.includes.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-1.5">
+                        <span className="text-emerald-500 font-bold">✓</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Requirements selection section */}
               {(() => {

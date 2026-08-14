@@ -91,6 +91,519 @@ const DEFAULT_SUITABLE_PRESETS = {
     "Dedicated relocation manager",
     "End-to-end unpacking & setup",
   ],
+  "fridge-parent": [
+    "Interior & exterior cleaning",
+    "Shelves, trays & compartments cleaning",
+    "Door seal & stain cleaning"
+  ],
+  "fridge-single": [
+    "Interior & exterior cleaning",
+    "Shelves, trays & compartments cleaning",
+    "Door seal & stain cleaning"
+  ],
+  "fridge-double": [
+    "Interior & exterior cleaning",
+    "Shelves, trays & compartments cleaning",
+    "Door seal & stain cleaning"
+  ],
+  "fridge-triple": [
+    "Interior & exterior cleaning",
+    "Shelves, trays & compartments cleaning",
+    "Door seal & stain cleaning"
+  ],
+  "stove-parent": [
+    "Stove / hob surface cleaning",
+    "Burner & knob cleaning",
+    "Grease & food stain removal"
+  ],
+  "stove-2b": [
+    "Stove / hob surface cleaning",
+    "Burner & knob cleaning",
+    "Grease & food stain removal"
+  ],
+  "stove-3b": [
+    "Stove / hob surface cleaning",
+    "Burner & knob cleaning",
+    "Grease & food stain removal"
+  ],
+  "stove-4b": [
+    "Stove / hob surface cleaning",
+    "Burner & knob cleaning",
+    "Grease & food stain removal"
+  ],
+}
+
+const STATIC_SERVICE_DETAIL_DATA = {
+  "empty-kitchen": {
+    tools: ["Specialized degreasing agents", "High-pressure floor scrubbers", "Microfiber detailing cloths", "Glass cleaning kits"],
+    ready: ["Ensure the kitchen is completely empty of utensils and items", "Provide access to continuous water and power supply"],
+    reviews: [{ name: "Meera R.", rating: "4.9", text: '"Perfect cleaning before we moved into our new apartment. Every corner was spotless."' }],
+    faqs: [{ q: "Is utensil washing included?", a: "No, this service is specifically for empty kitchens and does not include utensil cleaning." }]
+  },
+  "kitchen-tiles-slabs": {
+    tools: ["Heavy duty degreasers", "Grout scrubbing brushes", "Microfiber cleaning cloths", "High-pressure sprayers"],
+    ready: ["Clear items from the kitchen counters", "Ensure access to water and power outlets"],
+    reviews: [{ name: "Priya M.", rating: "5.0", text: '"Removed the stubborn oil stains from the tiles. Looks brand new!"' }],
+    faqs: [{ q: "Will this remove old stains?", a: "Yes, our specialized degreasers are designed to lift and clean tough oil and grease stains from slabs and tiles." }]
+  },
+  "cabinet-trolley-clean": {
+    tools: ["Wood-safe cleaner & polish", "Stainless steel degreaser for rails", "Soft detailing brushes", "Lint-free microfibers"],
+    ready: ["Empty all utensils and stored items from cabinets", "Ensure access to a water connection"],
+    reviews: [{ name: "Suresh V.", rating: "4.9", text: '"They cleaned every trolley track and got rid of the sticky grease inside the cabinets."' }],
+    faqs: [{ q: "Do I need to empty the cabinets?", a: "Yes, please empty all cabinets and drawers before the team arrives." }]
+  },
+  "occ-basic": {
+    tools: ["Kitchen-safe degreasers", "Microfiber cloths", "Non-abrasive scrubbers", "Detail cleaning brushes", "Floor and surface cleaning tools"],
+    ready: ["Continuous water supply", "Working power connection", "Kitchen area accessible for cleaning", "Fragile items and valuables kept safely"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The kitchen was cleaned very neatly. The stove, sink and tiles looked fresh after the service."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service for regular kitchen cleaning. The team was quick and professional."' }
+    ],
+    faqs: [
+      { q: "Will you move utensils from the cabinets?", a: "No. Utensil removal and rearrangement are not included in the Basic package." },
+      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring all the required environment-friendly cleaning tools and products." },
+      { q: "Is chimney cleaning included in the Basic package?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add appliance cleaning to this package?", a: "Yes. You can add individual appliance cleaning as an additional service." },
+      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean the exhaust fan in basic cleaning?", a: "No, exhaust fan cleaning is part of our deep cleaning package or can be booked separately as a quick service." },
+      { q: "Will you clean tiles and grout?", a: "Yes, we wipe tiles and slabs to remove superficial oil stains, but deep scrubbing grout lines is part of the deep cleaning package." },
+      { q: "Is garbage disposal included?", a: "We collect all waste generated during the cleaning and hand it over to your society bin, but we do not discard pre-existing bulk trash." }
+    ]
+  },
+  "occ-deep": {
+    tools: ["Steam cleaning equipment", "Kitchen-safe degreasers", "Microfiber cloths", "Non-abrasive scrubbers", "Detail brushes for corners and cabinets"],
+    ready: ["Continuous water supply", "Working power connection", "Kitchen area accessible for cleaning", "Fragile items and valuables kept safely"],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"Excellent deep cleaning. The grease on the stove and tiles was removed, and the cabinets were cleaned properly."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Very thorough service. They cleaned areas that are usually difficult to reach."' }
+    ],
+    faqs: [
+      { q: "Does Deep Clean include everything in Basic?", a: "Yes. Deep Clean includes all services covered in the Basic package, along with additional deep-cleaning services." },
+      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed, cabinets cleaned internally, and utensils rearranged as part of the Deep Clean service." },
+      { q: "Does Deep Clean include chimney cleaning?", a: "No. Chimney cleaning is available separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add refrigerator or microwave cleaning?", a: "Yes. Individual appliance cleaning can be added separately to your booking." },
+      { q: "Does steam cleaning remove tough grease?", a: "Yes. Steam cleaning helps loosen and remove stubborn grease, oil buildup and stains from suitable kitchen surfaces." },
+      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean internal cabinet walls?", a: "Yes, we deep clean both the interiors and exteriors of all kitchen cabinets and drawers." },
+      { q: "Are window panes and grills cleaned in this package?", a: "Yes, deep cleaning includes cleaning of kitchen window panes, frames, exhaust fans, and mesh surfaces." },
+      { q: "Do you offer stain guarantee for old granite or tiles?", a: "While we use professional-grade degreasers and steam machines that remove 99% of grease, extremely old chemical etchings or stone discoloration may not disappear completely." }
+    ]
+  },
+  "fridge-clean": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-parent": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-single": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-double": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-triple": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "stove-parent": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-2b": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-3b": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-4b": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "microwave-clean": {
+    tools: ["Appliance-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food and containers", "Keep the microwave accessible", "Ensure the appliance is switched off"],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The inside of my microwave was cleaned really well."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Quick and neat service. The food stains were removed properly."' }
+    ],
+    faqs: [
+      { q: "Will you clean the inside of the microwave?", a: "Yes, the inside, glass door and rotating plate will be cleaned." },
+      { q: "Do I need to remove everything before cleaning?", a: "Yes, please remove food and containers before the service." },
+      { q: "Can you remove burnt food stains?", a: "We will clean removable food and grease stains." }
+    ]
+  },
+  "chimney-clean": {
+    tools: ["Grease-removing cleaning products", "Microfiber cloths", "Soft scrubbers", "Cleaning brushes"],
+    ready: ["Keep the chimney area accessible", "Clear items around the stove", "Ensure a power connection is available"],
+    reviews: [
+      { name: "Karthik M.", rating: "5.0", text: '"The grease on my chimney filter was cleaned properly."' },
+      { name: "Ananya S.", rating: "4.8", text: '"Good cleaning service. The chimney looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the chimney filter?", a: "Yes, the chimney filter will be cleaned." },
+      { q: "Will you remove grease and oil?", a: "Yes, visible grease and oil buildup will be cleaned." },
+      { q: "Do you repair the chimney?", a: "No, repair and replacement work are not included." }
+    ]
+  },
+  "dishwasher-clean": {
+    tools: ["Dishwasher-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove all dishes before cleaning", "Keep the dishwasher accessible", "Keep water and power connections available"],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The dishwasher was cleaned very neatly, especially the racks and filter."' },
+      { name: "Karthik M.", rating: "4.8", text: '"Good service and the inside looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the filter?", a: "Yes, the accessible filter will be cleaned." },
+      { q: "Do I need to remove the dishes?", a: "Yes, please empty the dishwasher before cleaning." },
+      { q: "Will you remove food waste and dirt?", a: "Yes, visible food waste and dirt will be cleaned." }
+    ]
+  },
+  "air-fryer-clean": {
+    tools: ["Food-safe interior sanitizers", "Microfiber cloths", "Detail cleaning brushes"],
+    ready: ["Keep the air fryer accessible and unplugged", "Ensure power outlet is nearby for testing"],
+    reviews: [{ name: "Meera V.", rating: "5.0", text: '"Very neat cleaning. The tray oil and food residues were completely washed."' }],
+    faqs: [{ q: "Is the cleaner safe for non-stick coating?", a: "Yes, we use non-abrasive soft sponges and mild, food-safe cleaners that protect the non-stick coating." }]
+  },
+  "otg-clean": {
+    tools: ["OTG safe degreasers", "Microfiber cleaning cloths", "Crevice cleaning brushes"],
+    ready: ["Unplug the OTG and keep it accessible", "Empty any trays or racks inside"],
+    reviews: [{ name: "Siddharth N.", rating: "4.9", text: '"Removed all grease stains from the glass door and walls. Excellent OTG service!"' }],
+    faqs: [{ q: "Will this clean the heating elements?", a: "We clean around heating elements carefully to avoid damage, removing grease from the oven interior walls, glass door, and trays." }]
+  },
+  "sandwich-clean": {
+    tools: ["Food-safe surface wipes", "Detangled cleaning brushes"],
+    ready: ["Keep the sandwich maker/griller accessible and unplugged"],
+    reviews: [{ name: "Deepa K.", rating: "4.8", text: '"Quick and efficient. Removed the dark stuck food particles from the grill plates."' }],
+    faqs: [{ q: "Will this clean stuck cheese?", a: "Yes, we use safe scrapers and warm chemical wipes to dissolve and remove cheese and char residues." }]
+  },
+  "quick-sink-under-sink": {
+    tools: ["Scrubbing brushes", "Disinfectant sanitizers", "Odour removal sprays"],
+    ready: ["Clear any vessels from the sink before the professional arrives"],
+    reviews: [
+      { name: "Kunal T.", rating: "4.9", text: '"The sink shines like new, and the under-sink smell is totally gone."' },
+      { name: "Ritu G.", rating: "4.8", text: '"Great scrubbing work on the hard water stains in the sink."' }
+    ],
+    faqs: [{ q: "Do you clean the drain pipe?", a: "We clean the external sink drain area and visible parts. We do not do plumbing repairs or unclogging." }]
+  },
+  "quick-kitchen-window": {
+    tools: ["Glass squeegee", "Grease-cutting window spray", "Track cleaning brush"],
+    ready: ["Clear the window sill and counter space below the window"],
+    reviews: [{ name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' }],
+    faqs: [{ q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." }]
+  },
+  "quick-dining-table": {
+    tools: ["Food-safe table cleaner", "Polishing cloth"],
+    ready: ["Clear dishes and table mats before service"],
+    reviews: [{ name: "Arjun V.", rating: "5.0", text: '"Got rid of sticky grease stains on the glass tabletop. Super clean!"' }],
+    faqs: [{ q: "Will you polish wooden tables?", a: "We do standard cleaning and gentle wiping. Specialized wood polishing is not included." }]
+  },
+  "quick-fan-clean": {
+    tools: ["Microfiber cloths", "All-purpose cleaning spray", "Sturdy step ladder"],
+    ready: ["Keep the space below the fan clear", "Ensure the fan switch is turned off"],
+    reviews: [
+      { name: "Amit S.", rating: "4.9", text: '"The fan was covered in sticky kitchen grease, but they got it completely clean."' },
+      { name: "Neha P.", rating: "4.8", text: '"Fast and efficient fan cleaning service."' }
+    ],
+    faqs: [
+      { q: "Does this include repair?", a: "No, this is only a cleaning service. No repairs are done." },
+      { q: "Will my floor get dirty?", a: "Our professionals use dust-drop cloths to protect your floor." }
+    ]
+  },
+  "quick-exhaust-fan-clean": {
+    tools: ["Microfiber cloths", "Soft cleaning brushes", "Grease-removing cleaning solution", "Long-reach dusting tools"],
+    ready: ["Switch off the exhaust fan before cleaning", "Keep the area around the fan clear", "Provide safe access to the fan"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The exhaust fan had a lot of dust and grease. It was cleaned very neatly."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Quick service and the fan looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the fan blades?", a: "Yes, the accessible fan blades will be cleaned properly." },
+      { q: "Will you clean the cover / grill?", a: "Yes, the fan cover and visible grill will also be cleaned." },
+      { q: "Will you remove grease from the fan?", a: "Yes, normal dust, grease and dirt buildup will be cleaned." },
+      { q: "Will you remove the exhaust fan from the wall?", a: "No, the fan will be cleaned while it remains installed." },
+      { q: "Do you repair exhaust fans?", a: "No, electrical, motor and wiring repairs are not included." }
+    ]
+  },
+  "quick-balcony-upto-4ft": {
+    tools: ["Heavy duty floor brush", "High-pressure water source if available", "Balcony cleaning detergent"],
+    ready: ["Clear planters or light furniture from the balcony floor", "Provide access to a water tap"],
+    reviews: [{ name: "Sneha L.", rating: "5.0", text: '"Balcony floor is sparkling clean. They washed off all the pigeon droppings."' }],
+    faqs: [{ q: "Do you clean the balcony roof?", a: "No, roof or ceiling cleaning is not included in this quick package." }]
+  },
+  "quick-balcony-above-4ft": {
+    tools: ["Scrubbing brushes & wipers", "Balcony floor wash detergent", "Cobweb removal brush"],
+    ready: ["Clear all furniture and items from the balcony"],
+    reviews: [{ name: "Manish P.", rating: "4.9", text: '"Very thorough washing. Highly recommend for large balconies."' }],
+    faqs: [{ q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." }]
+  },
+  "fabric-sofa-clean": {
+    tools: [
+      "Fabric-safe cleaning shampoo",
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Wet & dry vacuum"
+    ],
+    ready: [
+      "Keep the sofa area accessible",
+      "Remove personal items from the sofa",
+      "Keep nearby furniture and valuables safely away",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The sofa looks much cleaner and fresh. The team did a neat job."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good cleaning service. They removed most of the dust and stains."' }
+    ],
+    faqs: [
+      { q: "Will you clean the sofa cushions?", a: "Normal sofa seats and back cushions are covered. Separate loose/removable cushions are not included." },
+      { q: "Will you remove stains?", a: "We treat common food, dust and everyday stains. Very old or permanent stains may not be completely removable." },
+      { q: "Will the sofa be completely dry immediately?", a: "The team removes excess moisture, but some drying time may still be required." },
+      { q: "Do I need to provide cleaning products?", a: "No. Our team brings the required cleaning products and equipment." }
+    ]
+  },
+  "fabric-sofa-cushion-clean": {
+    tools: [
+      "Fabric-safe cleaning shampoo",
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Wet & dry vacuum"
+    ],
+    ready: [
+      "Keep the sofa and cushions accessible",
+      "Remove personal items from the sofa",
+      "Keep nearby furniture and valuables safely away",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The sofa and cushions were cleaned really well. Everything looks fresh now."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Very good service. They cleaned the sofa and cushions carefully."' }
+    ],
+    faqs: [
+      { q: "Are loose cushions included?", a: "Yes. Loose/removable cushions belonging to the sofa are included." },
+      { q: "How many cushions are included?", a: "The cushions that belong to the selected sofa are included. Extra cushions can be added separately if available." },
+      { q: "Will you remove all stains?", a: "Common stains will be treated, but very old or permanent stains may not completely disappear." },
+      { q: "Can the sofa be used immediately?", a: "Some drying time may be required after cleaning." }
+    ]
+  },
+  "leather-sofa-clean": {
+    tools: [
+      "Leather-safe cleaning solution",
+      "Leather conditioner",
+      "Soft microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Keep the sofa area accessible",
+      "Remove personal items from the sofa",
+      "Keep valuables safely away",
+      "Provide a well-ventilated area"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The leather sofa looks clean and fresh again. Very neat work."' },
+      { name: "Rahul K.", rating: "4.8", text: '"The team handled the leather sofa carefully and professionally."' }
+    ],
+    faqs: [
+      { q: "Will you use shampoo on the leather sofa?", a: "No. We use products specifically suitable for leather surfaces." },
+      { q: "Will you remove scratches from the leather?", a: "No. Cleaning cannot repair deep scratches, cuts or damaged leather." },
+      { q: "Will you polish the leather sofa?", a: "The sofa receives a leather-safe conditioning and finishing treatment." },
+      { q: "Can you clean all types of leather?", a: "We clean commonly used finished leather surfaces. Special or delicate leather may require an additional assessment." }
+    ]
+  },
+  "leather-sofa-cushion-clean": {
+    tools: [
+      "Leather-safe cleaning solution",
+      "Leather conditioner",
+      "Soft microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Keep the sofa and cushions accessible",
+      "Remove personal items from the sofa",
+      "Keep valuables safely away",
+      "Provide a well-ventilated area"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The sofa and cushions were cleaned very carefully. They look much better now."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Good service and the leather was handled properly."' }
+    ],
+    faqs: [
+      { q: "Are removable leather cushions included?", a: "Yes. Loose/removable cushions belonging to the sofa are included." },
+      { q: "Will you repair damaged leather?", a: "No. Cuts, cracks, peeling and other leather damage are not repairable through this cleaning service." },
+      { q: "Will you use water on the leather?", a: "Only suitable amounts are used with leather-safe cleaning products." },
+      { q: "Will the leather become shiny after cleaning?", a: "The conditioning and finishing treatment gives the leather a clean and well-maintained appearance." }
+    ]
+  },
+  "mattress-deep": {
+    tools: [
+      "Fabric-safe mattress shampoo",
+      "Wet & dry vacuum",
+      "Microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Keep the mattress accessible",
+      "Remove bedsheets, pillows and blankets",
+      "Keep nearby items safely away",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The mattress had a lot of dust and stains. It looks much cleaner now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the mattress was cleaned properly."' }
+    ],
+    faqs: [
+      { q: "Will you clean the entire mattress?", a: "Yes, all accessible sides and surfaces included in the selected service will be cleaned." },
+      { q: "Will you remove all stains?", a: "Common stains will be treated, but very old or permanent stains may not completely disappear." },
+      { q: "Can I use the mattress immediately after cleaning?", a: "Some drying time is required before using the mattress." },
+      { q: "Do I need to remove the bedsheets?", a: "Yes, please remove bedsheets, blankets and other items before the service." }
+    ]
+  },
+  "mattress-pillow-refresh": {
+    tools: [
+      "Fabric-safe cleaning products",
+      "Wet & dry vacuum",
+      "Microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Remove bedsheets and covers",
+      "Keep mattress and pillows accessible",
+      "Clear the surrounding area",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The mattress and pillows were cleaned very neatly. Good service."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Everything was handled carefully and the mattress feels much fresher."' }
+    ],
+    faqs: [
+      { q: "Are pillows included?", a: "Yes, pillows are included in this package." },
+      { q: "How many pillows are included?", a: "Up to 2 standard pillows are included." },
+      { q: "Will you remove difficult stains?", a: "We treat common stains, but permanent stains may not be completely removable." },
+      { q: "How long does the mattress take to dry?", a: "Drying time depends on room ventilation, usually takes a few hours." }
+    ]
+  },
+  "carpet-deep": {
+    tools: [
+      "Carpet shampoo",
+      "Wet & dry vacuum",
+      "Microfiber cloths",
+      "Sponge scrubbers"
+    ],
+    ready: [
+      "Keep the carpet area accessible",
+      "Clear any furniture on top of the carpet",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The carpet looks extremely clean and the dirt was extracted nicely."' },
+      { name: "Karthik M.", rating: "4.8", text: '"Good shampoo cleaning and quick drying. Professional team."' }
+    ],
+    faqs: [
+      { q: "Will you remove all stains from the carpet?", a: "We treat common food and dirt stains. Very old or permanent stains may not be completely removable." },
+      { q: "How long will the carpet take to dry?", a: "Drying time depends on the carpet thickness and room ventilation, usually takes a few hours." },
+      { q: "Do I need to clear furniture before cleaning?", a: "Yes, please remove tables, chairs, and other items from the carpet before the service." }
+    ]
+  },
+  "quick-door-clean": {
+    tools: [
+      "Wiping cloths",
+      "Door polish / disinfectant spray"
+    ],
+    ready: [
+      "Keep doors clear and accessible for wiping"
+    ],
+    reviews: [
+      { name: "Deepak S.", rating: "4.8", text: '"Good dusting and fingerprint removal from the doors."' }
+    ],
+    faqs: [
+      { q: "Do you clean the door frames?", a: "Yes, we clean both panels and frames." }
+    ]
+  }
 }
 
 const EMPTY_PACKAGE = {
@@ -234,6 +747,7 @@ export function CatalogPackagesPage() {
   const [quickPriceEditing, setQuickPriceEditing] = useState(null)
   const [newItemText, setNewItemText] = useState("")
   const [serviceEditing, setServiceEditing] = useState(null)
+  const [expandedPackages, setExpandedPackages] = useState(new Set())
   const [toast, showToast] = useToast()
 
   const loadData = async () => {
@@ -244,10 +758,15 @@ export function CatalogPackagesPage() {
         apiRequest("/settings/catalog/v2/services/"),
         apiRequest("/settings/catalog/v2/packages/"),
       ])
-      if (catRes.success) setCategories(catRes.data)
-      if (svcRes.success) setServices(svcRes.data)
-      if (pkgRes.success) setPackages(pkgRes.data)
-    } catch {
+      if (catRes && catRes.success) setCategories(catRes.data)
+      if (svcRes && svcRes.success) setServices(svcRes.data)
+      if (pkgRes && pkgRes.success) setPackages(pkgRes.data)
+      // Warn if any response indicates failure
+      if (!catRes?.success || !svcRes?.success || !pkgRes?.success) {
+        console.warn("Catalog load partial failure:", { catRes, svcRes, pkgRes })
+      }
+    } catch (err) {
+      console.error("Catalog load error:", err)
       showToast("Failed to load catalog data", "error")
     }
     setLoading(false)
@@ -289,8 +808,19 @@ export function CatalogPackagesPage() {
       (s) => (catId && String(s.category) === String(catId)) || (s.category_slug && s.category_slug === activeCategoryKey)
     )
 
+    if (activeCategoryKey === "home_pest_control") {
+      catServices = catServices.filter(
+        (s) => s.slug !== "general" && s.slug !== "security"
+      )
+    }
+
     if (catServices.length === 0 && currentDbCat) {
       catServices = services.filter((s) => s.category_id === catId || s.category === catId)
+      if (activeCategoryKey === "home_pest_control") {
+        catServices = catServices.filter(
+          (s) => s.slug !== "general" && s.slug !== "security"
+        )
+      }
     }
 
     // Goods & Transports specific ordering: 2 Wheeler, Truck, Packers & Movers
@@ -306,11 +836,25 @@ export function CatalogPackagesPage() {
     const q = searchQuery.trim().toLowerCase()
 
     // Map each service to its packages list
-    const result = catServices.map((svc) => {
-      const allSvcPkgs = packages.filter((p) => {
+    const result = catServices.flatMap((svc) => {
+      let allSvcPkgs = packages.filter((p) => {
         const pkgSvcId = p.service?.id || p.service || p.service_id
         return String(pkgSvcId) === String(svc.id)
       })
+
+      if (svc.slug === "sofa-cleaning") {
+        const addonPkgs = packages.filter((p) =>
+          p.slug.startsWith("quick-") ||
+          p.slug.startsWith("fridge-") ||
+          p.slug.startsWith("sink-") ||
+          p.slug.startsWith("dining-") ||
+          p.slug.startsWith("fan-") ||
+          p.slug.startsWith("balcony-")
+        )
+        const seenIds = new Set(allSvcPkgs.map(p => p.id))
+        const uniqueAddons = addonPkgs.filter(p => !seenIds.has(p.id))
+        allSvcPkgs = [...allSvcPkgs, ...uniqueAddons]
+      }
 
       // Custom sorting for Goods & Transports modules
       let sortedPkgs = allSvcPkgs
@@ -326,15 +870,261 @@ export function CatalogPackagesPage() {
       }
 
       // Filter by search query if present
-      const filteredPkgs = !q
-        ? sortedPkgs
-        : sortedPkgs.filter(
-            (p) =>
-              p.name.toLowerCase().includes(q) ||
-              (p.tag && p.tag.toLowerCase().includes(q)) ||
-              (p.description && p.description.toLowerCase().includes(q)) ||
-              svc.name.toLowerCase().includes(q)
-          )
+      const getFilteredPkgs = (pkgs) => {
+        const q = searchQuery.trim().toLowerCase()
+        if (!q) return pkgs
+        return pkgs.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            (p.tag && p.tag.toLowerCase().includes(q)) ||
+            (p.description && p.description.toLowerCase().includes(q)) ||
+            svc.name.toLowerCase().includes(q)
+        )
+      }
+
+      if (svc.slug === "kitchen-cleaning") {
+        const groups = [
+          {
+            subSlug: "packages",
+            displayName: "Full Kitchen Packages",
+            filterFn: (p) => p.slug.startsWith("occ-") || p.slug.startsWith("empty-"),
+          },
+          {
+            subSlug: "appliance",
+            displayName: "single appliance cleaning",
+            filterFn: (p) =>
+              p.slug.includes("fridge") ||
+              p.slug.includes("microwave") ||
+              p.slug.includes("chimney") ||
+              p.slug.includes("stove") ||
+              p.slug.includes("dishwasher") ||
+              p.slug.includes("air-fryer") ||
+              p.slug.includes("otg") ||
+              p.slug.includes("sandwich"),
+            transformFn: (pkgs, getFilteredPkgs) => {
+              // Group fridge and stove items
+              const finalPkgs = [];
+              const fridgeSub = pkgs.filter(p => p.slug.startsWith("fridge-"));
+              const stoveSub = pkgs.filter(p => p.slug.startsWith("stove-"));
+              const remaining = pkgs.filter(p => !p.slug.startsWith("fridge-") && !p.slug.startsWith("stove-"));
+
+              if (fridgeSub.length > 0) {
+                finalPkgs.push({
+                  id: "fridge-parent",
+                  name: "Fridge cleaning",
+                  slug: "fridge-parent",
+                  description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
+                  base_price: Math.min(...fridgeSub.map(p => Number(p.base_price) || 0)),
+                  duration: fridgeSub[0]?.duration || "1.5 hrs",
+                  status: fridgeSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                  subOptions: fridgeSub,
+                });
+              }
+
+              if (stoveSub.length > 0) {
+                finalPkgs.push({
+                  id: "stove-parent",
+                  name: "Gas stove cleaning",
+                  slug: "stove-parent",
+                  description: "Surface cleaning of gas stove burners and knobs to remove grease.",
+                  base_price: Math.min(...stoveSub.map(p => Number(p.base_price) || 0)),
+                  duration: stoveSub[0]?.duration || "45 mins",
+                  status: stoveSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                  subOptions: stoveSub,
+                });
+              }
+
+              finalPkgs.push(...remaining);
+
+              // Sort finalPkgs to match KITCHEN_SLUG_ORDER
+              finalPkgs.sort((a, b) => {
+                const idxA = KITCHEN_SLUG_ORDER.indexOf(a.slug);
+                const idxB = KITCHEN_SLUG_ORDER.indexOf(b.slug);
+                const orderA = idxA !== -1 ? idxA : 999;
+                const orderB = idxB !== -1 ? idxB : 999;
+                return orderA - orderB;
+              });
+
+              return getFilteredPkgs(finalPkgs);
+            }
+          },
+          {
+            subSlug: "cabinet_tile",
+            displayName: "Cabinet & Tile Care",
+            filterFn: (p) => p.slug.startsWith("kitchen-") || p.slug.startsWith("cabinet-"),
+          },
+          {
+            subSlug: "addons",
+            displayName: "Quick Extra Services",
+            filterFn: (p) =>
+              p.slug.startsWith("quick-") ||
+              p.slug.startsWith("sink-") ||
+              p.slug.startsWith("dining-") ||
+              p.slug.startsWith("fan-") ||
+              p.slug.startsWith("balcony-"),
+          },
+        ]
+
+        const KITCHEN_SLUG_ORDER = [
+          "occ-basic",
+          "occ-deep",
+          "empty-kitchen",
+          "fridge-parent",
+          "fridge-single",
+          "fridge-double",
+          "fridge-triple",
+          "microwave-clean",
+          "chimney-clean",
+          "chimney-stove-clean",
+          "stove-parent",
+          "stove-2b",
+          "stove-3b",
+          "stove-4b",
+          "dishwasher-clean",
+          "air-fryer-clean",
+          "otg-clean",
+          "sandwich-clean",
+          "kitchen-tiles-slabs",
+          "cabinet-trolley-clean",
+          "quick-sink-under-sink",
+          "quick-kitchen-window",
+          "quick-dining-table",
+          "quick-fan-clean",
+          "quick-exhaust-fan-clean",
+          "quick-balcony-upto-4ft",
+          "quick-balcony-above-4ft",
+          "quick-door-clean"
+        ]
+
+        return groups.map((g) => {
+          let groupPkgs = allSvcPkgs.filter(g.filterFn)
+          groupPkgs = [...groupPkgs].sort((a, b) => {
+            const idxA = KITCHEN_SLUG_ORDER.indexOf(a.slug)
+            const idxB = KITCHEN_SLUG_ORDER.indexOf(b.slug)
+            const orderA = idxA !== -1 ? idxA : 999
+            const orderB = idxB !== -1 ? idxB : 999
+            return orderA - orderB
+          })
+          const finalPkgs = g.transformFn ? g.transformFn(groupPkgs, getFilteredPkgs) : getFilteredPkgs(groupPkgs);
+          return {
+            service: {
+              ...svc,
+              id: `${svc.id}-${g.subSlug}`,
+              virtualSlug: g.subSlug,
+              realServiceId: svc.id,
+            },
+            displayName: g.displayName,
+            icon: getServiceIcon(g.subSlug, g.displayName),
+            totalPackages: finalPkgs.length,
+            packages: finalPkgs,
+          }
+        })
+      }
+
+      if (svc.slug === "sofa-cleaning") {
+        const groups = [
+          {
+            subSlug: "sofa",
+            displayName: "Sofa Cleaning",
+            filterFn: (p) => p.slug.includes("sofa-"),
+          },
+          {
+            subSlug: "mattress",
+            displayName: "Mattress Cleaning",
+            filterFn: (p) => p.slug.startsWith("mattress-"),
+          },
+          {
+            subSlug: "carpet",
+            displayName: "Carpet Cleaning",
+            filterFn: (p) => p.slug.startsWith("carpet-"),
+          },
+          {
+            subSlug: "addons",
+            displayName: "Quick Extra Services",
+            filterFn: (p) =>
+              p.slug === "quick-dining-table" ||
+              p.slug === "quick-fan-clean" ||
+              p.slug === "quick-door-clean" ||
+              p.slug === "quick-balcony-upto-4ft" ||
+              p.slug === "quick-balcony-above-4ft" ||
+              p.slug.startsWith("fridge-"),
+            transformFn: (pkgs, getFilteredPkgs) => {
+              // Group fridge parent if subOptions exist
+              const finalPkgs = [];
+              const fridgeSub = pkgs.filter(p => p.slug.startsWith("fridge-"));
+              const remaining = pkgs.filter(p => !p.slug.startsWith("fridge-"));
+
+              if (fridgeSub.length > 0) {
+                finalPkgs.push({
+                  id: "fridge-parent",
+                  name: "Fridge cleaning",
+                  slug: "fridge-parent",
+                  description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
+                  base_price: Math.min(...fridgeSub.map(p => Number(p.base_price) || 0)),
+                  duration: fridgeSub[0]?.duration || "1.5 hrs",
+                  status: fridgeSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                  subOptions: fridgeSub,
+                });
+              }
+              finalPkgs.push(...remaining);
+
+              // Sort finalPkgs to match SOFA_SLUG_ORDER
+              finalPkgs.sort((a, b) => {
+                const idxA = SOFA_SLUG_ORDER.indexOf(a.slug);
+                const idxB = SOFA_SLUG_ORDER.indexOf(b.slug);
+                const orderA = idxA !== -1 ? idxA : 999;
+                const orderB = idxB !== -1 ? idxB : 999;
+                return orderA - orderB;
+              });
+
+              return getFilteredPkgs(finalPkgs);
+            }
+          },
+        ]
+
+        const SOFA_SLUG_ORDER = [
+          "fabric-sofa-clean",
+          "fabric-sofa-cushion-clean",
+          "leather-sofa-clean",
+          "leather-sofa-cushion-clean",
+          "mattress-deep",
+          "mattress-pillow-refresh",
+          "carpet-deep",
+          "quick-dining-table",
+          "quick-fan-clean",
+          "quick-door-clean",
+          "fridge-parent",
+          "fridge-single",
+          "fridge-double",
+          "fridge-triple",
+          "quick-balcony-upto-4ft",
+          "quick-balcony-above-4ft"
+        ]
+
+        return groups.map((g) => {
+          let groupPkgs = allSvcPkgs.filter(g.filterFn)
+          groupPkgs = [...groupPkgs].sort((a, b) => {
+            const idxA = SOFA_SLUG_ORDER.indexOf(a.slug)
+            const idxB = SOFA_SLUG_ORDER.indexOf(b.slug)
+            const orderA = idxA !== -1 ? idxA : 999
+            const orderB = idxB !== -1 ? idxB : 999
+            return orderA - orderB
+          })
+          const finalPkgs = g.transformFn ? g.transformFn(groupPkgs, getFilteredPkgs) : getFilteredPkgs(groupPkgs);
+          return {
+            service: {
+              ...svc,
+              id: `${svc.id}-${g.subSlug}`,
+              virtualSlug: g.subSlug,
+              realServiceId: svc.id,
+            },
+            displayName: g.displayName,
+            icon: getServiceIcon(g.subSlug, g.displayName),
+            totalPackages: finalPkgs.length,
+            packages: finalPkgs,
+          }
+        })
+      }
 
       // Friendly display name formatting (e.g. "Two Wheeler" -> "2 Wheeler")
       let displayName = svc.name
@@ -342,13 +1132,13 @@ export function CatalogPackagesPage() {
       if (svc.slug === "truck") displayName = "Truck"
       if (svc.slug === "packers-movers") displayName = "Packers & Movers"
 
-      return {
+      return [{
         service: svc,
         displayName,
         icon: getServiceIcon(svc.slug, svc.name),
         totalPackages: allSvcPkgs.length,
-        packages: filteredPkgs,
-      }
+        packages: getFilteredPkgs(sortedPkgs),
+      }]
     })
 
     return result
@@ -363,9 +1153,14 @@ export function CatalogPackagesPage() {
         counts[pillar.key] = 0
         return
       }
-      const catServices = services.filter(
+      let catServices = services.filter(
         (s) => String(s.category) === String(dbCat.id) || s.category_id === dbCat.id || s.category_slug === pillar.key
       )
+      if (pillar.key === "home_pest_control") {
+        catServices = catServices.filter(
+          (s) => s.slug !== "general" && s.slug !== "security"
+        )
+      }
       const serviceIds = new Set(catServices.map((s) => String(s.id)))
       const total = packages.filter((p) => {
         const svcId = String(p.service?.id || p.service || p.service_id)
@@ -389,7 +1184,9 @@ export function CatalogPackagesPage() {
     return activeCategoryServicesWithPackages.filter(
       (item) =>
         item.service.slug === activeSubServiceKey ||
+        item.service.virtualSlug === activeSubServiceKey ||
         String(item.service.id) === String(activeSubServiceKey) ||
+        String(item.service.realServiceId) === String(activeSubServiceKey) ||
         item.displayName.toLowerCase().replace(/[^a-z0-9]/g, "") === activeSubServiceKey.toLowerCase().replace(/[^a-z0-9]/g, "")
     )
   }, [activeSubServiceKey, activeCategoryServicesWithPackages])
@@ -431,9 +1228,15 @@ export function CatalogPackagesPage() {
   }
 
   const openQuickPriceEdit = (pkg) => {
-    const slug = pkg.slug || ""
-    const presets = DEFAULT_SUITABLE_PRESETS[slug] || []
-    const existingIncludes = Array.isArray(pkg.includes) ? pkg.includes : []
+    const slug = pkg.slug || pkg.id || ""
+    const presets = DEFAULT_SUITABLE_PRESETS[slug] || DEFAULT_SUITABLE_PRESETS[pkg.id] || []
+
+    // For virtual parent rows (fridge-parent, stove-parent), pull includes from first subOption
+    let existingIncludes = Array.isArray(pkg.includes) ? pkg.includes : []
+    if (existingIncludes.length === 0 && Array.isArray(pkg.subOptions) && pkg.subOptions.length > 0) {
+      const firstSub = pkg.subOptions[0]
+      existingIncludes = Array.isArray(firstSub.includes) ? firstSub.includes : []
+    }
 
     const items = []
     const seen = new Set()
@@ -464,11 +1267,23 @@ export function CatalogPackagesPage() {
       }
     })
 
+    // Load fallback defaults from STATIC_SERVICE_DETAIL_DATA when empty
+    const staticData = STATIC_SERVICE_DETAIL_DATA[slug] || STATIC_SERVICE_DETAIL_DATA[pkg.id] || {}
+
     setQuickPriceEditing({
       ...pkg,
       base_price: Math.round(Number(pkg.base_price) || 0),
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
       checklist: items,
+      image: pkg.image || "",
+      editingItemId: null,
+      _vdOpen: true,
+      viewDetails: {
+        tools: Array.isArray(pkg.tools) && pkg.tools.length > 0 ? pkg.tools : (staticData.tools || []),
+        ready: Array.isArray(pkg.ready) && pkg.ready.length > 0 ? pkg.ready : (staticData.ready || []),
+        reviews: Array.isArray(pkg.reviews) && pkg.reviews.length > 0 ? pkg.reviews : (staticData.reviews || []),
+        faqs: Array.isArray(pkg.faqs) && pkg.faqs.length > 0 ? pkg.faqs : (staticData.faqs || []),
+      },
     })
     setNewItemText("")
   }
@@ -493,6 +1308,7 @@ export function CatalogPackagesPage() {
         quickPriceEditing.tag.toLowerCase().includes("popular")
       )
 
+      const vd = quickPriceEditing.viewDetails || {}
       const payload = {
         name: quickPriceEditing.name,
         description: quickPriceEditing.description || "",
@@ -501,8 +1317,37 @@ export function CatalogPackagesPage() {
         popular: isPop,
         duration: quickPriceEditing.duration || "",
         includes: finalIncludes,
+        image: quickPriceEditing.image || "",
         offer_price: null,
+        tools: Array.isArray(vd.tools) ? vd.tools.filter(Boolean) : [],
+        ready: Array.isArray(vd.ready) ? vd.ready.filter(Boolean) : [],
+        reviews: Array.isArray(vd.reviews) ? vd.reviews.filter(r => r.name || r.text) : [],
+        faqs: Array.isArray(vd.faqs) ? vd.faqs.filter(f => f.q || f.a) : [],
       }
+
+      // Handle virtual parent rows (fridge-parent, stove-parent) — save includes to each sub-option
+      const isVirtualParent = (quickPriceEditing.id === "fridge-parent" || quickPriceEditing.id === "stove-parent") && Array.isArray(quickPriceEditing.subOptions)
+      if (isVirtualParent) {
+        const subIds = quickPriceEditing.subOptions.map(s => s.id).filter(Boolean)
+        const results = await Promise.all(
+          subIds.map(subId =>
+            apiRequest(`/settings/catalog/v2/packages/${subId}/`, {
+              method: "PUT",
+              json: { includes: finalIncludes, description: payload.description },
+            })
+          )
+        )
+        const allOk = results.every(r => r.success)
+        if (allOk) {
+          showToast(`Includes updated for all ${quickPriceEditing.name} variants`)
+          setQuickPriceEditing(null)
+          loadData()
+        } else {
+          showToast("Some updates failed", "error")
+        }
+        return
+      }
+
       const res = await apiRequest(`/settings/catalog/v2/packages/${quickPriceEditing.id}/`, {
         method: "PUT",
         json: payload,
@@ -549,6 +1394,7 @@ export function CatalogPackagesPage() {
       base_price: Math.round(Number(pkg.base_price) || 0),
       includes: Array.isArray(pkg.includes) ? pkg.includes.join(", ") : "",
       excludes: Array.isArray(pkg.excludes) ? pkg.excludes.join(", ") : "",
+      image: pkg.image || "",
     })
   }
 
@@ -589,6 +1435,33 @@ export function CatalogPackagesPage() {
   }
 
   const ActiveIcon = activePillar.icon
+
+  const selectedServiceId = String(editing?.service?.id || editing?.service || "")
+  const selectedService = services.find((s) => String(s.id) === selectedServiceId)
+  const isVegetableService = Boolean(
+    selectedService?.slug === "vegetables" || 
+    selectedService?.name?.toLowerCase().includes("vegetable")
+  )
+
+  const namePlaceholder = isVegetableService
+    ? "e.g. Tomato (Thakkali), Onion (Vengayam), Potato (Urulaikilangu)"
+    : "e.g. Pickup 8ft, Instant Courier, 1 BHK Shifting"
+
+  const slugPlaceholder = isVegetableService
+    ? "e.g. tomato-thakkali, onion-vengayam"
+    : "e.g. pickup-8ft, instant-courier"
+
+  const descPlaceholder = isVegetableService
+    ? "e.g. Fresh farm-picked organic vegetables with quality assurance..."
+    : "Detailed description of this vehicle or package offering..."
+
+  const includesPlaceholder = isVegetableService
+    ? "e.g. Freshly picked, Organic certified, Quality assured"
+    : "e.g. Closed container, Verified driver, GPS tracking"
+
+  const excludesPlaceholder = isVegetableService
+    ? "e.g. Damage during transit, Rotten parts refund"
+    : "e.g. Heavy toll extra, Helper unassisted"
 
   return (
     <div style={{ animation: "fadeUp 0.3s ease both" }} className="p-4 sm:p-6 lg:p-8 w-full max-w-[1720px] mx-auto font-sans text-slate-800 space-y-5">
@@ -635,13 +1508,9 @@ export function CatalogPackagesPage() {
       <div className="bg-white rounded-2xl p-5 sm:p-6 lg:p-7 shadow-sm border border-slate-200/90 mb-5 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="flex items-start gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${activePillar.iconBg} shadow-xs hidden sm:flex`}>
-              <ActiveIcon className="w-6 h-6 text-indigo-600" strokeWidth={2.2} />
-            </div>
-
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-indigo-800 text-xs font-semibold mb-2 border border-blue-200/80 shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Enterprise Service Pillars &amp; Catalog
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-indigo-800 text-xs font-semibold mb-2 border border-blue-200/80 shadow-xs">
+                Enterprise Service Pillars &amp; Catalog
               </div>
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
                 Service Packages &amp; Pricing
@@ -697,8 +1566,7 @@ export function CatalogPackagesPage() {
       {activeCategoryServicesWithPackages.length > 0 && (
         <div className="bg-white rounded-2xl p-3.5 shadow-xs border border-slate-200/90 mb-5">
           <div className="flex items-center justify-between gap-3 mb-2 px-1">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+            <div className="flex items-center text-xs font-bold text-slate-700 uppercase tracking-wider">
               <span>Sub-Modules / Services</span>
             </div>
             <span className="text-[11px] text-slate-400 font-normal">Click a module to view its specific packages</span>
@@ -715,7 +1583,6 @@ export function CatalogPackagesPage() {
                   : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
               }`}
             >
-              <Layers className="w-3.5 h-3.5" />
               <span>All</span>
               <span
                 className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
@@ -727,36 +1594,53 @@ export function CatalogPackagesPage() {
             </button>
 
             {/* Individual Sub-Service Tabs (e.g. 2 Wheeler, Truck, Packers & Movers) */}
-            {activeCategoryServicesWithPackages.map((item) => {
-              const SubIcon = item.icon
-              const isSubActive =
-                activeSubServiceKey === item.service.slug ||
-                String(activeSubServiceKey) === String(item.service.id) ||
-                activeSubServiceKey.toLowerCase() === item.displayName.toLowerCase().replace(/[^a-z0-9]/g, "")
+            {(() => {
+              const seen = new Set()
+              const uniqueItems = activeCategoryServicesWithPackages.filter((item) => {
+                const key = item.service.realServiceId || item.service.slug || item.service.id
+                if (seen.has(key)) return false
+                seen.add(key)
+                return true
+              })
 
-              return (
-                <button
-                  key={item.service.id}
-                  type="button"
-                  onClick={() => setActiveSubServiceKey(item.service.slug || String(item.service.id))}
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                    isSubActive
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                      : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
-                  }`}
-                >
-                  <SubIcon className="w-3.5 h-3.5" />
-                  <span>{item.displayName}</span>
-                  <span
-                    className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
-                      isSubActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+              return uniqueItems.map((item) => {
+                const serviceKey = item.service.realServiceId || item.service.slug || item.service.id
+                const totalCount = activeCategoryServicesWithPackages
+                  .filter(x => (x.service.realServiceId || x.service.slug || x.service.id) === serviceKey)
+                  .reduce((acc, x) => acc + x.totalPackages, 0)
+                
+                const SubIcon = item.icon
+                const isSubActive =
+                  activeSubServiceKey === item.service.slug ||
+                  activeSubServiceKey === item.service.virtualSlug ||
+                  String(activeSubServiceKey) === String(item.service.id) ||
+                  String(activeSubServiceKey) === String(item.service.realServiceId) ||
+                  item.displayName.toLowerCase().replace(/[^a-z0-9]/g, "") === activeSubServiceKey.toLowerCase().replace(/[^a-z0-9]/g, "")
+
+                return (
+                  <button
+                    key={item.service.id}
+                    type="button"
+                    onClick={() => setActiveSubServiceKey(item.service.slug || String(item.service.id))}
+                    className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                      isSubActive
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                        : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
                     }`}
                   >
-                    {item.totalPackages}
-                  </span>
-                </button>
-              )
-            })}
+                    <SubIcon className="w-3.5 h-3.5" />
+                    <span>{item.displayName}</span>
+                    <span
+                      className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
+                        isSubActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {totalCount}
+                    </span>
+                  </button>
+                )
+              })
+            })()}
           </div>
         </div>
       )}
@@ -795,9 +1679,6 @@ export function CatalogPackagesPage() {
                 {/* Service Sub-Header with Icon, Count & Add Option */}
                 <div className="bg-slate-50/90 px-4 sm:px-5 py-3.5 border-b border-slate-200/80 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs">
-                      <SubIcon className="w-4 h-4 text-indigo-600" />
-                    </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs sm:text-sm font-bold text-slate-900">
@@ -828,7 +1709,7 @@ export function CatalogPackagesPage() {
                     onClick={() => {
                       setEditing({
                         ...EMPTY_PACKAGE,
-                        service: String(svcItem.service.id),
+                        service: String(svcItem.service.realServiceId || svcItem.service.id),
                       })
                     }}
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100/80 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-indigo-200/60"
@@ -851,112 +1732,202 @@ export function CatalogPackagesPage() {
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Package / Option Name</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Starting Fare</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Highlight Badge</th>
-                          <th className="py-3 px-4 sm:px-5 font-extrabold">Duration / ETA</th>
+                          <th className="py-3 px-4 sm:px-5 font-extrabold">{activeCategoryKey === "goods_transports" ? "Badge Duration" : "Duration / ETA"}</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold">Status</th>
                           <th className="py-3 px-4 sm:px-5 font-extrabold text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
-                        {pkgList.map((pkg) => (
-                          <tr key={pkg.id} className="hover:bg-slate-50/80 transition-colors group">
-                            {/* Package Name & Description */}
-                            <td className="py-3.5 px-4 sm:px-5 max-w-xs sm:max-w-md">
-                              <div className="font-bold text-slate-900 text-xs sm:text-sm">{pkg.name}</div>
-                              {pkg.description ? (
-                                <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
-                                  {pkg.description}
-                                </p>
-                              ) : (
-                                <p className="text-[11px] text-slate-400 italic mt-0.5">No description set</p>
-                              )}
-                            </td>
+                        {pkgList.flatMap((pkg) => {
+                          const isParent = !!pkg.subOptions;
+                          const isExpanded = expandedPackages.has(pkg.id);
+                          const rows = [];
 
-                            {/* Starting Fare / Price */}
-                            <td className="py-3.5 px-4 sm:px-5">
-                              <div className="inline-flex items-center gap-1 text-sm font-extrabold text-indigo-700 bg-blue-50/80 border border-indigo-200/90 px-2.5 py-1 rounded-lg">
-                                <span>₹{Math.round(Number(pkg.base_price) || 0).toLocaleString("en-IN")}</span>
-                              </div>
-                            </td>
+                          rows.push(
+                            <tr key={pkg.id} className="hover:bg-slate-50/80 transition-colors group">
+                              {/* Package Name & Description */}
+                              <td className="py-3.5 px-4 sm:px-5 max-w-xs sm:max-w-md">
+                                <div className="flex items-center gap-2">
+                                  {isParent && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        const newSet = new Set(expandedPackages);
+                                        if (newSet.has(pkg.id)) {
+                                          newSet.delete(pkg.id);
+                                        } else {
+                                          newSet.add(pkg.id);
+                                        }
+                                        setExpandedPackages(newSet);
+                                      }}
+                                      className="p-1 rounded hover:bg-slate-200 text-slate-500"
+                                    >
+                                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                    </button>
+                                  )}
+                                  <div className="font-bold text-slate-900 text-xs sm:text-sm">{pkg.name}</div>
+                                </div>
+                                {pkg.description ? (
+                                  <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 ml-6">
+                                    {pkg.description}
+                                  </p>
+                                ) : (
+                                  <p className="text-[11px] text-slate-400 italic mt-0.5 ml-6">No description set</p>
+                                )}
+                              </td>
 
-                            {/* Highlight / Popularity Badge */}
-                            <td className="py-3.5 px-4 sm:px-5">
-                              {pkg.tag || pkg.popular ? (
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${
-                                    (pkg.tag || "").toLowerCase().includes("popular") || pkg.popular
-                                      ? "bg-amber-50 text-amber-700 border-amber-200/90"
-                                      : (pkg.tag || "").toLowerCase().includes("rare")
-                                      ? "bg-slate-100 text-slate-700 border-slate-200"
-                                      : (pkg.tag || "").toLowerCase().includes("best")
-                                      ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                      : "bg-blue-50 text-blue-700 border-blue-200"
-                                  }`}
-                                >
-                                  ★ {pkg.tag || "Popular"}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300 text-xs font-medium">—</span>
-                              )}
-                            </td>
+                              {/* Starting Fare / Price */}
+                              <td className="py-3.5 px-4 sm:px-5">
+                                <div className="inline-flex items-center gap-1 text-sm font-extrabold text-indigo-700 bg-blue-50/80 border border-indigo-200/90 px-2.5 py-1 rounded-lg">
+                                  <span>₹{Math.round(Number(pkg.base_price) || 0).toLocaleString("en-IN")}</span>
+                                </div>
+                              </td>
 
-                            {/* Duration / ETA */}
-                            <td className="py-3.5 px-4 sm:px-5">
-                              {pkg.duration ? (
-                                <span className="text-slate-600 font-medium">{pkg.duration}</span>
-                              ) : (
-                                <span className="text-slate-300 text-xs">—</span>
-                              )}
-                            </td>
+                              {/* Highlight / Popularity Badge */}
+                              <td className="py-3.5 px-4 sm:px-5">
+                                {pkg.tag || pkg.popular ? (
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${
+                                      (pkg.tag || "").toLowerCase().includes("popular") || pkg.popular
+                                        ? "bg-amber-50 text-amber-700 border-amber-200/90"
+                                        : (pkg.tag || "").toLowerCase().includes("rare")
+                                        ? "bg-slate-100 text-slate-700 border-slate-200"
+                                        : (pkg.tag || "").toLowerCase().includes("best")
+                                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                        : "bg-blue-50 text-blue-700 border-blue-200"
+                                    }`}
+                                  >
+                                    ★ {pkg.tag || "Popular"}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 text-xs font-medium">—</span>
+                                )}
+                              </td>
 
-                            {/* Status (Clickable Toggle) */}
-                            <td className="py-3.5 px-4 sm:px-5">
-                              <button
-                                type="button"
-                                onClick={() => handleToggleStatus(pkg)}
-                                title={`Click to set ${pkg.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"}`}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase border transition-all cursor-pointer ${
-                                  pkg.status === "ACTIVE"
-                                    ? "bg-blue-50 text-blue-700 border-blue-200/90 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"
-                                    : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200"
-                                }`}
-                              >
-                                <span
-                                  className={`w-1.5 h-1.5 rounded-full ${
+                              {/* Duration / ETA */}
+                              <td className="py-3.5 px-4 sm:px-5">
+                                {pkg.duration ? (
+                                  <span className="text-slate-600 font-medium">{pkg.duration}</span>
+                                ) : (
+                                  <span className="text-slate-300 text-xs">—</span>
+                                )}
+                              </td>
+
+                              {/* Status (Clickable Toggle) */}
+                              <td className="py-3.5 px-4 sm:px-5">
+                                <button
+                                  type="button"
+                                  onClick={() => !isParent && handleToggleStatus(pkg)}
+                                  title={isParent ? "" : `Click to set ${pkg.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"}`}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide uppercase border transition-all cursor-pointer ${
                                     pkg.status === "ACTIVE"
-                                      ? "bg-emerald-500"
-                                      : "bg-slate-400"
+                                      ? "bg-blue-50 text-blue-700 border-blue-200/90"
+                                      : "bg-slate-100 text-slate-600 border-slate-200"
                                   }`}
-                                />
-                                <span>{pkg.status}</span>
-                              </button>
-                            </td>
-
-                            {/* Actions */}
-                            <td className="py-3.5 px-4 sm:px-5 text-right">
-                              <div className="inline-flex items-center justify-end gap-2">
-                                {/* Customise Details & Price Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => openQuickPriceEdit(pkg)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
                                 >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                  <span>Customise</span>
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${
+                                      pkg.status === "ACTIVE"
+                                        ? "bg-emerald-500"
+                                        : "bg-slate-400"
+                                    }`}
+                                  />
+                                  <span>{pkg.status}</span>
                                 </button>
+                              </td>
 
-                                {/* Full Edit Modal */}
-                                <button
-                                  type="button"
-                                  onClick={() => openEdit(pkg)}
-                                  title="Edit Package Details"
-                                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                                >
-                                  <SlidersHorizontal className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                              {/* Actions */}
+                              <td className="py-3.5 px-4 sm:px-5 text-right">
+                                {isParent ? (
+                                  <div className="inline-flex items-center justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => openQuickPriceEdit(pkg)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                      <span>Customise</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="inline-flex items-center justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => openQuickPriceEdit(pkg)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                      <span>Customise</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openEdit(pkg)}
+                                      title="Edit Package Details"
+                                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                                    >
+                                      <SlidersHorizontal className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+
+                          if (isParent && isExpanded) {
+                            pkg.subOptions.forEach((sub) => {
+                              rows.push(
+                                <tr key={sub.id} className="bg-slate-50/50 hover:bg-slate-100/60 transition-colors border-l-4 border-indigo-500">
+                                  <td className="py-3.5 pl-12 pr-4 sm:pr-5">
+                                    <div className="font-bold text-slate-700 text-xs">{sub.name}</div>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">{sub.description || "Sub-variant option"}</p>
+                                  </td>
+                                  <td className="py-3.5 px-4 sm:px-5">
+                                    <span className="text-xs font-bold text-slate-600">₹{Math.round(Number(sub.base_price) || 0)}</span>
+                                  </td>
+                                  <td className="py-3.5 px-4 sm:px-5">
+                                    {sub.tag ? <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-700 px-2 py-0.5 rounded font-bold">★ {sub.tag}</span> : "—"}
+                                  </td>
+                                  <td className="py-3.5 px-4 sm:px-5 text-slate-500 text-xs">
+                                    {sub.duration}
+                                  </td>
+                                  <td className="py-3.5 px-4 sm:px-5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleStatus(sub)}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                                        sub.status === "ACTIVE" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-100 text-slate-600 border-slate-200"
+                                      }`}
+                                    >
+                                      {sub.status}
+                                    </button>
+                                  </td>
+                                  <td className="py-3.5 px-4 sm:px-5 text-right">
+                                    <div className="inline-flex items-center justify-end gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => openQuickPriceEdit(sub)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-[11px] font-bold border border-indigo-200/50 cursor-pointer"
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                        <span>Customise</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => openEdit(sub)}
+                                        className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                      >
+                                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          }
+
+                          return rows;
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1117,14 +2088,59 @@ export function CatalogPackagesPage() {
                           }}
                           className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
                         />
-                        <span
-                          className={`text-xs font-semibold ${
-                            item.checked ? "text-slate-800" : "text-slate-500 line-through"
+                        {quickPriceEditing.editingItemId === item.id ? (
+                          <input
+                            type="text"
+                            value={item.text}
+                            onChange={(e) => {
+                              const updated = quickPriceEditing.checklist.map((ci) =>
+                                ci.id === item.id ? { ...ci, text: e.target.value } : ci
+                              )
+                              setQuickPriceEditing({ ...quickPriceEditing, checklist: updated })
+                            }}
+                            onBlur={() => setQuickPriceEditing({ ...quickPriceEditing, editingItemId: null })}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                setQuickPriceEditing({ ...quickPriceEditing, editingItemId: null })
+                              }
+                            }}
+                            autoFocus
+                            className="bg-white border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1.5 py-0.5 text-xs font-semibold flex-1 text-slate-800"
+                          />
+                        ) : (
+                          <span
+                            onClick={() => {
+                              // By request, clicking the row text directly does not trigger edit, must click the edit icon.
+                              // Clicking the checkbox still toggles, but span does nothing.
+                            }}
+                            className={`text-xs font-semibold px-1.5 py-0.5 flex-1 select-none ${
+                              item.checked ? "text-slate-800" : "text-slate-500 line-through"
+                            }`}
+                          >
+                            {item.text}
+                          </span>
+                        )}
+                      </label>
+
+                      <div className="flex items-center gap-1">
+                        {/* Edit indicator/button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuickPriceEditing({
+                              ...quickPriceEditing,
+                              editingItemId: item.id
+                            })
+                          }}
+                          title="Rename item"
+                          className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                            quickPriceEditing.editingItemId === item.id
+                              ? "text-blue-600 bg-blue-50"
+                              : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"
                           }`}
                         >
-                          {item.text}
-                        </span>
-                      </label>
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
 
                       {/* Remove item button */}
                       <button
@@ -1138,6 +2154,7 @@ export function CatalogPackagesPage() {
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -1264,8 +2281,8 @@ export function CatalogPackagesPage() {
                   }
                 />
                 <Input
-                  label="Duration / ETA (e.g. 15 mins, 30 mins)"
-                  placeholder="e.g. 15 mins"
+                  label={activeCategoryKey === "goods_transports" ? "Duration of Badge Display (e.g. 30 days, 6 months, 1 yr)" : "Duration / ETA (e.g. 15 mins, 30 mins)"}
+                  placeholder={activeCategoryKey === "goods_transports" ? "e.g. 30 days, 6 months, 1 yr" : "e.g. 15 mins"}
                   value={quickPriceEditing.duration || ""}
                   onChange={(e) =>
                     setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
@@ -1273,6 +2290,162 @@ export function CatalogPackagesPage() {
                 />
               </div>
             </div>
+
+            {/* ── Image Customization Section ── */}
+            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-800">
+                    Package Image
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                {quickPriceEditing.image ? (
+                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                    <img src={quickPriceEditing.image} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setQuickPriceEditing((prev) => ({ ...prev, image: "" }))}
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                    No Image
+                  </div>
+                )}
+                <div className="flex-1 w-full space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const formData = new FormData()
+                        formData.append("image", file)
+                        try {
+                          const res = await apiRequest("/settings/catalog/upload-image/", {
+                            method: "POST",
+                            body: formData,
+                          })
+                          if (res.success && res.url) {
+                            setQuickPriceEditing((prev) => ({ ...prev, image: res.url }))
+                            showToast("Image uploaded successfully!")
+                          } else {
+                            showToast(res.message || "Upload failed", "error")
+                          }
+                        } catch (err) {
+                          showToast("Upload failed", "error")
+                        }
+                      }
+                    }}
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                  />
+                  <Input
+                    label="Or Image URL"
+                    placeholder="https://images.unsplash.com/..."
+                    value={quickPriceEditing.image || ""}
+                    onChange={(e) => setQuickPriceEditing({ ...quickPriceEditing, image: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ── View Details Content Section (only for Home Services & Pest Control) ── */}
+            {activePillar?.key === "home_pest_control" && (() => {
+              const vd = quickPriceEditing.viewDetails || { tools: [], ready: [], reviews: [], faqs: [] }
+              const setVd = (updates) => setQuickPriceEditing({ ...quickPriceEditing, viewDetails: { ...vd, ...updates } })
+              return (
+                <div className="rounded-2xl border border-emerald-100/90 overflow-hidden bg-gradient-to-b from-emerald-50/30 to-slate-50/40">
+                  <button
+                    type="button"
+                    onClick={() => setQuickPriceEditing({ ...quickPriceEditing, _vdOpen: !quickPriceEditing._vdOpen })}
+                    className="w-full flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-emerald-50/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800">View Details Content</span>
+                      <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200/90">Shown in app popup</span>
+                    </div>
+                    <span className="text-slate-400 text-sm font-bold">{quickPriceEditing._vdOpen ? "−" : "+"}</span>
+                  </button>
+
+                  {quickPriceEditing._vdOpen && (
+                    <div className="px-5 pb-5 space-y-5 border-t border-emerald-100">
+
+                      {/* Tools & Products We Use */}
+                      <div className="pt-4">
+                        <div className="text-xs font-bold text-slate-700 mb-2">🔧 Tools &amp; Products We Use</div>
+                        <div className="space-y-1.5 mb-2">
+                          {(vd.tools || []).map((t, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <input type="text" value={t} onChange={(e) => { const a = [...(vd.tools || [])]; a[i] = e.target.value; setVd({ tools: a }) }} className="flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 outline-none" />
+                              <button type="button" onClick={() => { const a = [...(vd.tools || [])]; a.splice(i, 1); setVd({ tools: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setVd({ tools: [...(vd.tools || []), ""] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add tool / product</button>
+                      </div>
+
+                      {/* What You Need to Keep Ready */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <div className="text-xs font-bold text-slate-700 mb-2">✅ What You Need to Keep Ready</div>
+                        <div className="space-y-1.5 mb-2">
+                          {(vd.ready || []).map((r, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <input type="text" value={r} onChange={(e) => { const a = [...(vd.ready || [])]; a[i] = e.target.value; setVd({ ready: a }) }} className="flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 outline-none" />
+                              <button type="button" onClick={() => { const a = [...(vd.ready || [])]; a.splice(i, 1); setVd({ ready: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setVd({ ready: [...(vd.ready || []), ""] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add item</button>
+                      </div>
+
+                      {/* Customer Reviews */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <div className="text-xs font-bold text-slate-700 mb-2">⭐ Customer Reviews</div>
+                        <div className="space-y-2.5 mb-2">
+                          {(vd.reviews || []).map((rev, i) => (
+                            <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
+                              <div className="flex gap-2">
+                                <input type="text" placeholder="Name" value={rev.name || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], name: e.target.value }; setVd({ reviews: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
+                                <input type="text" placeholder="Rating (e.g. 4.9)" value={rev.rating || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], rating: e.target.value }; setVd({ reviews: a }) }} className="w-24 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
+                                <button type="button" onClick={() => { const a = [...(vd.reviews || [])]; a.splice(i, 1); setVd({ reviews: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                              <textarea placeholder="Review text..." value={rev.text || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], text: e.target.value }; setVd({ reviews: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setVd({ reviews: [...(vd.reviews || []), { name: "", rating: "5.0", text: "" }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add review</button>
+                      </div>
+
+                      {/* FAQs */}
+                      <div className="pt-2 border-t border-slate-100">
+                        <div className="text-xs font-bold text-slate-700 mb-2">❓ Frequently Asked Questions</div>
+                        <div className="space-y-2.5 mb-2">
+                          {(vd.faqs || []).map((faq, i) => (
+                            <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
+                              <div className="flex gap-2">
+                                <input type="text" placeholder="Question" value={faq.q || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], q: e.target.value }; setVd({ faqs: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
+                                <button type="button" onClick={() => { const a = [...(vd.faqs || [])]; a.splice(i, 1); setVd({ faqs: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                              <textarea placeholder="Answer..." value={faq.a || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], a: e.target.value }; setVd({ faqs: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
+                            </div>
+                          ))}
+                        </div>
+                        <button type="button" onClick={() => setVd({ faqs: [...(vd.faqs || []), { q: "", a: "" }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add FAQ</button>
+                      </div>
+
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-slate-100">
               <button
@@ -1317,7 +2490,7 @@ export function CatalogPackagesPage() {
               <Input
                 label="Package Name"
                 required
-                placeholder="e.g. Pickup 8ft, Instant Courier, 1 BHK Shifting"
+                placeholder={namePlaceholder}
                 value={editing.name}
                 onChange={(e) => {
                   const val = e.target.value
@@ -1330,7 +2503,7 @@ export function CatalogPackagesPage() {
               <Input
                 label="Slug Identifier"
                 required
-                placeholder="e.g. pickup-8ft, instant-courier"
+                placeholder={slugPlaceholder}
                 value={editing.slug}
                 onChange={(e) => setEditing({ ...editing, slug: e.target.value })}
               />
@@ -1338,7 +2511,7 @@ export function CatalogPackagesPage() {
 
             <TextArea
               label="Short Description"
-              placeholder="Detailed description of this vehicle or package offering..."
+              placeholder={descPlaceholder}
               value={editing.description || ""}
               onChange={(e) => setEditing({ ...editing, description: e.target.value })}
             />
@@ -1353,7 +2526,8 @@ export function CatalogPackagesPage() {
                 onChange={(e) => setEditing({ ...editing, base_price: e.target.value })}
               />
               <Input
-                label="Duration / ETA (e.g. 20 mins, 1 hr)"
+                label={activeCategoryKey === "goods_transports" ? "Duration of Badge Display (e.g. 30 days, 6 months, 1 yr)" : "Duration / ETA (e.g. 20 mins, 1 hr)"}
+                placeholder={activeCategoryKey === "goods_transports" ? "e.g. 30 days, 6 months, 1 yr" : "e.g. 20 mins, 1 hr"}
                 value={editing.duration || ""}
                 onChange={(e) => setEditing({ ...editing, duration: e.target.value })}
               />
@@ -1367,17 +2541,83 @@ export function CatalogPackagesPage() {
 
             <Input
               label="Includes (comma-separated features)"
-              placeholder="e.g. Closed container, Verified driver, GPS tracking"
+              placeholder={includesPlaceholder}
               value={editing.includes}
               onChange={(e) => setEditing({ ...editing, includes: e.target.value })}
             />
 
             <Input
               label="Excludes (comma-separated)"
-              placeholder="e.g. Heavy toll extra, Helper unassisted"
+              placeholder={excludesPlaceholder}
               value={editing.excludes}
               onChange={(e) => setEditing({ ...editing, excludes: e.target.value })}
             />
+
+            {/* ── Image Customization Section ── */}
+            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-800">
+                    Package Image
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                {editing.image ? (
+                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                    <img src={editing.image} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setEditing((prev) => ({ ...prev, image: "" }))}
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                    No Image
+                  </div>
+                )}
+                <div className="flex-1 w-full space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const formData = new FormData()
+                        formData.append("image", file)
+                        try {
+                          const res = await apiRequest("/settings/catalog/upload-image/", {
+                            method: "POST",
+                            body: formData,
+                          })
+                          if (res.success && res.url) {
+                            setEditing((prev) => ({ ...prev, image: res.url }))
+                            showToast("Image uploaded successfully!")
+                          } else {
+                            showToast(res.message || "Upload failed", "error")
+                          }
+                        } catch (err) {
+                          showToast("Upload failed", "error")
+                        }
+                      }
+                    }}
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                  />
+                  <Input
+                    label="Or Image URL"
+                    placeholder="https://images.unsplash.com/..."
+                    value={editing.image || ""}
+                    onChange={(e) => setEditing({ ...editing, image: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
 
             <div className="flex items-center justify-between pt-1">
               <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">

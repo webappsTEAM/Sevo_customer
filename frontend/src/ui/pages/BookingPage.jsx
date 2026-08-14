@@ -32,6 +32,7 @@ import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
+import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -5616,7 +5617,7 @@ function QuickCommerceCartCheckout({
   const deliveryCharge = itemsTotal >= 199 ? 0 : 30
   const handlingCharge = itemsTotal > 0 ? 5 : 0
   const surgeCharge = 15
-  const donationAmount = isDonationChecked ? 1 : 0
+  const donationAmount = 0
   const tipAmount = selectedTip === "custom" ? (parseInt(customTip) || 0) : (selectedTip || 0)
   const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + surgeCharge + donationAmount + tipAmount)
 
@@ -5662,7 +5663,8 @@ function QuickCommerceCartCheckout({
         phone: user?.phone || "9876543210",
         service_category: "vegetables_quick_delivery",
         issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items)`,
-        description: `Quick Commerce Vegetable Order\nDelivering to: ${activeAddressObj?.address || "Hosur"}`,
+        description: `Quick Commerce Vegetable Order
+Delivering to: ${activeAddressObj?.address || "Hosur"}`,
         address: activeAddressObj?.address || "Hosur, Tamil Nadu",
         preferred_date: today,
         total_amount: grandTotal,
@@ -5681,7 +5683,6 @@ function QuickCommerceCartCheckout({
       try {
         res = await apiRequest("/booking/", { method: "POST", data: payload })
       } catch (e) {
-        // Fallback response for rapid mock checkout
         res = { success: true, request_id: `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}` }
       }
 
@@ -5699,84 +5700,32 @@ function QuickCommerceCartCheckout({
     }
   }
 
-  if (orderConfirmedData) {
-    return (
-      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-4">
-        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-xl border border-slate-100 text-center animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-600/30">
-            <CheckCircle2 className="w-9 h-9" />
-          </div>
-          <h3 className="text-2xl font-black text-slate-900 mb-1">Order Confirmed!</h3>
-          <p className="text-xs text-slate-500 font-semibold mb-6">
-            Order ID: <span className="text-emerald-700 font-bold">{orderConfirmedData.requestId}</span>
-          </p>
-
-          <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 text-left space-y-2 mb-6">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-bold">Estimated Delivery:</span>
-              <span className="text-emerald-800 font-extrabold flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                {orderConfirmedData.eta}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-bold">Items Count:</span>
-              <span className="text-slate-800 font-bold">{orderConfirmedData.itemsCount} items</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-bold">Total (Cash on Delivery):</span>
-              <span className="text-slate-900 font-black text-sm">₹{orderConfirmedData.total}</span>
-            </div>
-            <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-slate-600">
-              <span className="font-bold text-slate-700">Delivering to: </span>
-              {orderConfirmedData.address}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (onBack) {
-                onBack()
-              } else {
-                window.location.href = "/home"
-              }
-            }}
-            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer"
-          >
-            Back to Home
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // Address Selection View (Image 3)
+  // Address Selection View
   if (isAddressScreenOpen) {
     return (
-      <div className="min-h-screen bg-[#f3f5f8] text-slate-800 flex justify-center py-4 px-2 sm:px-4 font-sans">
-        <div className="max-w-md w-full bg-[#f8fafc] min-h-screen shadow-lg rounded-2xl flex flex-col justify-between overflow-hidden border border-slate-200/80">
+      <div className="min-h-screen bg-slate-50 text-slate-800 flex justify-center py-4 px-2 sm:px-4 font-sans">
+        <div className="max-w-md w-full bg-[#f8fafc] min-h-screen shadow-2xl rounded-3xl flex flex-col justify-between overflow-hidden border border-slate-100">
           <div>
             {/* Header */}
-            <div className="bg-white px-4 py-3.5 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-20">
+            <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-20">
               <button
                 type="button"
                 onClick={() => setIsAddressScreenOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 cursor-pointer"
+                className="w-8 h-8 rounded-full hover:bg-slate-50 flex items-center justify-center text-slate-700 transition-colors cursor-pointer border border-transparent hover:border-slate-100"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <h2 className="text-base font-extrabold text-slate-900">Select delivery address</h2>
+              <h2 className="text-base font-bold text-slate-900">Select Delivery Address</h2>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-5 space-y-4">
               {/* Add a new address button */}
               <button
                 type="button"
                 onClick={() => setShowAddAddressModal(true)}
-                className="w-full bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex items-center gap-3 text-emerald-700 hover:border-emerald-500 font-extrabold text-sm transition-all cursor-pointer"
+                className="w-full bg-white rounded-2xl p-4 border border-slate-200 hover:border-slate-350 shadow-2xs flex items-center gap-3 text-slate-700 hover:text-slate-900 font-extrabold text-sm transition-all cursor-pointer"
               >
-                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black">
+                <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-black">
                   <Plus className="w-4 h-4" />
                 </div>
                 <span>Add a new address</span>
@@ -5784,8 +5733,8 @@ function QuickCommerceCartCheckout({
 
               {/* Your saved address Section */}
               <div>
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 px-1">
-                  Your saved address
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">
+                  Saved Addresses
                 </h3>
                 <div className="space-y-3">
                   {savedAddresses.map((addr) => {
@@ -5797,22 +5746,24 @@ function QuickCommerceCartCheckout({
                           setSelectedAddressId(addr.id)
                           setIsAddressScreenOpen(false)
                         }}
-                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-xs ${isSelected ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200/90 hover:border-slate-300"
+                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-2xs ${isSelected
+                          ? "border-emerald-600 ring-2 ring-emerald-500/10 bg-emerald-50/10"
+                          : "border-slate-200/80 hover:border-slate-300"
                           }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                          <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 flex items-center justify-center shrink-0 mt-0.5 shadow-3xs">
                             {addr.type.toLowerCase() === "work" ? (
-                              <Users className="w-5 h-5" />
+                              <Users className="w-4 h-4" />
                             ) : (
-                              <Home className="w-5 h-5" />
+                              <Home className="w-4 h-4" />
                             )}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-extrabold text-slate-900">{addr.type}</h4>
+                              <h4 className="text-sm font-bold text-slate-800">{addr.type}</h4>
                               {isSelected && (
-                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                   SELECTED
                                 </span>
                               )}
@@ -5830,9 +5781,9 @@ function QuickCommerceCartCheckout({
                             setNewAddressType(addr.type)
                             setShowAddAddressModal(true)
                           }}
-                          className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-emerald-700 transition-colors shrink-0"
+                          className="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors shrink-0 border border-slate-100"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
@@ -5846,24 +5797,26 @@ function QuickCommerceCartCheckout({
 
           {/* Add Address Modal */}
           {showAddAddressModal && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-extrabold text-slate-900">Add Address in Hosur</h3>
-                  <button onClick={() => setShowAddAddressModal(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+            <div className="fixed inset-0 z-50 bg-slate-955/40 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-base font-bold text-slate-900">Add Address in Hosur</h3>
+                  <button onClick={() => setShowAddAddressModal(false)} className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center border border-slate-100 text-slate-400 transition-colors">
                     <X className="w-4 h-4 text-slate-600" />
                   </button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Save Address as</label>
+                    <label className="block text-xs font-bold text-slate-505 uppercase tracking-wider mb-2">Save Address as</label>
                     <div className="flex gap-2">
                       {["Home", "Work", "Other"].map(t => (
                         <button
                           key={t}
                           type="button"
                           onClick={() => setNewAddressType(t)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${newAddressType === t ? "bg-emerald-600 text-white border-emerald-600" : "bg-slate-50 text-slate-700 border-slate-200"
+                          className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${newAddressType === t
+                            ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
+                            : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100/60"
                             }`}
                         >
                           {t}
@@ -5872,19 +5825,19 @@ function QuickCommerceCartCheckout({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Complete Address</label>
+                    <label className="block text-xs font-bold text-slate-505 uppercase tracking-wider mb-2">Complete Address</label>
                     <textarea
                       rows={3}
                       value={newAddressText}
                       onChange={(e) => setNewAddressText(e.target.value)}
                       placeholder="House/Flat No., Building, Street, Area, Hosur..."
-                      className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-emerald-600"
+                      className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={handleAddNewAddress}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md cursor-pointer transition-all"
+                    className="w-full py-3 bg-slate-900 hover:bg-slate-950 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all active:scale-98"
                   >
                     Save &amp; Select Address
                   </button>
@@ -5897,24 +5850,24 @@ function QuickCommerceCartCheckout({
     )
   }
 
-  // Main "My Cart" View (Image 2 & Image 4)
+  // Main "My Cart" View
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-800 flex justify-center py-0 sm:py-8 px-0 sm:px-4 font-sans">
-      <div className="max-w-md sm:max-w-xl md:max-w-2xl w-full bg-white sm:rounded-3xl shadow-xl border border-slate-200/80 flex flex-col justify-between overflow-hidden">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex justify-center py-0 sm:py-8 px-0 sm:px-4 font-sans">
+      <div className="max-w-md sm:max-w-xl md:max-w-2xl w-full bg-white sm:rounded-3xl shadow-2xl border border-slate-100 flex flex-col justify-between overflow-hidden">
         <div>
           {/* Header */}
-          <div className="bg-white/95 backdrop-blur-md px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
+          <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={onBack}
-                className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+                className="w-9 h-9 rounded-full hover:bg-slate-105 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-lg sm:text-xl font-black text-slate-900 leading-none">My Cart</h1>
-                <span className="text-[11px] font-semibold text-slate-400">Hosur Express Delivery</span>
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-none">My Cart</h1>
+                <span className="text-[11px] font-semibold text-slate-400 mt-0.5 block">Hosur Express Delivery</span>
               </div>
             </div>
             <button
@@ -5924,37 +5877,40 @@ function QuickCommerceCartCheckout({
                   navigator.share({ title: "My Vegetables Cart", url: window.location.href }).catch(() => { })
                 }
               }}
-              className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 cursor-pointer bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200/60 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-650 hover:text-slate-900 border border-slate-200/80 bg-white hover:bg-slate-50 px-3.5 py-2 rounded-xl transition-all shadow-3xs cursor-pointer active:scale-98"
             >
-              <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
+              <ShoppingCart className="w-3.5 h-3.5 text-slate-500" />
               <span>Share Cart</span>
             </button>
           </div>
 
-          <div className="p-4 sm:p-6 space-y-4 bg-slate-50/50">
-            {/* Delivery Time Banner (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/70 flex items-center justify-center shrink-0 shadow-2xs">
-                <Clock className="w-6 h-6 text-amber-600 stroke-[2.5]" />
+          <div className="p-5 sm:p-6 space-y-4 bg-slate-50/30">
+            {/* Delivery Time Banner */}
+            <div className="bg-gradient-to-r from-emerald-50/60 to-emerald-50/20 rounded-2xl p-4 border border-emerald-100 flex items-center gap-4 shadow-3xs border-l-4 border-l-emerald-600">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center shrink-0 shadow-3xs">
+                <Clock className="w-5 h-5 stroke-[2.5]" />
               </div>
               <div>
-                <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Delivery in 15 minutes</h3>
-                <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                  Shipment of {cart.reduce((a, b) => a + (b.quantity || 1), 0)} farm-fresh items
+                <h3 className="text-sm font-bold text-slate-955 flex items-center gap-1.5">
+                  Priority Express Delivery
+                  <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Active</span>
+                </h3>
+                <p className="text-xs text-slate-600 font-medium mt-0.5">
+                  Arriving in <span className="font-bold text-emerald-800">15 minutes</span> • {cart.reduce((a, b) => a + (b.quantity || 1), 0)} fresh items
                 </p>
               </div>
             </div>
 
-            {/* Cart Items List (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs divide-y divide-slate-100 space-y-3.5">
+            {/* Cart Items List */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs divide-y divide-slate-100 space-y-4">
               {cart.map((item, idx) => (
-                <div key={item.id || idx} className={`flex items-center justify-between gap-3.5 ${idx > 0 ? "pt-3.5" : ""}`}>
+                <div key={item.id || idx} className={`flex items-center justify-between gap-3.5 ${idx > 0 ? "pt-4" : ""}`}>
                   {/* Left: Product Thumbnail */}
-                  <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#f5f1eb] overflow-hidden shrink-0 border border-slate-100 shadow-2xs">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-50 overflow-hidden shrink-0 border border-slate-100 shadow-3xs">
                     <img
                       src={item.image || "/mockups/category_food_health.png"}
                       alt={item.name}
-                      className="w-full h-full object-cover hover:scale-105 transition-transform"
+                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-350"
                       onError={(e) => {
                         e.target.onerror = null
                         e.target.src = "/mockups/category_food_health.png"
@@ -5964,36 +5920,36 @@ function QuickCommerceCartCheckout({
 
                   {/* Middle: Details */}
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-1">
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-805 line-clamp-1 leading-snug">
                       {item.displayName || item.name}
                     </h4>
                     <p className="text-[11px] font-semibold text-slate-400 mt-0.5">{item.unit || "1 unit"}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-sm font-black text-slate-900">₹{item.price}</span>
                       {item.mrp && (
-                        <span className="text-xs line-through text-slate-400 font-semibold">
+                        <span className="text-xs line-through text-slate-400 font-medium">
                           ₹{item.mrp}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Right: Counter Button (Green style matching Image 2 & 4) */}
-                  <div className="flex items-center bg-[#15803d] hover:bg-[#166534] text-white rounded-xl px-2.5 py-1.5 shadow-xs shrink-0 transition-colors">
+                  {/* Right: Counter Button */}
+                  <div className="flex items-center bg-white border border-slate-200/80 hover:border-slate-350 rounded-xl px-1 py-1 shadow-3xs shrink-0 transition-all">
                     <button
                       type="button"
                       onClick={() => handleUpdateQty(item.id, -1)}
-                      className="text-white hover:text-emerald-100 font-black text-sm px-1.5 cursor-pointer"
+                      className="w-6 h-6 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center font-bold text-xs cursor-pointer transition-colors"
                     >
                       -
                     </button>
-                    <span className="text-xs font-black min-w-[18px] text-center px-1">
+                    <span className="text-xs font-bold min-w-[20px] text-center text-slate-800">
                       {item.quantity || 1}
                     </span>
                     <button
                       type="button"
                       onClick={() => handleUpdateQty(item.id, 1)}
-                      className="text-white hover:text-emerald-100 font-black text-sm px-1.5 cursor-pointer"
+                      className="w-6 h-6 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 flex items-center justify-center font-bold text-xs cursor-pointer transition-colors"
                     >
                       +
                     </button>
@@ -6002,16 +5958,16 @@ function QuickCommerceCartCheckout({
               ))}
             </div>
 
-            {/* Bill Details Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-3">
-              <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Bill details</h3>
+            {/* Bill Details Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-4">
+              <h3 className="text-sm font-bold text-slate-900 tracking-tight pb-1 border-b border-slate-50">Bill Details</h3>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-650">
                 <div className="flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-slate-400" />
                   <span>Items total</span>
                   {savings > 0 && (
-                    <span className="text-[10px] font-black bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">
+                    <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-100/60">
                       Saved ₹{savings}
                     </span>
                   )}
@@ -6024,77 +5980,55 @@ function QuickCommerceCartCheckout({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Truck className="w-4 h-4 text-slate-400" />
                   <span>Delivery charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
-                <span className={`font-bold ${deliveryCharge === 0 ? "text-emerald-700" : "text-slate-900"}`}>
+                <span className={`font-bold ${deliveryCharge === 0 ? "text-emerald-600" : "text-slate-900"}`}>
                   {deliveryCharge === 0 ? "FREE" : `₹${deliveryCharge}`}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Package className="w-4 h-4 text-slate-400" />
                   <span>Handling charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
                 <span className="font-bold text-slate-900">₹{handlingCharge}</span>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Droplets className="w-4 h-4 text-slate-400" />
                   <span>Rain surge / High demand charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
                 <span className="font-bold text-slate-900">₹{surgeCharge}</span>
               </div>
 
-              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-sm sm:text-base font-extrabold text-slate-900">Grand total</span>
-                <span className="text-base sm:text-lg font-black text-slate-900">₹{grandTotal}</span>
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-900">Grand Total</span>
+                <span className="text-base font-black text-slate-900">₹{grandTotal}</span>
               </div>
             </div>
 
-            {/* Feeding India Donation Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
-                  <span className="text-lg">🍲</span>
-                </div>
-                <div>
-                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900">Feeding India donation</h4>
-                  <p className="text-[11px] text-slate-500 font-medium mt-0.5 line-clamp-1">
-                    Working towards a malnutrition free India.
-                  </p>
-                </div>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer shrink-0">
-                <span className="text-xs font-black text-slate-900">₹1</span>
-                <input
-                  type="checkbox"
-                  checked={isDonationChecked}
-                  onChange={(e) => setIsDonationChecked(e.target.checked)}
-                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                />
-              </label>
-            </div>
+            {/* (Donation box removed) */}
 
-            {/* Tip Your Delivery Partner Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-2.5">
-              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">Tip your delivery partner</h3>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
-                Your kindness means a lot! 100% of your tip will go directly to your delivery partner.
+            {/* Tip Your Delivery Partner Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-3">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900">Support your delivery partner</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-relaxed">
+                Add a tip to show appreciation. 100% of the tip goes directly to your rider.
               </p>
               <div className="grid grid-cols-4 gap-2 pt-1">
                 {[
-                  { label: "₹20", val: 20, icon: "👏" },
-                  { label: "₹30", val: 30, icon: "💌" },
-                  { label: "₹50", val: 50, icon: "❤️" },
-                  { label: "Custom", val: "custom", icon: "✨" },
+                  { label: "₹20", val: 20, desc: "Say Thanks" },
+                  { label: "₹30", val: 30, desc: "Buy a Chai" },
+                  { label: "₹50", val: 50, desc: "Show Love" },
+                  { label: "Custom", val: "custom", desc: "Other" },
                 ].map((t) => {
                   const isSelected = selectedTip === t.val
                   return (
@@ -6110,13 +6044,13 @@ function QuickCommerceCartCheckout({
                           setIsCustomTipOpen(t.val === "custom")
                         }
                       }}
-                      className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${isSelected
-                        ? "bg-emerald-50 border-emerald-600 text-emerald-800 shadow-2xs"
-                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
+                      className={`py-3 px-2 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 active:scale-95 ${isSelected
+                        ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
+                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700 hover:border-slate-350"
                         }`}
                     >
-                      <span>{t.icon}</span>
-                      <span>{t.label}</span>
+                      <span className="text-sm font-bold">{t.label}</span>
+                      <span className="text-[9px] font-semibold text-slate-405">{t.desc}</span>
                     </button>
                   )
                 })}
@@ -6128,35 +6062,35 @@ function QuickCommerceCartCheckout({
                     value={customTip}
                     onChange={(e) => setCustomTip(e.target.value)}
                     placeholder="Enter custom tip amount (₹)"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-600"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
                   />
                 </div>
               )}
             </div>
 
-            {/* Cancellation Policy Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-1">
-              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">Cancellation Policy</h3>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-relaxed">
+            {/* Cancellation Policy Card */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5 space-y-1.5 shadow-3xs">
+              <h3 className="text-xs font-bold text-slate-800">Cancellation Policy</h3>
+              <p className="text-[10px] sm:text-xs text-slate-550 font-semibold leading-relaxed">
                 Orders cannot be cancelled once packed for delivery. In case of unexpected delays, a refund will be provided, if applicable.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Delivering to Home & Sticky Bottom Checkout Bar (Image 2 & 4) */}
-        <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 sm:p-5 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] z-30 space-y-3">
+        {/* Delivering to Home & Sticky Bottom Checkout Bar */}
+        <div className="sticky bottom-0 bg-white/90 backdrop-blur-lg border-t border-slate-100 p-4 sm:p-5 shadow-[0_-12px_24px_rgba(0,0,0,0.04)] z-30 space-y-4">
           {/* Delivering to Home Address Bar */}
           <div className="flex items-center justify-between gap-3 text-xs sm:text-sm">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
+              <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center shrink-0 border border-slate-100 shadow-3xs">
                 <MapPin className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <span className="font-extrabold text-slate-900 block leading-tight">
+                <span className="font-bold text-slate-800 block leading-tight">
                   Delivering to {activeAddressObj?.type || "Home"}
                 </span>
-                <p className="text-[11px] text-slate-500 font-medium truncate max-w-[220px] sm:max-w-[340px]">
+                <p className="text-[11px] text-slate-400 font-semibold truncate max-w-[220px] sm:max-w-[340px] mt-0.5">
                   {activeAddressObj?.address || "Hosur, Tamil Nadu"}
                 </p>
               </div>
@@ -6164,7 +6098,7 @@ function QuickCommerceCartCheckout({
             <button
               type="button"
               onClick={() => setIsAddressScreenOpen(true)}
-              className="text-xs sm:text-sm font-extrabold text-emerald-700 hover:text-emerald-800 hover:underline shrink-0 cursor-pointer"
+              className="text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95"
             >
               Change
             </button>
@@ -6179,15 +6113,15 @@ function QuickCommerceCartCheckout({
             type="button"
             disabled={isSubmitting || cart.length === 0}
             onClick={handleProceedToPay}
-            className="w-full bg-[#15803d] hover:bg-[#166534] disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-emerald-700/20 cursor-pointer active:scale-98 transition-all"
+            className="w-full bg-slate-900 hover:bg-slate-950 disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-slate-955/20 cursor-pointer active:scale-98 transition-all duration-200"
           >
             <div className="text-left flex flex-col">
-              <span className="text-base sm:text-lg font-black leading-none">₹{grandTotal}</span>
-              <span className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider mt-0.5">TOTAL</span>
+              <span className="text-base sm:text-lg font-black text-white leading-none">₹{grandTotal}</span>
+              <span className="text-[9px] font-black text-emerald-450 uppercase tracking-widest mt-1">TOTAL AMOUNT</span>
             </div>
-            <div className="flex items-center gap-2 font-black">
-              <span>{isSubmitting ? "Placing Order..." : "Proceed To Pay"}</span>
-              <ChevronRight className="w-5 h-5" />
+            <div className="flex items-center gap-1.5 font-bold text-emerald-455 hover:text-white transition-colors">
+              <span className="text-white">{isSubmitting ? "Placing Order..." : "Proceed to Pay"}</span>
+              <ChevronRight className="w-5 h-5 text-emerald-450" />
             </div>
           </button>
         </div>
@@ -17736,7 +17670,6 @@ const FULL_KITCHEN_PACKAGES = [
     id: "empty-kitchen",
     name: "Empty Kitchen Cleaning",
     price: 849,
-    options: "2 options",
     duration: "2.5 hrs",
     description: "Thorough deep cleaning of empty kitchen spaces before moving in or after moving out.",
     image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
@@ -17744,26 +17677,6 @@ const FULL_KITCHEN_PACKAGES = [
       "Thorough degreasing of wall tiles, countertops, and exhaust fans",
       "Detailed cleaning of kitchen floors, windows, switchboards, and cabinets (exterior)",
       "Deep sanitization of sink and under-sink area (utensils removal not included)"
-    ],
-    subOptions: [
-      {
-        id: "empty-kitchen-small",
-        name: "Standard Kitchen",
-        price: 849,
-        rating: "4.82",
-        reviews: "15K reviews",
-        image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=200&q=80&fit=crop",
-        duration: "2.5 hrs"
-      },
-      {
-        id: "empty-kitchen-large",
-        name: "Large Kitchen",
-        price: 1149,
-        rating: "4.80",
-        reviews: "8K reviews",
-        image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=200&q=80&fit=crop",
-        duration: "3.5 hrs"
-      }
     ]
   }
 ];
@@ -17806,7 +17719,7 @@ const APPLIANCE_SERVICES = [
     options: "3 options",
     duration: "1.5 hrs",
     description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
-    image: "/mockups/appliance_cleaning_hero.png",
+    image: "/mockups/appliance_cleaning_thumb.png",
     includes: [
       "Interior & exterior cleaning",
       "Shelves, trays & compartments cleaning",
@@ -17837,7 +17750,7 @@ const APPLIANCE_SERVICES = [
         price: 799,
         rating: "4.80",
         reviews: "9K reviews",
-        image: "/mockups/appliance_cleaning_hero.png",
+        image: "/mockups/appliance_cleaning_thumb.png",
         duration: "2 hrs"
       }
     ]
@@ -17850,7 +17763,7 @@ const APPLIANCE_SERVICES = [
     price: 199,
     duration: "15 mins",
     description: "Complete interior grease removal and sanitization of turntable.",
-    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
+    image: "/mockups/microwave_clean.png",
     includes: [
       "Interior & exterior cleaning",
       "Turntable & glass door cleaning",
@@ -17865,7 +17778,7 @@ const APPLIANCE_SERVICES = [
     price: 399,
     duration: "45 mins",
     description: "Deep filter degreasing and external hood surface cleaning.",
-    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    image: "/mockups/chimney_clean.png",
     includes: [
       "Filter & exterior cleaning",
       "Grease & oil buildup removal",
@@ -17880,7 +17793,7 @@ const APPLIANCE_SERVICES = [
     price: 499,
     duration: "1 hr 10 mins",
     description: "Combined steam deep cleaning of kitchen chimney and gas stove.",
-    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    image: "/mockups/chimney_stove_clean.png",
     includes: [
       "Stovetops, burners, mesh & filter cleaning with steam",
       "Includes motor cleaning, repair & automatic chimney cleaning"
@@ -17895,7 +17808,7 @@ const APPLIANCE_SERVICES = [
     options: "3 options",
     duration: "45 mins",
     description: "Surface cleaning of gas stove burners and knobs to remove grease.",
-    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
+    image: "/mockups/gas_stove_clean.png",
     includes: [
       "Stove / hob surface cleaning",
       "Burner & knob cleaning",
@@ -17908,7 +17821,7 @@ const APPLIANCE_SERVICES = [
         price: 99,
         rating: "4.81",
         reviews: "30K reviews",
-        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        image: "/mockups/gas_stove_clean.png",
         duration: "30 mins"
       },
       {
@@ -17917,7 +17830,7 @@ const APPLIANCE_SERVICES = [
         price: 149,
         rating: "4.79",
         reviews: "15K reviews",
-        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        image: "/mockups/gas_stove_clean.png",
         duration: "45 mins"
       },
       {
@@ -17926,7 +17839,7 @@ const APPLIANCE_SERVICES = [
         price: 199,
         rating: "4.78",
         reviews: "15K reviews",
-        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        image: "/mockups/gas_stove_clean.png",
         duration: "1 hr"
       }
     ]
@@ -17937,7 +17850,7 @@ const APPLIANCE_SERVICES = [
     price: 599,
     duration: "1 hr",
     description: "Thorough interior rack wash and food debris clearing.",
-    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
+    image: "/mockups/dishwasher_clean.png",
     includes: [
       "Interior & exterior cleaning",
       "Filter, racks & tray cleaning",
@@ -17952,7 +17865,7 @@ const APPLIANCE_SERVICES = [
     price: 199,
     duration: "30 mins",
     description: "Air fryer interior wet wipe and tray wash.",
-    image: "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?w=600&q=80&fit=crop",
+    image: "/mockups/air_fryer_clean.png",
     includes: [
       "Wet wiping of interior to remove oil stains & odour",
       "Cleaning of tray to remove food spills"
@@ -17966,7 +17879,7 @@ const APPLIANCE_SERVICES = [
     price: 399,
     duration: "50 mins",
     description: "Oven interior crumb removal and grease wipe down.",
-    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=600&q=80&fit=crop",
+    image: "/mockups/otg_clean.png",
     includes: [
       "Cleaning of interior to remove food crumbs & spills",
       "Exterior & back panel cleaning to remove oil & grease"
@@ -17995,7 +17908,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 129,
     duration: "20 mins",
     description: "Deep scrubbing of sink and under-sink sanitization.",
-    image: "/mockups/drain_clean.png",
+    image: "/mockups/washbasin.png",
     includes: [
       "Deep scrub & sanitization of kitchen sink",
       "Wiping and disinfecting under-sink area",
@@ -18008,7 +17921,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Detailed glass panel and frame grease cleaning.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
     includes: [
       "Glass panes dusting and wet wiping",
       "Window frames, sill, and tracks cleaning",
@@ -18021,7 +17934,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 449,
     duration: "30 mins",
     description: "Detailed dining table surface cleaning and grease removal.",
-    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1577140917170-285929fb55b7?w=300&q=80&fit=crop",
     includes: [
       "Surface cleaning & sanitation",
       "Removal of food stains & greasy layers",
@@ -18034,7 +17947,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 89,
     duration: "30 mins",
     description: "Detailed ceiling fan dusting and blade wipe down.",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+    image: "/mockups/ceiling_fan.png",
     includes: [
       "Fan blade cleaning",
       "Motor housing & cover dusting",
@@ -18047,7 +17960,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 99,
     duration: "30 mins",
     description: "Kitchen exhaust fan degreasing and grill dusting.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    image: "/mockups/exhaust_fan.png",
     includes: [
       "Exhaust fan blades cleaning",
       "Fan cover / grill cleaning",
@@ -18060,7 +17973,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Washing and scrubbing of balcony floor and railings.",
-    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop",
     includes: [
       "Balcony floor washing & scrubbing",
       "Dusting of railing and windows",
@@ -18073,11 +17986,24 @@ const QUICK_EXTRA_SERVICES = [
     price: 549,
     duration: "50 mins",
     description: "Deep floor scrubbing and mesh cleaning for large balconies.",
-    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=300&q=80&fit=crop",
     includes: [
       "Deep floor scrubbing & balcony washing",
       "Railing, windows, and mesh cleaning",
       "Thorough dust and dirt clearance"
+    ]
+  },
+  {
+    id: "quick-door-clean",
+    name: "Door Cleaning",
+    price: 89,
+    duration: "10 mins",
+    description: "Thorough wiping and dusting of doors to remove fingerprints and dirt.",
+    image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+    includes: [
+      "Wiping of door panels and frames",
+      "Removal of smudges, dust & fingerprint marks",
+      "Handle sanitization"
     ]
   }
 ];
@@ -18160,10 +18086,13 @@ const SERVICE_DETAIL_DATA = {
     ],
     faqs: [
       { q: "Will you move utensils from the cabinets?", a: "No. Utensil removal and rearrangement are not included in the Basic package." },
-      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring the required cleaning tools and products." },
-      { q: "Is chimney cleaning included?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
-      { q: "Can I add appliance cleaning?", a: "Yes. You can add individual appliance cleaning as an additional service." },
-      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." }
+      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring all the required environment-friendly cleaning tools and products." },
+      { q: "Is chimney cleaning included in the Basic package?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add appliance cleaning to this package?", a: "Yes. You can add individual appliance cleaning as an additional service." },
+      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean the exhaust fan in basic cleaning?", a: "No, exhaust fan cleaning is part of our deep cleaning package or can be booked separately as a quick service." },
+      { q: "Will you clean tiles and grout?", a: "Yes, we wipe tiles and slabs to remove superficial oil stains, but deep scrubbing grout lines is part of the deep cleaning package." },
+      { q: "Is garbage disposal included?", a: "We collect all waste generated during the cleaning and hand it over to your society bin, but we do not discard pre-existing bulk trash." }
     ]
   },
   "occ-deep": {
@@ -18186,14 +18115,83 @@ const SERVICE_DETAIL_DATA = {
     ],
     faqs: [
       { q: "Does Deep Clean include everything in Basic?", a: "Yes. Deep Clean includes all services covered in the Basic package, along with additional deep-cleaning services." },
-      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed and rearranged as part of the Deep Clean service." },
+      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed, cabinets cleaned internally, and utensils rearranged as part of the Deep Clean service." },
       { q: "Does Deep Clean include chimney cleaning?", a: "No. Chimney cleaning is available separately under Single Appliance & Specific Area Cleaning." },
       { q: "Can I add refrigerator or microwave cleaning?", a: "Yes. Individual appliance cleaning can be added separately to your booking." },
       { q: "Does steam cleaning remove tough grease?", a: "Yes. Steam cleaning helps loosen and remove stubborn grease, oil buildup and stains from suitable kitchen surfaces." },
-      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." }
+      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean internal cabinet walls?", a: "Yes, we deep clean both the interiors and exteriors of all kitchen cabinets and drawers." },
+      { q: "Are window panes and grills cleaned in this package?", a: "Yes, deep cleaning includes cleaning of kitchen window panes, frames, exhaust fans, and mesh surfaces." },
+      { q: "Do you offer stain guarantee for old granite or tiles?", a: "While we use professional-grade degreasers and steam machines that remove 99% of grease, extremely old chemical etchings or stone discoloration may not disappear completely." }
     ]
   },
   "fridge-clean": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-single": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-double": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-triple": {
     tools: [
       "Food-safe cleaning products",
       "Microfiber cloths",
@@ -18328,6 +18326,72 @@ const SERVICE_DETAIL_DATA = {
     ]
   },
   "stove-clean": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-2b": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-3b": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-4b": {
     tools: [
       "Stove-safe cleaning products",
       "Microfiber cloths",
@@ -18507,17 +18571,27 @@ const SERVICE_DETAIL_DATA = {
   },
   "quick-dining-table": {
     tools: [
-      "Food-safe table cleaner",
-      "Polishing cloth"
+      "Heavy duty degreasers / polishers",
+      "Microfiber detailing cloths",
+      "Soft detailing brushes"
     ],
     ready: [
-      "Clear dishes and table mats before service"
+      "Clear all items from the dining table",
+      "Ensure access to water and power outlets"
     ],
     reviews: [
-      { name: "Arjun V.", rating: "5.0", text: '"Got rid of sticky grease stains on the glass tabletop. Super clean!"' }
+      { name: "Rohit P.", rating: "4.9", text: '"Very detailed cleaning of the dining chairs as well. Stains are completely gone!"' },
+      { name: "Kunal M.", rating: "4.8", text: '"Cleaned the glass table top spotless. The wooden chairs look polished."' }
     ],
     faqs: [
-      { q: "Will you polish wooden tables?", a: "We do standard cleaning and gentle wiping. Specialized wood polishing is not included." }
+      { q: "Will this clean the table chairs too?", a: "Yes, this service covers the deep cleaning of both the dining table and the chairs." },
+      { q: "Is wood polishing included?", a: "No, we perform standard cleaning and gentle wiping. Wood varnishing or professional polishing is not included." },
+      { q: "How many chairs are covered?", a: "Up to a 6-seater dining set is covered in the standard package." },
+      { q: "Will you clean table mats?", a: "No, table mats, table cloths, and runners are not cleaned." },
+      { q: "Do you clean table extensions?", a: "Yes, if the table extensions are opened by the customer before cleaning." },
+      { q: "Will you remove grease stains?", a: "Yes, food oil, grease, and sticky stains are thoroughly cleaned." },
+      { q: "Do you clean glass tabletops?", a: "Yes, glass tops are cleaned with specialized glass cleaning spray." },
+      { q: "How long does it take?", a: "The dining table and chairs cleaning takes about 30 to 40 minutes." }
     ]
   },
   "quick-kitchen-window": {
@@ -18530,43 +18604,69 @@ const SERVICE_DETAIL_DATA = {
       "Clear the window sill and counter space below the window"
     ],
     reviews: [
-      { name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' }
+      { name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' },
+      { name: "Sonia P.", rating: "4.7", text: '"Spotless cleaning. The frames and tracks are completely clean now."' }
     ],
     faqs: [
-      { q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." }
+      { q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." },
+      { q: "Will you clean both sides of the window?", a: "Yes, if the exterior side is safely accessible from inside the kitchen." },
+      { q: "Do you remove window frames?", a: "No, window panels are cleaned as installed without dismantling." },
+      { q: "Will you remove paint or cement stains?", a: "No, heavy paint or cement scrapings are not included in this quick package." },
+      { q: "How long does it take?", a: "It takes about 30 to 40 minutes per window." },
+      { q: "Do you clean window grills?", a: "Yes, accessible window grills are wiped and cleaned of dust and grease." },
+      { q: "What cleaning agents do you use?", a: "We use professional glass cleaner and kitchen-grade grease removers." },
+      { q: "Is slider track vacuuming included?", a: "Yes, we vacuum/brush dirt out of the window sliding tracks." }
     ]
   },
   "quick-balcony-upto-4ft": {
     tools: [
-      "Heavy duty floor brush",
-      "High-pressure water source if available",
-      "Balcony cleaning detergent"
+      "Floor scrubbers",
+      "High pressure water sprays",
+      "Hard dusting brushes"
     ],
     ready: [
-      "Clear planters or light furniture from the balcony floor",
-      "Provide access to a water tap"
+      "Remove plants or outdoor furniture from the balcony",
+      "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Sneha L.", rating: "5.0", text: '"Balcony floor is sparkling clean. They washed off all the pigeon droppings."' }
+      { name: "Vikram P.", rating: "4.9", text: '"Scrubbed all the dust and dirt from the balcony floor. Very clean."' },
+      { name: "Divya N.", rating: "4.8", text: '"The pigeon droppings were cleaned very neatly. Worth the price."' }
     ],
     faqs: [
-      { q: "Do you clean the balcony roof?", a: "No, roof or ceiling cleaning is not included in this quick package." }
+      { q: "Do you clean balcony windows?", a: "Yes, accessible balcony windows are dusted and wiped." },
+      { q: "Is roof cleaning included?", a: "No, ceiling/roof cleaning is not included in this quick package." },
+      { q: "Do you wash the railings?", a: "Yes, railings are scrubbed and wiped to remove dust." },
+      { q: "What if there is no water connection near the balcony?", a: "Our team will fetch water from the nearest bathroom or kitchen." },
+      { q: "Do you clean wall tiles in the balcony?", a: "Yes, wall tiles are wiped down to remove surface dust." },
+      { q: "Will you discard old items?", a: "No, we do not throw away trash or scrap items left in the balcony." },
+      { q: "How long does it take?", a: "It takes about 30 to 45 minutes." },
+      { q: "Do you clean mesh windows?", a: "Yes, window mesh screen dusting is included." }
     ]
   },
   "quick-balcony-above-4ft": {
     tools: [
-      "Scrubbing brushes & wipers",
-      "Balcony floor wash detergent",
-      "Cobweb removal brush"
+      "Floor scrubbers",
+      "High pressure water sprays",
+      "Hard dusting brushes",
+      "Mesh cleaning brushes"
     ],
     ready: [
-      "Clear all furniture and items from the balcony"
+      "Remove plants or outdoor furniture from the balcony",
+      "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Manish P.", rating: "4.9", text: '"Very thorough washing. Highly recommend for large balconies."' }
+      { name: "Aditi G.", rating: "4.8", text: '"Deep scrubbed the entire balcony floor and mesh screens. Perfect."' },
+      { name: "Rohan J.", rating: "4.7", text: '"Professional cleaners. Cleaned my large balcony tiles and railings nicely."' }
     ],
     faqs: [
-      { q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." }
+      { q: "Is mesh screen cleaning included?", a: "Yes, mesh screen dusting and washing is included." },
+      { q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." },
+      { q: "Do you clean balcony ceilings?", a: "No, ceiling and roof cleaning is not included." },
+      { q: "How much time is required?", a: "It takes around 45 to 60 minutes for balconies above 4ft width." },
+      { q: "Do you scrub the floor with a machine?", a: "No, manual heavy-duty scrubbing brushes are used to remove stains." },
+      { q: "Are plant pots moved by the cleaners?", a: "We request customers to move heavy plant pots beforehand. Light pots can be moved by our team." },
+      { q: "Do you clean outer side of balcony walls?", a: "No, exterior walls are excluded due to safety hazards." },
+      { q: "Do you remove hard water stains from tiles?", a: "We use cleaning detergents, but very old hard water scaling might not disappear completely." }
     ]
   },
   "quick-window-upto-4x4": {
@@ -18600,6 +18700,57 @@ const SERVICE_DETAIL_DATA = {
     faqs: [
       { q: "Is exterior cleaning included?", a: "Exterior glass is cleaned as long as it does not pose a safety risk to the cleaner." }
     ]
+  },
+  "quick-exhaust-fan-clean": {
+    tools: [
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Grease-removing cleaning solution",
+      "Long-reach dusting tools"
+    ],
+    ready: [
+      "Switch off the exhaust fan before cleaning",
+      "Keep the area around the fan clear",
+      "Provide safe access to the fan"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The exhaust fan had a lot of dust and grease. It was cleaned very neatly."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Quick service and the fan looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the fan blades?", a: "Yes, the accessible fan blades will be cleaned properly." },
+      { q: "Will you clean the cover / grill?", a: "Yes, the fan cover and visible grill will also be cleaned." },
+      { q: "Will you remove grease from the fan?", a: "Yes, normal dust, grease and dirt buildup will be cleaned." },
+      { q: "Will you remove the exhaust fan from the wall?", a: "No, the fan will be cleaned while it remains installed." },
+      { q: "Do you repair exhaust fans?", a: "No, electrical, motor and wiring repairs are not included." },
+      { q: "How long does it take?", a: "It takes about 30 to 45 minutes to deep clean the exhaust fan." },
+      { q: "Do you clean the wall area around the fan?", a: "Yes, we wipe the immediate wall area around the fan to remove splashed grease." },
+      { q: "What cleaning chemicals do you use?", a: "We use heavy-duty kitchen-safe degreasers to dissolve grease and oil." }
+    ]
+  },
+  "quick-door-clean": {
+    tools: [
+      "Wood-safe spray",
+      "Soft detailing sponges",
+      "Microfiber towels"
+    ],
+    ready: [
+      "Provide clear path to doors"
+    ],
+    reviews: [
+      { name: "Alok R.", rating: "4.8", text: '"Got rid of all grease spots on the door handles and corners."' },
+      { name: "Suresh P.", rating: "4.7", text: '"Excellent door wiping. The panels look polished and clean now."' }
+    ],
+    faqs: [
+      { q: "Is handle disinfection included?", a: "Yes, we sanitize door handles as part of the service." },
+      { q: "Do you clean the door frames?", a: "Yes, we clean both door panels and frames." },
+      { q: "Do you clean glass panels on doors?", a: "Yes, any glass panels are wiped and cleaned with glass cleaner." },
+      { q: "Will this service polish wooden doors?", a: "No, this is a cleaning service. We do not apply wood polish or varnish." },
+      { q: "How many doors are cleaned?", a: "This service is priced per door. You can select the quantity accordingly." },
+      { q: "Do you clean mesh doors?", a: "No, mesh doors require separate pricing/washing." },
+      { q: "Do you remove scratches?", a: "No, cleaning cannot repair scratches, dents or structural damage." },
+      { q: "Are sliding door tracks cleaned?", a: "Yes, we dust and wipe the accessible sliding track area." }
+    ]
   }
 };
 
@@ -18610,6 +18761,21 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   const [isBasicExpanded, setIsBasicExpanded] = useState(false);
   const [isDeepExpanded, setIsDeepExpanded] = useState(false);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [dbPackages, setDbPackages] = useState([]);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      try {
+        const res = await apiRequest("/settings/catalog/public/packages/?service_slug=kitchen-cleaning");
+        if (res.success && Array.isArray(res.data)) {
+          setDbPackages(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch kitchen packages:", err);
+      }
+    };
+    fetchPackages();
+  }, []);
 
   useEffect(() => {
     if (selectedServiceDetails) {
@@ -18645,10 +18811,70 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   const getActiveServices = () => {
     let list = [];
-    if (activeTab === "packages") list = FULL_KITCHEN_PACKAGES;
-    else if (activeTab === "appliance") list = APPLIANCE_SERVICES;
-    else if (activeTab === "cabinet_tile") list = CABINET_TILE_SERVICES;
-    else if (activeTab === "addons") list = QUICK_EXTRA_SERVICES;
+    if (activeTab === "packages") list = JSON.parse(JSON.stringify(FULL_KITCHEN_PACKAGES));
+    else if (activeTab === "appliance") list = JSON.parse(JSON.stringify(APPLIANCE_SERVICES));
+    else if (activeTab === "cabinet_tile") list = JSON.parse(JSON.stringify(CABINET_TILE_SERVICES));
+    else if (activeTab === "addons") list = JSON.parse(JSON.stringify(QUICK_EXTRA_SERVICES));
+
+    if (dbPackages.length > 0) {
+      list = list.map(item => {
+        if (Array.isArray(item.subOptions)) {
+          const parentDbMatch = dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id));
+          if (parentDbMatch) {
+            item.name = parentDbMatch.name;
+            item.price = Math.round(Number(parentDbMatch.base_price) || item.price);
+            item.duration = parentDbMatch.duration || item.duration;
+            item.description = parentDbMatch.description || item.description;
+            item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
+            item.tag = parentDbMatch.tag || "";
+            item.popular = parentDbMatch.popular || false;
+          }
+
+          item.subOptions = item.subOptions.map(subOpt => {
+            const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
+            if (dbMatch) {
+              return {
+                ...subOpt,
+                name: dbMatch.name,
+                price: Math.round(Number(dbMatch.base_price) || subOpt.price),
+                duration: dbMatch.duration || subOpt.duration,
+                description: dbMatch.description || subOpt.description,
+                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes),
+                tag: dbMatch.tag || "",
+                popular: dbMatch.popular || false,
+                tools: Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0 ? dbMatch.tools : (subOpt.tools || []),
+                ready: Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0 ? dbMatch.ready : (subOpt.ready || []),
+                reviews: Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || []),
+                faqs: Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0 ? dbMatch.faqs : (subOpt.faqs || []),
+              };
+            }
+            return {
+              ...subOpt,
+              includes: subOpt.includes || item.includes
+            };
+          });
+          if (item.subOptions.length > 0) {
+            item.price = item.subOptions[0].price;
+          }
+        } else {
+          const dbMatch = dbPackages.find(p => p.slug === item.id);
+          if (dbMatch) {
+            item.name = dbMatch.name;
+            item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.duration = dbMatch.duration || item.duration;
+            item.description = dbMatch.description || item.description;
+            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            item.tag = dbMatch.tag || "";
+            item.popular = dbMatch.popular || false;
+            if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
+            if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews = dbMatch.reviews;
+            if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
+          }
+        }
+        return item;
+      });
+    }
 
     if (!searchQuery) return list;
     return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -18661,12 +18887,12 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
       {/* Sticky Header + Tabs */}
       <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
         <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
-          <div>
+          <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-2 text-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
-              <ChevronLeft size={16} /> Back to Services
+              <ChevronLeft size={14} /> Back to Services
             </button>
             <h2 className="text-xl font-black text-slate-900">Kitchen Cleaning</h2>
           </div>
@@ -18734,6 +18960,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           Occupied Kitchen Cleaning
                         </div>
+                      )}
+                      {service.tag && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80 mb-1">
+                          ★ {service.tag}
+                        </span>
                       )}
                       <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
@@ -18921,6 +19152,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
         </div>
       </div>
 
+      <AppBannerAndFooter />
+
       {selectedServiceDetails && createPortal(
         <div
           onClick={() => setSelectedServiceDetails(null)}
@@ -18993,6 +19226,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 )}
               </div>
 
+              {/* Inclusions Box removed for kitchen cleaning view details per request */}
+
               {/* Exclusions Box */}
               {(() => {
                 const id = selectedServiceDetails.id;
@@ -19029,11 +19264,19 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 mb-2 flex items-center justify-center">
                             <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
                           </div>
-                          <div className="flex-1 flex flex-col justify-between w-full">
+                            <div className="flex-1 flex flex-col justify-between w-full">
                             <div>
                               <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">{sub.name}</h5>
                             </div>
                             <div className="w-full mt-auto">
+                              <button
+                                onClick={() => {
+                                  setSelectedServiceDetails(sub);
+                                }}
+                                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] py-1 rounded-lg mb-1.5 uppercase transition-colors"
+                              >
+                                View Details
+                              </button>
                               <div className="text-xs font-black text-slate-900 mb-2">₹{sub.price}</div>
                               {subCount > 0 ? (
                                 <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm w-full">
@@ -19062,7 +19305,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const tools = detail.tools || [];
+                const tools = (Array.isArray(selectedServiceDetails.tools) && selectedServiceDetails.tools.length > 0)
+                  ? selectedServiceDetails.tools
+                  : (detail.tools || []);
                 if (tools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -19083,7 +19328,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const readyList = detail.ready || [];
+                const readyList = (Array.isArray(selectedServiceDetails.ready) && selectedServiceDetails.ready.length > 0)
+                  ? selectedServiceDetails.ready
+                  : (detail.ready || []);
                 if (readyList.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -19106,7 +19353,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 {(() => {
                   const id = selectedServiceDetails.id;
                   const detail = SERVICE_DETAIL_DATA[id] || {};
-                  const reviews = detail.reviews || [];
+                  const reviews = (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0)
+                    ? selectedServiceDetails.reviews
+                    : (detail.reviews || []);
                   return reviews.map((rev, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
                       <div className="flex items-center justify-between">
@@ -19131,7 +19380,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   {(() => {
                     const id = selectedServiceDetails.id;
                     const detail = SERVICE_DETAIL_DATA[id] || {};
-                    const faqs = detail.faqs || [];
+                    const faqs = (Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0)
+                      ? selectedServiceDetails.faqs
+                      : (detail.faqs || []);
                     return faqs.map((faq, idx) => {
                       const isFaqOpen = activeFaq === idx;
                       return (
