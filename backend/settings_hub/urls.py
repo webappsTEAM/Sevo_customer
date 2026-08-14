@@ -6,6 +6,7 @@ from .views_catalog_v2 import (
     AdminPackageListView, AdminPackageDetailView, AdminPackageTransitionView,
     AdminAddOnListView, AdminAddOnDetailView,
     AdminCatalogChangeLogView,
+    PublicPackageListView,
 )
 from .views import (
     NotificationPreferenceView,
@@ -18,9 +19,18 @@ from .views import (
     DataExportView, AccountDeletionView, WorkspaceDeletionView, OwnerTransferView,
 )
 
+from .views_homepage import (
+    HomePageConfigAPIView,
+    HomePageImageUploadAPIView,
+    HomePageImageDeleteAPIView,
+)
 from service_requests.payment_views import InvoiceDownloadView
 
 urlpatterns = [
+    # Homepage Config & Storage APIs
+    path("homepage/", HomePageConfigAPIView.as_view(), name="settings-homepage-config"),
+    path("homepage/upload-image/", HomePageImageUploadAPIView.as_view(), name="settings-homepage-upload-image"),
+    path("homepage/images/<uuid:media_id>/", HomePageImageDeleteAPIView.as_view(), name="settings-homepage-image-delete"),
     # Notifications
     path("notifications/", NotificationPreferenceView.as_view(), name="notification-prefs"),
 
@@ -61,6 +71,9 @@ urlpatterns = [
     path("catalog/v2/addons/", AdminAddOnListView.as_view(), name="settings-catalog-v2-addons-list"),
     path("catalog/v2/addons/<int:pk>/", AdminAddOnDetailView.as_view(), name="settings-catalog-v2-addons-detail"),
     path("catalog/v2/change-log/", AdminCatalogChangeLogView.as_view(), name="settings-catalog-v2-change-log"),
+
+    # Public (no-auth) read-only catalog — used by customer-facing booking UI
+    path("catalog/public/packages/", PublicPackageListView.as_view(), name="settings-catalog-public-packages"),
 
     # Data / Privacy
     path("data/export/", DataExportView.as_view(), name="data-export"),

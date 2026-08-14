@@ -10,6 +10,7 @@ from .views import (
     PublicFeedbackListView,
     CatalogCategoryListView,
     CatalogServiceListView,
+    CatalogSubServiceListView,
     # Admin — Service Requests
     AdminSRListView,
     AdminSRDetailView,
@@ -125,6 +126,7 @@ urlpatterns = [
     # ── Public & Customer ─────────────────────────────────────────────────────
     path("catalog/categories/",              CatalogCategoryListView.as_view(), name="catalog-categories"),
     path("catalog/services/",                CatalogServiceListView.as_view(),  name="catalog-services"),
+    path("catalog/sub-services/",            CatalogSubServiceListView.as_view(), name="catalog-sub-services"),
     path("booking/",                         BookingCreateView.as_view(),    name="sr-booking"),
     path("booking/my-bookings/",             CustomerMyBookingsView.as_view(), name="sr-my-bookings"),
     path("booking/<int:pk>/retry-payment/",  CustomerBookingRetryPaymentView.as_view(), name="sr-retry-payment"),

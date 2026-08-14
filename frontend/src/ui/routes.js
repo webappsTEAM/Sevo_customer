@@ -81,4 +81,5 @@ export const routes = {
   marketing_coupons: "/marketing/coupons",
   marketing_offers: "/marketing/offers",
   marketing_referrals: "/marketing/referrals",
+  homepage_customizer: "/admin/homepage-customizer",
 }

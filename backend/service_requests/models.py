@@ -672,6 +672,10 @@ class Package(models.Model):
     tag            = models.CharField(max_length=50, blank=True)
     includes       = models.JSONField(default=list, blank=True)
     excludes       = models.JSONField(default=list, blank=True)
+    tools          = models.JSONField(default=list, blank=True)   # Tools & Products We Use (shown in View Details)
+    ready          = models.JSONField(default=list, blank=True)   # What You Need to Keep Ready
+    reviews        = models.JSONField(default=list, blank=True)   # Customer Reviews [{name, rating, text}]
+    faqs           = models.JSONField(default=list, blank=True)   # FAQ [{q, a}]
     payment_policy = models.CharField(max_length=20, choices=PaymentPolicy.choices, default=PaymentPolicy.BOTH)
     status         = models.CharField(max_length=20, choices=PackageStatus.choices, default=PackageStatus.DRAFT)
     version        = models.PositiveIntegerField(default=1)

@@ -32,6 +32,7 @@ import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
+import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -149,54 +150,54 @@ function openGoogleSignInPopup(onSuccess, onError) {
 
 const PACKAGES = {
   cleaning: [
-    { id: "clean-std", name: "Standard", price: 999, priceStr: "₹999", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", includes: ["Floor Cleaning", "Kitchen Surface Cleaning", "Bathroom Cleaning", "Dusting"], excludes: [] },
-    { id: "clean-prem", name: "Premium", price: 2499, priceStr: "₹2,499", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", includes: ["Complete Home Deep Cleaning", "Kitchen Deep Cleaning", "Bathroom Deep Cleaning", "Sofa Vacuuming", "Window Cleaning", "Balcony Cleaning"], excludes: [] },
-    { id: "clean-move", name: "Move-In / Move-Out Package", price: 3499, priceStr: "₹3,499", duration: "6 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", includes: ["Entire House Cleaning", "Cabinet Cleaning", "Fan & Light Cleaning", "Window & Glass Cleaning"], excludes: [] },
+    { id: "clean-std", name: "Standard", price: 999, priceStr: "₹999", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", includes: ["Floor Cleaning", "Kitchen Surface Cleaning", "Bathroom Cleaning", "Dusting"], excludes: [] },
+    { id: "clean-prem", name: "Premium", price: 2499, priceStr: "₹2,499", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", includes: ["Complete Home Deep Cleaning", "Kitchen Deep Cleaning", "Bathroom Deep Cleaning", "Sofa Vacuuming", "Window Cleaning", "Balcony Cleaning"], excludes: [] },
+    { id: "clean-move", name: "Move-In / Move-Out Package", price: 3499, priceStr: "₹3,499", duration: "6 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=500&q=80&fit=crop", includes: ["Entire House Cleaning", "Cabinet Cleaning", "Fan & Light Cleaning", "Window & Glass Cleaning"], excludes: [] },
   ],
   plumbing: [
-    { id: "plum-std", name: "Standard", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", includes: ["One Plumbing Issue", "Leak Check", "Basic Repair"], excludes: [] },
-    { id: "plum-prem", name: "Premium", price: 799, priceStr: "₹799", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", includes: ["Up to 3 Plumbing Repairs", "Pipe Inspection", "Drain Cleaning"], excludes: [] },
-    { id: "plum-comp", name: "Complete Home Plumbing", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop", includes: ["Full House Plumbing Inspection", "Multiple Repairs", "Water Pressure Check"], excludes: [] },
+    { id: "plum-std", name: "Standard", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", includes: ["One Plumbing Issue", "Leak Check", "Basic Repair"], excludes: [] },
+    { id: "plum-prem", name: "Premium", price: 799, priceStr: "₹799", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop", includes: ["Up to 3 Plumbing Repairs", "Pipe Inspection", "Drain Cleaning"], excludes: [] },
+    { id: "plum-comp", name: "Complete Home Plumbing", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop", includes: ["Full House Plumbing Inspection", "Multiple Repairs", "Water Pressure Check"], excludes: [] },
   ],
   electrical: [
-    { id: "elec-std", name: "Standard", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", includes: ["One Electrical Repair", "Safety Check"], excludes: [] },
-    { id: "elec-prem", name: "Premium", price: 899, priceStr: "₹899", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", includes: ["Multiple Electrical Repairs", "Wiring Inspection", "MCB Check"], excludes: [] },
-    { id: "elec-care", name: "Home Electrical Care", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop", includes: ["Complete Home Inspection", "Fan & Light Service", "Socket Testing"], excludes: [] },
+    { id: "elec-std", name: "Standard", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&q=80&fit=crop", includes: ["One Electrical Repair", "Safety Check"], excludes: [] },
+    { id: "elec-prem", name: "Premium", price: 899, priceStr: "₹899", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop", includes: ["Multiple Electrical Repairs", "Wiring Inspection", "MCB Check"], excludes: [] },
+    { id: "elec-care", name: "Home Electrical Care", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop", includes: ["Complete Home Inspection", "Fan & Light Service", "Socket Testing"], excludes: [] },
   ],
   hvac: [
-    { id: "hvac-std", name: "Standard Package", price: 599, priceStr: "₹599", duration: "1-2 Hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop", includes: ["General AC Service", "Filter Cleaning", "Cooling Performance Check", "Basic Inspection"], excludes: [] },
-    { id: "hvac-prem", name: "Premium Package", price: 1299, priceStr: "₹1,299", duration: "2-3 Hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop", includes: ["Deep Coil Cleaning", "Water Jet Cleaning", "Filter Cleaning", "Cooling Performance Check", "Gas Pressure Check", "Minor Adjustments", "30-Day Service Warranty"], excludes: [] },
-    { id: "hvac-amc", name: "Annual Maintenance Package (AMC)", price: 2999, priceStr: "₹2,999", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop", includes: ["4 AC Services per Year", "Priority Technician", "Discount on Spare Parts", "Free Basic Inspection", "Service Reminder"], excludes: [] },
+    { id: "hvac-std", name: "Standard Package", price: 599, priceStr: "₹599", duration: "1-2 Hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=500&q=80&fit=crop", includes: ["General AC Service", "Filter Cleaning", "Cooling Performance Check", "Basic Inspection"], excludes: [] },
+    { id: "hvac-prem", name: "Premium Package", price: 1299, priceStr: "₹1,299", duration: "2-3 Hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=500&q=80&fit=crop", includes: ["Deep Coil Cleaning", "Water Jet Cleaning", "Filter Cleaning", "Cooling Performance Check", "Gas Pressure Check", "Minor Adjustments", "30-Day Service Warranty"], excludes: [] },
+    { id: "hvac-amc", name: "Annual Maintenance Package (AMC)", price: 2999, priceStr: "₹2,999", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=500&q=80&fit=crop", includes: ["4 AC Services per Year", "Priority Technician", "Discount on Spare Parts", "Free Basic Inspection", "Service Reminder"], excludes: [] },
   ],
   appliance_repair: [
-    { id: "app-std", name: "Standard", price: 399, priceStr: "₹399", duration: "1 hr", popular: false, tag: "", includes: ["Appliance Diagnosis", "Basic Repair"], excludes: [] },
-    { id: "app-prem", name: "Premium", price: 999, priceStr: "₹999", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", includes: ["Complete Servicing", "Internal Cleaning", "Performance Testing"], excludes: [] },
-    { id: "app-amc", name: "Annual Care Plan", price: 2499, priceStr: "₹2,499", duration: "Yearly", popular: false, tag: "Best Value", includes: ["3 Service Visits", "Priority Support", "Discount on Parts"], excludes: [] },
+    { id: "app-std", name: "Standard", price: 399, priceStr: "₹399", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=500&q=80&fit=crop", includes: ["Appliance Diagnosis", "Basic Repair"], excludes: [] },
+    { id: "app-prem", name: "Premium", price: 999, priceStr: "₹999", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=500&q=80&fit=crop", includes: ["Complete Servicing", "Internal Cleaning", "Performance Testing"], excludes: [] },
+    { id: "app-amc", name: "Annual Care Plan", price: 2499, priceStr: "₹2,499", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=500&q=80&fit=crop", includes: ["3 Service Visits", "Priority Support", "Discount on Parts"], excludes: [] },
   ],
   security: [
-    { id: "check", name: "System Check", price: 499, priceStr: "₹499", duration: "1 hr", popular: false, tag: "", includes: ["Camera test", "DVR check", "App verify"], excludes: ["New cables", "Repositioning"] },
-    { id: "install2", name: "2-Camera Setup", price: 2999, priceStr: "₹2,999", duration: "3 hrs", popular: true, tag: "Most Booked", includes: ["2 HD cameras", "DVR setup", "Mobile app config", "Cabling"], excludes: ["Monthly plan"] },
-    { id: "install4", name: "4-Camera Setup", price: 4999, priceStr: "₹4,999", duration: "5 hrs", popular: false, tag: "Best Value", includes: ["4 HD cameras", "DVR", "App", "Night vision", "1-yr warranty"], excludes: [] },
+    { id: "check", name: "System Check", price: 499, priceStr: "₹499", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop", includes: ["Camera test", "DVR check", "App verify"], excludes: ["New cables", "Repositioning"] },
+    { id: "install2", name: "2-Camera Setup", price: 2999, priceStr: "₹2,999", duration: "3 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop", includes: ["2 HD cameras", "DVR setup", "Mobile app config", "Cabling"], excludes: ["Monthly plan"] },
+    { id: "install4", name: "4-Camera Setup", price: 4999, priceStr: "₹4,999", duration: "5 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop", includes: ["4 HD cameras", "DVR", "App", "Night vision", "1-yr warranty"], excludes: [] },
   ],
   general: [
-    { id: "basic", name: "1 Hr Handyman", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", includes: ["Any general task", "Basic tools"], excludes: ["Materials", "Electrical/plumbing"] },
-    { id: "standard", name: "2 Hr Handyman", price: 499, priceStr: "₹499", duration: "2 hrs", popular: true, tag: "Most Booked", includes: ["Multiple small tasks", "Tools included", "Experienced pro"], excludes: ["Materials"] },
-    { id: "complete", name: "Full Day Pro", price: 999, priceStr: "₹999", duration: "8 hrs", popular: false, tag: "Best Value", includes: ["Unlimited tasks", "All tools", "Priority scheduling"], excludes: ["Materials above •‚¹500"] },
+    { id: "basic", name: "1 Hr Handyman", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", includes: ["Any general task", "Basic tools"], excludes: ["Materials", "Electrical/plumbing"] },
+    { id: "standard", name: "2 Hr Handyman", price: 499, priceStr: "₹499", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", includes: ["Multiple small tasks", "Tools included", "Experienced pro"], excludes: ["Materials"] },
+    { id: "complete", name: "Full Day Pro", price: 999, priceStr: "₹999", duration: "8 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", includes: ["Unlimited tasks", "All tools", "Priority scheduling"], excludes: ["Materials above ₹500"] },
   ],
   carpentry: [
-    { id: "carp-std", name: "Standard Repair", price: 499, priceStr: "₹499", duration: "2 hrs", popular: false, tag: "", image: "/tractor-emulsion.png", includes: ["Minor Woodwork", "Hinge Replacement", "Basic Fixes"], excludes: [] },
-    { id: "carp-prem", name: "Premium Setup", price: 999, priceStr: "₹999", duration: "4 hrs", popular: true, tag: "Most Booked", image: "/tractor-emulsion.png", includes: ["Furniture Assembly", "Custom Shelving", "Door Alignment"], excludes: [] },
-    { id: "carp-full", name: "Full Day Carpentry", price: 1999, priceStr: "₹1,999", duration: "8 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop", includes: ["Extensive Repairs", "New Installations", "Material Shopping"], excludes: [] },
+    { id: "carp-std", name: "Standard Repair", price: 499, priceStr: "₹499", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop", includes: ["Minor Woodwork", "Hinge Replacement", "Basic Fixes"], excludes: [] },
+    { id: "carp-prem", name: "Premium Setup", price: 999, priceStr: "₹999", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop", includes: ["Furniture Assembly", "Custom Shelving", "Door Alignment"], excludes: [] },
+    { id: "carp-full", name: "Full Day Carpentry", price: 1999, priceStr: "₹1,999", duration: "8 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop", includes: ["Extensive Repairs", "New Installations", "Material Shopping"], excludes: [] },
   ],
   pest_control: [
-    { id: "pest-std", name: "Basic Pest Control", price: 799, priceStr: "₹799", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=300&q=80&fit=crop", includes: ["Cockroach & Ant Spray", "Targeted Areas"], excludes: [] },
-    { id: "pest-prem", name: "Comprehensive Treatment", price: 1499, priceStr: "₹1,499", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=300&q=80&fit=crop", includes: ["Full Home Spray", "Termite Check", "Bedbug Treatment"], excludes: [] },
-    { id: "pest-year", name: "Annual Pest Protection", price: 3499, priceStr: "₹3,499", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1628102491629-778586284000?w=300&q=80&fit=crop", includes: ["3 Service Visits", "Priority Response", "Guarantee"], excludes: [] },
+    { id: "pest-std", name: "Basic Pest Control", price: 799, priceStr: "₹799", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", includes: ["Cockroach & Ant Spray", "Targeted Areas"], excludes: [] },
+    { id: "pest-prem", name: "Comprehensive Treatment", price: 1499, priceStr: "₹1,499", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", includes: ["Full Home Spray", "Termite Check", "Bedbug Treatment"], excludes: [] },
+    { id: "pest-year", name: "Annual Pest Protection", price: 3499, priceStr: "₹3,499", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", includes: ["3 Service Visits", "Priority Response", "Guarantee"], excludes: [] },
   ],
   painting: [
-    { id: "paint-room", name: "Single Room Makeover", price: 2999, priceStr: "₹2,999", duration: "1 day", popular: false, tag: "", image: "/tractor-uno.png", includes: ["Basic Prep", "2 Coats Paint", "Cleanup"], excludes: [] },
-    { id: "paint-home", name: "Complete Home Painting", price: 9999, priceStr: "₹9,999", duration: "4 days", popular: true, tag: "Most Booked", image: "/tractor-uno.png", includes: ["Wall Putty", "Primer", "Premium Paint", "Post-Cleanup"], excludes: [] },
-    { id: "paint-prem", name: "Texture & Decor Painting", price: 14999, priceStr: "₹14,999", duration: "5 days", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1584820927500-11b3337a7c5a?w=300&q=80&fit=crop", includes: ["Custom Textures", "Accent Walls", "Designer Finish"], excludes: [] },
+    { id: "paint-room", name: "Single Room Makeover", price: 2999, priceStr: "₹2,999", duration: "1 day", popular: false, tag: "", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=500&q=80&fit=crop", includes: ["Basic Prep", "2 Coats Paint", "Cleanup"], excludes: [] },
+    { id: "paint-home", name: "Complete Home Painting", price: 9999, priceStr: "₹9,999", duration: "4 days", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=500&q=80&fit=crop", includes: ["Wall Putty", "Primer", "Premium Paint", "Post-Cleanup"], excludes: [] },
+    { id: "paint-prem", name: "Texture & Decor Painting", price: 14999, priceStr: "₹14,999", duration: "5 days", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=500&q=80&fit=crop", includes: ["Custom Textures", "Accent Walls", "Designer Finish"], excludes: [] },
   ],
 }
 
@@ -6243,10 +6244,10 @@ function StepWorkflowCheckout({
   const origTotal = Math.round(itemTotal * 1.1)
   const discount = appliedCoupon
     ? (appliedCoupon.discountAmount != null
-        ? appliedCoupon.discountAmount
-        : (appliedCoupon.discountType === "flat"
-            ? Math.min(itemTotal, appliedCoupon.discountValue)
-            : Math.min(appliedCoupon.maxDiscount || itemTotal, Math.floor(itemTotal * (appliedCoupon.discountValue / 100)))))
+      ? appliedCoupon.discountAmount
+      : (appliedCoupon.discountType === "flat"
+        ? Math.min(itemTotal, appliedCoupon.discountValue)
+        : Math.min(appliedCoupon.maxDiscount || itemTotal, Math.floor(itemTotal * (appliedCoupon.discountValue / 100)))))
     : (couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 0)
   const taxFee = itemTotal === 0 ? 49 : (itemTotal === 49 || (items && items.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
   const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
@@ -6746,13 +6747,11 @@ function StepWorkflowCheckout({
           </div>
 
           {/* Coupons Card */}
-          <div className={`border rounded-2xl p-4 shadow-xs flex items-center justify-between transition-all ${
-            appliedCoupon ? "bg-emerald-50/80 border-emerald-300" : "bg-white border-slate-200/80"
-          }`}>
+          <div className={`border rounded-2xl p-4 shadow-xs flex items-center justify-between transition-all ${appliedCoupon ? "bg-emerald-50/80 border-emerald-300" : "bg-white border-slate-200/80"
+            }`}>
             <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                appliedCoupon ? "bg-emerald-600 text-white" : "bg-indigo-100 text-indigo-700"
-              }`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${appliedCoupon ? "bg-emerald-600 text-white" : "bg-indigo-100 text-indigo-700"
+                }`}>
                 {appliedCoupon ? "✓" : "%"}
               </div>
               <div>
@@ -6777,7 +6776,7 @@ function StepWorkflowCheckout({
                   onClick={() => setIsCouponDrawerOpen(true)}
                   className="text-xs font-extrabold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
                 >
-                  9 offers &gt;
+                  {dbCoupons.length > 0 ? `${dbCoupons.length} offer${dbCoupons.length !== 1 ? "s" : ""} >` : "View offers >"}
                 </button>
               )}
             </div>
@@ -6995,11 +6994,10 @@ function StepWorkflowCheckout({
                   return (
                     <div
                       key={cpn.id || cpn.code}
-                      className={`p-4 rounded-2xl border transition-all ${
-                        isApplied
+                      className={`p-4 rounded-2xl border transition-all ${isApplied
                           ? "border-emerald-500 bg-emerald-50/40 shadow-xs"
                           : "border-slate-200/80 bg-white hover:border-slate-300"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -11907,12 +11905,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const CATEGORY_SUBCATEGORIES = {
     refrigerator: [
-      { name: "Refrigerator Service & Repair", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Gas & Compressor", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cleaning & Maintenance", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      { name: "Refrigerator Service & Repair", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Gas & Compressor", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Cleaning & Maintenance", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" }
     ],
     microwave: [
       { name: "Microwave Repair", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
@@ -11926,52 +11924,52 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     ],
     tv_display: [
       { name: "TV Service & Repair", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-      { name: "TV Installation & Setup", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+      { name: "TV Installation & Setup", image: "https://images.unsplash.com/photo-1577979749830-f1d742b96791?w=300&q=80&fit=crop" },
       { name: "TV Screen & Display", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
       { name: "TV Sound & Speaker", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
       { name: "TV Software & Smart Features", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-      { name: "TV Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      { name: "TV Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1577979749830-f1d742b96791?w=300&q=80&fit=crop" }
     ],
     hvac: [
       { name: "AC Service & Cleaning", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-      { name: "AC Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "AC Gas & Refrigerant", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
+      { name: "AC Repair", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+      { name: "AC Gas & Refrigerant", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
       { name: "AC Installation & Uninstallation", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-      { name: "AC PCB & Electrical", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "AC Parts & Accessories", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      { name: "AC PCB & Electrical", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+      { name: "AC Parts & Accessories", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" }
     ],
     washing_machine: [
-      { name: "Washing Machine Jet Service", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-      { name: "Washing Machine Check-up", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Installation & Uninstallation", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Washing Machine Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      { name: "Washing Machine Jet Service", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=300&q=80&fit=crop" },
+      { name: "Washing Machine Check-up", image: "https://images.unsplash.com/photo-1610557892470-55d9e80c0bce?w=300&q=80&fit=crop" },
+      { name: "Installation & Uninstallation", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=300&q=80&fit=crop" },
+      { name: "Washing Machine Repair", image: "https://images.unsplash.com/photo-1610557892470-55d9e80c0bce?w=300&q=80&fit=crop" }
     ],
     electrical: [
-      { name: "Switches & Sockets", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+      { name: "Switches & Sockets", image: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=300&q=80&fit=crop" },
       { name: "Fan & Lighting", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-      { name: "MCB & Wiring", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Inverter & Heavy Appliance", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      { name: "MCB & Wiring", image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=300&q=80&fit=crop" },
+      { name: "Inverter & Heavy Appliance", image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=300&q=80&fit=crop" }
     ],
     plumbing: [
-      { name: "Tap & Mixer", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-      { name: "Toilet", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Tap & Mixer", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Toilet", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
       { name: "Basin & Sink", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Bath Fittings", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Bath Fittings", image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=300&q=80&fit=crop" },
       { name: "Water Tank & Motor", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Drainage", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-      { name: "Water Filter", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Grouting", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Plumber On-Demand", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      { name: "Drainage", image: "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=300&q=80&fit=crop" },
+      { name: "Water Filter", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+      { name: "Grouting", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Plumber On-Demand", image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=300&q=80&fit=crop" }
     ],
     carpentry: [
-      { name: "Lock & Handle", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-      { name: "Cupboard & Drawer", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-      { name: "Kitchen Fittings", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Lock & Handle", image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=300&q=80&fit=crop" },
+      { name: "Cupboard & Drawer", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=300&q=80&fit=crop" },
+      { name: "Kitchen Fittings", image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=300&q=80&fit=crop" },
       { name: "Hangers & Drying Solutions", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Furniture Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Doors & Windows", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Furniture Services", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop" },
+      { name: "Doors & Windows", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
       { name: "Drill & Hanging", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
-      { name: "Carpenter On-Demand", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      { name: "Carpenter On-Demand", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop" }
     ],
     painting: [
       { name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
@@ -12399,36 +12397,36 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const OTHER_SERVICES = {
     electrical: {
       "Switches & Sockets": [
-        { id: "elec-sw-1", name: "Modular Switch Replacement", price: 199, duration: "20 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing faulty switch and fitting premium brand modular switch plate.", includes: ["Old switch removal", "New modular switch fit", "Live wire test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-2", name: "5/15A Socket Replacement", price: 199, duration: "20 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe 5A or 15A wall socket replacement with shutter mechanism.", includes: ["Socket removal", "ISI marked socket fit", "Earth continuity check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-3", name: "16A Heavy Duty Socket for AC/Geyser", price: 249, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Heavy gauge 16A moulded socket fitting for high-power appliances.", includes: ["16A socket fit", "Earthing check", "Load test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-4", name: "Switchboard Installation", price: 349, duration: "30 mins", badge: "New Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "New modular switchboard fitting with up to 4 switch/socket positions.", includes: ["Board frame fit", "Wiring connection", "Safety check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-5", name: "USB Charging Socket Fit", price: 299, duration: "25 mins", badge: "Smart Home", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dual USB + 5A socket combo fitting for bedside or office desk.", includes: ["USB socket installation", "Flush mount fitting", "Charging test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-6", name: "Faulty Switch Diagnosis", price: 149, duration: "15 mins", badge: "Quick Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Multi-meter testing to identify tripped, arcing, or loose contact switches.", includes: ["Multi-meter test", "Arc trace check", "Fix or replace advice"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "elec-sw-1", name: "Modular Switch Replacement", price: 199, duration: "20 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing faulty switch and fitting premium brand modular switch plate.", includes: ["Old switch removal", "New modular switch fit", "Live wire test"], image: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&q=80&fit=crop" },
+        { id: "elec-sw-2", name: "5/15A Socket Replacement", price: 199, duration: "20 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe 5A or 15A wall socket replacement with shutter mechanism.", includes: ["Socket removal", "ISI marked socket fit", "Earth continuity check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
+        { id: "elec-sw-3", name: "16A Heavy Duty Socket for AC/Geyser", price: 249, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Heavy gauge 16A moulded socket fitting for high-power appliances.", includes: ["16A socket fit", "Earthing check", "Load test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
+        { id: "elec-sw-4", name: "Switchboard Installation", price: 349, duration: "30 mins", badge: "New Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "New modular switchboard fitting with up to 4 switch/socket positions.", includes: ["Board frame fit", "Wiring connection", "Safety check"], image: "https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=500&q=80&fit=crop" },
+        { id: "elec-sw-5", name: "USB Charging Socket Fit", price: 299, duration: "25 mins", badge: "Smart Home", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dual USB + 5A socket combo fitting for bedside or office desk.", includes: ["USB socket installation", "Flush mount fitting", "Charging test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" },
+        { id: "elec-sw-6", name: "Faulty Switch Diagnosis", price: 149, duration: "15 mins", badge: "Quick Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Multi-meter testing to identify tripped, arcing, or loose contact switches.", includes: ["Multi-meter test", "Arc trace check", "Fix or replace advice"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" }
       ],
       "Fan & Lighting": [
-        { id: "elec-fan-1", name: "Ceiling Fan Installation", price: 249, duration: "30 mins", badge: "Standard Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe hook bolt ceiling fit, blade balancing and speed regulator connection.", includes: ["Hook bolt ceiling fit", "Blade balance", "Regulator wiring"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-2", name: "Ceiling Fan Repair", price: 299, duration: "30 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fan capacitor replacement, bearing lubrication or speed problem fix.", includes: ["Capacitor replacement", "Bearing lubrication", "Speed test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-3", name: "Exhaust Fan Installation", price: 199, duration: "25 mins", badge: "Ventilation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Kitchen or bathroom exhaust fan wall/ceiling fitting with louvre cover.", includes: ["Hole cutting if needed", "Fan bracket fit", "Power connection"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-4", name: "LED Light Installation", price: 149, duration: "15 mins", badge: "Energy Save", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Panel light, spot light or batten fitting with safe driver connection.", includes: ["Driver connection", "Flush panel fit", "Brightness test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-5", name: "Fan Regulator Replacement", price: 149, duration: "15 mins", badge: "Speed Control", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Replacing faulty step regulator or electronic dimmer with new unit.", includes: ["Old regulator removal", "New regulator fit", "Speed step test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-6", name: "Light Fixture Replacement", price: 199, duration: "20 mins", badge: "Upgrade", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Removing old bulb holder and fitting new LED bulb holder or batten light.", includes: ["Holder removal", "New fixture fit", "Wire connection"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" }
+        { id: "elec-fan-1", name: "Ceiling Fan Installation", price: 249, duration: "30 mins", badge: "Standard Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe hook bolt ceiling fit, blade balancing and speed regulator connection.", includes: ["Hook bolt ceiling fit", "Blade balance", "Regulator wiring"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
+        { id: "elec-fan-2", name: "Ceiling Fan Repair", price: 299, duration: "30 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fan capacitor replacement, bearing lubrication or speed problem fix.", includes: ["Capacitor replacement", "Bearing lubrication", "Speed test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
+        { id: "elec-fan-3", name: "Exhaust Fan Installation", price: 199, duration: "25 mins", badge: "Ventilation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Kitchen or bathroom exhaust fan wall/ceiling fitting with louvre cover.", includes: ["Hole cutting if needed", "Fan bracket fit", "Power connection"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
+        { id: "elec-fan-4", name: "LED Light Installation", price: 149, duration: "15 mins", badge: "Energy Save", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Panel light, spot light or batten fitting with safe driver connection.", includes: ["Driver connection", "Flush panel fit", "Brightness test"], image: "https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?w=500&q=80&fit=crop" },
+        { id: "elec-fan-5", name: "Fan Regulator Replacement", price: 149, duration: "15 mins", badge: "Speed Control", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Replacing faulty step regulator or electronic dimmer with new unit.", includes: ["Old regulator removal", "New regulator fit", "Speed step test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
+        { id: "elec-fan-6", name: "Light Fixture Replacement", price: 199, duration: "20 mins", badge: "Upgrade", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Removing old bulb holder and fitting new LED bulb holder or batten light.", includes: ["Holder removal", "New fixture fit", "Wire connection"], image: "https://images.unsplash.com/photo-1565814636199-ae8133055c1c?w=500&q=80&fit=crop" }
       ],
       "MCB & Wiring": [
-        { id: "elec-mcb-1", name: "MCB Replacement", price: 299, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing tripped or faulty MCB with new ISI marked circuit breaker.", includes: ["MCB rating check", "New MCB installation", "Trip test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-2", name: "Main DB Box Inspection", price: 249, duration: "30 mins", badge: "Safety Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Full distribution board inspection, terminal tightening and leakage check.", includes: ["Terminal tightening", "RCCB/ELCB test", "Wiring health audit"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-3", name: "Earthing Check & Repair", price: 349, duration: "30 mins", badge: "Grounding", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Earth continuity resistance test and earthing wire repair.", includes: ["Resistance measurement", "Earth wire tracing", "Safe earth restoration"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-4", name: "Short Circuit Repair", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Tracing and repairing burnt wire short circuits causing repeated MCB trips.", includes: ["Fault circuit tracing", "Burnt wire replacement", "MCB reset test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-5", name: "New Point Wiring", price: 599, duration: "1 hr", badge: "New Connection", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Adding a new electrical power point with conduit wiring from nearest junction.", includes: ["Conduit routing", "3-core wire pull", "Socket/switch fit"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-6", name: "RCCB / ELCB Installation", price: 799, duration: "45 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Residual current circuit breaker installation for shock protection.", includes: ["RCCB rating selection", "DB box fitting", "Leakage trip test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "elec-mcb-1", name: "MCB Replacement", price: 299, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing tripped or faulty MCB with new ISI marked circuit breaker.", includes: ["MCB rating check", "New MCB installation", "Trip test"], image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-2", name: "Main DB Box Inspection", price: 249, duration: "30 mins", badge: "Safety Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Full distribution board inspection, terminal tightening and leakage check.", includes: ["Terminal tightening", "RCCB/ELCB test", "Wiring health audit"], image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-3", name: "Earthing Check & Repair", price: 349, duration: "30 mins", badge: "Grounding", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Earth continuity resistance test and earthing wire repair.", includes: ["Resistance measurement", "Earth wire tracing", "Safe earth restoration"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-4", name: "Short Circuit Repair", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Tracing and repairing burnt wire short circuits causing repeated MCB trips.", includes: ["Fault circuit tracing", "Burnt wire replacement", "MCB reset test"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-5", name: "New Point Wiring", price: 599, duration: "1 hr", badge: "New Connection", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Adding a new electrical power point with conduit wiring from nearest junction.", includes: ["Conduit routing", "3-core wire pull", "Socket/switch fit"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-6", name: "RCCB / ELCB Installation", price: 799, duration: "45 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Residual current circuit breaker installation for shock protection.", includes: ["RCCB rating selection", "DB box fitting", "Leakage trip test"], image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&q=80&fit=crop" }
       ],
       "Inverter & Heavy Appliance": [
-        { id: "elec-inv-1", name: "Inverter Battery Checkup", price: 299, duration: "30 mins", badge: "Battery Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Battery water level check, terminal cleaning, charging current test & backup estimate.", includes: ["Electrolyte level check", "Terminal cleaning", "Charging voltage test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "elec-inv-2", name: "Inverter Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Inverter PCB repair, MOSFET replacement, charger fault or display board fix.", includes: ["PCB diagnostic", "Faulty component replace", "Output voltage test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "elec-inv-3", name: "Inverter Wiring", price: 399, duration: "45 mins", badge: "Safe Wiring", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Safe inverter bypass wiring for selected power points in the home.", includes: ["Bypass circuit routing", "3-core inverter wire", "Load test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "elec-inv-4", name: "Geyser Installation", price: 399, duration: "45 mins", badge: "Hot Water", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Wall mounting bracket fitting, plumbing inlet/outlet & 16A socket connection.", includes: ["Bracket wall mount", "Inlet/outlet pipe fit", "16A socket connection"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "elec-inv-5", name: "Geyser Repair", price: 499, duration: "45 mins", badge: "Element Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Heating element resistance test, thermostat replacement or pressure valve fix.", includes: ["Element resistance check", "Thermostat swap", "Pressure valve check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "elec-inv-6", name: "Voltage Stabilizer Installation", price: 299, duration: "30 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Stabilizer wall/shelf mounting with dedicated input wiring & load test.", includes: ["Shelf/wall mounting", "Input wiring", "Voltage regulation test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "elec-inv-1", name: "Inverter Battery Checkup", price: 299, duration: "30 mins", badge: "Battery Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Battery water level check, terminal cleaning, charging current test & backup estimate.", includes: ["Electrolyte level check", "Terminal cleaning", "Charging voltage test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" },
+        { id: "elec-inv-2", name: "Inverter Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Inverter PCB repair, MOSFET replacement, charger fault or display board fix.", includes: ["PCB diagnostic", "Faulty component replace", "Output voltage test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" },
+        { id: "elec-inv-3", name: "Inverter Wiring", price: 399, duration: "45 mins", badge: "Safe Wiring", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Safe inverter bypass wiring for selected power points in the home.", includes: ["Bypass circuit routing", "3-core inverter wire", "Load test"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" },
+        { id: "elec-inv-4", name: "Geyser Installation", price: 399, duration: "45 mins", badge: "Hot Water", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Wall mounting bracket fitting, plumbing inlet/outlet & 16A socket connection.", includes: ["Bracket wall mount", "Inlet/outlet pipe fit", "16A socket connection"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "elec-inv-5", name: "Geyser Repair", price: 499, duration: "45 mins", badge: "Element Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Heating element resistance test, thermostat replacement or pressure valve fix.", includes: ["Element resistance check", "Thermostat swap", "Pressure valve check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "elec-inv-6", name: "Voltage Stabilizer Installation", price: 299, duration: "30 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Stabilizer wall/shelf mounting with dedicated input wiring & load test.", includes: ["Shelf/wall mounting", "Input wiring", "Voltage regulation test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" }
       ]
     },
     washing_machine: {
@@ -12491,23 +12489,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         { id: "hvac-prt-fst", name: "Floor Stand", price: 399, duration: "30 mins", badge: "Floor Mount", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Heavy duty floor stand for rooftop or balcony outdoor unit positioning.", includes: ["Floor stand assembly", "Vibration dampening", "Rubber foot fit"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
         { id: "hvac-prt-bpl", name: "Universal Back Plate", price: 199, duration: "20 mins", badge: "Mounting Plate", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Galvanized steel indoor unit mounting backplate installation.", includes: ["Wall alignment", "Rawl plug drilling", "Spirit level check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
         { id: "hvac-prt-fast", name: "Fastener Set", price: 99, duration: "15 mins", badge: "Hardware", badgeColor: "bg-gray-50 text-gray-700 border-gray-100", description: "Heavy anchor dash fasteners and stainless steel mounting bolts set.", includes: ["4x anchor bolts", "Rawl plug anchors", "Tightening test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
-      ]
-    },
-    washing_machine: {
-      "Washing Machine Jet Service": [
-        { id: "wm-jet-1", name: "Jet Service", price: 599, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "High-pressure foam & water jet deep cleaning for inner steel tub, outer drum scale & lint filter.", includes: ["High pressure foam jet wash", "Chemical tub descaling", "30-day service warranty"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
-      ],
-      "Washing Machine Check-up": [
-        { id: "wm-chk-1", name: "Washing Machine Check-up", price: 299, duration: "30 mins", badge: "Diagnostic", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Complete 21-point system check-up, drum spin balance audit, water flow & electrical safety inspection.", includes: ["21-point system diagnostic", "Fault inspection report", "Repair cost estimate"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
-      ],
-      "Installation & Uninstallation": [
-        { id: "wm-inst-1", name: "Washing Machine Installation", price: 399, duration: "45 mins", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional top load / front load unboxing, inlet pipe tap adapter fitting, drain hose setup & demo.", includes: ["Unboxing & positioning", "Inlet & outlet pipe connection", "Live run demo"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "wm-inst-2", name: "Washing Machine Uninstallation", price: 249, duration: "30 mins", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe disconnection of water inlet hose, power cord, drain pipe & transit safety bolt fitting.", includes: ["Water line disconnection", "Drain hose detachment", "Transit bolt fit"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
-      ],
-      "Washing Machine Repair": [
-        { id: "wm-rep-1", name: "Washer Spinning Abnormally", price: 499, duration: "45 mins", badge: "Spin Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix uneven tub rotation, spin drum vibration, shock absorber check, or drive belt tension adjustment.", includes: ["Shock absorber inspection", "Drive belt tension check", "Drum spin test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "wm-rep-2", name: "Machine Making Sound", price: 449, duration: "45 mins", badge: "Noise Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnosis & fix for loud grinding, squeaking, or thumping sounds during wash/spin cycles.", includes: ["Coin trap clearance", "Motor pulley check", "Bearing noise test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "wm-rep-3", name: "Other / Other Issue", price: 399, duration: "45 mins", badge: "General Fix", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "General diagnosis for water inlet leak, PCB error codes, door lock failure, or timer issues.", includes: ["Full system diagnostic", "Faulty component fix", "Safety circuit check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
       ]
     },
     refrigerator: {
@@ -12651,109 +12632,109 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     },
     plumbing: {
       "Tap & Mixer": [
-        { id: "plum-tap-1", name: "Tap Repair", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or internal seal tuning.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-tap-2", name: "Tap Installation / Replacement", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unmounting old tap and fitting new sink/basin/wall tap with Teflon thread sealing.", includes: ["Old tap dismount", "New tap fitting", "Teflon seal check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-tap-3", name: "Tap Accessory Installation", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fitting aerators, extension nozzles, foamers, or water filter adapters on taps.", includes: ["Accessory mounting", "Aerator cleaning", "Spray test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-tap-4", name: "Mixer Repair", price: 399, duration: "45 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hot & cold water mixer valve cartridge replacement, shower diverter repair, and thread sealing.", includes: ["Internal cartridge fix", "Teflon tape seal", "Flow pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-tap-5", name: "Mixer Installation", price: 499, duration: "1 hr", badge: "New Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Wall mixer or counter-top mixer installation with hot & cold braided pipe connection.", includes: ["Hot/cold alignment", "Wall flange fit", "Pressure leak test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-tap-6", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Overhead shower arm mounting, hand shower bracket fitting, and flow test.", includes: ["Shower arm fit", "Teflon thread seal", "Spray pattern check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-tap-1", name: "Tap Repair", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or internal seal tuning.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-tap-2", name: "Tap Installation / Replacement", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unmounting old tap and fitting new sink/basin/wall tap with Teflon thread sealing.", includes: ["Old tap dismount", "New tap fitting", "Teflon seal check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-tap-3", name: "Tap Accessory Installation", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fitting aerators, extension nozzles, foamers, or water filter adapters on taps.", includes: ["Accessory mounting", "Aerator cleaning", "Spray test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-tap-4", name: "Mixer Repair", price: 399, duration: "45 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hot & cold water mixer valve cartridge replacement, shower diverter repair, and thread sealing.", includes: ["Internal cartridge fix", "Teflon tape seal", "Flow pressure test"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" },
+        { id: "plum-tap-5", name: "Mixer Installation", price: 499, duration: "1 hr", badge: "New Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Wall mixer or counter-top mixer installation with hot & cold braided pipe connection.", includes: ["Hot/cold alignment", "Wall flange fit", "Pressure leak test"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" },
+        { id: "plum-tap-6", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Overhead shower arm mounting, hand shower bracket fitting, and flow test.", includes: ["Shower arm fit", "Teflon thread seal", "Spray pattern check"], image: "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=500&q=80&fit=crop" }
       ],
       "Toilet": [
-        { id: "plum-toil-1", name: "Jet Spray Repair / Replacement", price: 199, duration: "25 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix leaking health faucet jet spray, trigger replacement or new hose installation.", includes: ["Trigger repair/replace", "Braided hose connection", "Pressure test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-2", name: "Jet Spray Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "New health faucet jet spray wall bracket fitting and 2-way angle valve connection.", includes: ["Wall bracket drill & fit", "Angle valve connection", "Leakage test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-3", name: "Toilet Seat Cover Installation", price: 199, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Removing old damaged seat cover and installing new soft-close hydraulic toilet seat cover.", includes: ["Old cover removal", "Hinge bolt alignment", "Soft-close test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-4", name: "Flush Tank Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix continuous flushing water leakage, syphon kit change, or float valve adjustment.", includes: ["Syphon kit check", "Float valve adjustment", "Leak tightness check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-5", name: "Flush Tank Replacement", price: 699, duration: "1 hr", badge: "Full Kit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Dismounting old flush tank and installing new PVC single/dual flush tank assembly.", includes: ["Old tank removal", "New tank mounting", "Dual flush calibration"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-6", name: "Western Toilet Replacement", price: 1299, duration: "1.5 hrs", badge: "Heavy Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Dismounting old commode, wax seal ring installation, floor bolt fixing, and silicone sealing.", includes: ["Old commode dismount", "Wax ring & gasket seal", "Floor anchorage & silicone seal"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-7", name: "Indian Toilet Installation", price: 1499, duration: "2 hrs", badge: "Sanitary Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Squatting pan alignment, P-trap sealing, cement joint packing, and flush connection.", includes: ["P-trap alignment", "Cement mortar packing", "Flush pipe seal"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-8", name: "Toilet Pot Blockage Removal", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "High-pressure auger drain snake clearing for toilet pot blockage and waste line backup.", includes: ["Drain snake clearing", "Pressure flush test", "Sanitizing cleanup"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" }
+        { id: "plum-toil-1", name: "Jet Spray Repair / Replacement", price: 199, duration: "25 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix leaking health faucet jet spray, trigger replacement or new hose installation.", includes: ["Trigger repair/replace", "Braided hose connection", "Pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-2", name: "Jet Spray Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "New health faucet jet spray wall bracket fitting and 2-way angle valve connection.", includes: ["Wall bracket drill & fit", "Angle valve connection", "Leakage test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-3", name: "Toilet Seat Cover Installation", price: 199, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Removing old damaged seat cover and installing new soft-close hydraulic toilet seat cover.", includes: ["Old cover removal", "Hinge bolt alignment", "Soft-close test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-4", name: "Flush Tank Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix continuous flushing water leakage, syphon kit change, or float valve adjustment.", includes: ["Syphon kit check", "Float valve adjustment", "Leak tightness check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-5", name: "Flush Tank Replacement", price: 699, duration: "1 hr", badge: "Full Kit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Dismounting old flush tank and installing new PVC single/dual flush tank assembly.", includes: ["Old tank removal", "New tank mounting", "Dual flush calibration"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-6", name: "Western Toilet Replacement", price: 1299, duration: "1.5 hrs", badge: "Heavy Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Dismounting old commode, wax seal ring installation, floor bolt fixing, and silicone sealing.", includes: ["Old commode dismount", "Wax ring & gasket seal", "Floor anchorage & silicone seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-7", name: "Indian Toilet Installation", price: 1499, duration: "2 hrs", badge: "Sanitary Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Squatting pan alignment, P-trap sealing, cement joint packing, and flush connection.", includes: ["P-trap alignment", "Cement mortar packing", "Flush pipe seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-8", name: "Toilet Pot Blockage Removal", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "High-pressure auger drain snake clearing for toilet pot blockage and waste line backup.", includes: ["Drain snake clearing", "Pressure flush test", "Sanitizing cleanup"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" }
       ],
       "Basin & Sink": [
-        { id: "plum-bs-1", name: "Wash Basin Installation", price: 499, duration: "45 mins", badge: "Recommended", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Wall bracket mounting, ceramic wash basin positioning, waste coupling, and pillar tap fit.", includes: ["Wall bracket drilling", "Basin positioning & leveling", "Waste coupling seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-bs-2", name: "Waste Pipe Replacement", price: 199, duration: "25 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing cracked or leaking flexible corrugated waste pipe under sink/basin.", includes: ["Old pipe removal", "Heavy duty flexible hose fit", "Drain flush check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-bs-3", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "De-clog", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Clearing food sludge, grease buildup, and debris in kitchen sink bottle trap or drain line.", includes: ["Bottle trap dismount & clean", "Spring snake clearing", "Water drain flush"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-        { id: "plum-bs-4", name: "Waste Coupling Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Brass or stainless steel waste coupling installation with rubber gasket and pop-up plug.", includes: ["Old coupling removal", "Rubber gasket positioning", "Leak-free tightness test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-bs-1", name: "Wash Basin Installation", price: 499, duration: "45 mins", badge: "Recommended", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Wall bracket mounting, ceramic wash basin positioning, waste coupling, and pillar tap fit.", includes: ["Wall bracket drilling", "Basin positioning & leveling", "Waste coupling seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-bs-2", name: "Waste Pipe Replacement", price: 199, duration: "25 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing cracked or leaking flexible corrugated waste pipe under sink/basin.", includes: ["Old pipe removal", "Heavy duty flexible hose fit", "Drain flush check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-bs-3", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "De-clog", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Clearing food sludge, grease buildup, and debris in kitchen sink bottle trap or drain line.", includes: ["Bottle trap dismount & clean", "Spring snake clearing", "Water drain flush"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" },
+        { id: "plum-bs-4", name: "Waste Coupling Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Brass or stainless steel waste coupling installation with rubber gasket and pop-up plug.", includes: ["Old coupling removal", "Rubber gasket positioning", "Leak-free tightness test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
       ],
       "Bath Fittings": [
-        { id: "plum-bf-1", name: "Bath Accessory Installation", price: 199, duration: "20 mins", badge: "Fitting", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Towel rod, soap dish, robe hook, tumbler holder or mirror bracket wall mounting.", includes: ["Tile drilling with precision", "Rawl plug anchor fit", "Leveling check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-bf-2", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Rain shower head, shower arm extension or hand shower sliding rail fitting.", includes: ["Shower arm connection", "Flange placement", "Spray nozzle check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-bf-3", name: "Bathroom Fitting Repair", price: 249, duration: "30 mins", badge: "Repair", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fixing loose bathroom fixtures, leaking angle valves, or damaged flanges.", includes: ["Loose screw tightening", "Washer replacement", "Sealing check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-bf-4", name: "Bathroom Fitting Replacement", price: 349, duration: "45 mins", badge: "Upgrade", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Complete replacement of old worn out bathroom metallic/CP accessories with new fixtures.", includes: ["Dismounting old fittings", "New accessory fitting", "Alignment test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-bf-1", name: "Bath Accessory Installation", price: 199, duration: "20 mins", badge: "Fitting", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Towel rod, soap dish, robe hook, tumbler holder or mirror bracket wall mounting.", includes: ["Tile drilling with precision", "Rawl plug anchor fit", "Leveling check"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" },
+        { id: "plum-bf-2", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Rain shower head, shower arm extension or hand shower sliding rail fitting.", includes: ["Shower arm connection", "Flange placement", "Spray nozzle check"], image: "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=500&q=80&fit=crop" },
+        { id: "plum-bf-3", name: "Bathroom Fitting Repair", price: 249, duration: "30 mins", badge: "Repair", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fixing loose bathroom fixtures, leaking angle valves, or damaged flanges.", includes: ["Loose screw tightening", "Washer replacement", "Sealing check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-bf-4", name: "Bathroom Fitting Replacement", price: 349, duration: "45 mins", badge: "Upgrade", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Complete replacement of old worn out bathroom metallic/CP accessories with new fixtures.", includes: ["Dismounting old fittings", "New accessory fitting", "Alignment test"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" }
       ],
       "Water Tank & Motor": [
-        { id: "plum-wt-1", name: "Overhead Water Tank Installation", price: 1499, duration: "2 hrs", badge: "Heavy Duty", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "500L/1000L PVC water tank positioning, inlet/outlet tank nipple fitting, and overflow pipe setup.", includes: ["Tank alignment", "Tank nipple sealing", "Ball valve & overflow fit"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wt-2", name: "Water Tank Repair", price: 599, duration: "1 hr", badge: "Leak Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing crack leaks in plastic water tanks using thermal plastic welding or leak proof sealant.", includes: ["Crack surface prep", "Thermal welding / sealant", "Water fill test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wt-3", name: "Motor Installation", price: 799, duration: "1 hr", badge: "Motor Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Submersible or monoblock water pump motor piping connection, check valve, and union fitting.", includes: ["Inlet/outlet pipe jointing", "Non-return valve fit", "Priming & run test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wt-4", name: "Motor Air Cavity Removal", price: 399, duration: "45 mins", badge: "Air Lock", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Resolving motor air lock issues, suction line priming, and foot valve air bleeding.", includes: ["Suction line priming", "Air bleed valve opening", "Water pumping test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-wt-1", name: "Overhead Water Tank Installation", price: 1499, duration: "2 hrs", badge: "Heavy Duty", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "500L/1000L PVC water tank positioning, inlet/outlet tank nipple fitting, and overflow pipe setup.", includes: ["Tank alignment", "Tank nipple sealing", "Ball valve & overflow fit"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-wt-2", name: "Water Tank Repair", price: 599, duration: "1 hr", badge: "Leak Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing crack leaks in plastic water tanks using thermal plastic welding or leak proof sealant.", includes: ["Crack surface prep", "Thermal welding / sealant", "Water fill test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-wt-3", name: "Motor Installation", price: 799, duration: "1 hr", badge: "Motor Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Submersible or monoblock water pump motor piping connection, check valve, and union fitting.", includes: ["Inlet/outlet pipe jointing", "Non-return valve fit", "Priming & run test"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
+        { id: "plum-wt-4", name: "Motor Air Cavity Removal", price: 399, duration: "45 mins", badge: "Air Lock", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Resolving motor air lock issues, suction line priming, and foot valve air bleeding.", includes: ["Suction line priming", "Air bleed valve opening", "Water pumping test"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" }
       ],
       "Drainage": [
-        { id: "plum-dr-1", name: "Drain Blockage Removal", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High pressure water jet flushing or heavy rotary snake clearing for clogged bathroom floor drains.", includes: ["Rotary spring snake clear", "Grease & hair extraction", "Drain flush test"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-        { id: "plum-dr-2", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "Kitchen Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Clearing stubborn food oil and debris blockage in kitchen sink drain trap line.", includes: ["Sink trap removal & clean", "Pipe flush treatment", "Flow restoration"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-        { id: "plum-dr-3", name: "Pipe Blockage Removal", price: 499, duration: "1 hr", badge: "Deep Clear", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Clearing main chamber or underground PVC drainage pipe line blockage.", includes: ["Chamber inspection", "Heavy duty cable snake", "Debris extraction"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-        { id: "plum-dr-4", name: "Drainage Repair", price: 599, duration: "1 hr", badge: "Pipe Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Repairing broken PVC drain pipe section, replacing damaged nahani trap, or solvent joint sealing.", includes: ["Damaged pipe cut & patch", "PVC solvent weld joint", "Leak test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-dr-1", name: "Drain Blockage Removal", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High pressure water jet flushing or heavy rotary snake clearing for clogged bathroom floor drains.", includes: ["Rotary spring snake clear", "Grease & hair extraction", "Drain flush test"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" },
+        { id: "plum-dr-2", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "Kitchen Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Clearing stubborn food oil and debris blockage in kitchen sink drain trap line.", includes: ["Sink trap removal & clean", "Pipe flush treatment", "Flow restoration"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" },
+        { id: "plum-dr-3", name: "Pipe Blockage Removal", price: 499, duration: "1 hr", badge: "Deep Clear", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Clearing main chamber or underground PVC drainage pipe line blockage.", includes: ["Chamber inspection", "Heavy duty cable snake", "Debris extraction"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" },
+        { id: "plum-dr-4", name: "Drainage Repair", price: 599, duration: "1 hr", badge: "Pipe Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Repairing broken PVC drain pipe section, replacing damaged nahani trap, or solvent joint sealing.", includes: ["Damaged pipe cut & patch", "PVC solvent weld joint", "Leak test"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" }
       ],
       "Water Filter": [
-        { id: "plum-wf-1", name: "Shower Filter Installation", price: 249, duration: "25 mins", badge: "Hard Water", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Connecting anti-scale hard water filter cartridge to shower arm or tap.", includes: ["Filter adapter attachment", "Cartridge insert", "Flow check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wf-2", name: "Washing Machine Filter Installation", price: 299, duration: "30 mins", badge: "Appliance Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Inline hard water descaling filter connection to washing machine water inlet tap.", includes: ["Tap adapter fitting", "Inline filter installation", "Leak check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wf-3", name: "Water Filter Installation", price: 499, duration: "45 mins", badge: "Purifier Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Main water purifier / RO pre-filter housing installation with diverter valve connection.", includes: ["Diverter valve connection", "Pre-filter housing mount", "Pure water pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wf-4", name: "Filter Replacement", price: 199, duration: "20 mins", badge: "Quick Swap", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Replacing exhausted sediment or carbon filter candle with new fresh cartridge.", includes: ["Housing opening", "Old candle removal & wash", "New cartridge insertion"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-wf-1", name: "Shower Filter Installation", price: 249, duration: "25 mins", badge: "Hard Water", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Connecting anti-scale hard water filter cartridge to shower arm or tap.", includes: ["Filter adapter attachment", "Cartridge insert", "Flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
+        { id: "plum-wf-2", name: "Washing Machine Filter Installation", price: 299, duration: "30 mins", badge: "Appliance Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Inline hard water descaling filter connection to washing machine water inlet tap.", includes: ["Tap adapter fitting", "Inline filter installation", "Leak check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
+        { id: "plum-wf-3", name: "Water Filter Installation", price: 499, duration: "45 mins", badge: "Purifier Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Main water purifier / RO pre-filter housing installation with diverter valve connection.", includes: ["Diverter valve connection", "Pre-filter housing mount", "Pure water pressure test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
+        { id: "plum-wf-4", name: "Filter Replacement", price: 199, duration: "20 mins", badge: "Quick Swap", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Replacing exhausted sediment or carbon filter candle with new fresh cartridge.", includes: ["Housing opening", "Old candle removal & wash", "New cartridge insertion"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" }
       ],
       "Grouting": [
-        { id: "plum-gr-1", name: "Bathroom Tile Grouting", price: 699, duration: "1 hr", badge: "Waterproof Seal", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Scraping old damaged grout lines and applying epoxy / waterproof white cement grout in bathroom tiles.", includes: ["Tile joint scraping", "Waterproof epoxy grout application", "Tile surface sponge clean"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "plum-gr-2", name: "Kitchen Tile Grouting", price: 599, duration: "1 hr", badge: "Hygienic Seal", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Sealing kitchen wall & counter tile joints with anti-bacterial stain-proof grout.", includes: ["Joint cleaning & degreasing", "Stain-proof epoxy grout fill", "Sponge finishing"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "plum-gr-1", name: "Bathroom Tile Grouting", price: 699, duration: "1 hr", badge: "Waterproof Seal", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Scraping old damaged grout lines and applying epoxy / waterproof white cement grout in bathroom tiles.", includes: ["Tile joint scraping", "Waterproof epoxy grout application", "Tile surface sponge clean"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-gr-2", name: "Kitchen Tile Grouting", price: 599, duration: "1 hr", badge: "Hygienic Seal", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Sealing kitchen wall & counter tile joints with anti-bacterial stain-proof grout.", includes: ["Joint cleaning & degreasing", "Stain-proof epoxy grout fill", "Sponge finishing"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
       ],
       "Plumber On-Demand": [
-        { id: "plum-od-1", name: "30-Minute Plumber Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert plumber for quick minor repairs, leak inspection, or small fittings.", includes: ["Rapid response plumber", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-od-2", name: "Hourly Plumber Service", price: 399, duration: "1 hr", badge: "Flexible Labor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Hourly plumbing labor for multiple custom repair jobs, piping work, or fixture replacements.", includes: ["1 hr professional plumber labor", "Multiple small tasks handled", "Tools included"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-od-3", name: "Full-Day Plumber Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated plumber booking for new home setup, bathroom renovation, or major pipe work.", includes: ["8 hrs dedicated master plumber", "Complete plumbing overhaul", "Daily progress check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-od-4", name: "Plumber Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site plumbing system health audit, piping leakage trace, and renovation estimate.", includes: ["Detailed on-site audit", "Leakage point trace", "Itemized cost estimate"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+        { id: "plum-od-1", name: "30-Minute Plumber Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert plumber for quick minor repairs, leak inspection, or small fittings.", includes: ["Rapid response plumber", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
+        { id: "plum-od-2", name: "Hourly Plumber Service", price: 399, duration: "1 hr", badge: "Flexible Labor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Hourly plumbing labor for multiple custom repair jobs, piping work, or fixture replacements.", includes: ["1 hr professional plumber labor", "Multiple small tasks handled", "Tools included"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
+        { id: "plum-od-3", name: "Full-Day Plumber Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated plumber booking for new home setup, bathroom renovation, or major pipe work.", includes: ["8 hrs dedicated master plumber", "Complete plumbing overhaul", "Daily progress check"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
+        { id: "plum-od-4", name: "Plumber Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site plumbing system health audit, piping leakage trace, and renovation estimate.", includes: ["Detailed on-site audit", "Leakage point trace", "Itemized cost estimate"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" }
       ]
     },
     carpentry: {
       "Lock & Handle": [
-        { id: "carp-lock-1", name: "Main Door Lock / Handle Installation", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Mortise lock fitting, cylindrical lock replace, latch alignment, key smooth turn check.", includes: ["Lock slot chisel & fit", "Latch strike plate alignment", "Key smooth test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-lock-2", name: "Mortise Lock Repair & Replacement", price: 299, duration: "45 mins", badge: "Heavy Lock", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repairing or replacing heavy mortise door locks, handles, and key cylinders.", includes: ["Chisel mortise pocket", "Key cylinder alignment", "Latching check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-lock-3", name: "Cylindrical Door Lock Installation", price: 249, duration: "30 mins", badge: "Popular", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fitting cylindrical knob / lever lock for bedroom and office wooden doors.", includes: ["Hole saw drilling", "Latch mechanism fit", "Key test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-lock-4", name: "Door Latch & Tower Bolt Fitting", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Installing brass/steel tower bolts, aldrop latches, or magnetic door catchers.", includes: ["Screw pilot drilling", "Tower bolt fit", "Latching check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "carp-lock-1", name: "Main Door Lock / Handle Installation", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Mortise lock fitting, cylindrical lock replace, latch alignment, key smooth turn check.", includes: ["Lock slot chisel & fit", "Latch strike plate alignment", "Key smooth test"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" },
+        { id: "carp-lock-2", name: "Mortise Lock Repair & Replacement", price: 299, duration: "45 mins", badge: "Heavy Lock", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repairing or replacing heavy mortise door locks, handles, and key cylinders.", includes: ["Chisel mortise pocket", "Key cylinder alignment", "Latching check"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" },
+        { id: "carp-lock-3", name: "Cylindrical Door Lock Installation", price: 249, duration: "30 mins", badge: "Popular", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fitting cylindrical knob / lever lock for bedroom and office wooden doors.", includes: ["Hole saw drilling", "Latch mechanism fit", "Key test"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" },
+        { id: "carp-lock-4", name: "Door Latch & Tower Bolt Fitting", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Installing brass/steel tower bolts, aldrop latches, or magnetic door catchers.", includes: ["Screw pilot drilling", "Tower bolt fit", "Latching check"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" }
       ],
       "Cupboard & Drawer": [
-        { id: "carp-cup-1", name: "Cupboard Repair", price: 299, duration: "45 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fixing sagging cupboard shelves, loose wooden joints, door misalignment, and latch fixes.", includes: ["Shelf support reinforcement", "Hinge adjustment", "Joint glue & screw"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-cup-2", name: "Cupboard Lock & Latches", price: 199, duration: "30 mins", badge: "Security", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Installing or replacing multi-purpose cupboard locks, cam locks, and magnetic catches.", includes: ["Cam lock fitting", "Strike plate alignment", "Key smoothness test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-cup-3", name: "Drawer Repair & Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Repairing broken wooden drawer boxes, alignment adjustment, and smooth slide setup.", includes: ["Drawer box alignment", "Telescopic channel fix", "Smooth slide test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-cup-4", name: "Drawer Channel Slide Replacement", price: 199, duration: "25 mins", badge: "Smooth Slide", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing rusty or broken ball-bearing drawer telescopic channels for quiet sliding.", includes: ["Old channel dismount", "Heavy-duty channel fit", "Slide alignment test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+        { id: "carp-cup-1", name: "Cupboard Repair", price: 299, duration: "45 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fixing sagging cupboard shelves, loose wooden joints, door misalignment, and latch fixes.", includes: ["Shelf support reinforcement", "Hinge adjustment", "Joint glue & screw"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" },
+        { id: "carp-cup-2", name: "Cupboard Lock & Latches", price: 199, duration: "30 mins", badge: "Security", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Installing or replacing multi-purpose cupboard locks, cam locks, and magnetic catches.", includes: ["Cam lock fitting", "Strike plate alignment", "Key smoothness test"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" },
+        { id: "carp-cup-3", name: "Drawer Repair & Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Repairing broken wooden drawer boxes, alignment adjustment, and smooth slide setup.", includes: ["Drawer box alignment", "Telescopic channel fix", "Smooth slide test"], image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=500&q=80&fit=crop" },
+        { id: "carp-cup-4", name: "Drawer Channel Slide Replacement", price: 199, duration: "25 mins", badge: "Smooth Slide", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing rusty or broken ball-bearing drawer telescopic channels for quiet sliding.", includes: ["Old channel dismount", "Heavy-duty channel fit", "Slide alignment test"], image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=500&q=80&fit=crop" }
       ],
       "Kitchen Fittings": [
-        { id: "carp-kit-1", name: "Pull-Out Drawer Repair / Replacement", price: 349, duration: "45 mins", badge: "Kitchen Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Modular kitchen stainless steel wire pull-out drawer repair, channel alignment, or basket replacement.", includes: ["Basket channel alignment", "Roller wheel replace", "Load test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-kit-2", name: "Cabinet Hinges", price: 199, duration: "30 mins", badge: "Hinge Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing loose, squeaking, or rusted auto-close cabinet hinges on modular kitchen doors.", includes: ["Auto-close hinge swap", "Door gap adjustment", "Closing test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-kit-3", name: "Cabinet Hydraulic Repair", price: 299, duration: "45 mins", badge: "Hydraulic", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing weak gas lift struts and hydraulic stay arms for overhead kitchen cabinets.", includes: ["Gas strut replacement", "Pressure bracket mount", "Lift & stay test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-kit-4", name: "Utensil Rack Installation", price: 249, duration: "30 mins", badge: "Storage Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Wall drilling and mounting stainless steel dish drying rack, spice rack, or cup holder.", includes: ["Precision tile drilling", "Stainless rack anchor fit", "Weight test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+        { id: "carp-kit-1", name: "Pull-Out Drawer Repair / Replacement", price: 349, duration: "45 mins", badge: "Kitchen Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Modular kitchen stainless steel wire pull-out drawer repair, channel alignment, or basket replacement.", includes: ["Basket channel alignment", "Roller wheel replace", "Load test"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" },
+        { id: "carp-kit-2", name: "Cabinet Hinges", price: 199, duration: "30 mins", badge: "Hinge Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing loose, squeaking, or rusted auto-close cabinet hinges on modular kitchen doors.", includes: ["Auto-close hinge swap", "Door gap adjustment", "Closing test"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" },
+        { id: "carp-kit-3", name: "Cabinet Hydraulic Repair", price: 299, duration: "45 mins", badge: "Hydraulic", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing weak gas lift struts and hydraulic stay arms for overhead kitchen cabinets.", includes: ["Gas strut replacement", "Pressure bracket mount", "Lift & stay test"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" },
+        { id: "carp-kit-4", name: "Utensil Rack Installation", price: 249, duration: "30 mins", badge: "Storage Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Wall drilling and mounting stainless steel dish drying rack, spice rack, or cup holder.", includes: ["Precision tile drilling", "Stainless rack anchor fit", "Weight test"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" }
       ],
       "Hangers & Drying Solutions": [
-        { id: "carp-hng-1", name: "Ceiling-Mounted Hanger Installation", price: 499, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Installing 6-pipe pulley ceiling cloth drying hanger with smooth rope hoisting mechanism.", includes: ["Ceiling anchor drilling", "Pulley wheel alignment", "Hoisting rope test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "carp-hng-2", name: "Wall Hanger Installation", price: 249, duration: "30 mins", badge: "Wall Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Foldable wall-mounted cloth drying rack installation for balcony or utility area.", includes: ["Wall bracket drilling", "Foldable rack fit", "Weight test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "carp-hng-3", name: "Cloth Drying Rope Installation", price: 199, duration: "25 mins", badge: "Quick Rope", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Hook anchor drilling and nylon / stainless steel plastic-coated clothesline stringing.", includes: ["Hook anchor drilling", "High-tension rope knot", "Tension check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "carp-hng-1", name: "Ceiling-Mounted Hanger Installation", price: 499, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Installing 6-pipe pulley ceiling cloth drying hanger with smooth rope hoisting mechanism.", includes: ["Ceiling anchor drilling", "Pulley wheel alignment", "Hoisting rope test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "carp-hng-2", name: "Wall Hanger Installation", price: 249, duration: "30 mins", badge: "Wall Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Foldable wall-mounted cloth drying rack installation for balcony or utility area.", includes: ["Wall bracket drilling", "Foldable rack fit", "Weight test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "carp-hng-3", name: "Cloth Drying Rope Installation", price: 199, duration: "25 mins", badge: "Quick Rope", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Hook anchor drilling and nylon / stainless steel plastic-coated clothesline stringing.", includes: ["Hook anchor drilling", "High-tension rope knot", "Tension check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
       ],
       "Furniture Services": [
-        { id: "carp-furn-1", name: "Furniture Repair", price: 399, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Tighten loose joints, replace broken wooden slats, wardrobe door realignment, or sofa frame repair.", includes: ["Joint tightening & glueing", "Leveling check", "30-day warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "carp-furn-2", name: "Furniture Making", price: 1499, duration: "2 hrs", badge: "Custom Wood", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Custom carpentry wood cutting, plywood framing, laminate pasting, and custom furniture crafting.", includes: ["Custom wood cutting", "Frame joinery", "Edge banding & sanding"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "carp-furn-3", name: "Furniture Assembly", price: 499, duration: "1 hr", badge: "Flatpack Assembly", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Professional IKEA / Pepperfry flatpack furniture unboxing, cam lock assembly, and leveling.", includes: ["Unboxing & hardware sort", "Cam lock structural assembly", "Stability check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "carp-furn-4", name: "Wooden Furniture Fixes", price: 299, duration: "45 mins", badge: "Wood Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fixing wobbly chair legs, cracked table surfaces, drawer wood swelling, or loose veneer.", includes: ["Wood putty filling", "Veneer glue clamping", "Sanding smoothing"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "carp-furn-1", name: "Furniture Repair", price: 399, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Tighten loose joints, replace broken wooden slats, wardrobe door realignment, or sofa frame repair.", includes: ["Joint tightening & glueing", "Leveling check", "30-day warranty"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" },
+        { id: "carp-furn-2", name: "Furniture Making", price: 1499, duration: "2 hrs", badge: "Custom Wood", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Custom carpentry wood cutting, plywood framing, laminate pasting, and custom furniture crafting.", includes: ["Custom wood cutting", "Frame joinery", "Edge banding & sanding"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" },
+        { id: "carp-furn-3", name: "Furniture Assembly", price: 499, duration: "1 hr", badge: "Flatpack Assembly", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Professional IKEA / Pepperfry flatpack furniture unboxing, cam lock assembly, and leveling.", includes: ["Unboxing & hardware sort", "Cam lock structural assembly", "Stability check"], image: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=500&q=80&fit=crop" },
+        { id: "carp-furn-4", name: "Wooden Furniture Fixes", price: 299, duration: "45 mins", badge: "Wood Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fixing wobbly chair legs, cracked table surfaces, drawer wood swelling, or loose veneer.", includes: ["Wood putty filling", "Veneer glue clamping", "Sanding smoothing"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" }
       ],
       "Doors & Windows": [
-        { id: "carp-door-1", name: "Cabinet Soft-Close Hinge Fix", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hydraulic soft-close hinge replacement, magnetic catch fitting, drawer channel smooth slide fix.", includes: ["Hinge replacement", "Door gap alignment", "Magnetic catch fit"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-door-2", name: "Door Alignment & Shaving", price: 299, duration: "45 mins", badge: "Smooth Close", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Planing / shaving jammed wooden doors swelling in monsoon, hinge tightening, and smooth latching.", includes: ["Door edge planing", "Hinge screw tightening", "Latch clearance check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-door-3", name: "Wooden Window Latch Repair", price: 199, duration: "30 mins", badge: "Window Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Replacing wooden window stay handles, tower bolts, hinges, and glass bead strips.", includes: ["Stay handle replacement", "Hinge lubrication", "Latch test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-door-4", name: "Door Stopper & Rubber Buffer Fit", price: 149, duration: "20 mins", badge: "Wall Safety", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Floor or wall door stopper installation with rubber buffer to prevent door handle wall damage.", includes: ["Floor anchor drilling", "Stopper screw fit", "Impact check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "carp-door-1", name: "Cabinet Soft-Close Hinge Fix", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hydraulic soft-close hinge replacement, magnetic catch fitting, drawer channel smooth slide fix.", includes: ["Hinge replacement", "Door gap alignment", "Magnetic catch fit"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" },
+        { id: "carp-door-2", name: "Door Alignment & Shaving", price: 299, duration: "45 mins", badge: "Smooth Close", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Planing / shaving jammed wooden doors swelling in monsoon, hinge tightening, and smooth latching.", includes: ["Door edge planing", "Hinge screw tightening", "Latch clearance check"], image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&q=80&fit=crop" },
+        { id: "carp-door-3", name: "Wooden Window Latch Repair", price: 199, duration: "30 mins", badge: "Window Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Replacing wooden window stay handles, tower bolts, hinges, and glass bead strips.", includes: ["Stay handle replacement", "Hinge lubrication", "Latch test"], image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&q=80&fit=crop" },
+        { id: "carp-door-4", name: "Door Stopper & Rubber Buffer Fit", price: 149, duration: "20 mins", badge: "Wall Safety", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Floor or wall door stopper installation with rubber buffer to prevent door handle wall damage.", includes: ["Floor anchor drilling", "Stopper screw fit", "Impact check"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" }
       ],
       "Drill & Hanging": [
-        { id: "carp-drill-1", name: "Wall Shelf / TV Bracket Mounting", price: 249, duration: "30 mins", badge: "Quick Drill", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Laser level drilling, rawl plug anchor insertion, heavy concealed bracket shelf fitting.", includes: ["Laser leveling check", "Concealed bracket fitting", "Weight test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
-        { id: "carp-drill-2", name: "Photo Frame & Wall Decor Hanging", price: 149, duration: "20 mins", badge: "Decor Drill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Hanging heavy photo frames, paintings, wall clocks, or decorative mirrors safely.", includes: ["Spirit level positioning", "Heavy duty wall anchor drill", "Hang stability test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
-        { id: "carp-drill-3", name: "Curtain Rod & Blind Installation", price: 199, duration: "25 mins", badge: "Curtain Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Single/Double curtain rod bracket drilling, roller blind, or wooden Venetian blind mounting.", includes: ["Rod bracket anchor drilling", "Finial alignment", "Smooth pull check"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" }
+        { id: "carp-drill-1", name: "Wall Shelf / TV Bracket Mounting", price: 249, duration: "30 mins", badge: "Quick Drill", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Laser level drilling, rawl plug anchor insertion, heavy concealed bracket shelf fitting.", includes: ["Laser leveling check", "Concealed bracket fitting", "Weight test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=500&q=80&fit=crop" },
+        { id: "carp-drill-2", name: "Photo Frame & Wall Decor Hanging", price: 149, duration: "20 mins", badge: "Decor Drill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Hanging heavy photo frames, paintings, wall clocks, or decorative mirrors safely.", includes: ["Spirit level positioning", "Heavy duty wall anchor drill", "Hang stability test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=500&q=80&fit=crop" },
+        { id: "carp-drill-3", name: "Curtain Rod & Blind Installation", price: 199, duration: "25 mins", badge: "Curtain Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Single/Double curtain rod bracket drilling, roller blind, or wooden Venetian blind mounting.", includes: ["Rod bracket anchor drilling", "Finial alignment", "Smooth pull check"], image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&q=80&fit=crop" }
       ],
       "Carpenter On-Demand": [
-        { id: "carp-od-1", name: "30-Minute Carpenter Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert carpenter for quick minor wood repairs, hinge tuning, or small drill jobs.", includes: ["Rapid response carpenter", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-od-2", name: "Full-Day Carpenter Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated master carpenter booking for home renovation, custom woodworking, or major repairs.", includes: ["8 hrs dedicated master carpenter", "Complete carpentry service", "Tools included"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-od-3", name: "Carpenter Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site woodworking health audit, furniture measurement, and custom work cost estimate.", includes: ["On-site wood inspection", "Precision measurement", "Itemized estimate"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "carp-od-1", name: "30-Minute Carpenter Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert carpenter for quick minor wood repairs, hinge tuning, or small drill jobs.", includes: ["Rapid response carpenter", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" },
+        { id: "carp-od-2", name: "Full-Day Carpenter Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated master carpenter booking for home renovation, custom woodworking, or major repairs.", includes: ["8 hrs dedicated master carpenter", "Complete carpentry service", "Tools included"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" },
+        { id: "carp-od-3", name: "Carpenter Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site woodworking health audit, furniture measurement, and custom work cost estimate.", includes: ["On-site wood inspection", "Precision measurement", "Itemized estimate"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" }
       ]
     },
     painting: {
@@ -12965,12 +12946,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     : `fixed inset-0 z-[9999] bg-white text-slate-700 w-full min-h-screen flex flex-col ${selectedMasonDetail ? "overflow-hidden" : "overflow-y-auto"}`;
 
   const containerClass = isFullPage
-    ? "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4"
+    ? "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto py-4"
     : "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto min-h-screen px-4 sm:px-6 lg:px-8 py-4";
 
-  const mainAreaClass = "flex flex-col lg:flex-row flex-1 gap-8 mt-4";
+  const mainAreaClass = "flex flex-col lg:flex-row flex-1 gap-9 mt-4";
 
-  const leftColumnClass = "flex-1 space-y-5 lg:pr-4";
+  const leftColumnClass = "flex-1 space-y-5";
 
   const rightColumnClass = "w-full lg:w-[380px] bg-slate-50 border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between lg:sticky lg:top-24 h-fit space-y-5 shadow-sm shrink-0";
 
@@ -13051,7 +13032,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   params.set("subTab", tab.name);
                   navigate(`?${params.toString()}`, { replace: true });
                 }}
-                className="flex flex-col items-center justify-center p-1 transition-all cursor-pointer text-center bg-transparent w-[68px] shrink-0 group"
+                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[85px] sm:w-[90px] shrink-0 group"
               >
                 <img
                   src={tab.image}
@@ -13060,12 +13041,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     e.target.onerror = null;
                     e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
                   }}
-                  className={`w-10 h-10 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected
-                    ? "scale-[1.08] shadow-sm border-2 border-slate-800"
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected
+                    ? "scale-[1.05] shadow-md border-2 border-slate-800"
                     : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
                     }`}
                 />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-900 font-black" : "text-slate-600 font-bold"
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
                   }`}>
                   {tab.name}
                 </span>
@@ -13157,8 +13138,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       </div>
 
                       {/* Right side image & add button */}
-                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
-                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50">
                           <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                             {count > 0 ? (
@@ -13216,8 +13197,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </ul>
                       </div>
 
-                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
-                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50">
                           <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                             {count > 0 ? (
@@ -13275,8 +13256,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </ul>
                       </div>
 
-                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
-                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50">
                           <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                             {count > 0 ? (
@@ -13308,7 +13289,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 .map((p, idx) => {
                   const cartId = `serv-${normalizedKey}-${p.id}`;
                   const count = getCartItemCount(cartId);
-                  const isFirst = normalizedKey === "mason" && idx === 0 && !searchQuery;
+                  const isFirst = idx === 0 && !searchQuery;
 
                   return (
                     <div
@@ -13316,7 +13297,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative"
                     >
                       {isFirst && (
-                        <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/50">
+                        <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/60">
                           <img
                             src={p.image}
                             alt={p.name}
@@ -13457,8 +13438,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </div>
 
                         {/* Right side image & floating ADD button */}
-                        <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
-                          <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                        <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                          <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50">
                             <img
                               src={p.image}
                               alt={p.name}
@@ -14221,9 +14202,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                             return (
                               <div
                                 key={idx}
-                                className={`border rounded-xl overflow-hidden transition-all duration-200 ${
-                                  isFaqOpen ? "border-emerald-500/50 bg-emerald-50/20 shadow-xs" : "border-slate-200/80 bg-white hover:border-slate-300"
-                                }`}
+                                className={`border rounded-xl overflow-hidden transition-all duration-200 ${isFaqOpen ? "border-emerald-500/50 bg-emerald-50/20 shadow-xs" : "border-slate-200/80 bg-white hover:border-slate-300"
+                                  }`}
                               >
                                 <button
                                   onClick={() => setActiveFaq(isFaqOpen ? -1 : idx)}
@@ -17799,7 +17779,6 @@ const FULL_KITCHEN_PACKAGES = [
     id: "empty-kitchen",
     name: "Empty Kitchen Cleaning",
     price: 849,
-    options: "2 options",
     duration: "2.5 hrs",
     description: "Thorough deep cleaning of empty kitchen spaces before moving in or after moving out.",
     image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
@@ -17807,26 +17786,6 @@ const FULL_KITCHEN_PACKAGES = [
       "Thorough degreasing of wall tiles, countertops, and exhaust fans",
       "Detailed cleaning of kitchen floors, windows, switchboards, and cabinets (exterior)",
       "Deep sanitization of sink and under-sink area (utensils removal not included)"
-    ],
-    subOptions: [
-      {
-        id: "empty-kitchen-small",
-        name: "Standard Kitchen",
-        price: 849,
-        rating: "4.82",
-        reviews: "15K reviews",
-        image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=200&q=80&fit=crop",
-        duration: "2.5 hrs"
-      },
-      {
-        id: "empty-kitchen-large",
-        name: "Large Kitchen",
-        price: 1149,
-        rating: "4.80",
-        reviews: "8K reviews",
-        image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=200&q=80&fit=crop",
-        duration: "3.5 hrs"
-      }
     ]
   }
 ];
@@ -18142,6 +18101,19 @@ const QUICK_EXTRA_SERVICES = [
       "Railing, windows, and mesh cleaning",
       "Thorough dust and dirt clearance"
     ]
+  },
+  {
+    id: "quick-door-clean",
+    name: "Door Cleaning",
+    price: 89,
+    duration: "10 mins",
+    description: "Thorough wiping and dusting of doors to remove fingerprints and dirt.",
+    image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+    includes: [
+      "Wiping of door panels and frames",
+      "Removal of smudges, dust & fingerprint marks",
+      "Handle sanitization"
+    ]
   }
 ];
 
@@ -18223,10 +18195,13 @@ const SERVICE_DETAIL_DATA = {
     ],
     faqs: [
       { q: "Will you move utensils from the cabinets?", a: "No. Utensil removal and rearrangement are not included in the Basic package." },
-      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring the required cleaning tools and products." },
-      { q: "Is chimney cleaning included?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
-      { q: "Can I add appliance cleaning?", a: "Yes. You can add individual appliance cleaning as an additional service." },
-      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." }
+      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring all the required environment-friendly cleaning tools and products." },
+      { q: "Is chimney cleaning included in the Basic package?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add appliance cleaning to this package?", a: "Yes. You can add individual appliance cleaning as an additional service." },
+      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean the exhaust fan in basic cleaning?", a: "No, exhaust fan cleaning is part of our deep cleaning package or can be booked separately as a quick service." },
+      { q: "Will you clean tiles and grout?", a: "Yes, we wipe tiles and slabs to remove superficial oil stains, but deep scrubbing grout lines is part of the deep cleaning package." },
+      { q: "Is garbage disposal included?", a: "We collect all waste generated during the cleaning and hand it over to your society bin, but we do not discard pre-existing bulk trash." }
     ]
   },
   "occ-deep": {
@@ -18249,14 +18224,83 @@ const SERVICE_DETAIL_DATA = {
     ],
     faqs: [
       { q: "Does Deep Clean include everything in Basic?", a: "Yes. Deep Clean includes all services covered in the Basic package, along with additional deep-cleaning services." },
-      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed and rearranged as part of the Deep Clean service." },
+      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed, cabinets cleaned internally, and utensils rearranged as part of the Deep Clean service." },
       { q: "Does Deep Clean include chimney cleaning?", a: "No. Chimney cleaning is available separately under Single Appliance & Specific Area Cleaning." },
       { q: "Can I add refrigerator or microwave cleaning?", a: "Yes. Individual appliance cleaning can be added separately to your booking." },
       { q: "Does steam cleaning remove tough grease?", a: "Yes. Steam cleaning helps loosen and remove stubborn grease, oil buildup and stains from suitable kitchen surfaces." },
-      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." }
+      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean internal cabinet walls?", a: "Yes, we deep clean both the interiors and exteriors of all kitchen cabinets and drawers." },
+      { q: "Are window panes and grills cleaned in this package?", a: "Yes, deep cleaning includes cleaning of kitchen window panes, frames, exhaust fans, and mesh surfaces." },
+      { q: "Do you offer stain guarantee for old granite or tiles?", a: "While we use professional-grade degreasers and steam machines that remove 99% of grease, extremely old chemical etchings or stone discoloration may not disappear completely." }
     ]
   },
   "fridge-clean": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-single": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-double": {
+    tools: [
+      "Food-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food items before cleaning",
+      "Keep the refrigerator accessible",
+      "Keep a power connection available"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-triple": {
     tools: [
       "Food-safe cleaning products",
       "Microfiber cloths",
@@ -18391,6 +18435,72 @@ const SERVICE_DETAIL_DATA = {
     ]
   },
   "stove-clean": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-2b": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-3b": {
+    tools: [
+      "Stove-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Switch off the stove before cleaning",
+      "Remove vessels and cookware",
+      "Keep the stove area accessible"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-4b": {
     tools: [
       "Stove-safe cleaning products",
       "Microfiber cloths",
@@ -18570,17 +18680,27 @@ const SERVICE_DETAIL_DATA = {
   },
   "quick-dining-table": {
     tools: [
-      "Food-safe table cleaner",
-      "Polishing cloth"
+      "Heavy duty degreasers / polishers",
+      "Microfiber detailing cloths",
+      "Soft detailing brushes"
     ],
     ready: [
-      "Clear dishes and table mats before service"
+      "Clear all items from the dining table",
+      "Ensure access to water and power outlets"
     ],
     reviews: [
-      { name: "Arjun V.", rating: "5.0", text: '"Got rid of sticky grease stains on the glass tabletop. Super clean!"' }
+      { name: "Rohit P.", rating: "4.9", text: '"Very detailed cleaning of the dining chairs as well. Stains are completely gone!"' },
+      { name: "Kunal M.", rating: "4.8", text: '"Cleaned the glass table top spotless. The wooden chairs look polished."' }
     ],
     faqs: [
-      { q: "Will you polish wooden tables?", a: "We do standard cleaning and gentle wiping. Specialized wood polishing is not included." }
+      { q: "Will this clean the table chairs too?", a: "Yes, this service covers the deep cleaning of both the dining table and the chairs." },
+      { q: "Is wood polishing included?", a: "No, we perform standard cleaning and gentle wiping. Wood varnishing or professional polishing is not included." },
+      { q: "How many chairs are covered?", a: "Up to a 6-seater dining set is covered in the standard package." },
+      { q: "Will you clean table mats?", a: "No, table mats, table cloths, and runners are not cleaned." },
+      { q: "Do you clean table extensions?", a: "Yes, if the table extensions are opened by the customer before cleaning." },
+      { q: "Will you remove grease stains?", a: "Yes, food oil, grease, and sticky stains are thoroughly cleaned." },
+      { q: "Do you clean glass tabletops?", a: "Yes, glass tops are cleaned with specialized glass cleaning spray." },
+      { q: "How long does it take?", a: "The dining table and chairs cleaning takes about 30 to 40 minutes." }
     ]
   },
   "quick-kitchen-window": {
@@ -18593,43 +18713,69 @@ const SERVICE_DETAIL_DATA = {
       "Clear the window sill and counter space below the window"
     ],
     reviews: [
-      { name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' }
+      { name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' },
+      { name: "Sonia P.", rating: "4.7", text: '"Spotless cleaning. The frames and tracks are completely clean now."' }
     ],
     faqs: [
-      { q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." }
+      { q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." },
+      { q: "Will you clean both sides of the window?", a: "Yes, if the exterior side is safely accessible from inside the kitchen." },
+      { q: "Do you remove window frames?", a: "No, window panels are cleaned as installed without dismantling." },
+      { q: "Will you remove paint or cement stains?", a: "No, heavy paint or cement scrapings are not included in this quick package." },
+      { q: "How long does it take?", a: "It takes about 30 to 40 minutes per window." },
+      { q: "Do you clean window grills?", a: "Yes, accessible window grills are wiped and cleaned of dust and grease." },
+      { q: "What cleaning agents do you use?", a: "We use professional glass cleaner and kitchen-grade grease removers." },
+      { q: "Is slider track vacuuming included?", a: "Yes, we vacuum/brush dirt out of the window sliding tracks." }
     ]
   },
   "quick-balcony-upto-4ft": {
     tools: [
-      "Heavy duty floor brush",
-      "High-pressure water source if available",
-      "Balcony cleaning detergent"
+      "Floor scrubbers",
+      "High pressure water sprays",
+      "Hard dusting brushes"
     ],
     ready: [
-      "Clear planters or light furniture from the balcony floor",
-      "Provide access to a water tap"
+      "Remove plants or outdoor furniture from the balcony",
+      "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Sneha L.", rating: "5.0", text: '"Balcony floor is sparkling clean. They washed off all the pigeon droppings."' }
+      { name: "Vikram P.", rating: "4.9", text: '"Scrubbed all the dust and dirt from the balcony floor. Very clean."' },
+      { name: "Divya N.", rating: "4.8", text: '"The pigeon droppings were cleaned very neatly. Worth the price."' }
     ],
     faqs: [
-      { q: "Do you clean the balcony roof?", a: "No, roof or ceiling cleaning is not included in this quick package." }
+      { q: "Do you clean balcony windows?", a: "Yes, accessible balcony windows are dusted and wiped." },
+      { q: "Is roof cleaning included?", a: "No, ceiling/roof cleaning is not included in this quick package." },
+      { q: "Do you wash the railings?", a: "Yes, railings are scrubbed and wiped to remove dust." },
+      { q: "What if there is no water connection near the balcony?", a: "Our team will fetch water from the nearest bathroom or kitchen." },
+      { q: "Do you clean wall tiles in the balcony?", a: "Yes, wall tiles are wiped down to remove surface dust." },
+      { q: "Will you discard old items?", a: "No, we do not throw away trash or scrap items left in the balcony." },
+      { q: "How long does it take?", a: "It takes about 30 to 45 minutes." },
+      { q: "Do you clean mesh windows?", a: "Yes, window mesh screen dusting is included." }
     ]
   },
   "quick-balcony-above-4ft": {
     tools: [
-      "Scrubbing brushes & wipers",
-      "Balcony floor wash detergent",
-      "Cobweb removal brush"
+      "Floor scrubbers",
+      "High pressure water sprays",
+      "Hard dusting brushes",
+      "Mesh cleaning brushes"
     ],
     ready: [
-      "Clear all furniture and items from the balcony"
+      "Remove plants or outdoor furniture from the balcony",
+      "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Manish P.", rating: "4.9", text: '"Very thorough washing. Highly recommend for large balconies."' }
+      { name: "Aditi G.", rating: "4.8", text: '"Deep scrubbed the entire balcony floor and mesh screens. Perfect."' },
+      { name: "Rohan J.", rating: "4.7", text: '"Professional cleaners. Cleaned my large balcony tiles and railings nicely."' }
     ],
     faqs: [
-      { q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." }
+      { q: "Is mesh screen cleaning included?", a: "Yes, mesh screen dusting and washing is included." },
+      { q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." },
+      { q: "Do you clean balcony ceilings?", a: "No, ceiling and roof cleaning is not included." },
+      { q: "How much time is required?", a: "It takes around 45 to 60 minutes for balconies above 4ft width." },
+      { q: "Do you scrub the floor with a machine?", a: "No, manual heavy-duty scrubbing brushes are used to remove stains." },
+      { q: "Are plant pots moved by the cleaners?", a: "We request customers to move heavy plant pots beforehand. Light pots can be moved by our team." },
+      { q: "Do you clean outer side of balcony walls?", a: "No, exterior walls are excluded due to safety hazards." },
+      { q: "Do you remove hard water stains from tiles?", a: "We use cleaning detergents, but very old hard water scaling might not disappear completely." }
     ]
   },
   "quick-window-upto-4x4": {
@@ -18663,6 +18809,57 @@ const SERVICE_DETAIL_DATA = {
     faqs: [
       { q: "Is exterior cleaning included?", a: "Exterior glass is cleaned as long as it does not pose a safety risk to the cleaner." }
     ]
+  },
+  "quick-exhaust-fan-clean": {
+    tools: [
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Grease-removing cleaning solution",
+      "Long-reach dusting tools"
+    ],
+    ready: [
+      "Switch off the exhaust fan before cleaning",
+      "Keep the area around the fan clear",
+      "Provide safe access to the fan"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The exhaust fan had a lot of dust and grease. It was cleaned very neatly."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Quick service and the fan looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the fan blades?", a: "Yes, the accessible fan blades will be cleaned properly." },
+      { q: "Will you clean the cover / grill?", a: "Yes, the fan cover and visible grill will also be cleaned." },
+      { q: "Will you remove grease from the fan?", a: "Yes, normal dust, grease and dirt buildup will be cleaned." },
+      { q: "Will you remove the exhaust fan from the wall?", a: "No, the fan will be cleaned while it remains installed." },
+      { q: "Do you repair exhaust fans?", a: "No, electrical, motor and wiring repairs are not included." },
+      { q: "How long does it take?", a: "It takes about 30 to 45 minutes to deep clean the exhaust fan." },
+      { q: "Do you clean the wall area around the fan?", a: "Yes, we wipe the immediate wall area around the fan to remove splashed grease." },
+      { q: "What cleaning chemicals do you use?", a: "We use heavy-duty kitchen-safe degreasers to dissolve grease and oil." }
+    ]
+  },
+  "quick-door-clean": {
+    tools: [
+      "Wood-safe spray",
+      "Soft detailing sponges",
+      "Microfiber towels"
+    ],
+    ready: [
+      "Provide clear path to doors"
+    ],
+    reviews: [
+      { name: "Alok R.", rating: "4.8", text: '"Got rid of all grease spots on the door handles and corners."' },
+      { name: "Suresh P.", rating: "4.7", text: '"Excellent door wiping. The panels look polished and clean now."' }
+    ],
+    faqs: [
+      { q: "Is handle disinfection included?", a: "Yes, we sanitize door handles as part of the service." },
+      { q: "Do you clean the door frames?", a: "Yes, we clean both door panels and frames." },
+      { q: "Do you clean glass panels on doors?", a: "Yes, any glass panels are wiped and cleaned with glass cleaner." },
+      { q: "Will this service polish wooden doors?", a: "No, this is a cleaning service. We do not apply wood polish or varnish." },
+      { q: "How many doors are cleaned?", a: "This service is priced per door. You can select the quantity accordingly." },
+      { q: "Do you clean mesh doors?", a: "No, mesh doors require separate pricing/washing." },
+      { q: "Do you remove scratches?", a: "No, cleaning cannot repair scratches, dents or structural damage." },
+      { q: "Are sliding door tracks cleaned?", a: "Yes, we dust and wipe the accessible sliding track area." }
+    ]
   }
 };
 
@@ -18673,6 +18870,21 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   const [isBasicExpanded, setIsBasicExpanded] = useState(false);
   const [isDeepExpanded, setIsDeepExpanded] = useState(false);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [dbPackages, setDbPackages] = useState([]);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      try {
+        const res = await apiRequest("/settings/catalog/public/packages/?service_slug=kitchen-cleaning");
+        if (res.success && Array.isArray(res.data)) {
+          setDbPackages(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch kitchen packages:", err);
+      }
+    };
+    fetchPackages();
+  }, []);
 
   useEffect(() => {
     if (selectedServiceDetails) {
@@ -18708,10 +18920,70 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   const getActiveServices = () => {
     let list = [];
-    if (activeTab === "packages") list = FULL_KITCHEN_PACKAGES;
-    else if (activeTab === "appliance") list = APPLIANCE_SERVICES;
-    else if (activeTab === "cabinet_tile") list = CABINET_TILE_SERVICES;
-    else if (activeTab === "addons") list = QUICK_EXTRA_SERVICES;
+    if (activeTab === "packages") list = JSON.parse(JSON.stringify(FULL_KITCHEN_PACKAGES));
+    else if (activeTab === "appliance") list = JSON.parse(JSON.stringify(APPLIANCE_SERVICES));
+    else if (activeTab === "cabinet_tile") list = JSON.parse(JSON.stringify(CABINET_TILE_SERVICES));
+    else if (activeTab === "addons") list = JSON.parse(JSON.stringify(QUICK_EXTRA_SERVICES));
+
+    if (dbPackages.length > 0) {
+      list = list.map(item => {
+        if (Array.isArray(item.subOptions)) {
+          const parentDbMatch = dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id));
+          if (parentDbMatch) {
+            item.name = parentDbMatch.name;
+            item.price = Math.round(Number(parentDbMatch.base_price) || item.price);
+            item.duration = parentDbMatch.duration || item.duration;
+            item.description = parentDbMatch.description || item.description;
+            item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
+            item.tag = parentDbMatch.tag || "";
+            item.popular = parentDbMatch.popular || false;
+          }
+
+          item.subOptions = item.subOptions.map(subOpt => {
+            const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
+            if (dbMatch) {
+              return {
+                ...subOpt,
+                name: dbMatch.name,
+                price: Math.round(Number(dbMatch.base_price) || subOpt.price),
+                duration: dbMatch.duration || subOpt.duration,
+                description: dbMatch.description || subOpt.description,
+                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes),
+                tag: dbMatch.tag || "",
+                popular: dbMatch.popular || false,
+                tools: Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0 ? dbMatch.tools : (subOpt.tools || []),
+                ready: Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0 ? dbMatch.ready : (subOpt.ready || []),
+                reviews: Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || []),
+                faqs: Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0 ? dbMatch.faqs : (subOpt.faqs || []),
+              };
+            }
+            return {
+              ...subOpt,
+              includes: subOpt.includes || item.includes
+            };
+          });
+          if (item.subOptions.length > 0) {
+            item.price = item.subOptions[0].price;
+          }
+        } else {
+          const dbMatch = dbPackages.find(p => p.slug === item.id);
+          if (dbMatch) {
+            item.name = dbMatch.name;
+            item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.duration = dbMatch.duration || item.duration;
+            item.description = dbMatch.description || item.description;
+            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            item.tag = dbMatch.tag || "";
+            item.popular = dbMatch.popular || false;
+            if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
+            if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews = dbMatch.reviews;
+            if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
+          }
+        }
+        return item;
+      });
+    }
 
     if (!searchQuery) return list;
     return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -18724,12 +18996,12 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
       {/* Sticky Header + Tabs */}
       <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
         <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
-          <div>
+          <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-2 text-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
-              <ChevronLeft size={16} /> Back to Services
+              <ChevronLeft size={14} /> Back to Services
             </button>
             <h2 className="text-xl font-black text-slate-900">Kitchen Cleaning</h2>
           </div>
@@ -18763,7 +19035,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
       <div className="flex flex-col lg:flex-row flex-1 pt-4">
 
         {/* Left Column */}
-        <div className="flex-1 space-y-5 lg:pr-6">
+        <div className="flex-1 space-y-5">
 
           {/* Section title */}
           <div className="pt-1">
@@ -18781,7 +19053,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all">
                   {/* First item image hero */}
                   {isFirst && (
-                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4">
+                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4 border border-slate-100/60">
                       <img
                         src={activeTab === "packages" ? "/mockups/kitchen_top_new.png" : activeTab === "appliance" ? "/mockups/appliance_cleaning_hero.png" : activeTab === "cabinet_tile" ? "/mockups/kitchen_cleaning_hero.png" : "/mockups/quick_extra_services_hero.png"}
                         alt={service.name}
@@ -18797,6 +19069,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           Occupied Kitchen Cleaning
                         </div>
+                      )}
+                      {service.tag && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80 mb-1">
+                          ★ {service.tag}
+                        </span>
                       )}
                       <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
@@ -18984,6 +19261,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
         </div>
       </div>
 
+      <AppBannerAndFooter />
+
       {selectedServiceDetails && createPortal(
         <div
           onClick={() => setSelectedServiceDetails(null)}
@@ -19056,6 +19335,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 )}
               </div>
 
+              {/* Inclusions Box removed for kitchen cleaning view details per request */}
+
               {/* Exclusions Box */}
               {(() => {
                 const id = selectedServiceDetails.id;
@@ -19080,7 +19361,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 );
               })()}
 
-                            {/* Sub-options selector */}
+              {/* Sub-options selector */}
               {selectedServiceDetails.subOptions && (
                 <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
                   <h4 className="text-xs font-black text-slate-850 uppercase tracking-wider mb-3">Choose Variant</h4>
@@ -19092,11 +19373,19 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 mb-2 flex items-center justify-center">
                             <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
                           </div>
-                          <div className="flex-1 flex flex-col justify-between w-full">
+                            <div className="flex-1 flex flex-col justify-between w-full">
                             <div>
                               <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">{sub.name}</h5>
                             </div>
                             <div className="w-full mt-auto">
+                              <button
+                                onClick={() => {
+                                  setSelectedServiceDetails(sub);
+                                }}
+                                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] py-1 rounded-lg mb-1.5 uppercase transition-colors"
+                              >
+                                View Details
+                              </button>
                               <div className="text-xs font-black text-slate-900 mb-2">₹{sub.price}</div>
                               {subCount > 0 ? (
                                 <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm w-full">
@@ -19125,7 +19414,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const tools = detail.tools || [];
+                const tools = (Array.isArray(selectedServiceDetails.tools) && selectedServiceDetails.tools.length > 0)
+                  ? selectedServiceDetails.tools
+                  : (detail.tools || []);
                 if (tools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -19146,7 +19437,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const readyList = detail.ready || [];
+                const readyList = (Array.isArray(selectedServiceDetails.ready) && selectedServiceDetails.ready.length > 0)
+                  ? selectedServiceDetails.ready
+                  : (detail.ready || []);
                 if (readyList.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -19169,7 +19462,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 {(() => {
                   const id = selectedServiceDetails.id;
                   const detail = SERVICE_DETAIL_DATA[id] || {};
-                  const reviews = detail.reviews || [];
+                  const reviews = (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0)
+                    ? selectedServiceDetails.reviews
+                    : (detail.reviews || []);
                   return reviews.map((rev, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
                       <div className="flex items-center justify-between">
@@ -19194,7 +19489,9 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   {(() => {
                     const id = selectedServiceDetails.id;
                     const detail = SERVICE_DETAIL_DATA[id] || {};
-                    const faqs = detail.faqs || [];
+                    const faqs = (Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0)
+                      ? selectedServiceDetails.faqs
+                      : (detail.faqs || []);
                     return faqs.map((faq, idx) => {
                       const isFaqOpen = activeFaq === idx;
                       return (

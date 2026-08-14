@@ -9,6 +9,7 @@ public catalog read API in service_requests/views.py).
 """
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -24,6 +25,25 @@ from service_requests.services import catalog as catalog_service
 def _validation_error_response(exc):
     detail = exc.message_dict if hasattr(exc, "message_dict") else {"detail": exc.messages if hasattr(exc, "messages") else str(exc)}
     return Response({"success": False, "message": "Validation failed", "errors": detail}, status=400)
+
+
+# ── Public (no-auth) read-only catalog endpoints ─────────────────────────────
+
+class PublicPackageListView(APIView):
+    """Read-only list of packages for the customer-facing booking UI.
+    No authentication required — only returns fields needed for display.
+    Admins can fetch all packages; public fetches all (including DRAFT) so
+    that admin previews also work immediately after customization."""
+    permission_classes = [AllowAny]
+    authentication_classes = []  # bypass auth middleware entirely for speed
+
+    def get(self, request):
+        qs = Package.objects.select_related("service", "service__category").all()
+        service_slug = request.GET.get("service_slug")
+        if service_slug:
+            qs = qs.filter(service__slug=service_slug)
+        data = PackageSerializer(qs, many=True).data
+        return Response({"success": True, "data": data})
 
 
 # ── Categories ──────────────────────────────────────────────────────────────

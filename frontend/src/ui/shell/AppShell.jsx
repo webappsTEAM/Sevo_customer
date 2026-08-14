@@ -129,6 +129,24 @@ const ADMIN_NAV_ITEMS = [
       { label: "Referrals", to: routes.marketing_referrals, icon: <Users size={16} />, color: "#10B981" },
     ]
   },
+  {
+    label: "Home Page Builder",
+    to: routes.homepage_customizer,
+    icon: <Globe size={20} />,
+    color: "#F59E0B",
+    adminOnly: true,
+    children: [
+      { label: "Hero Banner", to: `${routes.homepage_customizer}?tab=hero`, icon: <Globe size={16} />, color: "#F59E0B" },
+      { label: "Browse Categories", to: `${routes.homepage_customizer}?tab=categories`, icon: <FolderOpen size={16} />, color: "#3B82F6" },
+      { label: "Promotional Offers", to: `${routes.homepage_customizer}?tab=offers`, icon: <Gift size={16} />, color: "#EC4899" },
+      { label: "Why Choose Us", to: `${routes.homepage_customizer}?tab=trust`, icon: <ShieldCheck size={16} />, color: "#10B981" },
+      { label: "How It Works", to: `${routes.homepage_customizer}?tab=workflow`, icon: <Repeat2 size={16} />, color: "#8B5CF6" },
+      { label: "Live Stats Bar", to: `${routes.homepage_customizer}?tab=stats`, icon: <BarChart3 size={16} />, color: "#0EA5E9" },
+      { label: "Featured Pros", to: `${routes.homepage_customizer}?tab=experts`, icon: <Users size={16} />, color: "#D946EF" },
+      { label: "Testimonials", to: `${routes.homepage_customizer}?tab=testimonials`, icon: <Award size={16} />, color: "#F59E0B" },
+      { label: "Footer & Contacts", to: `${routes.homepage_customizer}?tab=footer`, icon: <FileText size={16} />, color: "#64748B" },
+    ]
+  },
   { label: "Inventory", to: routes.inventory, icon: <Package size={20} />, color: "#8B5CF6" },
   { label: "Customer Care", to: "/support/tickets", icon: <Headset size={20} />, color: "#0EA5E9" },
   {
