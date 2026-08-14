@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, Search, ShoppingCart, X, Star } from "lucide-react";
+import { apiRequest } from "../../api/client.js";
+import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
@@ -83,19 +85,6 @@ const SOFA_CLEANING_SERVICES = [
       "Leather-safe conditioning",
       "Soft finishing for a clean appearance"
     ]
-  },
-  {
-    id: "quick-dining-table",
-    name: "Dining Table & Chairs Cleaning",
-    price: 449,
-    duration: "30 mins",
-    description: "Detailed dining table and chairs surface cleaning and grease removal.",
-    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
-    includes: [
-      "Surface cleaning & sanitation of table and chairs",
-      "Removal of food stains & greasy layers",
-      "Wiping & drying of tabletop"
-    ]
   }
 ];
 
@@ -147,6 +136,19 @@ const CARPET_SERVICES = [
 ];
 
 const SOFA_ADDONS_SERVICES = [
+  {
+    id: "quick-dining-table",
+    name: "Dining Table & Chairs Cleaning",
+    price: 449,
+    duration: "30 mins",
+    description: "Detailed dining table and chairs surface cleaning and grease removal.",
+    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    includes: [
+      "Surface cleaning & sanitation of table and chairs",
+      "Removal of food stains & greasy layers",
+      "Wiping & drying of tabletop"
+    ]
+  },
   {
     id: "quick-fan-clean",
     name: "Ceiling Fan Cleaning",
@@ -258,10 +260,18 @@ const SOFA_DETAIL_DATA = {
       "Provide access to a power source"
     ],
     reviews: [
-      { name: "Vijay S.", rating: "4.9", text: '"Cleaned the fan blades and motor body nicely. Dust-free now."' }
+      { name: "Vijay S.", rating: "4.9", text: '"Cleaned the fan blades and motor body nicely. Dust-free now."' },
+      { name: "Amit K.", rating: "4.8", text: '"Quick service, got rid of all kitchen oil and grease stains on blades."' }
     ],
     faqs: [
-      { q: "Do you clean the regulator?", a: "No, we only clean the fan blades, motor housing, and downrod." }
+      { q: "Do you clean the regulator?", a: "No, we only clean the fan blades, motor housing, and downrod." },
+      { q: "Is repair service included?", a: "No, this is strictly a cleaning service. Repairs are not included." },
+      { q: "Will my floor get dirty?", a: "No, our professionals use protective sheets to cover your floor." },
+      { q: "How long does it take?", a: "It takes around 20-30 minutes per ceiling fan." },
+      { q: "Do you clean exhaust fans too?", a: "No, exhaust fan cleaning is a separate service." },
+      { q: "Do you clean the fan motor?", a: "We clean the external motor body and cover, but do not open or service internal parts." },
+      { q: "Is ladder provided by the technician?", a: "Yes, our team brings all necessary ladders and safety equipment." },
+      { q: "Do you clean the switchboards?", a: "No, switchboard cleaning is not covered in this service." }
     ]
   },
   "quick-door-clean": {
@@ -274,10 +284,18 @@ const SOFA_DETAIL_DATA = {
       "Provide clear path to doors"
     ],
     reviews: [
-      { name: "Alok R.", rating: "4.8", text: '"Got rid of all grease spots on the door handles and corners."' }
+      { name: "Alok R.", rating: "4.8", text: '"Got rid of all grease spots on the door handles and corners."' },
+      { name: "Suresh P.", rating: "4.7", text: '"Excellent door wiping. The panels look polished and clean now."' }
     ],
     faqs: [
-      { q: "Is handle disinfection included?", a: "Yes, we sanitize door handles as part of the service." }
+      { q: "Is handle disinfection included?", a: "Yes, we sanitize door handles as part of the service." },
+      { q: "Do you clean the door frames?", a: "Yes, we clean both door panels and frames." },
+      { q: "Do you clean glass panels on doors?", a: "Yes, any glass panels are wiped and cleaned with glass cleaner." },
+      { q: "Will this service polish wooden doors?", a: "No, this is a cleaning service. We do not apply wood polish or varnish." },
+      { q: "How many doors are cleaned?", a: "This service is priced per door. You can select the quantity accordingly." },
+      { q: "Do you clean mesh doors?", a: "No, mesh doors require separate pricing/washing." },
+      { q: "Do you remove scratches?", a: "No, cleaning cannot repair scratches, dents or structural damage." },
+      { q: "Are sliding door tracks cleaned?", a: "Yes, we dust and wipe the accessible sliding track area." }
     ]
   },
   "fridge-clean": {
@@ -299,7 +317,12 @@ const SOFA_DETAIL_DATA = {
     faqs: [
       { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
       { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
-      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." },
+      { q: "Is external cleaning included?", a: "Yes, we clean both the interior shelves and exterior doors." },
+      { q: "Do you clean the back coils?", a: "No, we only clean interior components, shelves, trays, and exterior doors." },
+      { q: "How long does it take?", a: "The service takes approximately 1 to 1.5 hours depending on size." },
+      { q: "Do you defrost the freezer?", a: "Yes, please switch off the fridge 1 hour prior to defrost if ice buildup is high." },
+      { q: "Are details customized per fridge model?", a: "Yes, our team cleans single door, double door, and triple door refrigerators." }
     ]
   },
   "quick-balcony-upto-4ft": {
@@ -313,10 +336,18 @@ const SOFA_DETAIL_DATA = {
       "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Vikram P.", rating: "4.9", text: '"Scrubbed all the dust and dirt from the balcony floor. Very clean."' }
+      { name: "Vikram P.", rating: "4.9", text: '"Scrubbed all the dust and dirt from the balcony floor. Very clean."' },
+      { name: "Divya N.", rating: "4.8", text: '"The pigeon droppings were cleaned very neatly. Worth the price."' }
     ],
     faqs: [
-      { q: "Do you clean balcony windows?", a: "Yes, accessible balcony windows are dusted and wiped." }
+      { q: "Do you clean balcony windows?", a: "Yes, accessible balcony windows are dusted and wiped." },
+      { q: "Is roof cleaning included?", a: "No, ceiling/roof cleaning is not included in this quick package." },
+      { q: "Do you wash the railings?", a: "Yes, railings are scrubbed and wiped to remove dust." },
+      { q: "What if there is no water connection near the balcony?", a: "Our team will fetch water from the nearest bathroom or kitchen." },
+      { q: "Do you clean wall tiles in the balcony?", a: "Yes, wall tiles are wiped down to remove surface dust." },
+      { q: "Will you discard old items?", a: "No, we do not throw away trash or scrap items left in the balcony." },
+      { q: "How long does it take?", a: "It takes about 30 to 45 minutes." },
+      { q: "Do you clean mesh windows?", a: "Yes, window mesh screen dusting is included." }
     ]
   },
   "quick-balcony-above-4ft": {
@@ -331,10 +362,18 @@ const SOFA_DETAIL_DATA = {
       "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Aditi G.", rating: "4.8", text: '"Deep scrubbed the entire balcony floor and mesh screens. Perfect."' }
+      { name: "Aditi G.", rating: "4.8", text: '"Deep scrubbed the entire balcony floor and mesh screens. Perfect."' },
+      { name: "Rohan J.", rating: "4.7", text: '"Professional cleaners. Cleaned my large balcony tiles and railings nicely."' }
     ],
     faqs: [
-      { q: "Is mesh screen cleaning included?", a: "Yes, mesh screen dusting and washing is included." }
+      { q: "Is mesh screen cleaning included?", a: "Yes, mesh screen dusting and washing is included." },
+      { q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." },
+      { q: "Do you clean balcony ceilings?", a: "No, ceiling and roof cleaning is not included." },
+      { q: "How much time is required?", a: "It takes around 45 to 60 minutes for balconies above 4ft width." },
+      { q: "Do you scrub the floor with a machine?", a: "No, manual heavy-duty scrubbing brushes are used to remove stains." },
+      { q: "Are plant pots moved by the cleaners?", a: "We request customers to move heavy plant pots beforehand. Light pots can be moved by our team." },
+      { q: "Do you clean outer side of balcony walls?", a: "No, exterior walls are excluded due to safety hazards." },
+      { q: "Do you remove hard water stains from tiles?", a: "We use cleaning detergents, but very old hard water scaling might not disappear completely." }
     ]
   },
   "quick-dining-table": {
@@ -348,10 +387,18 @@ const SOFA_DETAIL_DATA = {
       "Ensure access to water and power outlets"
     ],
     reviews: [
-      { name: "Rohit P.", rating: "4.9", text: '"Very detailed cleaning of the dining chairs as well. Stains are completely gone!"' }
+      { name: "Rohit P.", rating: "4.9", text: '"Very detailed cleaning of the dining chairs as well. Stains are completely gone!"' },
+      { name: "Kunal M.", rating: "4.8", text: '"Cleaned the glass table top spotless. The wooden chairs look polished."' }
     ],
     faqs: [
-      { q: "Will this clean the table chairs too?", a: "Yes, this service covers the deep cleaning of both the dining table and the chairs." }
+      { q: "Will this clean the table chairs too?", a: "Yes, this service covers the deep cleaning of both the dining table and the chairs." },
+      { q: "Is wood polishing included?", a: "No, we perform standard cleaning and gentle wiping. Wood varnishing or professional polishing is not included." },
+      { q: "How many chairs are covered?", a: "Up to a 6-seater dining set is covered in the standard package." },
+      { q: "Will you clean table mats?", a: "No, table mats, table cloths, and runners are not cleaned." },
+      { q: "Do you clean table extensions?", a: "Yes, if the table extensions are opened by the customer before cleaning." },
+      { q: "Will you remove grease stains?", a: "Yes, food oil, grease, and sticky stains are thoroughly cleaned." },
+      { q: "Do you clean glass tabletops?", a: "Yes, glass tops are cleaned with specialized glass cleaning spray." },
+      { q: "How long does it take?", a: "The dining table and chairs cleaning takes about 30 to 40 minutes." }
     ]
   },
   "fabric-sofa-clean": {
@@ -375,7 +422,11 @@ const SOFA_DETAIL_DATA = {
       { q: "Will you clean the sofa cushions?", a: "Normal sofa seats and back cushions are covered. Separate loose/removable cushions are not included." },
       { q: "Will you remove stains?", a: "We treat common food, dust and everyday stains. Very old or permanent stains may not be completely removable." },
       { q: "Will the sofa be completely dry immediately?", a: "The team removes excess moisture, but some drying time may still be required." },
-      { q: "Do I need to provide cleaning products?", a: "No. Our team brings the required cleaning products and equipment." }
+      { q: "Do I need to provide cleaning products?", a: "No. Our team brings the required cleaning products and equipment." },
+      { q: "How long does it take?", a: "Sofa cleaning takes around 1 to 1.5 hours depending on seats." },
+      { q: "Do you clean the back side of the sofa?", a: "Yes, all accessible sides (front, back, sides, armrests) are vacuumed and cleaned." },
+      { q: "Is leather sofa covered under this?", a: "No, this is specifically for fabric sofas. Leather sofas require a different service." },
+      { q: "How often should I get this done?", a: "We recommend professional fabric sofa deep cleaning every 6 months." }
     ]
   },
   "fabric-sofa-cushion-clean": {
@@ -399,7 +450,11 @@ const SOFA_DETAIL_DATA = {
       { q: "Are loose cushions included?", a: "Yes. Loose/removable cushions belonging to the sofa are included." },
       { q: "How many cushions are included?", a: "The cushions that belong to the selected sofa are included. Extra cushions can be added separately if available." },
       { q: "Will you remove all stains?", a: "Common stains will be treated, but very old or permanent stains may not completely disappear." },
-      { q: "Can the sofa be used immediately?", a: "Some drying time may be required after cleaning." }
+      { q: "Can the sofa be used immediately?", a: "Some drying time may be required after cleaning." },
+      { q: "Do you use chemical cleaners?", a: "We use fabric-safe, mild professional cleaning shampoos." },
+      { q: "Is dry cleaning available?", a: "No, this is a shampoo extraction wet-cleaning process." },
+      { q: "Does it help remove pet odors?", a: "Yes, the deep shampooing and wet-vacuuming extracts deep dirt and helps eliminate odors." },
+      { q: "What is the typical drying time?", a: "It takes about 3 to 4 hours under a running ceiling fan to dry completely." }
     ]
   },
   "leather-sofa-clean": {
@@ -423,7 +478,11 @@ const SOFA_DETAIL_DATA = {
       { q: "Will you use shampoo on the leather sofa?", a: "No. We use products specifically suitable for leather surfaces." },
       { q: "Will you remove scratches from the leather?", a: "No. Cleaning cannot repair deep scratches, cuts or damaged leather." },
       { q: "Will you polish the leather sofa?", a: "The sofa receives a leather-safe conditioning and finishing treatment." },
-      { q: "Can you clean all types of leather?", a: "We clean commonly used finished leather surfaces. Special or delicate leather may require an additional assessment." }
+      { q: "Can you clean all types of leather?", a: "We clean commonly used finished leather surfaces. Special or delicate leather may require an additional assessment." },
+      { q: "How long does it take?", a: "It takes approximately 1 hour." },
+      { q: "Does the leather smell go away?", a: "Yes, the leather-safe cleaners help refresh the leather and reduce odors." },
+      { q: "Is loose cushions cleaning included?", a: "Loose leather cushions are not covered unless the cushion package is chosen." },
+      { q: "How long after cleaning can we sit?", a: "You can sit on it almost immediately after the conditioner dries (about 15-20 minutes)." }
     ]
   },
   "leather-sofa-cushion-clean": {
@@ -447,7 +506,11 @@ const SOFA_DETAIL_DATA = {
       { q: "Are removable leather cushions included?", a: "Yes. Loose/removable cushions belonging to the sofa are included." },
       { q: "Will you repair damaged leather?", a: "No. Cuts, cracks, peeling and other leather damage are not repairable through this cleaning service." },
       { q: "Will you use water on the leather?", a: "Only suitable amounts are used with leather-safe cleaning products." },
-      { q: "Will the leather become shiny after cleaning?", a: "The conditioning and finishing treatment gives the leather a clean and well-maintained appearance." }
+      { q: "Will the leather become shiny after cleaning?", a: "The conditioning and finishing treatment gives the leather a clean and well-maintained appearance." },
+      { q: "Do you clean suede leather?", a: "No, we only clean standard finished smooth leather. Suede and nubuck are excluded." },
+      { q: "Can I choose this for loose cushions only?", a: "No, this is an add-on package for the entire leather sofa + cushions." },
+      { q: "How long does this take?", a: "The detailed cleaning and conditioning takes about 1.5 hours." },
+      { q: "How often should leather be conditioned?", a: "We recommend conditioning your leather sofa every 6 to 12 months." }
     ]
   },
   "mattress-deep": {
@@ -471,7 +534,11 @@ const SOFA_DETAIL_DATA = {
       { q: "Will you clean the entire mattress?", a: "Yes, all accessible sides and surfaces included in the selected service will be cleaned." },
       { q: "Will you remove all stains?", a: "Common stains will be treated, but very old or permanent stains may not completely disappear." },
       { q: "Can I use the mattress immediately after cleaning?", a: "Some drying time is required before using the mattress." },
-      { q: "Do I need to remove the bedsheets?", a: "Yes, please remove bedsheets, blankets and other items before the service." }
+      { q: "Do I need to remove the bedsheets?", a: "Yes, please remove bedsheets, blankets and other items before the service." },
+      { q: "How long does it take?", a: "It takes about 1 hour per mattress." },
+      { q: "Do you sanitize the mattress?", a: "Yes, deep cleaning shampoo has mild sanitizing properties to remove germs." },
+      { q: "Will you clean both top and bottom sides?", a: "Yes, standard deep cleaning covers both main sides of the mattress." },
+      { q: "Is urine stain removal guaranteed?", a: "We treat it with deodorizer and cleaning solution, but complete stain removal depends on stain age." }
     ]
   },
   "mattress-pillow-refresh": {
@@ -495,10 +562,13 @@ const SOFA_DETAIL_DATA = {
       { q: "Are pillows included?", a: "Yes, pillows are included in this package." },
       { q: "How many pillows are included?", a: "Up to 2 standard pillows are included." },
       { q: "Will you remove difficult stains?", a: "We treat common stains, but permanent stains may not be completely removable." },
-      { q: "How long does the mattress take to dry?", a: "How long does the mattress take to dry?" }
+      { q: "How long does the mattress take to dry?", a: "Drying time depends on room ventilation, usually takes a few hours." },
+      { q: "Do you clean the pillow covers too?", a: "No, we request you to wash pillow covers separately." },
+      { q: "Can you clean extra pillows?", a: "Yes, additional pillows can be added for a small extra charge." },
+      { q: "Do you use steam?", a: "No, we use deep vacuuming and mild foam sanitization." },
+      { q: "Does this eliminate dust mites?", a: "Yes, high-power vacuuming removes dust mites and allergens from the mattress and pillows." }
     ]
-  }
-,
+  },
   "carpet-deep": {
     tools: [
       "Carpet shampoo",
@@ -518,15 +588,36 @@ const SOFA_DETAIL_DATA = {
     faqs: [
       { q: "Will you remove all stains from the carpet?", a: "We treat common food and dirt stains. Very old or permanent stains may not be completely removable." },
       { q: "How long will the carpet take to dry?", a: "Drying time depends on the carpet thickness and room ventilation, usually takes a few hours." },
-      { q: "Do I need to clear furniture before cleaning?", a: "Yes, please remove tables, chairs, and other items from the carpet before the service." }
+      { q: "Do I need to clear furniture before cleaning?", a: "Yes, please remove tables, chairs, and other items from the carpet before the service." },
+      { q: "Do you clean handmade/delicate silk carpets?", a: "No, we only clean standard synthetic, wool, and cotton carpets. Silk carpets require dry-cleaning." },
+      { q: "How long does it take?", a: "It takes about 1 hour for standard sized carpets." },
+      { q: "Do you scrub the carpet with a machine?", a: "Yes, hand-held scrubbing brushes or rotating cleaning pads are used depending on type." },
+      { q: "Will it remove pet odors?", a: "Yes, carpet shampooing helps extract dust, stains and removes pet odors." },
+      { q: "Can it shrink the carpet?", a: "No, our cleaning process and carpet shampoos prevent shrinking." }
     ]
-  }};
+  }
+};
 
 export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout }) {
   const [activeTab, setActiveTab] = useState("sofa");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [dbPackages, setDbPackages] = useState([]);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      try {
+        const res = await apiRequest("/settings/catalog/public/packages/?service_slug=sofa-cleaning");
+        if (res.success && Array.isArray(res.data)) {
+          setDbPackages(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch sofa packages:", err);
+      }
+    };
+    fetchPackages();
+  }, []);
 
   useEffect(() => {
     if (selectedServiceDetails) {
@@ -558,7 +649,68 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
 
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
 
-  const currentServicesList = activeTab === "sofa" ? SOFA_CLEANING_SERVICES : activeTab === "mattress" ? MATTRESS_SERVICES : activeTab === "carpet" ? CARPET_SERVICES : SOFA_ADDONS_SERVICES;
+  const getDynamicServices = () => {
+    let list = activeTab === "sofa" ? SOFA_CLEANING_SERVICES : activeTab === "mattress" ? MATTRESS_SERVICES : activeTab === "carpet" ? CARPET_SERVICES : SOFA_ADDONS_SERVICES;
+    list = JSON.parse(JSON.stringify(list));
+
+    if (dbPackages.length > 0) {
+      list = list.map(item => {
+        if (Array.isArray(item.subOptions)) {
+          const parentDbMatch = dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id));
+          if (parentDbMatch) {
+            item.name = parentDbMatch.name;
+            item.price = Math.round(Number(parentDbMatch.base_price) || item.price);
+            item.duration = parentDbMatch.duration || item.duration;
+            item.description = parentDbMatch.description || item.description;
+            item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
+            if (Array.isArray(parentDbMatch.tools) && parentDbMatch.tools.length > 0) item.tools = parentDbMatch.tools;
+            if (Array.isArray(parentDbMatch.ready) && parentDbMatch.ready.length > 0) item.ready = parentDbMatch.ready;
+            if (Array.isArray(parentDbMatch.reviews) && parentDbMatch.reviews.length > 0) item.reviews = parentDbMatch.reviews;
+            if (Array.isArray(parentDbMatch.faqs) && parentDbMatch.faqs.length > 0) item.faqs = parentDbMatch.faqs;
+          }
+
+          item.subOptions = item.subOptions.map(subOpt => {
+            const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
+            if (dbMatch) {
+              const updatedSub = {
+                ...subOpt,
+                name: dbMatch.name,
+                price: Math.round(Number(dbMatch.base_price) || subOpt.price),
+                duration: dbMatch.duration || subOpt.duration,
+                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : subOpt.includes,
+              };
+              if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) updatedSub.tools = dbMatch.tools;
+              if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) updatedSub.ready = dbMatch.ready;
+              if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) updatedSub.reviews = dbMatch.reviews;
+              if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) updatedSub.faqs = dbMatch.faqs;
+              return updatedSub;
+            }
+            return subOpt;
+          });
+          if (item.subOptions.length > 0) {
+            item.price = item.subOptions[0].price;
+          }
+        } else {
+          const dbMatch = dbPackages.find(p => p.slug === item.id);
+          if (dbMatch) {
+            item.name = dbMatch.name;
+            item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.duration = dbMatch.duration || item.duration;
+            item.description = dbMatch.description || item.description;
+            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
+            if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews = dbMatch.reviews;
+            if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
+          }
+        }
+        return item;
+      });
+    }
+    return list;
+  };
+
+  const currentServicesList = getDynamicServices();
 
   const activeServices = currentServicesList.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -572,18 +724,16 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
       {/* Sticky Header + Tabs */}
       <div className="sticky top-16 z-20 bg-white pb-2 shadow-sm">
         <div className="p-0 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white py-4">
-          <div>
+          <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="flex items-center gap-1 text-slate-500 hover:text-emerald-700 font-semibold mb-2 text-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
-              <ChevronLeft size={16} /> Back to Services
+              <ChevronLeft size={14} /> Back to Services
             </button>
             <h2 className="text-xl font-black text-slate-900">Sofa Cleaning</h2>
           </div>
         </div>
-
-        {/* Sub-tabs */}
         <div className="flex gap-5 pb-3 pt-2 border-b border-slate-100 justify-start">
           {SOFA_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
@@ -773,6 +923,8 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
         </div>
       </div>
 
+      <AppBannerAndFooter />
+
       {/* Details modal overlay */}
       {selectedServiceDetails && createPortal(
         <div 
@@ -846,6 +998,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 )}
               </div>
 
+
                             {/* Sub-options selector */}
               {selectedServiceDetails.subOptions && (
                 <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
@@ -890,8 +1043,9 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
               {/* Tools & Products We Use */}
               {(() => {
                 const id = selectedServiceDetails.id;
-                const detail = SOFA_DETAIL_DATA[id] || {};
-                const tools = detail.tools || [];
+                const tools = Array.isArray(selectedServiceDetails.tools)
+                  ? selectedServiceDetails.tools
+                  : (SOFA_DETAIL_DATA[id]?.tools || []);
                 if (tools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -911,8 +1065,9 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
               {/* What You Need to Keep Ready */}
               {(() => {
                 const id = selectedServiceDetails.id;
-                const detail = SOFA_DETAIL_DATA[id] || {};
-                const readyList = detail.ready || [];
+                const readyList = Array.isArray(selectedServiceDetails.ready)
+                  ? selectedServiceDetails.ready
+                  : (SOFA_DETAIL_DATA[id]?.ready || []);
                 if (readyList.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -934,8 +1089,9 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
                 {(() => {
                   const id = selectedServiceDetails.id;
-                  const detail = SOFA_DETAIL_DATA[id] || {};
-                  const reviews = detail.reviews || [];
+                  const reviews = Array.isArray(selectedServiceDetails.reviews)
+                    ? selectedServiceDetails.reviews
+                    : (SOFA_DETAIL_DATA[id]?.reviews || []);
                   return reviews.map((rev, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
                       <div className="flex items-center justify-between">
@@ -959,8 +1115,9 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 <div className="space-y-2">
                   {(() => {
                     const id = selectedServiceDetails.id;
-                    const detail = SOFA_DETAIL_DATA[id] || {};
-                    const faqs = detail.faqs || [];
+                    const faqs = Array.isArray(selectedServiceDetails.faqs)
+                      ? selectedServiceDetails.faqs
+                      : (SOFA_DETAIL_DATA[id]?.faqs || []);
                     return faqs.map((faq, idx) => {
                       const isFaqOpen = activeFaq === idx;
                       return (
