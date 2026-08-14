@@ -592,18 +592,7 @@ export function AppShell() {
         </div>
 
         <div className="flex items-center gap-6">
-          <button
-            type="button"
-            className="hidden md:flex items-center gap-3 px-5 py-2.5 bg-white dark:bg-black hover:bg-slate-50 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm text-slate-500 dark:text-white/80 hover:text-slate-900 dark:hover:text-white transition-all duration-300 w-72 group shadow-sm dark:shadow-lg dark:shadow-black/20 active:scale-[0.98]"
-            onClick={() => setCmdOpen(true)}
-          >
-            <Search size={16} className="text-blue-500 group-hover:scale-110 transition-transform" />
-            <span className="flex-1 text-left font-black tracking-tight opacity-70 group-hover:opacity-100">Quick search...</span>
-            <div className="flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-black bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-400 dark:text-white/40 group-hover:text-slate-600 dark:group-hover:text-white/60 transition-colors uppercase tracking-widest">
-              <span>⌘</span>
-              <span>K</span>
-            </div>
-          </button>
+
 
           <div className="hidden sm:flex flex-col items-center justify-center px-4 py-1.5 bg-slate-100/60 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 rounded-2xl select-none shadow-sm dark:shadow-md dark:shadow-black/20 min-w-[125px] hover:border-blue-500/30 transition-colors duration-300">
             <span className="text-xs font-extrabold font-mono tracking-tight text-slate-800 dark:text-slate-200 tabular-nums leading-none">

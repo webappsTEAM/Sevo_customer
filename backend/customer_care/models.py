@@ -226,7 +226,6 @@ class CommunicationLog(models.Model):
 class CareAgentProfile(CompanyScopedModel):
     class CareRole(models.TextChoices):
         CARE_EXECUTIVE = "care_executive", "Care Executive"
-        SENIOR_CARE = "senior_care", "Senior Care"
         OPS_MANAGER = "ops_manager", "Ops Manager"
         ADMIN = "admin", "Admin Support"
 
@@ -250,3 +249,39 @@ class CareAgentProfile(CompanyScopedModel):
 
     def __str__(self):
         return f"{self.user.username} - {self.care_role}"
+
+class MessageTemplate(models.Model):
+    name = models.CharField(max_length=100)
+    channel = models.CharField(max_length=20, choices=CommunicationLog.Channel.choices)
+    category = models.CharField(max_length=30, choices=CustomerCareTicket.Category.choices)
+    body = models.TextField() # Supports placeholders like {{customer_name}}, {{ticket_number}}
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.channel})"
+
+class CancellationRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending Approval"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        COMPLETED = "completed", "Completed"
+
+    ticket = models.ForeignKey(CustomerCareTicket, on_delete=models.CASCADE, related_name="cancellation_requests")
+    booking = models.ForeignKey("service_requests.ServiceRequest", on_delete=models.CASCADE)
+    reason = models.CharField(max_length=50) # change_of_mind, technician_no_show, duplicate, etc.
+    reason_note = models.TextField(blank=True, default="")
+    retention_offered = models.BooleanField(default=False)
+    retention_outcome = models.CharField(max_length=50, blank=True, default="")
+    refund_request = models.ForeignKey("service_requests.RefundRequest", on_delete=models.SET_NULL, null=True, blank=True)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="requested_cancellations")
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_cancellations")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Cancellation Request for {self.booking.id} - {self.status}"
+
