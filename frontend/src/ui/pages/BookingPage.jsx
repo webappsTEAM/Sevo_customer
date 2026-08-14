@@ -5617,7 +5617,7 @@ function QuickCommerceCartCheckout({
   const deliveryCharge = itemsTotal >= 199 ? 0 : 30
   const handlingCharge = itemsTotal > 0 ? 5 : 0
   const surgeCharge = 15
-  const donationAmount = isDonationChecked ? 1 : 0
+  const donationAmount = 0
   const tipAmount = selectedTip === "custom" ? (parseInt(customTip) || 0) : (selectedTip || 0)
   const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + surgeCharge + donationAmount + tipAmount)
 
@@ -5663,7 +5663,8 @@ function QuickCommerceCartCheckout({
         phone: user?.phone || "9876543210",
         service_category: "vegetables_quick_delivery",
         issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items)`,
-        description: `Quick Commerce Vegetable Order\nDelivering to: ${activeAddressObj?.address || "Hosur"}`,
+        description: `Quick Commerce Vegetable Order
+Delivering to: ${activeAddressObj?.address || "Hosur"}`,
         address: activeAddressObj?.address || "Hosur, Tamil Nadu",
         preferred_date: today,
         total_amount: grandTotal,
@@ -5682,7 +5683,6 @@ function QuickCommerceCartCheckout({
       try {
         res = await apiRequest("/booking/", { method: "POST", data: payload })
       } catch (e) {
-        // Fallback response for rapid mock checkout
         res = { success: true, request_id: `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}` }
       }
 
@@ -5700,84 +5700,32 @@ function QuickCommerceCartCheckout({
     }
   }
 
-  if (orderConfirmedData) {
-    return (
-      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-4">
-        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-xl border border-slate-100 text-center animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-600/30">
-            <CheckCircle2 className="w-9 h-9" />
-          </div>
-          <h3 className="text-2xl font-black text-slate-900 mb-1">Order Confirmed!</h3>
-          <p className="text-xs text-slate-500 font-semibold mb-6">
-            Order ID: <span className="text-emerald-700 font-bold">{orderConfirmedData.requestId}</span>
-          </p>
-
-          <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 text-left space-y-2 mb-6">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-bold">Estimated Delivery:</span>
-              <span className="text-emerald-800 font-extrabold flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                {orderConfirmedData.eta}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-bold">Items Count:</span>
-              <span className="text-slate-800 font-bold">{orderConfirmedData.itemsCount} items</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-bold">Total (Cash on Delivery):</span>
-              <span className="text-slate-900 font-black text-sm">₹{orderConfirmedData.total}</span>
-            </div>
-            <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-slate-600">
-              <span className="font-bold text-slate-700">Delivering to: </span>
-              {orderConfirmedData.address}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (onBack) {
-                onBack()
-              } else {
-                window.location.href = "/home"
-              }
-            }}
-            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer"
-          >
-            Back to Home
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // Address Selection View (Image 3)
+  // Address Selection View
   if (isAddressScreenOpen) {
     return (
-      <div className="min-h-screen bg-[#f3f5f8] text-slate-800 flex justify-center py-4 px-2 sm:px-4 font-sans">
-        <div className="max-w-md w-full bg-[#f8fafc] min-h-screen shadow-lg rounded-2xl flex flex-col justify-between overflow-hidden border border-slate-200/80">
+      <div className="min-h-screen bg-slate-50 text-slate-800 flex justify-center py-4 px-2 sm:px-4 font-sans">
+        <div className="max-w-md w-full bg-[#f8fafc] min-h-screen shadow-2xl rounded-3xl flex flex-col justify-between overflow-hidden border border-slate-100">
           <div>
             {/* Header */}
-            <div className="bg-white px-4 py-3.5 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-20">
+            <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-20">
               <button
                 type="button"
                 onClick={() => setIsAddressScreenOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 cursor-pointer"
+                className="w-8 h-8 rounded-full hover:bg-slate-50 flex items-center justify-center text-slate-700 transition-colors cursor-pointer border border-transparent hover:border-slate-100"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <h2 className="text-base font-extrabold text-slate-900">Select delivery address</h2>
+              <h2 className="text-base font-bold text-slate-900">Select Delivery Address</h2>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-5 space-y-4">
               {/* Add a new address button */}
               <button
                 type="button"
                 onClick={() => setShowAddAddressModal(true)}
-                className="w-full bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex items-center gap-3 text-emerald-700 hover:border-emerald-500 font-extrabold text-sm transition-all cursor-pointer"
+                className="w-full bg-white rounded-2xl p-4 border border-slate-200 hover:border-slate-350 shadow-2xs flex items-center gap-3 text-slate-700 hover:text-slate-900 font-extrabold text-sm transition-all cursor-pointer"
               >
-                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black">
+                <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-black">
                   <Plus className="w-4 h-4" />
                 </div>
                 <span>Add a new address</span>
@@ -5785,8 +5733,8 @@ function QuickCommerceCartCheckout({
 
               {/* Your saved address Section */}
               <div>
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 px-1">
-                  Your saved address
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">
+                  Saved Addresses
                 </h3>
                 <div className="space-y-3">
                   {savedAddresses.map((addr) => {
@@ -5798,22 +5746,24 @@ function QuickCommerceCartCheckout({
                           setSelectedAddressId(addr.id)
                           setIsAddressScreenOpen(false)
                         }}
-                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-xs ${isSelected ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200/90 hover:border-slate-300"
+                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-2xs ${isSelected
+                          ? "border-emerald-600 ring-2 ring-emerald-500/10 bg-emerald-50/10"
+                          : "border-slate-200/80 hover:border-slate-300"
                           }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                          <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 flex items-center justify-center shrink-0 mt-0.5 shadow-3xs">
                             {addr.type.toLowerCase() === "work" ? (
-                              <Users className="w-5 h-5" />
+                              <Users className="w-4 h-4" />
                             ) : (
-                              <Home className="w-5 h-5" />
+                              <Home className="w-4 h-4" />
                             )}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-extrabold text-slate-900">{addr.type}</h4>
+                              <h4 className="text-sm font-bold text-slate-800">{addr.type}</h4>
                               {isSelected && (
-                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                   SELECTED
                                 </span>
                               )}
@@ -5831,9 +5781,9 @@ function QuickCommerceCartCheckout({
                             setNewAddressType(addr.type)
                             setShowAddAddressModal(true)
                           }}
-                          className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-emerald-700 transition-colors shrink-0"
+                          className="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors shrink-0 border border-slate-100"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
@@ -5847,24 +5797,26 @@ function QuickCommerceCartCheckout({
 
           {/* Add Address Modal */}
           {showAddAddressModal && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-extrabold text-slate-900">Add Address in Hosur</h3>
-                  <button onClick={() => setShowAddAddressModal(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+            <div className="fixed inset-0 z-50 bg-slate-955/40 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-base font-bold text-slate-900">Add Address in Hosur</h3>
+                  <button onClick={() => setShowAddAddressModal(false)} className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center border border-slate-100 text-slate-400 transition-colors">
                     <X className="w-4 h-4 text-slate-600" />
                   </button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Save Address as</label>
+                    <label className="block text-xs font-bold text-slate-505 uppercase tracking-wider mb-2">Save Address as</label>
                     <div className="flex gap-2">
                       {["Home", "Work", "Other"].map(t => (
                         <button
                           key={t}
                           type="button"
                           onClick={() => setNewAddressType(t)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${newAddressType === t ? "bg-emerald-600 text-white border-emerald-600" : "bg-slate-50 text-slate-700 border-slate-200"
+                          className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${newAddressType === t
+                            ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
+                            : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100/60"
                             }`}
                         >
                           {t}
@@ -5873,19 +5825,19 @@ function QuickCommerceCartCheckout({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Complete Address</label>
+                    <label className="block text-xs font-bold text-slate-505 uppercase tracking-wider mb-2">Complete Address</label>
                     <textarea
                       rows={3}
                       value={newAddressText}
                       onChange={(e) => setNewAddressText(e.target.value)}
                       placeholder="House/Flat No., Building, Street, Area, Hosur..."
-                      className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-emerald-600"
+                      className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={handleAddNewAddress}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md cursor-pointer transition-all"
+                    className="w-full py-3 bg-slate-900 hover:bg-slate-950 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all active:scale-98"
                   >
                     Save &amp; Select Address
                   </button>
@@ -5898,24 +5850,24 @@ function QuickCommerceCartCheckout({
     )
   }
 
-  // Main "My Cart" View (Image 2 & Image 4)
+  // Main "My Cart" View
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-800 flex justify-center py-0 sm:py-8 px-0 sm:px-4 font-sans">
-      <div className="max-w-md sm:max-w-xl md:max-w-2xl w-full bg-white sm:rounded-3xl shadow-xl border border-slate-200/80 flex flex-col justify-between overflow-hidden">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex justify-center py-0 sm:py-8 px-0 sm:px-4 font-sans">
+      <div className="max-w-md sm:max-w-xl md:max-w-2xl w-full bg-white sm:rounded-3xl shadow-2xl border border-slate-100 flex flex-col justify-between overflow-hidden">
         <div>
           {/* Header */}
-          <div className="bg-white/95 backdrop-blur-md px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
+          <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={onBack}
-                className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+                className="w-9 h-9 rounded-full hover:bg-slate-105 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-lg sm:text-xl font-black text-slate-900 leading-none">My Cart</h1>
-                <span className="text-[11px] font-semibold text-slate-400">Hosur Express Delivery</span>
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-none">My Cart</h1>
+                <span className="text-[11px] font-semibold text-slate-400 mt-0.5 block">Hosur Express Delivery</span>
               </div>
             </div>
             <button
@@ -5925,37 +5877,40 @@ function QuickCommerceCartCheckout({
                   navigator.share({ title: "My Vegetables Cart", url: window.location.href }).catch(() => { })
                 }
               }}
-              className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 cursor-pointer bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200/60 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-650 hover:text-slate-900 border border-slate-200/80 bg-white hover:bg-slate-50 px-3.5 py-2 rounded-xl transition-all shadow-3xs cursor-pointer active:scale-98"
             >
-              <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
+              <ShoppingCart className="w-3.5 h-3.5 text-slate-500" />
               <span>Share Cart</span>
             </button>
           </div>
 
-          <div className="p-4 sm:p-6 space-y-4 bg-slate-50/50">
-            {/* Delivery Time Banner (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/70 flex items-center justify-center shrink-0 shadow-2xs">
-                <Clock className="w-6 h-6 text-amber-600 stroke-[2.5]" />
+          <div className="p-5 sm:p-6 space-y-4 bg-slate-50/30">
+            {/* Delivery Time Banner */}
+            <div className="bg-gradient-to-r from-emerald-50/60 to-emerald-50/20 rounded-2xl p-4 border border-emerald-100 flex items-center gap-4 shadow-3xs border-l-4 border-l-emerald-600">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center shrink-0 shadow-3xs">
+                <Clock className="w-5 h-5 stroke-[2.5]" />
               </div>
               <div>
-                <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Delivery in 15 minutes</h3>
-                <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                  Shipment of {cart.reduce((a, b) => a + (b.quantity || 1), 0)} farm-fresh items
+                <h3 className="text-sm font-bold text-slate-955 flex items-center gap-1.5">
+                  Priority Express Delivery
+                  <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Active</span>
+                </h3>
+                <p className="text-xs text-slate-600 font-medium mt-0.5">
+                  Arriving in <span className="font-bold text-emerald-800">15 minutes</span> • {cart.reduce((a, b) => a + (b.quantity || 1), 0)} fresh items
                 </p>
               </div>
             </div>
 
-            {/* Cart Items List (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs divide-y divide-slate-100 space-y-3.5">
+            {/* Cart Items List */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs divide-y divide-slate-100 space-y-4">
               {cart.map((item, idx) => (
-                <div key={item.id || idx} className={`flex items-center justify-between gap-3.5 ${idx > 0 ? "pt-3.5" : ""}`}>
+                <div key={item.id || idx} className={`flex items-center justify-between gap-3.5 ${idx > 0 ? "pt-4" : ""}`}>
                   {/* Left: Product Thumbnail */}
-                  <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#f5f1eb] overflow-hidden shrink-0 border border-slate-100 shadow-2xs">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-50 overflow-hidden shrink-0 border border-slate-100 shadow-3xs">
                     <img
                       src={item.image || "/mockups/category_food_health.png"}
                       alt={item.name}
-                      className="w-full h-full object-cover hover:scale-105 transition-transform"
+                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-350"
                       onError={(e) => {
                         e.target.onerror = null
                         e.target.src = "/mockups/category_food_health.png"
@@ -5965,36 +5920,36 @@ function QuickCommerceCartCheckout({
 
                   {/* Middle: Details */}
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-1">
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-805 line-clamp-1 leading-snug">
                       {item.displayName || item.name}
                     </h4>
                     <p className="text-[11px] font-semibold text-slate-400 mt-0.5">{item.unit || "1 unit"}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-sm font-black text-slate-900">₹{item.price}</span>
                       {item.mrp && (
-                        <span className="text-xs line-through text-slate-400 font-semibold">
+                        <span className="text-xs line-through text-slate-400 font-medium">
                           ₹{item.mrp}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Right: Counter Button (Green style matching Image 2 & 4) */}
-                  <div className="flex items-center bg-[#15803d] hover:bg-[#166534] text-white rounded-xl px-2.5 py-1.5 shadow-xs shrink-0 transition-colors">
+                  {/* Right: Counter Button */}
+                  <div className="flex items-center bg-white border border-slate-200/80 hover:border-slate-350 rounded-xl px-1 py-1 shadow-3xs shrink-0 transition-all">
                     <button
                       type="button"
                       onClick={() => handleUpdateQty(item.id, -1)}
-                      className="text-white hover:text-emerald-100 font-black text-sm px-1.5 cursor-pointer"
+                      className="w-6 h-6 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center font-bold text-xs cursor-pointer transition-colors"
                     >
                       -
                     </button>
-                    <span className="text-xs font-black min-w-[18px] text-center px-1">
+                    <span className="text-xs font-bold min-w-[20px] text-center text-slate-800">
                       {item.quantity || 1}
                     </span>
                     <button
                       type="button"
                       onClick={() => handleUpdateQty(item.id, 1)}
-                      className="text-white hover:text-emerald-100 font-black text-sm px-1.5 cursor-pointer"
+                      className="w-6 h-6 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 flex items-center justify-center font-bold text-xs cursor-pointer transition-colors"
                     >
                       +
                     </button>
@@ -6003,16 +5958,16 @@ function QuickCommerceCartCheckout({
               ))}
             </div>
 
-            {/* Bill Details Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-3">
-              <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Bill details</h3>
+            {/* Bill Details Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-4">
+              <h3 className="text-sm font-bold text-slate-900 tracking-tight pb-1 border-b border-slate-50">Bill Details</h3>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-650">
                 <div className="flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-slate-400" />
                   <span>Items total</span>
                   {savings > 0 && (
-                    <span className="text-[10px] font-black bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">
+                    <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-100/60">
                       Saved ₹{savings}
                     </span>
                   )}
@@ -6025,77 +5980,55 @@ function QuickCommerceCartCheckout({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Truck className="w-4 h-4 text-slate-400" />
                   <span>Delivery charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
-                <span className={`font-bold ${deliveryCharge === 0 ? "text-emerald-700" : "text-slate-900"}`}>
+                <span className={`font-bold ${deliveryCharge === 0 ? "text-emerald-600" : "text-slate-900"}`}>
                   {deliveryCharge === 0 ? "FREE" : `₹${deliveryCharge}`}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Package className="w-4 h-4 text-slate-400" />
                   <span>Handling charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
                 <span className="font-bold text-slate-900">₹{handlingCharge}</span>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Droplets className="w-4 h-4 text-slate-400" />
                   <span>Rain surge / High demand charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
                 <span className="font-bold text-slate-900">₹{surgeCharge}</span>
               </div>
 
-              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-sm sm:text-base font-extrabold text-slate-900">Grand total</span>
-                <span className="text-base sm:text-lg font-black text-slate-900">₹{grandTotal}</span>
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-900">Grand Total</span>
+                <span className="text-base font-black text-slate-900">₹{grandTotal}</span>
               </div>
             </div>
 
-            {/* Feeding India Donation Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
-                  <span className="text-lg">🍲</span>
-                </div>
-                <div>
-                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900">Feeding India donation</h4>
-                  <p className="text-[11px] text-slate-500 font-medium mt-0.5 line-clamp-1">
-                    Working towards a malnutrition free India.
-                  </p>
-                </div>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer shrink-0">
-                <span className="text-xs font-black text-slate-900">₹1</span>
-                <input
-                  type="checkbox"
-                  checked={isDonationChecked}
-                  onChange={(e) => setIsDonationChecked(e.target.checked)}
-                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                />
-              </label>
-            </div>
+            {/* (Donation box removed) */}
 
-            {/* Tip Your Delivery Partner Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-2.5">
-              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">Tip your delivery partner</h3>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
-                Your kindness means a lot! 100% of your tip will go directly to your delivery partner.
+            {/* Tip Your Delivery Partner Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-3">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900">Support your delivery partner</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-relaxed">
+                Add a tip to show appreciation. 100% of the tip goes directly to your rider.
               </p>
               <div className="grid grid-cols-4 gap-2 pt-1">
                 {[
-                  { label: "₹20", val: 20, icon: "👏" },
-                  { label: "₹30", val: 30, icon: "💌" },
-                  { label: "₹50", val: 50, icon: "❤️" },
-                  { label: "Custom", val: "custom", icon: "✨" },
+                  { label: "₹20", val: 20, desc: "Say Thanks" },
+                  { label: "₹30", val: 30, desc: "Buy a Chai" },
+                  { label: "₹50", val: 50, desc: "Show Love" },
+                  { label: "Custom", val: "custom", desc: "Other" },
                 ].map((t) => {
                   const isSelected = selectedTip === t.val
                   return (
@@ -6111,13 +6044,13 @@ function QuickCommerceCartCheckout({
                           setIsCustomTipOpen(t.val === "custom")
                         }
                       }}
-                      className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${isSelected
-                        ? "bg-emerald-50 border-emerald-600 text-emerald-800 shadow-2xs"
-                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
+                      className={`py-3 px-2 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 active:scale-95 ${isSelected
+                        ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
+                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700 hover:border-slate-350"
                         }`}
                     >
-                      <span>{t.icon}</span>
-                      <span>{t.label}</span>
+                      <span className="text-sm font-bold">{t.label}</span>
+                      <span className="text-[9px] font-semibold text-slate-405">{t.desc}</span>
                     </button>
                   )
                 })}
@@ -6129,35 +6062,35 @@ function QuickCommerceCartCheckout({
                     value={customTip}
                     onChange={(e) => setCustomTip(e.target.value)}
                     placeholder="Enter custom tip amount (₹)"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-600"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
                   />
                 </div>
               )}
             </div>
 
-            {/* Cancellation Policy Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-1">
-              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">Cancellation Policy</h3>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-relaxed">
+            {/* Cancellation Policy Card */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5 space-y-1.5 shadow-3xs">
+              <h3 className="text-xs font-bold text-slate-800">Cancellation Policy</h3>
+              <p className="text-[10px] sm:text-xs text-slate-550 font-semibold leading-relaxed">
                 Orders cannot be cancelled once packed for delivery. In case of unexpected delays, a refund will be provided, if applicable.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Delivering to Home & Sticky Bottom Checkout Bar (Image 2 & 4) */}
-        <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 sm:p-5 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] z-30 space-y-3">
+        {/* Delivering to Home & Sticky Bottom Checkout Bar */}
+        <div className="sticky bottom-0 bg-white/90 backdrop-blur-lg border-t border-slate-100 p-4 sm:p-5 shadow-[0_-12px_24px_rgba(0,0,0,0.04)] z-30 space-y-4">
           {/* Delivering to Home Address Bar */}
           <div className="flex items-center justify-between gap-3 text-xs sm:text-sm">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
+              <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center shrink-0 border border-slate-100 shadow-3xs">
                 <MapPin className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <span className="font-extrabold text-slate-900 block leading-tight">
+                <span className="font-bold text-slate-800 block leading-tight">
                   Delivering to {activeAddressObj?.type || "Home"}
                 </span>
-                <p className="text-[11px] text-slate-500 font-medium truncate max-w-[220px] sm:max-w-[340px]">
+                <p className="text-[11px] text-slate-400 font-semibold truncate max-w-[220px] sm:max-w-[340px] mt-0.5">
                   {activeAddressObj?.address || "Hosur, Tamil Nadu"}
                 </p>
               </div>
@@ -6165,7 +6098,7 @@ function QuickCommerceCartCheckout({
             <button
               type="button"
               onClick={() => setIsAddressScreenOpen(true)}
-              className="text-xs sm:text-sm font-extrabold text-emerald-700 hover:text-emerald-800 hover:underline shrink-0 cursor-pointer"
+              className="text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95"
             >
               Change
             </button>
@@ -6180,15 +6113,15 @@ function QuickCommerceCartCheckout({
             type="button"
             disabled={isSubmitting || cart.length === 0}
             onClick={handleProceedToPay}
-            className="w-full bg-[#15803d] hover:bg-[#166534] disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-emerald-700/20 cursor-pointer active:scale-98 transition-all"
+            className="w-full bg-slate-900 hover:bg-slate-950 disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-slate-955/20 cursor-pointer active:scale-98 transition-all duration-200"
           >
             <div className="text-left flex flex-col">
-              <span className="text-base sm:text-lg font-black leading-none">₹{grandTotal}</span>
-              <span className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider mt-0.5">TOTAL</span>
+              <span className="text-base sm:text-lg font-black text-white leading-none">₹{grandTotal}</span>
+              <span className="text-[9px] font-black text-emerald-450 uppercase tracking-widest mt-1">TOTAL AMOUNT</span>
             </div>
-            <div className="flex items-center gap-2 font-black">
-              <span>{isSubmitting ? "Placing Order..." : "Proceed To Pay"}</span>
-              <ChevronRight className="w-5 h-5" />
+            <div className="flex items-center gap-1.5 font-bold text-emerald-455 hover:text-white transition-colors">
+              <span className="text-white">{isSubmitting ? "Placing Order..." : "Proceed to Pay"}</span>
+              <ChevronRight className="w-5 h-5 text-emerald-450" />
             </div>
           </button>
         </div>
@@ -17807,7 +17740,7 @@ const APPLIANCE_SERVICES = [
     options: "3 options",
     duration: "1.5 hrs",
     description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
-    image: "/mockups/appliance_cleaning_hero.png",
+    image: "/mockups/appliance_cleaning_thumb.png",
     includes: [
       "Interior & exterior cleaning",
       "Shelves, trays & compartments cleaning",
@@ -17838,7 +17771,7 @@ const APPLIANCE_SERVICES = [
         price: 799,
         rating: "4.80",
         reviews: "9K reviews",
-        image: "/mockups/appliance_cleaning_hero.png",
+        image: "/mockups/appliance_cleaning_thumb.png",
         duration: "2 hrs"
       }
     ]
@@ -17851,7 +17784,7 @@ const APPLIANCE_SERVICES = [
     price: 199,
     duration: "15 mins",
     description: "Complete interior grease removal and sanitization of turntable.",
-    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
+    image: "/mockups/microwave_clean.png",
     includes: [
       "Interior & exterior cleaning",
       "Turntable & glass door cleaning",
@@ -17866,7 +17799,7 @@ const APPLIANCE_SERVICES = [
     price: 399,
     duration: "45 mins",
     description: "Deep filter degreasing and external hood surface cleaning.",
-    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    image: "/mockups/chimney_clean.png",
     includes: [
       "Filter & exterior cleaning",
       "Grease & oil buildup removal",
@@ -17881,7 +17814,7 @@ const APPLIANCE_SERVICES = [
     price: 499,
     duration: "1 hr 10 mins",
     description: "Combined steam deep cleaning of kitchen chimney and gas stove.",
-    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    image: "/mockups/chimney_stove_clean.png",
     includes: [
       "Stovetops, burners, mesh & filter cleaning with steam",
       "Includes motor cleaning, repair & automatic chimney cleaning"
@@ -17896,7 +17829,7 @@ const APPLIANCE_SERVICES = [
     options: "3 options",
     duration: "45 mins",
     description: "Surface cleaning of gas stove burners and knobs to remove grease.",
-    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
+    image: "/mockups/gas_stove_clean.png",
     includes: [
       "Stove / hob surface cleaning",
       "Burner & knob cleaning",
@@ -17909,7 +17842,7 @@ const APPLIANCE_SERVICES = [
         price: 99,
         rating: "4.81",
         reviews: "30K reviews",
-        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        image: "/mockups/gas_stove_clean.png",
         duration: "30 mins"
       },
       {
@@ -17918,7 +17851,7 @@ const APPLIANCE_SERVICES = [
         price: 149,
         rating: "4.79",
         reviews: "15K reviews",
-        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        image: "/mockups/gas_stove_clean.png",
         duration: "45 mins"
       },
       {
@@ -17927,7 +17860,7 @@ const APPLIANCE_SERVICES = [
         price: 199,
         rating: "4.78",
         reviews: "15K reviews",
-        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        image: "/mockups/gas_stove_clean.png",
         duration: "1 hr"
       }
     ]
@@ -17938,7 +17871,7 @@ const APPLIANCE_SERVICES = [
     price: 599,
     duration: "1 hr",
     description: "Thorough interior rack wash and food debris clearing.",
-    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
+    image: "/mockups/dishwasher_clean.png",
     includes: [
       "Interior & exterior cleaning",
       "Filter, racks & tray cleaning",
@@ -17953,7 +17886,7 @@ const APPLIANCE_SERVICES = [
     price: 199,
     duration: "30 mins",
     description: "Air fryer interior wet wipe and tray wash.",
-    image: "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?w=600&q=80&fit=crop",
+    image: "/mockups/air_fryer_clean.png",
     includes: [
       "Wet wiping of interior to remove oil stains & odour",
       "Cleaning of tray to remove food spills"
@@ -17967,7 +17900,7 @@ const APPLIANCE_SERVICES = [
     price: 399,
     duration: "50 mins",
     description: "Oven interior crumb removal and grease wipe down.",
-    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=600&q=80&fit=crop",
+    image: "/mockups/otg_clean.png",
     includes: [
       "Cleaning of interior to remove food crumbs & spills",
       "Exterior & back panel cleaning to remove oil & grease"
@@ -17996,7 +17929,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 129,
     duration: "20 mins",
     description: "Deep scrubbing of sink and under-sink sanitization.",
-    image: "/mockups/drain_clean.png",
+    image: "/mockups/washbasin.png",
     includes: [
       "Deep scrub & sanitization of kitchen sink",
       "Wiping and disinfecting under-sink area",
@@ -18009,7 +17942,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Detailed glass panel and frame grease cleaning.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
     includes: [
       "Glass panes dusting and wet wiping",
       "Window frames, sill, and tracks cleaning",
@@ -18022,7 +17955,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 449,
     duration: "30 mins",
     description: "Detailed dining table surface cleaning and grease removal.",
-    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1577140917170-285929fb55b7?w=300&q=80&fit=crop",
     includes: [
       "Surface cleaning & sanitation",
       "Removal of food stains & greasy layers",
@@ -18035,7 +17968,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 89,
     duration: "30 mins",
     description: "Detailed ceiling fan dusting and blade wipe down.",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+    image: "/mockups/ceiling_fan.png",
     includes: [
       "Fan blade cleaning",
       "Motor housing & cover dusting",
@@ -18048,7 +17981,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 99,
     duration: "30 mins",
     description: "Kitchen exhaust fan degreasing and grill dusting.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    image: "/mockups/exhaust_fan.png",
     includes: [
       "Exhaust fan blades cleaning",
       "Fan cover / grill cleaning",
@@ -18061,7 +17994,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Washing and scrubbing of balcony floor and railings.",
-    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop",
     includes: [
       "Balcony floor washing & scrubbing",
       "Dusting of railing and windows",
@@ -18074,7 +18007,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 549,
     duration: "50 mins",
     description: "Deep floor scrubbing and mesh cleaning for large balconies.",
-    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=300&q=80&fit=crop",
     includes: [
       "Deep floor scrubbing & balcony washing",
       "Railing, windows, and mesh cleaning",

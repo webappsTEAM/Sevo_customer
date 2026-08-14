@@ -75,6 +75,11 @@ def _apply_updates(instance, data, entity_type, actor, reason=None, version_fiel
 
     if changed_fields:
         instance.save()
+        try:
+            from django.core.cache import cache
+            cache.clear()
+        except Exception:
+            pass
     return instance
 
 
@@ -120,6 +125,11 @@ def create_package(data, actor):
     package = Package.objects.create(**data)
     _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.CREATE, actor)
     try:
+        from django.core.cache import cache
+        cache.clear()
+    except Exception:
+        pass
+    try:
         from logistics.models import ServiceTier, LogisticsCategory
         svc_slug = getattr(package.service, "slug", "").lower()
         cat_enum = None
@@ -141,6 +151,7 @@ def create_package(data, actor):
                     "description": package.description or "",
                     "city": "hosur",
                     "is_active": (package.status == "ACTIVE"),
+                    "duration": package.duration or "",
                 }
             )
     except Exception:
@@ -181,6 +192,9 @@ def update_package(package, data, actor, reason=None):
             if pkg.includes is not None and tier.includes != pkg.includes:
                 tier.includes = pkg.includes
                 fields_to_update.append("includes")
+            if pkg.duration is not None and tier.duration != pkg.duration:
+                tier.duration = pkg.duration
+                fields_to_update.append("duration")
             if fields_to_update:
                 tier.save(update_fields=fields_to_update)
     except Exception:
@@ -201,6 +215,11 @@ def transition_package_status(package, new_status, actor, reason=None):
         })
     package.status = new_status
     package.save(update_fields=["status", "updated_at"])
+    try:
+        from django.core.cache import cache
+        cache.clear()
+    except Exception:
+        pass
     _log(CatalogChangeLog.EntityType.PACKAGE, package.pk, package.name, CatalogChangeLog.Action.STATUS_CHANGE, actor,
          field_name="status", old_value=current, new_value=new_status, reason=reason)
     try:

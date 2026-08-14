@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 
 import {
   apiLogin,
+  apiVerify2FA,
   apiFetchMe,
   apiRegister,
   apiGoogleLogin,
@@ -80,8 +81,19 @@ export function AuthProvider({ children }) {
   // ── Login ─────────────────────────────────────────────────────────────────
   const login = useCallback(
     async (identifier, password) => {
-      await apiLogin(identifier, password)   // server sets cookies
-      return await refreshMe()                      // fetch user from /auth/me/
+      const res = await apiLogin(identifier, password)
+      // If 2FA is required, cookies are withheld — signal to UI to show TOTP step
+      if (res?.requires_2fa) return { requires2FA: true }
+      return await refreshMe()  // fetch user from /auth/me/
+    },
+    [refreshMe]
+  )
+
+  // ── 2FA Verification ──────────────────────────────────────────────────────
+  const verify2FA = useCallback(
+    async (code) => {
+      await apiVerify2FA(code)  // server sets cookies on success
+      return await refreshMe()  // fetch user from /auth/me/
     },
     [refreshMe]
   )
@@ -187,8 +199,8 @@ export function AuthProvider({ children }) {
 
   // ── Context value ─────────────────────────────────────────────────────────
   const value = useMemo(
-    () => ({ isReady, user, login, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe }),
-    [isReady, user, login, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe]
+    () => ({ isReady, user, login, verify2FA, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe }),
+    [isReady, user, login, verify2FA, register, loginWithGoogle, loginWithCustomerGoogle, logout, refreshMe]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
