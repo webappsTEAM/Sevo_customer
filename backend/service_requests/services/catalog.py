@@ -238,6 +238,20 @@ def transition_package_status(package, new_status, actor, reason=None):
     return package
 
 
+def delete_package(package):
+    try:
+        from logistics.models import ServiceTier
+        ServiceTier.objects.filter(slug=package.slug).delete()
+    except Exception:
+        pass
+    try:
+        from django.core.cache import cache
+        cache.clear()
+    except Exception:
+        pass
+    package.delete()
+
+
 # ── AddOn ─────────────────────────────────────────────────────────────────
 
 def create_addon(data, actor):

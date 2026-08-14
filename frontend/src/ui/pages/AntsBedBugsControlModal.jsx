@@ -392,7 +392,15 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
         <div className="flex-1 space-y-8">
           
           {activeTab === "bedbugs" && (
-            <div className="space-y-4">
+            <>
+              <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-100">
+                <img
+                  src="/mockups/ants_bedbugs_header.jpg"
+                  alt="Bed Bugs Control Services"
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
+              <div className="space-y-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Bed Bugs Control</h3>
@@ -479,10 +487,18 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                 ))}
               </div>
             </div>
-          )}
+          </>
+        )}
 
           {activeTab === "ants" && (
             <>
+              <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-100">
+                <img
+                  src="/mockups/ants_bedbugs_header.jpg"
+                  alt="Ants Control Services"
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
               {/* 1. Kitchen/Bathroom Section */}
               {filteredAntsKB.length > 0 && (
                 <div className="space-y-4">

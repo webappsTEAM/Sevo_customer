@@ -82,8 +82,8 @@ const BATHROOM_SERVICES = {
       description: "Not covered in standard bathroom services.",
       rating: "4.83",
       reviews: "616K reviews",
-      price: 99,
-      duration: "10 mins",
+      price: 89,
+      duration: "15 mins",
       image: "/mockups/ceiling_fan.png",
       includes: [
         "Ceiling fan dusting and blade wipe"

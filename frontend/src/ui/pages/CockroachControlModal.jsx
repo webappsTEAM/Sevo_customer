@@ -489,6 +489,13 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
           
           {activeTab === "cockroach" && (
             <>
+              <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-100">
+                <img
+                  src="/mockups/pest_control_header.jpg"
+                  alt="Cockroach Control Services"
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
               {/* 1. Kitchen/Bathroom Section */}
               {filteredKB.length > 0 && (
                 <div className="space-y-4">
@@ -639,6 +646,13 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
           {activeTab === "termite" && (
             <>
+              <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-100">
+                <img
+                  src="/mockups/pest_control_header.jpg"
+                  alt="Termite Control Services"
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
               {/* 1. Termite Kitchen/Bathroom Section */}
               {filteredTermiteKB.length > 0 && (
                 <div className="space-y-4">

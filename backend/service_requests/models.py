@@ -683,10 +683,10 @@ class Package(models.Model):
     updated_at     = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["service__category__sort_order", "service__name", "name"]
+        ordering = ["name"]
 
     def __str__(self):
-        return f"{self.service.category.name} / {self.service.name} / {self.name}"
+        return self.name
 
 
 class AddOn(models.Model):

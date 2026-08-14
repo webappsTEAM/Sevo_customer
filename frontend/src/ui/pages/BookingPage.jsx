@@ -17777,7 +17777,7 @@ const APPLIANCE_SERVICES = [
     ]
   },
   {
-    id: "microwave-clean",
+    id: "kitchen-microwave-clean",
     name: "Microwave cleaning",
     rating: "4.82",
     reviews: "37K reviews",
@@ -17966,7 +17966,7 @@ const QUICK_EXTRA_SERVICES = [
     id: "quick-fan-clean",
     name: "Ceiling Fan Cleaning",
     price: 89,
-    duration: "30 mins",
+    duration: "15 mins",
     description: "Detailed ceiling fan dusting and blade wipe down.",
     image: "/mockups/ceiling_fan.png",
     includes: [
@@ -18283,7 +18283,7 @@ const SERVICE_DETAIL_DATA = {
       { q: "Will this clean stuck cheese?", a: "Yes, we use safe scrapers and warm chemical wipes to dissolve and remove cheese and char residues." }
     ]
   },
-  "microwave-clean": {
+  "kitchen-microwave-clean": {
     tools: [
       "Appliance-safe cleaning products",
       "Microfiber cloths",
@@ -18838,6 +18838,61 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
     else if (activeTab === "addons") list = JSON.parse(JSON.stringify(QUICK_EXTRA_SERVICES));
 
     if (dbPackages.length > 0) {
+      const staticSlugs = new Set([
+        ...FULL_KITCHEN_PACKAGES.map(i => i.id),
+        ...FULL_KITCHEN_PACKAGES.flatMap(i => i.subOptions ? i.subOptions.map(s => s.id) : []),
+        ...APPLIANCE_SERVICES.map(i => i.id),
+        ...APPLIANCE_SERVICES.flatMap(i => i.subOptions ? i.subOptions.map(s => s.id) : []),
+        ...CABINET_TILE_SERVICES.map(i => i.id),
+        ...QUICK_EXTRA_SERVICES.map(i => i.id),
+      ]);
+      const extraPkgs = dbPackages.filter(p => !staticSlugs.has(p.slug));
+
+      const matchesTab = (slug) => {
+        if (activeTab === "appliance") {
+          return slug.startsWith("appliance-") || slug.startsWith("app-") ||
+                 slug.includes("fridge") || slug.includes("microwave") || slug.includes("chimney") ||
+                 slug.includes("stove") || slug.includes("dishwasher") || slug.includes("air-fryer") ||
+                 slug.includes("otg") || slug.includes("sandwich");
+        }
+        if (activeTab === "cabinet_tile") {
+          return slug.startsWith("kitchen-") || slug.startsWith("cabinet-") || slug.startsWith("tile-") || slug.startsWith("care-");
+        }
+        if (activeTab === "addons") {
+          return slug.startsWith("quick-") || slug.startsWith("sink-") || slug.startsWith("dining-") ||
+                 slug.startsWith("fan-") || slug.startsWith("balcony-") || slug.startsWith("door-") || slug.startsWith("addon-");
+        }
+        if (activeTab === "packages") {
+          const matchesOther = slug.startsWith("appliance-") || slug.startsWith("app-") ||
+                 slug.includes("fridge") || slug.includes("microwave") || slug.includes("chimney") ||
+                 slug.includes("stove") || slug.includes("dishwasher") || slug.includes("air-fryer") ||
+                 slug.includes("otg") || slug.includes("sandwich") ||
+                 slug.startsWith("kitchen-") || slug.startsWith("cabinet-") || slug.startsWith("tile-") || slug.startsWith("care-") ||
+                 slug.startsWith("quick-") || slug.startsWith("sink-") || slug.startsWith("dining-") ||
+                 slug.startsWith("fan-") || slug.startsWith("balcony-") || slug.startsWith("door-") || slug.startsWith("addon-");
+          return slug.startsWith("occ-") || slug.startsWith("empty-") || slug.startsWith("package-") || !matchesOther;
+        }
+        return false;
+      };
+
+      const matchedExtras = extraPkgs.filter(p => matchesTab(p.slug));
+      const formattedExtras = matchedExtras.map(p => ({
+        id: p.slug,
+        name: p.name,
+        description: p.description,
+        price: Math.round(Number(p.base_price) || 0),
+        duration: p.duration || "15 mins",
+        image: p.image || "/mockups/category_food_health.png",
+        includes: Array.isArray(p.includes) ? p.includes : [],
+        tools: Array.isArray(p.tools) ? p.tools : [],
+        ready: Array.isArray(p.ready) ? p.ready : [],
+        reviews: Array.isArray(p.reviews) ? p.reviews : [],
+        faqs: Array.isArray(p.faqs) ? p.faqs : [],
+      }));
+      list = [...list, ...formattedExtras];
+    }
+
+    if (dbPackages.length > 0) {
       list = list.map(item => {
         if (Array.isArray(item.subOptions)) {
           const parentDbMatch = dbPackages.find(p => p.slug === (item.id === "fridge-clean" ? "fridge-parent" : item.id === "stove-clean" ? "stove-parent" : item.id));
@@ -19326,9 +19381,12 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const tools = (Array.isArray(selectedServiceDetails.tools) && selectedServiceDetails.tools.length > 0)
+                const rawTools = (Array.isArray(selectedServiceDetails.tools) && selectedServiceDetails.tools.length > 0)
                   ? selectedServiceDetails.tools
                   : (detail.tools || []);
+                const tools = rawTools
+                  .filter(t => typeof t === 'string' ? true : t.enabled !== false)
+                  .map(t => typeof t === 'string' ? t : t.text);
                 if (tools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -19349,9 +19407,12 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const readyList = (Array.isArray(selectedServiceDetails.ready) && selectedServiceDetails.ready.length > 0)
+                const rawReady = (Array.isArray(selectedServiceDetails.ready) && selectedServiceDetails.ready.length > 0)
                   ? selectedServiceDetails.ready
                   : (detail.ready || []);
+                const readyList = rawReady
+                  .filter(r => typeof r === 'string' ? true : r.enabled !== false)
+                  .map(r => typeof r === 'string' ? r : r.text);
                 if (readyList.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -19374,9 +19435,10 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 {(() => {
                   const id = selectedServiceDetails.id;
                   const detail = SERVICE_DETAIL_DATA[id] || {};
-                  const reviews = (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0)
+                  const rawReviews = (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0 && (!detail.reviews || selectedServiceDetails.reviews.length >= detail.reviews.length))
                     ? selectedServiceDetails.reviews
                     : (detail.reviews || []);
+                  const reviews = rawReviews.filter(r => r.enabled !== false);
                   return reviews.map((rev, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
                       <div className="flex items-center justify-between">
@@ -19401,9 +19463,10 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   {(() => {
                     const id = selectedServiceDetails.id;
                     const detail = SERVICE_DETAIL_DATA[id] || {};
-                    const faqs = (Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0)
+                    const rawFaqs = (Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0 && (!detail.faqs || selectedServiceDetails.faqs.length >= detail.faqs.length))
                       ? selectedServiceDetails.faqs
                       : (detail.faqs || []);
+                    const faqs = rawFaqs.filter(f => f.enabled !== false);
                     return faqs.map((faq, idx) => {
                       const isFaqOpen = activeFaq === idx;
                       return (

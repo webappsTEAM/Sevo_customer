@@ -146,7 +146,7 @@ const FULL_HOUSE_SERVICES = {
   ],
   partial_home: [
     {
-      id: "balcony-clean-under-4",
+      id: "quick-balcony-upto-4ft",
       name: "Balcony Cleaning: Upto 4 ft Width",
       description: "Thorough floor scrubbing, railing wipe and drainage cleaning for smaller balconies.",
       rating: "4.81",
@@ -160,13 +160,13 @@ const FULL_HOUSE_SERVICES = {
       ]
     },
     {
-      id: "balcony-clean-above-4",
+      id: "quick-balcony-above-4ft",
       name: "Balcony Cleaning: Above 4 ft Width",
       description: "Intensive floor scrubbing, glass partition wipe and railing cleaning for spacious balconies.",
       rating: "4.81",
       reviews: "1.7M bookings",
       price: 549,
-      duration: "45 mins",
+      duration: "50 mins",
       image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop",
       includes: [
         "Heavy scrubbing of tiled/concrete balcony floor surfaces",
@@ -202,8 +202,8 @@ const FULL_HOUSE_SERVICES = {
       ]
     },
     {
-      id: "dining-table-clean",
-      name: "Dining Table Cleaning",
+      id: "quick-dining-table",
+      name: "Dining Table & chairs cleaning",
       description: "Intensive sanitization of table surfaces, legs wiping and matching dining chairs cleaning.",
       rating: "4.81",
       reviews: "1.7M bookings",
@@ -216,7 +216,7 @@ const FULL_HOUSE_SERVICES = {
       ]
     },
     {
-      id: "microwave-clean",
+      id: "kitchen-microwave-clean",
       name: "Microwave Cleaning",
       description: "Deep food-grease removal, interior stain scrubbing and exterior sanitization.",
       rating: "4.81",
@@ -599,7 +599,7 @@ const HOUSE_DETAILS_CONTENT = {
       { id: "balc-1", name: "1 Balcony scrubbing", price: 299 }
     ]
   },
-  "balcony-clean-under-4": {
+  "quick-balcony-upto-4ft": {
     covered: ["Scrubbing of balcony floor", "Wiping of balcony railings", "Cleaning of drainage outlet"],
     tools: ["Scrubbing brush", "Eco-friendly cleaning agents", "Microfiber cloth"],
     ready: ["Clear any plants or furniture from the balcony", "Ensure access to water and power outlets"],
@@ -614,7 +614,7 @@ const HOUSE_DETAILS_CONTENT = {
       { q: "Are windows bordering the balcony cleaned?", a: "Only the exterior frame and panes facing the balcony are wiped." }
     ]
   },
-  "balcony-clean-above-4": {
+  "quick-balcony-above-4ft": {
     covered: ["Deep scrubbing of large balcony floor", "Wiping of railings and glass partitions", "Drainage mesh cleaning"],
     tools: ["Scrubbing brush & wipers", "Eco-friendly surface cleaner", "Microfiber cloth"],
     ready: ["Clear all balcony furniture and plants", "Provide water and power access"],
@@ -659,7 +659,7 @@ const HOUSE_DETAILS_CONTENT = {
       { q: "Are chemicals safe for aluminum frames?", a: "Yes, our chemicals are neutral and safe for powder-coated aluminum or UPVC frames." }
     ]
   },
-  "dining-table-clean": {
+  "quick-dining-table": {
     covered: ["Sanitization of tabletop surface", "Wiping of table legs and framework", "Dusting and wiping of up to 6 dining chairs"],
     tools: ["Surface sanitizer", "Microfiber cloths"],
     ready: ["Remove all plates, utensils, and table mats before cleaning"],
@@ -674,7 +674,7 @@ const HOUSE_DETAILS_CONTENT = {
       { q: "Do you clean dining table extensions?", a: "Yes, extensions are wiped if opened by the customer." }
     ]
   },
-  "microwave-clean": {
+  "kitchen-microwave-clean": {
     covered: ["Deep degreasing of microwave interior", "Wiping of glass door (inside & out)", "Sanitization of exterior body and buttons"],
     tools: ["Food-safe degreasing spray", "Scrubbing sponges"],
     ready: ["Ensure microwave is plugged out and cool before cleaning"],
@@ -873,7 +873,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
             >
               <ChevronLeft size={14} /> Back to Services
             </button>
-            <h2 className="text-xl font-black text-slate-900">Full Home Cleaning</h2>
+            <h2 className="text-xl font-black text-slate-900">Full house cleaning</h2>
           </div>
 
         </div>

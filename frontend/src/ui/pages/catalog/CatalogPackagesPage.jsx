@@ -10,6 +10,7 @@ import {
 import { apiRequest } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
 import { useToast, ToastBanner } from "./useToast.jsx"
+import { SOFA_DETAIL_DATA } from "./sofaDetailData.js"
 
 const DEFAULT_SUITABLE_PRESETS = {
   "2-wheeler-electric-express": [
@@ -131,6 +132,36 @@ const DEFAULT_SUITABLE_PRESETS = {
     "Burner & knob cleaning",
     "Grease & food stain removal"
   ],
+  "occ-basic": [
+    "Kitchen tiles, floor & slab cleaning + Mopping",
+    "Gas stove / hob cleaning",
+    "Sink & under-sink cleaning",
+    "Exhaust fan cleaning",
+    "Windows & switchboards cleaning",
+    "Cabinet exterior cleaning",
+    "Dining table cleaning",
+    "Utensil removal / rearrangement not included"
+  ],
+  "occ-deep": [
+    "Includes everything in Basic, plus:",
+    "Cabinet interior & exterior cleaning",
+    "Exhaust fan deep cleaning",
+    "Utensil removal & rearrangement"
+  ],
+  "empty-kitchen": [
+    "Thorough degreasing of wall tiles, countertops, and exhaust fans",
+    "Detailed cleaning of kitchen floors, windows, switchboards, and cabinets (exterior)",
+    "Deep sanitization of sink and under-sink area (utensils removal not included)"
+  ],
+  "kitchen-tiles-slabs": [
+    "Tile and slab cleaning: Remove oil and grease stains",
+    "Degreases tiles & slabs and deep cleans grout for a fresh kitchen"
+  ],
+  "cabinet-trolley-clean": [
+    "Interior & exterior cabinet wet-wiping & degreasing",
+    "Removal of food residue, spills & accumulated oil layers",
+    "Trolley tracks vacuuming, wiping & structural sanitization"
+  ]
 }
 
 const STATIC_SERVICE_DETAIL_DATA = {
@@ -306,7 +337,7 @@ const STATIC_SERVICE_DETAIL_DATA = {
       { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
     ]
   },
-  "microwave-clean": {
+  "kitchen-microwave-clean": {
     tools: ["Appliance-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
     ready: ["Remove food and containers", "Keep the microwave accessible", "Ensure the appliance is switched off"],
     reviews: [
@@ -887,12 +918,25 @@ export function CatalogPackagesPage() {
           {
             subSlug: "packages",
             displayName: "Full Kitchen Packages",
-            filterFn: (p) => p.slug.startsWith("occ-") || p.slug.startsWith("empty-"),
+            filterFn: (p) => 
+              p.slug.startsWith("occ-") || 
+              p.slug.startsWith("empty-") ||
+              p.slug.startsWith("package-") ||
+              // Fallback: if it doesn't match any other group prefix, put it in full kitchen packages
+              (!p.slug.startsWith("appliance-") && !p.slug.startsWith("app-") &&
+               !p.slug.includes("fridge") && !p.slug.includes("microwave") && !p.slug.includes("chimney") &&
+               !p.slug.includes("stove") && !p.slug.includes("dishwasher") && !p.slug.includes("air-fryer") &&
+               !p.slug.includes("otg") && !p.slug.includes("sandwich") &&
+               !p.slug.startsWith("kitchen-") && !p.slug.startsWith("cabinet-") && !p.slug.startsWith("tile-") && !p.slug.startsWith("care-") &&
+               !p.slug.startsWith("quick-") && !p.slug.startsWith("sink-") && !p.slug.startsWith("dining-") &&
+               !p.slug.startsWith("fan-") && !p.slug.startsWith("balcony-") && !p.slug.startsWith("door-") && !p.slug.startsWith("addon-"))
           },
           {
             subSlug: "appliance",
             displayName: "single appliance cleaning",
             filterFn: (p) =>
+              p.slug.startsWith("appliance-") ||
+              p.slug.startsWith("app-") ||
               p.slug.includes("fridge") ||
               p.slug.includes("microwave") ||
               p.slug.includes("chimney") ||
@@ -910,27 +954,27 @@ export function CatalogPackagesPage() {
 
               if (fridgeSub.length > 0) {
                 finalPkgs.push({
-                  id: "fridge-parent",
-                  name: "Fridge cleaning",
-                  slug: "fridge-parent",
-                  description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
-                  base_price: Math.min(...fridgeSub.map(p => Number(p.base_price) || 0)),
-                  duration: fridgeSub[0]?.duration || "1.5 hrs",
-                  status: fridgeSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
-                  subOptions: fridgeSub,
+                   id: "fridge-parent",
+                   name: "Fridge cleaning",
+                   slug: "fridge-parent",
+                   description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
+                   base_price: Math.min(...fridgeSub.map(p => Number(p.base_price) || 0)),
+                   duration: fridgeSub[0]?.duration || "1.5 hrs",
+                   status: fridgeSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                   subOptions: fridgeSub,
                 });
               }
 
               if (stoveSub.length > 0) {
                 finalPkgs.push({
-                  id: "stove-parent",
-                  name: "Gas stove cleaning",
-                  slug: "stove-parent",
-                  description: "Surface cleaning of gas stove burners and knobs to remove grease.",
-                  base_price: Math.min(...stoveSub.map(p => Number(p.base_price) || 0)),
-                  duration: stoveSub[0]?.duration || "45 mins",
-                  status: stoveSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
-                  subOptions: stoveSub,
+                   id: "stove-parent",
+                   name: "Gas stove cleaning",
+                   slug: "stove-parent",
+                   description: "Surface cleaning of gas stove burners and knobs to remove grease.",
+                   base_price: Math.min(...stoveSub.map(p => Number(p.base_price) || 0)),
+                   duration: stoveSub[0]?.duration || "45 mins",
+                   status: stoveSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                   subOptions: stoveSub,
                 });
               }
 
@@ -951,7 +995,11 @@ export function CatalogPackagesPage() {
           {
             subSlug: "cabinet_tile",
             displayName: "Cabinet & Tile Care",
-            filterFn: (p) => p.slug.startsWith("kitchen-") || p.slug.startsWith("cabinet-"),
+            filterFn: (p) =>
+              p.slug.startsWith("kitchen-") ||
+              p.slug.startsWith("cabinet-") ||
+              p.slug.startsWith("tile-") ||
+              p.slug.startsWith("care-"),
           },
           {
             subSlug: "addons",
@@ -961,7 +1009,9 @@ export function CatalogPackagesPage() {
               p.slug.startsWith("sink-") ||
               p.slug.startsWith("dining-") ||
               p.slug.startsWith("fan-") ||
-              p.slug.startsWith("balcony-"),
+              p.slug.startsWith("balcony-") ||
+              p.slug.startsWith("door-") ||
+              p.slug.startsWith("addon-"),
           },
         ]
 
@@ -973,7 +1023,7 @@ export function CatalogPackagesPage() {
           "fridge-single",
           "fridge-double",
           "fridge-triple",
-          "microwave-clean",
+          "kitchen-microwave-clean",
           "chimney-clean",
           "chimney-stove-clean",
           "stove-parent",
@@ -1194,8 +1244,26 @@ export function CatalogPackagesPage() {
   const handleSave = async (e) => {
     e.preventDefault()
     try {
+      let finalSlug = editing.slug || ""
+      if (editing.virtualSlug && !editing.id) {
+        const prefixMap = {
+          appliance: "appliance-",
+          cabinet_tile: "cabinet-",
+          addons: "quick-",
+          packages: "package-",
+          sofa: "sofa-",
+          mattress: "mattress-",
+          carpet: "carpet-"
+        }
+        const prefix = prefixMap[editing.virtualSlug]
+        if (prefix && !finalSlug.startsWith(prefix)) {
+          finalSlug = prefix + finalSlug
+        }
+      }
+
       const payload = {
         ...editing,
+        slug: finalSlug,
         includes:
           typeof editing.includes === "string"
             ? editing.includes.split(",").map((s) => s.trim()).filter(Boolean)
@@ -1241,7 +1309,29 @@ export function CatalogPackagesPage() {
     const items = []
     const seen = new Set()
 
-    // 1. First add existing included items (checked = true)
+    // Normalize existingIncludes into lowercase set for quick lookup
+    const existingIncludesLower = new Set(
+      existingIncludes.map(inc => {
+        const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
+        return text.toLowerCase()
+      }).filter(Boolean)
+    )
+
+    // 1. Process preset items first, maintaining their original order
+    presets.forEach((preset, idx) => {
+      const text = preset.trim()
+      if (text && !seen.has(text.toLowerCase())) {
+        seen.add(text.toLowerCase())
+        const isIncluded = existingIncludesLower.has(text.toLowerCase())
+        items.push({
+          id: `preset-${idx}-${Date.now()}`,
+          text,
+          checked: existingIncludes.length === 0 ? true : isIncluded,
+        })
+      }
+    })
+
+    // 2. Add any custom items from existingIncludes that are not in presets
     existingIncludes.forEach((inc, idx) => {
       const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
       if (text && !seen.has(text.toLowerCase())) {
@@ -1254,39 +1344,23 @@ export function CatalogPackagesPage() {
       }
     })
 
-    // 2. Add preset items if not already present
-    presets.forEach((preset, idx) => {
-      const text = preset.trim()
-      if (!seen.has(text.toLowerCase())) {
-        seen.add(text.toLowerCase())
-        items.push({
-          id: `preset-${idx}-${Date.now()}`,
-          text,
-          checked: existingIncludes.length === 0, // default ticked if package had no prior includes
-        })
-      }
-    })
-
-    // Load fallback defaults from STATIC_SERVICE_DETAIL_DATA when empty
-    const staticData = STATIC_SERVICE_DETAIL_DATA[slug] || STATIC_SERVICE_DETAIL_DATA[pkg.id] || {}
+    // Load fallback defaults from SOFA_DETAIL_DATA or STATIC_SERVICE_DETAIL_DATA
+    const staticData = SOFA_DETAIL_DATA[slug] || SOFA_DETAIL_DATA[pkg.id] || STATIC_SERVICE_DETAIL_DATA[slug] || STATIC_SERVICE_DETAIL_DATA[pkg.id] || {}
 
     setQuickPriceEditing({
       ...pkg,
       base_price: Math.round(Number(pkg.base_price) || 0),
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
       checklist: items,
-<<<<<<< HEAD
       editingItemId: null,
       _vdOpen: true,
       viewDetails: {
         tools: Array.isArray(pkg.tools) && pkg.tools.length > 0 ? pkg.tools : (staticData.tools || []),
         ready: Array.isArray(pkg.ready) && pkg.ready.length > 0 ? pkg.ready : (staticData.ready || []),
-        reviews: Array.isArray(pkg.reviews) && pkg.reviews.length > 0 ? pkg.reviews : (staticData.reviews || []),
-        faqs: Array.isArray(pkg.faqs) && pkg.faqs.length > 0 ? pkg.faqs : (staticData.faqs || []),
+        reviews: (Array.isArray(pkg.reviews) && pkg.reviews.length > 0 && pkg.reviews.length >= (staticData.reviews || []).length) ? pkg.reviews : (staticData.reviews || pkg.reviews || []),
+        faqs: (Array.isArray(pkg.faqs) && pkg.faqs.length > 0 && pkg.faqs.length >= (staticData.faqs || []).length) ? pkg.faqs : (staticData.faqs || pkg.faqs || []),
       },
-=======
       image: pkg.image || "",
->>>>>>> 8a242d99f99d62ed0fb9e5c249c0cba4839ce856
     })
     setNewItemText("")
   }
@@ -1388,6 +1462,25 @@ export function CatalogPackagesPage() {
       }
     } catch {
       showToast("Service update failed", "error")
+    }
+  }
+
+  const handleDeletePackage = async (pkg) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${pkg.name}"? This will delete it from database and applications.`)) {
+      return
+    }
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${pkg.id}/`, {
+        method: "DELETE",
+      })
+      if (res.success) {
+        showToast("Package deleted successfully")
+        loadData()
+      } else {
+        showToast(res.message || "Delete failed", "error")
+      }
+    } catch {
+      showToast("Delete failed", "error")
     }
   }
 
@@ -1533,6 +1626,7 @@ export function CatalogPackagesPage() {
                 setEditing({
                   ...EMPTY_PACKAGE,
                   service: firstSvc?.id ? String(firstSvc.id) : "",
+                  virtualSlug: firstSvc?.virtualSlug || "",
                 })
               }}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
@@ -1606,7 +1700,6 @@ export function CatalogPackagesPage() {
                 return true
               })
 
-<<<<<<< HEAD
               return uniqueItems.map((item) => {
                 const serviceKey = item.service.realServiceId || item.service.slug || item.service.id
                 const totalCount = activeCategoryServicesWithPackages
@@ -1630,23 +1723,6 @@ export function CatalogPackagesPage() {
                       isSubActive
                         ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
                         : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
-=======
-              return (
-                <button
-                  key={item.service.id}
-                  type="button"
-                  onClick={() => setActiveSubServiceKey(item.service.slug || String(item.service.id))}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                  isSubActive
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                    : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-indigo-50/60 hover:text-indigo-900"
-                }`}
-              >
-                <span>{item.displayName}</span>
-                  <span
-                    className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
-                      isSubActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
->>>>>>> 8a242d99f99d62ed0fb9e5c249c0cba4839ce856
                     }`}
                   >
                     <SubIcon className="w-3.5 h-3.5" />
@@ -1731,6 +1807,7 @@ export function CatalogPackagesPage() {
                       setEditing({
                         ...EMPTY_PACKAGE,
                         service: String(svcItem.service.realServiceId || svcItem.service.id),
+                        virtualSlug: svcItem.service.virtualSlug || "",
                       })
                     }}
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100/80 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-indigo-200/60"
@@ -1883,6 +1960,14 @@ export function CatalogPackagesPage() {
                                     </button>
                                     <button
                                       type="button"
+                                      onClick={() => handleDeletePackage(pkg)}
+                                      title="Delete Package"
+                                      className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
                                       onClick={() => openEdit(pkg)}
                                       title="Edit Package Details"
                                       className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
@@ -1932,6 +2017,14 @@ export function CatalogPackagesPage() {
                                       >
                                         <Edit2 className="w-3 h-3" />
                                         <span>Customise</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeletePackage(sub)}
+                                        title="Delete Variant"
+                                        className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
                                       </button>
                                       <button
                                         type="button"
@@ -2312,7 +2405,6 @@ export function CatalogPackagesPage() {
               </div>
             </div>
 
-<<<<<<< HEAD
             {/* ── View Details Content Section (only for Home Services & Pest Control) ── */}
             {activePillar?.key === "home_pest_control" && (() => {
               const vd = quickPriceEditing.viewDetails || { tools: [], ready: [], reviews: [], faqs: [] }
@@ -2336,73 +2428,140 @@ export function CatalogPackagesPage() {
 
                       {/* Tools & Products We Use */}
                       <div className="pt-4">
-                        <div className="text-xs font-bold text-slate-700 mb-2">🔧 Tools &amp; Products We Use</div>
+                        <div className="text-xs font-bold text-slate-700 mb-2">🔧 Tools & Products We Use</div>
                         <div className="space-y-1.5 mb-2">
-                          {(vd.tools || []).map((t, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <input type="text" value={t} onChange={(e) => { const a = [...(vd.tools || [])]; a[i] = e.target.value; setVd({ tools: a }) }} className="flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 outline-none" />
-                              <button type="button" onClick={() => { const a = [...(vd.tools || [])]; a.splice(i, 1); setVd({ tools: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </div>
-                          ))}
+                          {(vd.tools || []).map((t, i) => {
+                            const text = typeof t === 'string' ? t : (t.text || '');
+                            const enabled = typeof t === 'string' ? true : (t.enabled !== false);
+                            return (
+                              <div key={i} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  onChange={(e) => {
+                                    const a = [...(vd.tools || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, enabled: e.target.checked };
+                                    setVd({ tools: a });
+                                  }}
+                                  className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                />
+                                <input
+                                  type="text"
+                                  value={text}
+                                  onChange={(e) => {
+                                    const a = [...(vd.tools || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, text: e.target.value };
+                                    setVd({ tools: a });
+                                  }}
+                                  className={`flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 outline-none ${!enabled ? 'text-slate-400 line-through bg-slate-50' : 'text-slate-800'}`}
+                                />
+                                <button type="button" onClick={() => { const a = [...(vd.tools || [])]; a.splice(i, 1); setVd({ tools: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ tools: [...(vd.tools || []), ""] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add tool / product</button>
+                        <button type="button" onClick={() => setVd({ tools: [...(vd.tools || []), { text: '', enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add tool / product</button>
                       </div>
 
                       {/* What You Need to Keep Ready */}
                       <div className="pt-2 border-t border-slate-100">
                         <div className="text-xs font-bold text-slate-700 mb-2">✅ What You Need to Keep Ready</div>
                         <div className="space-y-1.5 mb-2">
-                          {(vd.ready || []).map((r, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <input type="text" value={r} onChange={(e) => { const a = [...(vd.ready || [])]; a[i] = e.target.value; setVd({ ready: a }) }} className="flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 outline-none" />
-                              <button type="button" onClick={() => { const a = [...(vd.ready || [])]; a.splice(i, 1); setVd({ ready: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </div>
-                          ))}
+                          {(vd.ready || []).map((r, i) => {
+                            const text = typeof r === 'string' ? r : (r.text || '');
+                            const enabled = typeof r === 'string' ? true : (r.enabled !== false);
+                            return (
+                              <div key={i} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  onChange={(e) => {
+                                    const a = [...(vd.ready || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, enabled: e.target.checked };
+                                    setVd({ ready: a });
+                                  }}
+                                  className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                />
+                                <input
+                                  type="text"
+                                  value={text}
+                                  onChange={(e) => {
+                                    const a = [...(vd.ready || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, text: e.target.value };
+                                    setVd({ ready: a });
+                                  }}
+                                  className={`flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 outline-none ${!enabled ? 'text-slate-400 line-through bg-slate-50' : 'text-slate-800'}`}
+                                />
+                                <button type="button" onClick={() => { const a = [...(vd.ready || [])]; a.splice(i, 1); setVd({ ready: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ ready: [...(vd.ready || []), ""] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add item</button>
+                        <button type="button" onClick={() => setVd({ ready: [...(vd.ready || []), { text: '', enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add item</button>
                       </div>
 
                       {/* Customer Reviews */}
                       <div className="pt-2 border-t border-slate-100">
                         <div className="text-xs font-bold text-slate-700 mb-2">⭐ Customer Reviews</div>
                         <div className="space-y-2.5 mb-2">
-                          {(vd.reviews || []).map((rev, i) => (
-                            <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
-                              <div className="flex gap-2">
-                                <input type="text" placeholder="Name" value={rev.name || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], name: e.target.value }; setVd({ reviews: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
-                                <input type="text" placeholder="Rating (e.g. 4.9)" value={rev.rating || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], rating: e.target.value }; setVd({ reviews: a }) }} className="w-24 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
-                                <button type="button" onClick={() => { const a = [...(vd.reviews || [])]; a.splice(i, 1); setVd({ reviews: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                          {(vd.reviews || []).map((rev, i) => {
+                            const enabled = rev.enabled !== false;
+                            return (
+                              <div key={i} className={`bg-white border rounded-xl p-3 space-y-2 ${!enabled ? 'border-slate-100 opacity-60' : 'border-slate-200'}`}>
+                                <div className="flex gap-2 items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={enabled}
+                                    onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], enabled: e.target.checked }; setVd({ reviews: a }); }}
+                                    className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                  />
+                                  <input type="text" placeholder="Name" value={rev.name || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], name: e.target.value }; setVd({ reviews: a }); }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-indigo-400 outline-none" />
+                                  <input type="text" placeholder="Rating (e.g. 4.9)" value={rev.rating || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], rating: e.target.value }; setVd({ reviews: a }); }} className="w-24 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-indigo-400 outline-none" />
+                                  <button type="button" onClick={() => { const a = [...(vd.reviews || [])]; a.splice(i, 1); setVd({ reviews: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                                <textarea placeholder="Review text..." value={rev.text || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], text: e.target.value }; setVd({ reviews: a }); }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-indigo-400 outline-none resize-none" />
                               </div>
-                              <textarea placeholder="Review text..." value={rev.text || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], text: e.target.value }; setVd({ reviews: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ reviews: [...(vd.reviews || []), { name: "", rating: "5.0", text: "" }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add review</button>
+                        <button type="button" onClick={() => setVd({ reviews: [...(vd.reviews || []), { name: "", rating: "5.0", text: "", enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add review</button>
                       </div>
 
                       {/* FAQs */}
                       <div className="pt-2 border-t border-slate-100">
                         <div className="text-xs font-bold text-slate-700 mb-2">❓ Frequently Asked Questions</div>
                         <div className="space-y-2.5 mb-2">
-                          {(vd.faqs || []).map((faq, i) => (
-                            <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
-                              <div className="flex gap-2">
-                                <input type="text" placeholder="Question" value={faq.q || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], q: e.target.value }; setVd({ faqs: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
-                                <button type="button" onClick={() => { const a = [...(vd.faqs || [])]; a.splice(i, 1); setVd({ faqs: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                          {(vd.faqs || []).map((faq, i) => {
+                            const enabled = faq.enabled !== false;
+                            return (
+                              <div key={i} className={`bg-white border rounded-xl p-3 space-y-2 ${!enabled ? 'border-slate-100 opacity-60' : 'border-slate-200'}`}>
+                                <div className="flex gap-2 items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={enabled}
+                                    onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], enabled: e.target.checked }; setVd({ faqs: a }); }}
+                                    className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                  />
+                                  <input type="text" placeholder="Question" value={faq.q || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], q: e.target.value }; setVd({ faqs: a }); }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-indigo-400 outline-none" />
+                                  <button type="button" onClick={() => { const a = [...(vd.faqs || [])]; a.splice(i, 1); setVd({ faqs: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                                <textarea placeholder="Answer..." value={faq.a || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], a: e.target.value }; setVd({ faqs: a }); }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-indigo-400 outline-none resize-none" />
                               </div>
-                              <textarea placeholder="Answer..." value={faq.a || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], a: e.target.value }; setVd({ faqs: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ faqs: [...(vd.faqs || []), { q: "", a: "" }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add FAQ</button>
+                        <button type="button" onClick={() => setVd({ faqs: [...(vd.faqs || []), { q: "", a: "", enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add FAQ</button>
                       </div>
-
                     </div>
                   )}
                 </div>
               )
             })()}
-=======
+
             {/* ── Image Customization Section ── */}
             <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
               <div className="flex items-center justify-between gap-2">
@@ -2468,7 +2627,6 @@ export function CatalogPackagesPage() {
                 </div>
               </div>
             </div>
->>>>>>> 8a242d99f99d62ed0fb9e5c249c0cba4839ce856
 
             <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-slate-100">
               <button
@@ -2506,7 +2664,11 @@ export function CatalogPackagesPage() {
                 label: `${s.category_name ? s.category_name + " / " : ""}${s.name}`,
               }))}
               value={String(editing.service?.id || editing.service || "")}
-              onChange={(e) => setEditing({ ...editing, service: e.target.value })}
+              onChange={(e) => {
+                const sId = e.target.value
+                const matchSvc = services.find(s => String(s.id) === sId)
+                setEditing({ ...editing, service: sId, virtualSlug: matchSvc?.virtualSlug || "" })
+              }}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
