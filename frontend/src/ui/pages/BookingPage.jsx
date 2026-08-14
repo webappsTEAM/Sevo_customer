@@ -7483,7 +7483,22 @@ export function BookingPage() {
         setCart={setCart}
         category={category}
         user={user}
-        onBack={() => navigate(routes.landing || "/home", { replace: true })}
+        onBack={() => {
+          const restoredFoodCart = {}
+          cart.forEach(item => {
+            const key = item.displayName || item.name
+            restoredFoodCart[key] = item.quantity || 1
+          })
+          navigate(routes.landing || "/home", {
+            replace: true,
+            state: {
+              openFoodHealthModal: true,
+              openVegetablesModal: true,
+              openFoodSubModuleId: "vegetables",
+              foodCart: restoredFoodCart
+            }
+          })
+        }}
       />
     )
   }
