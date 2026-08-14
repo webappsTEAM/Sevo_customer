@@ -91,6 +91,254 @@ const DEFAULT_SUITABLE_PRESETS = {
     "Dedicated relocation manager",
     "End-to-end unpacking & setup",
   ],
+  "int-single-wall": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "int-one-room": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "int-multi-room": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "int-full-home": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "int-ceiling": [
+    "Ceiling sanding & crack repairs",
+    "Double coat flat white ceiling paint",
+    "Stain blocking primer (where needed)",
+    "Complete furniture & floor masking",
+  ],
+  "interior-painting": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "paint-interior": [
+    "Wall sanding & minor crack filling",
+    "Double coat premium interior emulsion",
+    "Eco-friendly, low VOC paints",
+    "Complete masking & floor protection",
+    "Post-job basic cleanup",
+    "1-year warranty on chipping & flaking",
+  ],
+  "ext-wall": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "ext-building": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "ext-compound": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "ext-terrace": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "exterior-painting": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "paint-exterior": [
+    "Pressure washing & crack filling",
+    "Anti-fungal primer coat",
+    "Double coat weather-defense paint",
+    "Dust and dirt resistant finish",
+    "Complete scaffolding & safety protocols",
+    "3-year weather protection warranty",
+  ],
+  "wp-terrace": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "wp-bathroom": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "wp-wall": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "wp-roof": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "wp-crack": [
+    "V-groove crack widening",
+    "Polymer-modified crack filler application",
+    "Reinforcing fiber mesh (for deep cracks)",
+    "Sanding & leveling smooth surface",
+  ],
+  "waterproofing": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "paint-waterproofing": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "waterproof-coating": [
+    "Surface cleaning & patch repairs",
+    "Crack filling & waterproofing base coat",
+    "Double coat elastomeric waterproofing membrane",
+    "Prevents wall dampness & paint peeling",
+    "2-year leakage warranty",
+  ],
+  "wm-doors": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "wm-windows": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "wm-grills": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "wm-cabinets": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "wm-gates": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "wood-metal": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "paint-wood-metal": [
+    "Rust removal & sanding treatment",
+    "Specialized wood/metal primer application",
+    "PU coating or premium enamel paint",
+    "High gloss or sophisticated matte finish",
+  ],
+  "td-texture": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "td-designer": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "td-stencil": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "td-accent": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "texture-decor": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "paint-texture": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
+  "texture-painting": [
+    "Designer accent wall textures",
+    "Premium metallic/non-metallic finishes",
+    "Double coat base preparation",
+    "Complete masking and protection",
+    "Wide range of pattern options",
+  ],
   "fridge-parent": [
     "Interior & exterior cleaning",
     "Shelves, trays & compartments cleaning",
@@ -1960,7 +2208,7 @@ export function CatalogPackagesPage() {
                                 <input type="text" placeholder="Question" value={faq.q || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], q: e.target.value }; setVd({ faqs: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
                                 <button type="button" onClick={() => { const a = [...(vd.faqs || [])]; a.splice(i, 1); setVd({ faqs: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
                               </div>
-                              <textarea placeholder="Answer..." value={faq.a || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], a: e.target.value }; setVd({ faqs: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
+                              <textarea placeholder="Answer text..." value={faq.a || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], a: e.target.value }; setVd({ faqs: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
                             </div>
                           ))}
                         </div>
@@ -1972,6 +2220,72 @@ export function CatalogPackagesPage() {
                 </div>
               )
             })()}
+
+            {/* ── Image Customization Section ── */}
+            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3 mt-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-800">
+                    Package Image
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                {quickPriceEditing.image ? (
+                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                    <img src={quickPriceEditing.image} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setQuickPriceEditing((prev) => ({ ...prev, image: "" }))}
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                    No Image
+                  </div>
+                )}
+                <div className="flex-1 w-full space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const formData = new FormData()
+                        formData.append("image", file)
+                        try {
+                          const res = await apiRequest("/settings/catalog/upload-image/", {
+                            method: "POST",
+                            body: formData,
+                          })
+                          if (res.success && res.url) {
+                            setQuickPriceEditing((prev) => ({ ...prev, image: res.url }))
+                            showToast("Image uploaded successfully!")
+                          } else {
+                            showToast(res.message || "Upload failed", "error")
+                          }
+                        } catch (err) {
+                          showToast("Upload failed", "error")
+                        }
+                      }
+                    }}
+                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                  />
+                  <Input
+                    label="Or Image URL"
+                    placeholder="https://images.unsplash.com/..."
+                    value={quickPriceEditing.image || ""}
+                    onChange={(e) => setQuickPriceEditing({ ...quickPriceEditing, image: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
 
             <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-slate-100">
               <button

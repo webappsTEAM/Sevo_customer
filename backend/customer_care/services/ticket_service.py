@@ -1,7 +1,11 @@
+import logging
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from datetime import timedelta
 from customer_care.models import CustomerCareTicket, TicketMessage, TicketActivity, Escalation
+
+logger = logging.getLogger(__name__)
+
 
 TICKET_TRANSITIONS = {
     "new": {"assigned", "escalated", "closed"},
@@ -83,7 +87,16 @@ def change_ticket_status(ticket, actor, new_status, note=""):
         description=f"Status changed from {from_status} to {new_status}. Note: {note}"
     )
 
+    # Dispatch notification if resolved
+    if new_status == "resolved":
+        try:
+            from customer_care.services.notifications import notify_ticket_resolved
+            notify_ticket_resolved(ticket)
+        except Exception as e:
+            logger.error(f"Failed to dispatch ticket resolution notification: {e}")
+
     return ticket
+
 
 def assign_ticket(ticket, actor, agent):
     """

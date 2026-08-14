@@ -120,3 +120,65 @@ export async function updateCareAgent(id, payload) {
 export async function fetchCareAnalytics() {
   return apiRequest("/customer-care/analytics/", { method: "GET" })
 }
+
+export async function fetchTicketContext(id) {
+  return apiRequest(`/customer-care/tickets/${id}/context/`, { method: "GET" })
+}
+
+export async function requestReschedule(id, payload) {
+  return apiRequest(`/customer-care/tickets/${id}/request_reschedule/`, {
+    method: "POST",
+    json: payload,
+  })
+}
+
+export async function confirmReschedule(id, payload) {
+  return apiRequest(`/customer-care/tickets/${id}/confirm_reschedule/`, {
+    method: "POST",
+    json: payload,
+  })
+}
+
+export async function requestCancellation(id, payload) {
+  return apiRequest(`/customer-care/tickets/${id}/request_cancellation/`, {
+    method: "POST",
+    json: payload,
+  })
+}
+
+export async function approveCancellation(id, payload) {
+  return apiRequest(`/customer-care/tickets/${id}/approve_cancellation/`, {
+    method: "POST",
+    json: payload,
+  })
+}
+
+export async function searchCustomers(q) {
+  return apiRequest(`/customer-care/customers/search/?q=${encodeURIComponent(q)}`, {
+    method: "GET",
+  })
+}
+
+export async function fetchCustomer360(customerId) {
+  return apiRequest(`/customer-care/customers/${customerId}/360/`, {
+    method: "GET",
+  })
+}
+
+export async function fetchCustomerCommunicationHistory(customerId) {
+  return apiRequest(`/customer-care/customers/${customerId}/communication-history/`, {
+    method: "GET",
+  })
+}
+
+export async function fetchMessageTemplates() {
+  return apiRequest("/customer-care/templates/", { method: "GET" })
+}
+
+export async function createMessageTemplate(payload) {
+  return apiRequest("/customer-care/templates/", {
+    method: "POST",
+    json: payload,
+  })
+}
+

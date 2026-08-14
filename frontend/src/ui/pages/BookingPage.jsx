@@ -203,7 +203,7 @@ const PACKAGES = {
 
 const TIME_SLOTS = [
   { period: "Morning", icon: "ðŸŒ…", slots: [{ t: "07:00", l: "7:00 AM" }, { t: "08:00", l: "8:00 AM" }, { t: "09:00", l: "9:00 AM" }, { t: "10:00", l: "10:00 AM" }, { t: "11:00", l: "11:00 AM" }] },
-  { period: "Afternoon", icon: "•˜•ï¸", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
+  { period: "Afternoon", icon: "•˜•ï¸ ", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
   { period: "Evening", icon: "ðŸŒ†", slots: [{ t: "17:00", l: "5:00 PM" }, { t: "18:00", l: "6:00 PM" }, { t: "19:00", l: "7:00 PM" }] },
 ]
 
@@ -351,7 +351,7 @@ function SavedAddressesModal({
   useEffect(() => {
     async function loadSavedAddresses() {
       try {
-        const res = await apiRequest("/customer/addresses/")
+        const res = await apiRequest("/auth/customer/addresses/")
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
           const list = res.data.map(a => ({
             id: String(a.id),
@@ -775,7 +775,7 @@ export function AddAddressSearchModal({
                       return (
                         <div
                           key={addr.id || idx}
-                          onClick={() => onSelectLocation(displayAddr)}
+                          onClick={() => onSelectLocation(displayAddr, { lat: addr.latitude, lng: addr.longitude })}
                           className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
                         >
                           <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
@@ -857,7 +857,7 @@ export function AddAddressSearchModal({
                 ? addressData
                 : addressData?.formatted_address || [addressData?.flat_house_no, addressData?.locality, addressData?.city].filter(Boolean).join(", ")
               if (typeof onSelectLocation === "function") {
-                onSelectLocation(locStr || addressData)
+                onSelectLocation(locStr || addressData, { lat: addressData?.latitude, lng: addressData?.longitude })
               }
               onClose()
             }}
@@ -1377,7 +1377,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
           <div className="uc-hero">
             <div className="uc-hero-inner">
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                <p className="uc-hero-tag">•­ India's #1 Home Services Platform</p>
+                <p className="uc-hero-tag">•­  India's #1 Home Services Platform</p>
                 <h1 className="uc-hero-h1">
                   Professional
                   <br />
@@ -1586,7 +1586,7 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
             >
               {pkg.tag && (
                 <div className="uc-pkg-tag" style={{ background: pkg.popular ? "#7C3AED" : "#059669" }}>
-                  {pkg.popular ? "•­ " : "•œ… "}{pkg.tag}
+                  {pkg.popular ? "•­  " : "•œ… "}{pkg.tag}
                 </div>
               )}
 
@@ -2092,9 +2092,14 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
   }, [globalLocation, formData.address])
 
   useEffect(() => {
-    if (!formData.issue_title && cart && cart.length > 0) {
-      const defaultTitle = cart.map(c => c.name).join(', ') + (category ? ` •” ${category.name}` : '');
-      onChange({ target: { name: 'issue_title', value: defaultTitle } })
+    if (cart && cart.length > 0) {
+      const firstName = cart[0].name || category?.name || "Service Item";
+      const defaultTitle = cart.length === 1
+        ? firstName
+        : `${firstName} (+${cart.length - 1} other item${cart.length - 1 > 1 ? 's' : ''})`;
+      if (!formData.issue_title) {
+        onChange({ target: { name: 'issue_title', value: defaultTitle } })
+      }
     }
   }, [cart, category, formData.issue_title])
 
@@ -2692,7 +2697,7 @@ function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTi
               <img src={MOCK_TECH.avatar} alt={MOCK_TECH.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '2px solid #7C3AED30' }} />
               <div style={{ flex: 1, textAlign: 'left' }}>
                 <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{MOCK_TECH.name}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>•­ {MOCK_TECH.rating} Â· {MOCK_TECH.jobs} jobs</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>•­  {MOCK_TECH.rating} Â· {MOCK_TECH.jobs} jobs</div>
               </div>
               <div style={{ background: '#10B98115', color: '#10B981', fontWeight: 800, fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, border: '1px solid #10B98130' }}>ETA {MOCK_TECH.eta}</div>
             </motion.div>
@@ -2726,9 +2731,9 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
 
   const trackSteps = [
     { label: "Booking Confirmed", icon: "•œ…", done: true, time: "Just now" },
-    { label: "Expert Assigned", icon: "ðŸ‘¨•ðŸ”§", done: false, time: "Pending" },
+    { label: "Expert Assigned", icon: "ðŸ‘¨• ðŸ”§", done: false, time: "Pending" },
     { label: "Expert On The Way", icon: "ðŸ›µ", done: false, time: "Pending" },
-    { label: "Service In Progress", icon: "•š™ï¸", done: false, time: "Scheduled" },
+    { label: "Service In Progress", icon: "•š™ï¸ ", done: false, time: "Scheduled" },
     { label: "Service Completed", icon: "ðŸŒŸ", done: false, time: "Pending" },
   ]
 
@@ -2766,7 +2771,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{tech.name}</div>
-            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>•­ {tech.rating} Â· {tech.jobs} jobs completed</div>
+            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>•­  {tech.rating} Â· {tech.jobs} jobs completed</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               <span style={{ background: '#10B98112', color: '#10B981', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #10B98125' }}>Verified Pro</span>
               <span style={{ background: '#7C3AED12', color: '#7C3AED', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #7C3AED25' }}>Background Checked</span>
@@ -2812,7 +2817,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
         style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
       >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>ðŸ—ºï¸ Live Tracking</div>
+        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>ðŸ—ºï¸  Live Tracking</div>
         {trackSteps.map((s, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.5rem 0', position: 'relative' }}>
             {i < trackSteps.length - 1 && <div style={{ position: 'absolute', left: 18, top: 36, width: 2, height: 24, background: s.done ? '#10B981' : '#e2e8f0' }} />}
@@ -4253,6 +4258,12 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     })
                     if (saveRes.success || saveRes.data || saveRes.id) {
                       setAddrSuccess('Address pin location updated!')
+                      const finalLat = confirmedPayload.latitude || mapAddress.latitude;
+                      const finalLng = confirmedPayload.longitude || mapAddress.longitude;
+                      if (finalLat && finalLng) {
+                        onChange({ target: { name: "latitude", value: String(finalLat) } });
+                        onChange({ target: { name: "longitude", value: String(finalLng) } });
+                      }
                       fetchAddresses()
                     }
                   } catch (e) {
@@ -4385,7 +4396,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
             </div>
 
             {rescheduleSuccess && (
-              <div style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', padding: '12px 16px', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
+ padding: '12px 16px', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
                 ✓ {rescheduleSuccess}
               </div>
             )}
@@ -5055,7 +5067,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     return (
                       <div key={resp.id} style={{ display: 'flex', justifyContent: isCustomer ? 'flex-end' : 'flex-start' }}>
                         <div style={{ maxWidth: '75%', padding: '10px 14px', borderRadius: isCustomer ? '14px 14px 2px 14px' : '14px 14px 14px 2px', background: isCustomer ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#f1f5f9', color: isCustomer ? 'white' : '#0f172a', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.7rem', opacity: 0.75, marginBottom: 4 }}>{isCustomer ? 'You' : resp.persona === 'ADMIN' ? 'ðŸ›¡ï¸ Support Team' : 'ðŸ‘· Employee'}</div>
+                          <div style={{ fontWeight: 700, fontSize: '0.7rem', opacity: 0.75, marginBottom: 4 }}>{isCustomer ? 'You' : resp.persona === 'ADMIN' ? 'ðŸ›¡ï¸  Support Team' : 'ðŸ‘· Employee'}</div>
                           {resp.message}
                           <div style={{ fontSize: '0.65rem', opacity: 0.6, marginTop: 4 }}>{new Date(resp.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</div>
                         </div>
@@ -6887,8 +6899,15 @@ function StepWorkflowCheckout({
         <SavedAddressesModal
           onClose={() => setShowSavedAddrModal(false)}
           currentAddress={formData.address}
-          onSelectAddress={(addr) => {
-            onChange({ target: { name: "address", value: addr } })
+          onSelectAddress={(addrObj) => {
+            if (typeof addrObj === "object" && addrObj !== null) {
+              const fullAddr = addrObj.formatted_address || [addrObj.address_line1, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(", ");
+              onChange({ target: { name: "address", value: fullAddr } });
+              if (addrObj.latitude) onChange({ target: { name: "latitude", value: String(addrObj.latitude) } });
+              if (addrObj.longitude) onChange({ target: { name: "longitude", value: String(addrObj.longitude) } });
+            } else if (typeof addrObj === "string") {
+              onChange({ target: { name: "address", value: addrObj } });
+            }
           }}
           onAddNewAddress={() => {
             setShowSavedAddrModal(false)
@@ -6900,12 +6919,17 @@ function StepWorkflowCheckout({
       {showAddSearchModal && (
         <AddAddressSearchModal
           onClose={() => setShowAddSearchModal(false)}
-          onSelectLocation={(loc) => {
+          onSelectLocation={(loc, coords) => {
             setShowAddSearchModal(false)
             if (loc) {
-              onChange({ target: { name: "address", value: loc } })
-              if (typeof setLocation === "function") setLocation(loc)
-              localStorage.setItem("calservice_user_location", loc)
+              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
+              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
+              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
+              onChange({ target: { name: "address", value: addrStr } });
+              if (latVal) onChange({ target: { name: "latitude", value: String(latVal) } });
+              if (lngVal) onChange({ target: { name: "longitude", value: String(lngVal) } });
+              if (typeof setLocation === "function") setLocation(addrStr)
+              localStorage.setItem("calservice_user_location", addrStr)
             }
           }}
           onUseCurrentLocation={() => {
@@ -6913,13 +6937,17 @@ function StepWorkflowCheckout({
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(async (pos) => {
                 try {
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                  const lat = pos.coords.latitude;
+                  const lng = pos.coords.longitude;
+                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
                   const data = await res.json();
                   if (data?.features?.[0]?.properties) {
                     const p = data.features[0].properties;
                     const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
                     if (display) {
                       onChange({ target: { name: "address", value: display } });
+                      onChange({ target: { name: "latitude", value: String(lat) } });
+                      onChange({ target: { name: "longitude", value: String(lng) } });
                       if (typeof setLocation === "function") setLocation(display);
                       localStorage.setItem("calservice_user_location", display);
                     }
@@ -7146,7 +7174,7 @@ export function BookingPage() {
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
   const [notes, setNotes] = useState("")
-  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "" })
+  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "", latitude: "", longitude: "" })
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [showPackageModal, setShowPackageModal] = useState(false)
@@ -7346,7 +7374,41 @@ export function BookingPage() {
     data.append("phone", formData.phone)
     data.append("email", formData.email || "")
     data.append("service_category", category?.id || "general")
-    data.append("issue_title", formData.issue_title || `${cart.map(c => c.name).join(', ')} — ${category?.name}`)
+
+    const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
+    const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
+    const defaultTitle = extraCount > 0
+      ? `${firstName} (+${extraCount} other item${extraCount > 1 ? 's' : ''})`
+      : firstName;
+
+    let finalIssueTitle = formData.issue_title || defaultTitle;
+    if (finalIssueTitle.length > 280) {
+      const shortName = firstName.length > 200 ? firstName.slice(0, 200) + "..." : firstName;
+      finalIssueTitle = extraCount > 0
+        ? `${shortName} (+${extraCount} other items)`
+        : shortName;
+    }
+
+    console.log("========== REAL BOOKING SUBMISSION ==========");
+    console.log("CONFIRM BOOKING CLICKED");
+    console.log("API URL: /api/booking/");
+    console.log("METHOD: POST");
+    console.log("customer_name:", formData.customer_name);
+    console.log("phone:", formData.phone);
+    console.log("email:", formData.email);
+    console.log("service_category:", category?.id || "general");
+    console.log("issue_title:", finalIssueTitle);
+    console.log("cart_data item count:", cart?.length || 0);
+    console.log("address:", formData.address);
+    console.log("latitude:", formData.latitude);
+    console.log("longitude:", formData.longitude);
+    console.log("preferred_date:", selDate);
+    console.log("preferred_time:", selTime);
+    console.log("payment_method:", backendPaymentMethod);
+    console.log("total_amount:", cart.reduce((a, c) => a + (c.price * c.quantity), 0));
+    console.log("==============================================");
+
+    data.append("issue_title", finalIssueTitle)
     let finalDesc = formData.description || "";
     if (urgency && urgency !== "Standard") {
       finalDesc += `\n[Urgency: ${urgency}]`;
@@ -7356,10 +7418,12 @@ export function BookingPage() {
     }
     data.append("description", finalDesc);
     data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
+    if (formData.latitude) data.append("latitude", formData.latitude)
+    if (formData.longitude) data.append("longitude", formData.longitude)
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
     data.append("total_amount", cart.reduce((a, c) => a + (c.price * c.quantity), 0))
-    // Serialize cart_data as JSON string •” backend will parse it robustly
+    // Serialize cart_data as JSON string
     data.append("cart_data", JSON.stringify(cart.map(c => ({
       id: c.id, name: c.name, price: c.price, quantity: c.quantity,
       categoryName: c.categoryName || category?.name || ""
@@ -7767,12 +7831,20 @@ export function BookingPage() {
       {showLocPicker && (
         <AddAddressSearchModal
           onClose={() => setShowLocPicker(false)}
-          onSelectLocation={(loc) => {
+          onSelectLocation={(loc, coords) => {
             setShowLocPicker(false)
             if (loc) {
-              setLocation(loc)
-              setFormData(prev => ({ ...prev, address: loc }))
-              localStorage.setItem("calservice_user_location", loc)
+              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
+              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
+              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
+              setLocation(addrStr)
+              setFormData(prev => ({
+                ...prev,
+                address: addrStr,
+                latitude: latVal ? String(latVal) : prev.latitude,
+                longitude: lngVal ? String(lngVal) : prev.longitude
+              }))
+              localStorage.setItem("calservice_user_location", addrStr)
             }
           }}
           onUseCurrentLocation={() => {
@@ -7780,14 +7852,21 @@ export function BookingPage() {
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(async (pos) => {
                 try {
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                  const lat = pos.coords.latitude;
+                  const lng = pos.coords.longitude;
+                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
                   const data = await res.json();
                   if (data?.features?.[0]?.properties) {
                     const p = data.features[0].properties;
                     const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
                     if (display) {
                       setLocation(display);
-                      setFormData(prev => ({ ...prev, address: display }));
+                      setFormData(prev => ({
+                        ...prev,
+                        address: display,
+                        latitude: String(lat),
+                        longitude: String(lng)
+                      }));
                       localStorage.setItem("calservice_user_location", display);
                     }
                   }
@@ -10090,40 +10169,44 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       id: "brick-new",
       catId: "brick",
       name: "Brick Wall Construction",
-      price: 999,
-      priceStr: "Starting from ₹999",
+      price: 1499,
+      priceStr: "Starts at ₹1,499",
+      badge: "Popular",
+      badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.2K",
       image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
-      includes: ["Material assessment", "Wall alignment checking", "Mortar preparation", "Brick laying", "Curing guidance"],
+      includes: ["Red brick supply & laying", "Mortar alignment check", "Curing guidance"],
       excludes: ["Plastering (available separately)", "Painting and structural slab work"],
       inspectionHighlights: ["Site layout measurement", "Load-bearing suitability check"],
       steps: ["Layout Planning", "Mortar Preparation", "Brick Alignment Laying", "Level Inspection", "Initial Curing"],
-      desc: "Build sturdy, high-quality new brick walls using premium cement mortar."
+      desc: "High-quality red clay brick masonry work with standard cement-mortar mix."
     },
     {
       id: "brick-block",
       catId: "brick",
       name: "Block Wall Construction",
-      price: 1299,
-      priceStr: "Starting from ₹1,299",
+      price: 1799,
+      priceStr: "Starts at ₹1,799",
+      badge: "Lightweight",
+      badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
       duration: "Flexible",
       rating: "4.7",
       reviews: "950",
       image: "/mockups/kitchen_cleaning_hero.png",
-      includes: ["Concrete blocks supply", "Mortar mixing & application", "Joint reinforcement check", "Block laying"],
+      includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"],
       excludes: ["Foundation excavation", "Plastering"],
       inspectionHighlights: ["Ground leveling check", "Alignment verification"],
       steps: ["Site Prep", "Mortar Mix", "Block Laying", "Alignment Check", "Curing"],
-      desc: "Solid or hollow concrete block wall construction for durability and strength."
+      desc: "AAC concrete block laying using thin-bed adhesive mortar for fast execution."
     },
     {
       id: "brick-repair",
       catId: "brick",
       name: "Brick/Block Wall Repair",
       price: 499,
-      priceStr: "Starting from ₹499",
+      priceStr: "Starts at ₹499",
       duration: "1-2 hrs",
       rating: "4.6",
       reviews: "1.1K",
@@ -10141,7 +10224,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "plastering",
       name: "Wall Plastering",
       price: 499,
-      priceStr: "Starting from ₹499",
+      priceStr: "Starts at ₹499",
+      badge: "Flawless",
+      badgeColor: "bg-teal-50 text-teal-700 border-teal-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.4K",
@@ -10157,7 +10242,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "plastering",
       name: "Plaster Repair",
       price: 349,
-      priceStr: "Starting from ₹349",
+      priceStr: "Starts at ₹349",
       duration: "1-2 hrs",
       rating: "4.7",
       reviews: "1.8K",
@@ -10173,7 +10258,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "plastering",
       name: "Crack Repair",
       price: 399,
-      priceStr: "Starting from ₹399",
+      priceStr: "Starts at ₹399",
+      badge: "Heavy Duty",
+      badgeColor: "bg-red-50 text-red-700 border-red-100",
       duration: "1 hr",
       rating: "4.6",
       reviews: "3.2K",
@@ -10191,7 +10278,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "partition",
       name: "New Partition Wall",
       price: 1999,
-      priceStr: "Starting from ₹1,999",
+      priceStr: "Starts at ₹1,999",
+      badge: "Sturdy",
+      badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "780",
@@ -10207,7 +10296,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "partition",
       name: "Room Partition",
       price: 1999,
-      priceStr: "Starting from ₹1,999",
+      priceStr: "Starts at ₹1,999",
+      badge: "Most Booked",
+      badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "950",
@@ -10223,7 +10314,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "partition",
       name: "Half-Wall Construction",
       price: 1499,
-      priceStr: "Starting from ₹1,499",
+      priceStr: "Starts at ₹1,499",
+      badge: "Trending",
+      badgeColor: "bg-pink-50 text-pink-700 border-pink-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.1K",
@@ -10241,7 +10334,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "demolition",
       name: "Wall Breaking",
       price: 999,
-      priceStr: "Starting from ₹999",
+      priceStr: "Starts at ₹999",
+      badge: "Safety Certified",
+      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
       duration: "Flexible",
       rating: "4.7",
       reviews: "1.5K",
@@ -10257,7 +10352,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "demolition",
       name: "Partition Removal",
       price: 399,
-      priceStr: "Starting from ₹399",
+      priceStr: "Starts at ₹399",
       duration: "1-2 hrs",
       rating: "4.8",
       reviews: "1.3K",
@@ -10273,7 +10368,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "demolition",
       name: "Door/Window Opening",
       price: 599,
-      priceStr: "Starting from ₹599",
+      priceStr: "Starts at ₹599",
+      badge: "Precision Cut",
+      badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
       duration: "2 hrs",
       rating: "4.7",
       reviews: "820",
@@ -10318,28 +10415,54 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   };
 
   const addToCart = (pkg) => {
+    console.log("DEBUG [addToCart] called with pkg:", pkg);
+    if (!pkg) return;
+    if (typeof setCart !== "function") {
+      console.error("DEBUG [addToCart] error: setCart is not a function", setCart);
+      return;
+    }
     setCart(prev => {
-      const existing = prev.find(c => c.id === pkg.id);
+      const currentCart = Array.isArray(prev) ? prev : [];
+      const cartId = pkg.id.startsWith("serv-mason-") ? pkg.id : `serv-mason-${pkg.id}`;
+      const existing = currentCart.find(c => c.id === cartId);
       if (existing) {
-        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
+        const updated = currentCart.map(c => c.id === cartId ? { ...c, quantity: c.quantity + 1 } : c);
+        console.log("DEBUG [addToCart] incremented existing item. New cart:", updated);
+        return updated;
       }
-      return [...prev, { ...pkg, quantity: 1, categoryName: "Mason" }];
+      const rawName = pkg.name.endsWith(" (Site Consultation)") ? pkg.name : `${pkg.name} (Site Consultation)`;
+      const newItem = { id: cartId, name: rawName, price: 49, quantity: 1, categoryName: "Mason" };
+      const updated = [...currentCart, newItem];
+      console.log("DEBUG [addToCart] added new item. New cart:", updated);
+      return updated;
     });
   };
 
   const removeFromCart = (pkgId) => {
+    console.log("DEBUG [removeFromCart] called with pkgId:", pkgId);
+    if (!pkgId) return;
+    if (typeof setCart !== "function") {
+      console.error("DEBUG [removeFromCart] error: setCart is not a function", setCart);
+      return;
+    }
     setCart(prev => {
-      const existing = prev.find(c => c.id === pkgId);
-      if (!existing) return prev;
-      if (existing.quantity === 1) {
-        return prev.filter(c => c.id !== pkgId);
+      const currentCart = Array.isArray(prev) ? prev : [];
+      const cartId = pkgId.startsWith("serv-mason-") ? pkgId : `serv-mason-${pkgId}`;
+      const existing = currentCart.find(c => c.id === cartId);
+      if (existing && existing.quantity > 1) {
+        const updated = currentCart.map(c => c.id === cartId ? { ...c, quantity: c.quantity - 1 } : c);
+        console.log("DEBUG [removeFromCart] decremented item. New cart:", updated);
+        return updated;
       }
-      return prev.map(c => c.id === pkgId ? { ...c, quantity: c.quantity - 1 } : c);
+      const updated = currentCart.filter(c => c.id !== cartId);
+      console.log("DEBUG [removeFromCart] removed item completely. New cart:", updated);
+      return updated;
     });
   };
 
   const getCartCount = (pkgId) => {
-    const item = cart.find(c => c.id === pkgId);
+    if (!cart || !Array.isArray(cart)) return 0;
+    const item = cart.find(c => c && c.id === pkgId);
     return item ? item.quantity : 0;
   };
 
@@ -10570,50 +10693,78 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                     </div>
                   )}
 
-                  <div className="uc-paint-list" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <div className="uc-paint-list" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
                     {filteredServices.map(service => {
-                      const count = getCartCount(service.id);
+                      const count = getCartCount("serv-mason-" + service.id);
                       return (
                         <div
                           key={service.id}
                           ref={cardRefs[service.id]}
                           style={{
-                            borderBottom: "1.5px solid #f1f5f9", padding: "1.25rem 0",
-                            background: "#ffffff", display: "flex", flexDirection: "column"
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "20px",
+                            padding: "1.25rem",
+                            background: "#ffffff",
+                            display: "flex",
+                            flexDirection: "column",
+                            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)"
                           }}
                         >
                           <div style={{ display: "flex", gap: "1.25rem", textAlign: "left", alignItems: "flex-start" }}>
                             {/* Left Info Column */}
                             <div style={{ flex: 1 }}>
-                              <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: "0 0 4px 0" }}>{service.name}</h4>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
+                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>{service.name}</h4>
+                                {service.badge && (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${service.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
+                                    {service.badge}
+                                  </span>
+                                )}
+                              </div>
                               <p style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0d9488", margin: 0 }}>
                                 {service.priceStr}
                                 {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
                               </p>
+                              <div style={{ display: "inline-flex", alignItems: "center", background: "#ecfdf5", border: "1px solid #d1fae5", borderRadius: "6px", padding: "2px 8px", margin: "4px 0", fontSize: "0.7rem", fontWeight: 800, color: "#047857" }}>
+                                Consultation & Visit Charge: ₹49
+                              </div>
                               <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
 
-                              {/* Includes Badges */}
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                              {/* Includes Bullet Points */}
+                              <ul style={{ listStyleType: "none", padding: 0, margin: "6px 0 10px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
                                 {service.includes.slice(0, 3).map((inc, i) => (
-                                  <span key={i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: "12px" }}>
-                                    ✓ {inc}
-                                  </span>
+                                  <li key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", color: "#475569", fontWeight: 600 }}>
+                                    <span style={{ color: "#94a3b8", fontSize: "1rem", lineHeight: 0 }}>•</span>
+                                    {inc}
+                                  </li>
                                 ))}
-                              </div>
+                              </ul>
 
-                              <button
-                                onClick={() => setActiveDetailService(service)}
-                                style={{
-                                  background: "none", border: "none", color: "#0d9488", fontWeight: 800, fontSize: "0.75rem",
-                                  cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", marginTop: "12px", padding: 0
-                                }}
-                              >
-                                View details <ChevronRight size={13} />
-                              </button>
+                              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
+                                <button
+                                  onClick={() => setActiveDetailService(service)}
+                                  style={{
+                                    background: "none", border: "none", color: "#2563eb", fontWeight: 850, fontSize: "0.75rem",
+                                    cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", padding: 0
+                                  }}
+                                >
+                                  View details <ChevronRight size={13} style={{ strokeWidth: 2.5 }} />
+                                </button>
+                                <button
+                                  onClick={() => addToCart(service)}
+                                  style={{
+                                    background: "#0d9488", border: "none", color: "#ffffff", borderRadius: "8px",
+                                    padding: "6px 14px", fontSize: "0.68rem", fontWeight: 850, cursor: "pointer",
+                                    boxShadow: "0 2px 4px rgba(13,148,136,0.2)", textTransform: "uppercase", letterSpacing: "0.02em"
+                                  }}
+                                >
+                                  Book Consultation
+                                </button>
+                              </div>
                             </div>
 
                             {/* Right Image/Button Column */}
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                            <div style={{ position: "relative", width: "112px", height: "108px", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                               <div style={{ width: "112px", height: "96px", borderRadius: "16px", overflow: "hidden", background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
                                 <img
                                   src={service.image}
@@ -10626,28 +10777,32 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                 />
                               </div>
 
-                              {/* Cart Controls */}
-                              {count > 0 ? (
-                                <div style={{
-                                  display: "flex", alignItems: "center", gap: "12px", border: "1.5px solid #0d9488",
-                                  background: "#f0fdf4", borderRadius: "20px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 900, color: "#0f766e"
-                                }}>
-                                  <button onClick={() => removeFromCart(service.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>-</button>
-                                  <span>{count}</span>
-                                  <button onClick={() => addToCart(service)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>+</button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => addToCart(service)}
-                                  style={{
-                                    background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0d9488", borderRadius: "20px",
-                                    padding: "5px 16px", fontSize: "0.72rem", fontWeight: 800, cursor: "pointer",
-                                    boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
-                                  }}
-                                >
-                                  + ADD
-                                </button>
-                              )}
+                              {/* Cart Controls overlaid on image */}
+                              <div style={{ position: "absolute", bottom: "4px", left: "50%", transform: "translateX(-50%)", zIndex: 10 }}>
+                                {count > 0 ? (
+                                  <div style={{
+                                    display: "flex", alignItems: "center", gap: "10px", border: "1px solid #0d9488",
+                                    background: "#ffffff", borderRadius: "8px", padding: "4px 10px", fontSize: "0.7rem", fontWeight: 900, color: "#0f766e",
+                                    boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", minWidth: "76px", justifyContent: "space-between"
+                                  }}>
+                                    <button onClick={() => removeFromCart(service.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900, fontSize: "0.9rem", padding: "0 2px" }}>-</button>
+                                    <span>{count}</span>
+                                    <button onClick={() => addToCart(service)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900, fontSize: "0.9rem", padding: "0 2px" }}>+</button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => addToCart(service)}
+                                    style={{
+                                      background: "#ffffff", border: "1px solid #e2e8f0", color: "#0d9488", borderRadius: "8px",
+                                      padding: "5px 12px", fontSize: "0.68rem", fontWeight: 850, cursor: "pointer",
+                                      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", gap: "4px",
+                                      whiteSpace: "nowrap"
+                                    }}
+                                  >
+                                    <ShoppingCart size={11} style={{ strokeWidth: 2.5 }} /> ADD
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -10757,34 +10912,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                               </div>
                             </div>
                           )}
-                          {/* General description box for standard masonry when added */}
-                          {count > 0 && (
-                            <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                              <div style={{ textAlign: "left" }}>
-                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Describe requirement (optional)</label>
-                                <textarea
-                                  value={generalDesc}
-                                  onChange={e => setGeneralDesc(e.target.value)}
-                                  placeholder="Explain your needs in detail (e.g. wall size, crack types)..."
-                                  style={{ width: "100%", height: "60px", padding: "0.5rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem", resize: "none", fontFamily: "inherit" }}
-                                />
-                              </div>
-                              <div style={{ textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                <div>
-                                  <label style={{ fontSize: "0.75rem", fontWeight: 800, color: "#475569", display: "inline-block", marginRight: "10px" }}>Upload photo</label>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={e => handlePhotoUpload(e, "general")}
-                                    style={{ fontSize: "0.75rem", color: "#64748b" }}
-                                  />
-                                </div>
-                                {generalPhotoPreview && (
-                                  <img src={generalPhotoPreview} alt="Preview" style={{ width: "60px", height: "45px", objectFit: "cover", borderRadius: "4px", border: "1px solid #cbd5e1" }} />
-                                )}
-                              </div>
-                            </div>
-                          )}
+
                         </div>
                       );
                     })}
@@ -10889,30 +11017,88 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
               {/* Right Column - Promise & Cart Summary */}
               <div className="uc-paint-right-col">
-                <div className="uc-paint-promise-card">
-                  <div className="uc-paint-promise-title-row">
-                    <ShieldCheck size={18} style={{ color: "#059669" }} />
-                    <span>CalServices Promise</span>
+                {/* Why Choose Us Box */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-sm text-left mb-4">
+                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-widest mb-3">
+                    Why choose us?
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      {
+                        title: "Trained Masons",
+                        bg: "bg-indigo-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#4f46e5" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Accurate Estimate",
+                        bg: "bg-teal-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#0d9488" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m9 11 3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Premium Materials",
+                        bg: "bg-pink-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#db2777" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Alignment Check",
+                        bg: "bg-amber-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#ea580c" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            <path d="m9 12 2 2 4-4" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Site Cleanup",
+                        bg: "bg-blue-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#2563eb" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Service Warranty",
+                        bg: "bg-emerald-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#059669" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          </svg>
+                        )
+                      }
+                    ].map((item, idx) => (
+                      <div key={idx} className="bg-white border border-slate-100 rounded-xl p-2 flex flex-col items-center justify-center text-center gap-1 shadow-2xs">
+                        <div className={`w-7 h-7 rounded-full ${item.bg} flex items-center justify-center`}>
+                          {item.icon}
+                        </div>
+                        <span className="text-[8px] font-black text-slate-800 uppercase tracking-tight leading-tight">
+                          {item.title}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <ul className="uc-paint-promise-list">
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>Verified Professionals</span>
-                    </li>
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>1-Year Structural Warranty</span>
-                    </li>
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>Debris Post-Service Cleanup</span>
-                    </li>
-                  </ul>
                 </div>
+
+
 
                 <div className="uc-paint-cart-card">
                   <h4 className="uc-paint-cart-card-title">Your Cart</h4>
-                  {cart.filter(c => c.id.startsWith("mason-")).length === 0 ? (
+                  {cart.filter(c => c.id.includes("mason")).length === 0 ? (
                     <div>
                       <ShoppingCart className="uc-paint-empty-cart-img" style={{ color: "#94a3b8" }} />
                       <p className="uc-paint-empty-cart-text">No items in your cart</p>
@@ -10920,7 +11106,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   ) : (
                     <div>
                       <div className="uc-paint-cart-items">
-                        {cart.filter(c => c.id.startsWith("mason-")).map(item => (
+                        {cart.filter(c => c.id.includes("mason")).map(item => (
                           <div key={item.id} className="uc-paint-cart-item">
                             <div className="uc-paint-cart-item-info">
                               <span className="uc-paint-cart-item-name">{item.name}</span>
@@ -17121,7 +17307,8 @@ export function BkStyles() {
         color:#1e293b; margin:0 0 0.3rem;
         letter-spacing:-0.02em;
       }
-      .uc-step-sub { font-size:0.82rem; color:#64748b; margin:0 0 1.5rem; font-weight:500; }
+      .uc-step-sub { font-size:0.82rem; color:#64748b; margin:0 0 1.5rem; font-weight:500
+; }
 
       /* ── Package Cards ── */
       .uc-pkg-grid {

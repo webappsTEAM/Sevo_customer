@@ -15,6 +15,6 @@ with open(out_file, 'w', encoding='utf-8') as f:
     users = User.objects.all()
     f.write(f"Total users: {users.count()}\n")
     for u in users:
-        f.write(f"ID: {u.id} | Username: {u.username} | Email: '{u.email}' | Role: '{u.role}' | Staff: {u.is_staff} | Superuser: {u.is_superuser} | Company: {u.company_id}\n")
+        f.write(f"ID: {u.id} | Username: {u.username} | Email: '{u.email}' | Role: '{u.role}' | First Name: '{u.first_name}' | Last Name: '{u.last_name}'\n")
 
 print("Wrote user info to file")
