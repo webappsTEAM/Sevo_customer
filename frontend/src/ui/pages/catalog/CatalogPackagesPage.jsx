@@ -2540,7 +2540,7 @@ export function CatalogPackagesPage() {
             </div>
 
             {/* ── View Details Content Section (only for Home Services & Pest Control) ── */}
-            {activePillar?.key === "home_pest_control" && (() => {
+            {activePillar?.key !== "goods_transports" && (() => {
               const vd = quickPriceEditing.viewDetails || { tools: [], ready: [], reviews: [], faqs: [] }
               const setVd = (updates) => setQuickPriceEditing({ ...quickPriceEditing, viewDetails: { ...vd, ...updates } })
               return (
