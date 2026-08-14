@@ -42,6 +42,9 @@ class PublicPackageListView(APIView):
         service_slug = request.GET.get("service_slug")
         if service_slug:
             qs = qs.filter(service__slug=service_slug)
+        category_slug = request.GET.get("category_slug")
+        if category_slug:
+            qs = qs.filter(service__category__slug=category_slug)
         data = PackageSerializer(qs, many=True).data
         return Response({"success": True, "data": data})
 
@@ -68,7 +71,10 @@ class AdminCategoryDetailView(APIView):
     permission_classes = [IsAdminRole]
 
     def put(self, request, pk):
-        category = get_object_or_404(CatalogCategory, pk=pk)
+        if str(pk).isdigit():
+            category = get_object_or_404(CatalogCategory, pk=int(pk))
+        else:
+            category = get_object_or_404(CatalogCategory, slug=str(pk))
         serializer = CatalogCategorySerializer(category, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
@@ -77,7 +83,10 @@ class AdminCategoryDetailView(APIView):
         return Response({"success": True, "data": CatalogCategorySerializer(category).data})
 
     def delete(self, request, pk):
-        category = get_object_or_404(CatalogCategory, pk=pk)
+        if str(pk).isdigit():
+            category = get_object_or_404(CatalogCategory, pk=int(pk))
+        else:
+            category = get_object_or_404(CatalogCategory, slug=str(pk))
         try:
             catalog_service.delete_category(category)
         except DjangoValidationError as exc:
@@ -110,7 +119,10 @@ class AdminServiceDetailView(APIView):
     permission_classes = [IsAdminRole]
 
     def put(self, request, pk):
-        service = get_object_or_404(Service, pk=pk)
+        if str(pk).isdigit():
+            service = get_object_or_404(Service, pk=int(pk))
+        else:
+            service = get_object_or_404(Service, slug=str(pk))
         serializer = ServiceSerializer(service, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
@@ -119,7 +131,10 @@ class AdminServiceDetailView(APIView):
         return Response({"success": True, "data": ServiceSerializer(service).data})
 
     def delete(self, request, pk):
-        service = get_object_or_404(Service, pk=pk)
+        if str(pk).isdigit():
+            service = get_object_or_404(Service, pk=int(pk))
+        else:
+            service = get_object_or_404(Service, slug=str(pk))
         try:
             catalog_service.delete_service(service)
         except DjangoValidationError as exc:
@@ -158,7 +173,21 @@ class AdminPackageDetailView(APIView):
     permission_classes = [IsAdminRole]
 
     def put(self, request, pk):
-        package = get_object_or_404(Package, pk=pk)
+        package = None
+        if str(pk).isdigit():
+            package = Package.objects.filter(pk=int(pk)).first()
+        if not package:
+            package = Package.objects.filter(slug=str(pk)).first()
+        if not package:
+            name = request.data.get("name")
+            if name:
+                package = Package.objects.filter(name__iexact=name).first()
+                if not package:
+                    # Partial match
+                    package = Package.objects.filter(name__icontains=name.split("/")[0].strip()).first()
+        if not package:
+            return Response({"success": False, "message": f"Package '{pk}' not found in database"}, status=404)
+
         serializer = PackageSerializer(package, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
@@ -179,7 +208,10 @@ class AdminPackageTransitionView(APIView):
     permission_classes = [IsAdminRole]
 
     def post(self, request, pk):
-        package = get_object_or_404(Package, pk=pk)
+        if str(pk).isdigit():
+            package = get_object_or_404(Package, pk=int(pk))
+        else:
+            package = get_object_or_404(Package, slug=str(pk))
         new_status = request.data.get("status")
         reason = request.data.get("reason")
         if not new_status:

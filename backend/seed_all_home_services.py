@@ -502,7 +502,7 @@ def seed():
         return
 
     # Get max ID to avoid sequence issues
-    max_id = Package.objects.aggregate(Max('id'))['id__max'] or 0
+    max_id = Package.objects.order_by().aggregate(Max('id'))['id__max'] or 0
 
     for s_slug, s_data in SERVICES_DATA.items():
         service, _ = Service.objects.get_or_create(
@@ -518,7 +518,7 @@ def seed():
         print(f"Service: {service.name}")
 
         for pkg_data in s_data["packages"]:
-            pkg = Package.objects.filter(slug=pkg_data["slug"]).first()
+            pkg = Package.objects.order_by('id').filter(slug=pkg_data["slug"]).first()
             if pkg:
                 pkg.service = service
                 pkg.name = pkg_data["name"]

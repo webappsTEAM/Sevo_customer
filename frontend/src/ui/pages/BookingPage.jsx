@@ -150,60 +150,60 @@ function openGoogleSignInPopup(onSuccess, onError) {
 
 const PACKAGES = {
   cleaning: [
-    { id: "clean-std", name: "Standard", price: 999, priceStr: "₹999", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop", includes: ["Floor Cleaning", "Kitchen Surface Cleaning", "Bathroom Cleaning", "Dusting"], excludes: [] },
-    { id: "clean-prem", name: "Premium", price: 2499, priceStr: "₹2,499", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop", includes: ["Complete Home Deep Cleaning", "Kitchen Deep Cleaning", "Bathroom Deep Cleaning", "Sofa Vacuuming", "Window Cleaning", "Balcony Cleaning"], excludes: [] },
-    { id: "clean-move", name: "Move-In / Move-Out Package", price: 3499, priceStr: "₹3,499", duration: "6 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop", includes: ["Entire House Cleaning", "Cabinet Cleaning", "Fan & Light Cleaning", "Window & Glass Cleaning"], excludes: [] },
+    { id: "clean-std", name: "Standard", price: 999, priceStr: "₹999", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", includes: ["Floor Cleaning", "Kitchen Surface Cleaning", "Bathroom Cleaning", "Dusting"], excludes: [] },
+    { id: "clean-prem", name: "Premium", price: 2499, priceStr: "₹2,499", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", includes: ["Complete Home Deep Cleaning", "Kitchen Deep Cleaning", "Bathroom Deep Cleaning", "Sofa Vacuuming", "Window Cleaning", "Balcony Cleaning"], excludes: [] },
+    { id: "clean-move", name: "Move-In / Move-Out Package", price: 3499, priceStr: "₹3,499", duration: "6 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=500&q=80&fit=crop", includes: ["Entire House Cleaning", "Cabinet Cleaning", "Fan & Light Cleaning", "Window & Glass Cleaning"], excludes: [] },
   ],
   plumbing: [
-    { id: "plum-std", name: "Standard", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", includes: ["One Plumbing Issue", "Leak Check", "Basic Repair"], excludes: [] },
-    { id: "plum-prem", name: "Premium", price: 799, priceStr: "₹799", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop", includes: ["Up to 3 Plumbing Repairs", "Pipe Inspection", "Drain Cleaning"], excludes: [] },
-    { id: "plum-comp", name: "Complete Home Plumbing", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop", includes: ["Full House Plumbing Inspection", "Multiple Repairs", "Water Pressure Check"], excludes: [] },
+    { id: "plum-std", name: "Standard", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", includes: ["One Plumbing Issue", "Leak Check", "Basic Repair"], excludes: [] },
+    { id: "plum-prem", name: "Premium", price: 799, priceStr: "₹799", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop", includes: ["Up to 3 Plumbing Repairs", "Pipe Inspection", "Drain Cleaning"], excludes: [] },
+    { id: "plum-comp", name: "Complete Home Plumbing", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop", includes: ["Full House Plumbing Inspection", "Multiple Repairs", "Water Pressure Check"], excludes: [] },
   ],
   electrical: [
-    { id: "elec-std", name: "Standard", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", includes: ["One Electrical Repair", "Safety Check"], excludes: [] },
-    { id: "elec-prem", name: "Premium", price: 899, priceStr: "₹899", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop", includes: ["Multiple Electrical Repairs", "Wiring Inspection", "MCB Check"], excludes: [] },
-    { id: "elec-care", name: "Home Electrical Care", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop", includes: ["Complete Home Inspection", "Fan & Light Service", "Socket Testing"], excludes: [] },
+    { id: "elec-std", name: "Standard", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&q=80&fit=crop", includes: ["One Electrical Repair", "Safety Check"], excludes: [] },
+    { id: "elec-prem", name: "Premium", price: 899, priceStr: "₹899", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop", includes: ["Multiple Electrical Repairs", "Wiring Inspection", "MCB Check"], excludes: [] },
+    { id: "elec-care", name: "Home Electrical Care", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop", includes: ["Complete Home Inspection", "Fan & Light Service", "Socket Testing"], excludes: [] },
   ],
   hvac: [
-    { id: "hvac-std", name: "Standard Package", price: 599, priceStr: "₹599", duration: "1-2 Hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop", includes: ["General AC Service", "Filter Cleaning", "Cooling Performance Check", "Basic Inspection"], excludes: [] },
-    { id: "hvac-prem", name: "Premium Package", price: 1299, priceStr: "₹1,299", duration: "2-3 Hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop", includes: ["Deep Coil Cleaning", "Water Jet Cleaning", "Filter Cleaning", "Cooling Performance Check", "Gas Pressure Check", "Minor Adjustments", "30-Day Service Warranty"], excludes: [] },
-    { id: "hvac-amc", name: "Annual Maintenance Package (AMC)", price: 2999, priceStr: "₹2,999", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop", includes: ["4 AC Services per Year", "Priority Technician", "Discount on Spare Parts", "Free Basic Inspection", "Service Reminder"], excludes: [] },
+    { id: "hvac-std", name: "Standard Package", price: 599, priceStr: "₹599", duration: "1-2 Hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=500&q=80&fit=crop", includes: ["General AC Service", "Filter Cleaning", "Cooling Performance Check", "Basic Inspection"], excludes: [] },
+    { id: "hvac-prem", name: "Premium Package", price: 1299, priceStr: "₹1,299", duration: "2-3 Hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=500&q=80&fit=crop", includes: ["Deep Coil Cleaning", "Water Jet Cleaning", "Filter Cleaning", "Cooling Performance Check", "Gas Pressure Check", "Minor Adjustments", "30-Day Service Warranty"], excludes: [] },
+    { id: "hvac-amc", name: "Annual Maintenance Package (AMC)", price: 2999, priceStr: "₹2,999", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=500&q=80&fit=crop", includes: ["4 AC Services per Year", "Priority Technician", "Discount on Spare Parts", "Free Basic Inspection", "Service Reminder"], excludes: [] },
   ],
   appliance_repair: [
-    { id: "app-std", name: "Standard", price: 399, priceStr: "₹399", duration: "1 hr", popular: false, tag: "", includes: ["Appliance Diagnosis", "Basic Repair"], excludes: [] },
-    { id: "app-prem", name: "Premium", price: 999, priceStr: "₹999", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop", includes: ["Complete Servicing", "Internal Cleaning", "Performance Testing"], excludes: [] },
-    { id: "app-amc", name: "Annual Care Plan", price: 2499, priceStr: "₹2,499", duration: "Yearly", popular: false, tag: "Best Value", includes: ["3 Service Visits", "Priority Support", "Discount on Parts"], excludes: [] },
+    { id: "app-std", name: "Standard", price: 399, priceStr: "₹399", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=500&q=80&fit=crop", includes: ["Appliance Diagnosis", "Basic Repair"], excludes: [] },
+    { id: "app-prem", name: "Premium", price: 999, priceStr: "₹999", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=500&q=80&fit=crop", includes: ["Complete Servicing", "Internal Cleaning", "Performance Testing"], excludes: [] },
+    { id: "app-amc", name: "Annual Care Plan", price: 2499, priceStr: "₹2,499", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=500&q=80&fit=crop", includes: ["3 Service Visits", "Priority Support", "Discount on Parts"], excludes: [] },
   ],
   security: [
-    { id: "check", name: "System Check", price: 499, priceStr: "₹499", duration: "1 hr", popular: false, tag: "", includes: ["Camera test", "DVR check", "App verify"], excludes: ["New cables", "Repositioning"] },
-    { id: "install2", name: "2-Camera Setup", price: 2999, priceStr: "₹2,999", duration: "3 hrs", popular: true, tag: "Most Booked", includes: ["2 HD cameras", "DVR setup", "Mobile app config", "Cabling"], excludes: ["Monthly plan"] },
-    { id: "install4", name: "4-Camera Setup", price: 4999, priceStr: "₹4,999", duration: "5 hrs", popular: false, tag: "Best Value", includes: ["4 HD cameras", "DVR", "App", "Night vision", "1-yr warranty"], excludes: [] },
+    { id: "check", name: "System Check", price: 499, priceStr: "₹499", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop", includes: ["Camera test", "DVR check", "App verify"], excludes: ["New cables", "Repositioning"] },
+    { id: "install2", name: "2-Camera Setup", price: 2999, priceStr: "₹2,999", duration: "3 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop", includes: ["2 HD cameras", "DVR setup", "Mobile app config", "Cabling"], excludes: ["Monthly plan"] },
+    { id: "install4", name: "4-Camera Setup", price: 4999, priceStr: "₹4,999", duration: "5 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=500&q=80&fit=crop", includes: ["4 HD cameras", "DVR", "App", "Night vision", "1-yr warranty"], excludes: [] },
   ],
   general: [
-    { id: "basic", name: "1 Hr Handyman", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", includes: ["Any general task", "Basic tools"], excludes: ["Materials", "Electrical/plumbing"] },
-    { id: "standard", name: "2 Hr Handyman", price: 499, priceStr: "₹499", duration: "2 hrs", popular: true, tag: "Most Booked", includes: ["Multiple small tasks", "Tools included", "Experienced pro"], excludes: ["Materials"] },
-    { id: "complete", name: "Full Day Pro", price: 999, priceStr: "₹999", duration: "8 hrs", popular: false, tag: "Best Value", includes: ["Unlimited tasks", "All tools", "Priority scheduling"], excludes: ["Materials above •‚¹500"] },
+    { id: "basic", name: "1 Hr Handyman", price: 299, priceStr: "₹299", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", includes: ["Any general task", "Basic tools"], excludes: ["Materials", "Electrical/plumbing"] },
+    { id: "standard", name: "2 Hr Handyman", price: 499, priceStr: "₹499", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", includes: ["Multiple small tasks", "Tools included", "Experienced pro"], excludes: ["Materials"] },
+    { id: "complete", name: "Full Day Pro", price: 999, priceStr: "₹999", duration: "8 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=500&q=80&fit=crop", includes: ["Unlimited tasks", "All tools", "Priority scheduling"], excludes: ["Materials above ₹500"] },
   ],
   carpentry: [
-    { id: "carp-std", name: "Standard Repair", price: 499, priceStr: "₹499", duration: "2 hrs", popular: false, tag: "", image: "/tractor-emulsion.png", includes: ["Minor Woodwork", "Hinge Replacement", "Basic Fixes"], excludes: [] },
-    { id: "carp-prem", name: "Premium Setup", price: 999, priceStr: "₹999", duration: "4 hrs", popular: true, tag: "Most Booked", image: "/tractor-emulsion.png", includes: ["Furniture Assembly", "Custom Shelving", "Door Alignment"], excludes: [] },
-    { id: "carp-full", name: "Full Day Carpentry", price: 1999, priceStr: "₹1,999", duration: "8 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop", includes: ["Extensive Repairs", "New Installations", "Material Shopping"], excludes: [] },
+    { id: "carp-std", name: "Standard Repair", price: 499, priceStr: "₹499", duration: "2 hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop", includes: ["Minor Woodwork", "Hinge Replacement", "Basic Fixes"], excludes: [] },
+    { id: "carp-prem", name: "Premium Setup", price: 999, priceStr: "₹999", duration: "4 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop", includes: ["Furniture Assembly", "Custom Shelving", "Door Alignment"], excludes: [] },
+    { id: "carp-full", name: "Full Day Carpentry", price: 1999, priceStr: "₹1,999", duration: "8 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop", includes: ["Extensive Repairs", "New Installations", "Material Shopping"], excludes: [] },
   ],
   pest_control: [
-    { id: "pest-std", name: "Basic Pest Control", price: 799, priceStr: "₹799", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=300&q=80&fit=crop", includes: ["Cockroach & Ant Spray", "Targeted Areas"], excludes: [] },
-    { id: "pest-prem", name: "Comprehensive Treatment", price: 1499, priceStr: "₹1,499", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=300&q=80&fit=crop", includes: ["Full Home Spray", "Termite Check", "Bedbug Treatment"], excludes: [] },
-    { id: "pest-year", name: "Annual Pest Protection", price: 3499, priceStr: "₹3,499", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1628102491629-778586284000?w=300&q=80&fit=crop", includes: ["3 Service Visits", "Priority Response", "Guarantee"], excludes: [] },
+    { id: "pest-std", name: "Basic Pest Control", price: 799, priceStr: "₹799", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", includes: ["Cockroach & Ant Spray", "Targeted Areas"], excludes: [] },
+    { id: "pest-prem", name: "Comprehensive Treatment", price: 1499, priceStr: "₹1,499", duration: "2 hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", includes: ["Full Home Spray", "Termite Check", "Bedbug Treatment"], excludes: [] },
+    { id: "pest-year", name: "Annual Pest Protection", price: 3499, priceStr: "₹3,499", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop", includes: ["3 Service Visits", "Priority Response", "Guarantee"], excludes: [] },
   ],
   painting: [
-    { id: "paint-room", name: "Single Room Makeover", price: 2999, priceStr: "₹2,999", duration: "1 day", popular: false, tag: "", image: "/tractor-uno.png", includes: ["Basic Prep", "2 Coats Paint", "Cleanup"], excludes: [] },
-    { id: "paint-home", name: "Complete Home Painting", price: 9999, priceStr: "₹9,999", duration: "4 days", popular: true, tag: "Most Booked", image: "/tractor-uno.png", includes: ["Wall Putty", "Primer", "Premium Paint", "Post-Cleanup"], excludes: [] },
-    { id: "paint-prem", name: "Texture & Decor Painting", price: 14999, priceStr: "₹14,999", duration: "5 days", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1584820927500-11b3337a7c5a?w=300&q=80&fit=crop", includes: ["Custom Textures", "Accent Walls", "Designer Finish"], excludes: [] },
+    { id: "paint-room", name: "Single Room Makeover", price: 2999, priceStr: "₹2,999", duration: "1 day", popular: false, tag: "", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=500&q=80&fit=crop", includes: ["Basic Prep", "2 Coats Paint", "Cleanup"], excludes: [] },
+    { id: "paint-home", name: "Complete Home Painting", price: 9999, priceStr: "₹9,999", duration: "4 days", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=500&q=80&fit=crop", includes: ["Wall Putty", "Primer", "Premium Paint", "Post-Cleanup"], excludes: [] },
+    { id: "paint-prem", name: "Texture & Decor Painting", price: 14999, priceStr: "₹14,999", duration: "5 days", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=500&q=80&fit=crop", includes: ["Custom Textures", "Accent Walls", "Designer Finish"], excludes: [] },
   ],
 }
 
 const TIME_SLOTS = [
   { period: "Morning", icon: "ðŸŒ…", slots: [{ t: "07:00", l: "7:00 AM" }, { t: "08:00", l: "8:00 AM" }, { t: "09:00", l: "9:00 AM" }, { t: "10:00", l: "10:00 AM" }, { t: "11:00", l: "11:00 AM" }] },
-  { period: "Afternoon", icon: "•˜•ï¸", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
+  { period: "Afternoon", icon: "•˜•ï¸ ", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
   { period: "Evening", icon: "ðŸŒ†", slots: [{ t: "17:00", l: "5:00 PM" }, { t: "18:00", l: "6:00 PM" }, { t: "19:00", l: "7:00 PM" }] },
 ]
 
@@ -351,7 +351,7 @@ function SavedAddressesModal({
   useEffect(() => {
     async function loadSavedAddresses() {
       try {
-        const res = await apiRequest("/customer/addresses/")
+        const res = await apiRequest("/auth/customer/addresses/")
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
           const list = res.data.map(a => ({
             id: String(a.id),
@@ -775,7 +775,7 @@ export function AddAddressSearchModal({
                       return (
                         <div
                           key={addr.id || idx}
-                          onClick={() => onSelectLocation(displayAddr)}
+                          onClick={() => onSelectLocation(displayAddr, { lat: addr.latitude, lng: addr.longitude })}
                           className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
                         >
                           <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
@@ -857,7 +857,7 @@ export function AddAddressSearchModal({
                 ? addressData
                 : addressData?.formatted_address || [addressData?.flat_house_no, addressData?.locality, addressData?.city].filter(Boolean).join(", ")
               if (typeof onSelectLocation === "function") {
-                onSelectLocation(locStr || addressData)
+                onSelectLocation(locStr || addressData, { lat: addressData?.latitude, lng: addressData?.longitude })
               }
               onClose()
             }}
@@ -1377,7 +1377,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
           <div className="uc-hero">
             <div className="uc-hero-inner">
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                <p className="uc-hero-tag">•­ India's #1 Home Services Platform</p>
+                <p className="uc-hero-tag">•­  India's #1 Home Services Platform</p>
                 <h1 className="uc-hero-h1">
                   Professional
                   <br />
@@ -1586,7 +1586,7 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
             >
               {pkg.tag && (
                 <div className="uc-pkg-tag" style={{ background: pkg.popular ? "#7C3AED" : "#059669" }}>
-                  {pkg.popular ? "•­ " : "•œ… "}{pkg.tag}
+                  {pkg.popular ? "•­  " : "•œ… "}{pkg.tag}
                 </div>
               )}
 
@@ -2092,9 +2092,14 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
   }, [globalLocation, formData.address])
 
   useEffect(() => {
-    if (!formData.issue_title && cart && cart.length > 0) {
-      const defaultTitle = cart.map(c => c.name).join(', ') + (category ? ` •” ${category.name}` : '');
-      onChange({ target: { name: 'issue_title', value: defaultTitle } })
+    if (cart && cart.length > 0) {
+      const firstName = cart[0].name || category?.name || "Service Item";
+      const defaultTitle = cart.length === 1
+        ? firstName
+        : `${firstName} (+${cart.length - 1} other item${cart.length - 1 > 1 ? 's' : ''})`;
+      if (!formData.issue_title) {
+        onChange({ target: { name: 'issue_title', value: defaultTitle } })
+      }
     }
   }, [cart, category, formData.issue_title])
 
@@ -2692,7 +2697,7 @@ function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTi
               <img src={MOCK_TECH.avatar} alt={MOCK_TECH.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '2px solid #7C3AED30' }} />
               <div style={{ flex: 1, textAlign: 'left' }}>
                 <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{MOCK_TECH.name}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>•­ {MOCK_TECH.rating} Â· {MOCK_TECH.jobs} jobs</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>•­  {MOCK_TECH.rating} Â· {MOCK_TECH.jobs} jobs</div>
               </div>
               <div style={{ background: '#10B98115', color: '#10B981', fontWeight: 800, fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, border: '1px solid #10B98130' }}>ETA {MOCK_TECH.eta}</div>
             </motion.div>
@@ -2726,9 +2731,9 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
 
   const trackSteps = [
     { label: "Booking Confirmed", icon: "•œ…", done: true, time: "Just now" },
-    { label: "Expert Assigned", icon: "ðŸ‘¨•ðŸ”§", done: false, time: "Pending" },
+    { label: "Expert Assigned", icon: "ðŸ‘¨• ðŸ”§", done: false, time: "Pending" },
     { label: "Expert On The Way", icon: "ðŸ›µ", done: false, time: "Pending" },
-    { label: "Service In Progress", icon: "•š™ï¸", done: false, time: "Scheduled" },
+    { label: "Service In Progress", icon: "•š™ï¸ ", done: false, time: "Scheduled" },
     { label: "Service Completed", icon: "ðŸŒŸ", done: false, time: "Pending" },
   ]
 
@@ -2766,7 +2771,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{tech.name}</div>
-            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>•­ {tech.rating} Â· {tech.jobs} jobs completed</div>
+            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>•­  {tech.rating} Â· {tech.jobs} jobs completed</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               <span style={{ background: '#10B98112', color: '#10B981', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #10B98125' }}>Verified Pro</span>
               <span style={{ background: '#7C3AED12', color: '#7C3AED', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #7C3AED25' }}>Background Checked</span>
@@ -2812,7 +2817,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
         style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
       >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>ðŸ—ºï¸ Live Tracking</div>
+        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>ðŸ—ºï¸  Live Tracking</div>
         {trackSteps.map((s, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.5rem 0', position: 'relative' }}>
             {i < trackSteps.length - 1 && <div style={{ position: 'absolute', left: 18, top: 36, width: 2, height: 24, background: s.done ? '#10B981' : '#e2e8f0' }} />}
@@ -2942,6 +2947,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   });
 
   const [selectedMockBooking, setSelectedMockBooking] = useState(null)
+  const [selectedBooking, setSelectedBooking] = useState(null)
+  const messageEndRef = React.useRef(null)
 
   const [realBookings, setRealBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
@@ -3199,6 +3206,45 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     }
   }, [refundBookingId, refundType])
 
+  useEffect(() => {
+    if (selectedBooking) {
+      setComplaintBookingId(selectedBooking.request_id || selectedBooking.id || '')
+      setRefundBookingId(selectedBooking.id || '')
+      setRescheduleBookingId(selectedBooking.id || '')
+    }
+  }, [selectedBooking])
+
+  useEffect(() => {
+    if (activeTab === 'My Complaints' && user) {
+      setComplaintsLoading(true)
+      apiRequest('/booking/complaints/')
+        .then(res => {
+          const list = res.data || []
+          setComplaints(list)
+          if (!showComplaintForm) {
+            if (list.length > 0) {
+              const sorted = [...list].sort((a, b) => b.id - a.id)
+              apiRequest(`/booking/complaints/${sorted[0].id}/`)
+                .then(resp => {
+                  setSelectedComplaint(resp.data)
+                })
+                .catch(console.error)
+            } else {
+              setShowComplaintForm(true)
+            }
+          }
+        })
+        .catch(() => setComplaints([]))
+        .finally(() => setComplaintsLoading(false))
+    }
+  }, [activeTab, user])
+
+  useEffect(() => {
+    if (messageEndRef.current) {
+      messageEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [selectedComplaint?.messages])
+
   const handleSubmitReschedule = async () => {
     setRescheduleError(''); setRescheduleSuccess(''); setRescheduleSubmitting(true)
     try {
@@ -3304,6 +3350,36 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
       setSelectedComplaint(res.data)
     } catch (e) { console.error(e) }
     finally { setComplaintReplying(false) }
+  }
+
+  const handleStartSupportChat = async () => {
+    if (!complaintDesc.trim()) return
+    setComplaintSubmitting(true)
+    setComplaintError('')
+    try {
+      const payload = {
+        category: complaintCategory || "OTHER",
+        description: complaintDesc,
+        booking_id: complaintBookingId || undefined
+      }
+      const res = await apiRequest('/booking/complaints/create/', {
+        method: 'POST',
+        json: payload
+      })
+      if (res?.success && res.data?.id) {
+        const detailed = await apiRequest(`/booking/complaints/${res.data.id}/`)
+        setSelectedComplaint(detailed.data)
+        setComplaintDesc('')
+        const updated = await apiRequest('/booking/complaints/')
+        setComplaints(updated.data || [])
+      } else {
+        setComplaintError(res?.message || 'Failed to start chat session.')
+      }
+    } catch (e) {
+      setComplaintError(e?.body?.message || 'Failed to start chat session. Please try again.')
+    } finally {
+      setComplaintSubmitting(false)
+    }
   }
 
 
@@ -3749,7 +3825,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 </button>
                               )
                               if (act === "reschedule") return (
-                                <button key={act} onClick={() => { setActiveTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <button key={act} onClick={() => { onChangeTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <Calendar size={14} /> Reschedule
                                 </button>
                               )
@@ -3759,12 +3835,12 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 </button>
                               )
                               if (act === "refund_status") return (
-                                <button key={act} onClick={() => { setActiveTab("My Refunds"); setSelectedBooking(b); setShowRefundForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <button key={act} onClick={() => { onChangeTab("My Refunds"); setSelectedBooking(b); setShowRefundForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <CreditCard size={14} /> Refund Status
                                 </button>
                               )
                               if (act === "report_problem") return (
-                                <button key={act} onClick={() => { setActiveTab("My Complaints"); setSelectedBooking(b); setShowComplaintForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <button key={act} onClick={() => { onChangeTab("My Complaints"); setSelectedBooking(b); setShowComplaintForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <MessageSquare size={14} /> Report Problem
                                 </button>
                               )
@@ -3893,7 +3969,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           const fullAddr = `${addr.address_line1}${addr.address_line2 ? ', ' + addr.address_line2 : ''}, ${addr.city}, ${addr.state} ${addr.pincode}`
           if (typeof setAddress === 'function') setAddress(fullAddr)
           setAddrSuccess(`Selected "${addr.label_display || addr.label}" for booking!`)
-          setActiveTab('Book Service')
+          onChangeTab('Book Service')
         }
 
         const labelIcons = {
@@ -4253,6 +4329,12 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     })
                     if (saveRes.success || saveRes.data || saveRes.id) {
                       setAddrSuccess('Address pin location updated!')
+                      const finalLat = confirmedPayload.latitude || mapAddress.latitude;
+                      const finalLng = confirmedPayload.longitude || mapAddress.longitude;
+                      if (finalLat && finalLng) {
+                        onChange({ target: { name: "latitude", value: String(finalLat) } });
+                        onChange({ target: { name: "longitude", value: String(finalLng) } });
+                      }
                       fetchAddresses()
                     }
                   } catch (e) {
@@ -4341,7 +4423,17 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
             <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: 24, background: 'linear-gradient(to right bottom, #f8fafc, #f1f5f9)' }}>
               <h4 style={{ margin: '0 0 12px', color: '#0f172a', fontSize: '1.1rem', fontWeight: 800 }}>Need assistance?</h4>
               <p style={{ margin: '0 0 24px', color: '#475569', fontSize: '0.9rem', lineHeight: 1.6 }}>Our dedicated support team is available 24/7 to help you with your bookings, payments, and general queries.</p>
-              <button style={{ padding: '0.85rem 1.75rem', background: '#0f172a', color: 'white', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}>Contact Support</button>
+              <button
+                onClick={() => {
+                  onChangeTab("My Complaints");
+                  setShowComplaintForm(false);
+                  setComplaintError('');
+                  setComplaintSuccess('');
+                }}
+                style={{ padding: '0.85rem 1.75rem', background: '#0f172a', color: 'white', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
+              >
+                Contact Support
+              </button>
             </div>
             <h4 style={{ margin: '32px 0 16px', color: '#0f172a', fontSize: '1.1rem', fontWeight: 800 }}>Frequently Asked Questions</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -4385,7 +4477,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
             </div>
 
             {rescheduleSuccess && (
-              <div style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', padding: '12px 16px', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
+ padding: '12px 16px', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
                 ✓ {rescheduleSuccess}
               </div>
             )}
@@ -5025,147 +5118,204 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
       case "My Complaints":
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            {selectedComplaint ? (
-              // Complaint thread view
+            {complaintsLoading && !selectedComplaint ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, color: '#94a3b8', gap: 12 }}>
+                <RefreshCw className="animate-spin" size={24} style={{ color: '#7C3AED' }} />
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Loading support session...</div>
+              </div>
+            ) : selectedComplaint ? (
+              // Customer Care Chat thread view
               <div>
-                <button onClick={() => setSelectedComplaint(null)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: '#7C3AED', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', marginBottom: 16 }}>
-                  <ChevronLeft size={18} /> Back to Complaints
-                </button>
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.5rem', background: 'white', marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: 4 }}>{selectedComplaint.category_display}</div>
-                      {selectedComplaint.booking_request_id && <div style={{ fontSize: '0.78rem', color: '#64748b', fontFamily: 'monospace' }}>{selectedComplaint.booking_request_id}</div>}
-                    </div>
-                    {(() => {
-                      const sc = { OPEN: '#F59E0B', IN_PROGRESS: '#3B82F6', RESOLVED: '#10B981', ESCALATED: '#EF4444', CLOSED: '#94a3b8' }[selectedComplaint.status] || '#64748b'
-                      return <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: sc + '18', color: sc, border: `1px solid ${sc}30` }}>{selectedComplaint.status_display}</span>
-                    })()}
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <button onClick={() => { onChangeTab("Help & Support"); setSelectedComplaint(null); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: '#6366f1', fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer' }}>
+                    <ChevronLeft size={16} /> Back to Help
+                  </button>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 900, fontSize: '1.25rem', color: '#0f172a' }}>Customer Care Chat</div>
+                    <span style={{ fontSize: '0.75rem', color: '#7c3aed', background: '#f5f3ff', padding: '3px 10px', borderRadius: 99, fontWeight: 800, border: '1px solid #ddd6fe', display: 'inline-block', marginTop: 4 }}>
+                      Ticket #{selectedComplaint.ticket_number || ('CCT-' + selectedComplaint.id)} ({selectedComplaint.status_display || selectedComplaint.status.toLowerCase()})
+                    </span>
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.6 }}>{selectedComplaint.description}</div>
                 </div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', marginBottom: 12 }}>Conversation Thread</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
-                  {(selectedComplaint.messages || []).length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8', fontSize: '0.85rem' }}>No responses yet. Our team will respond within 24 hours.</div>
-                  )}
-                  {(selectedComplaint.messages || []).map(resp => {
-                    const isCustomer = resp.persona === 'CUSTOMER'
-                    return (
-                      <div key={resp.id} style={{ display: 'flex', justifyContent: isCustomer ? 'flex-end' : 'flex-start' }}>
-                        <div style={{ maxWidth: '75%', padding: '10px 14px', borderRadius: isCustomer ? '14px 14px 2px 14px' : '14px 14px 14px 2px', background: isCustomer ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#f1f5f9', color: isCustomer ? 'white' : '#0f172a', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.7rem', opacity: 0.75, marginBottom: 4 }}>{isCustomer ? 'You' : resp.persona === 'ADMIN' ? 'ðŸ›¡ï¸ Support Team' : 'ðŸ‘· Employee'}</div>
-                          {resp.message}
-                          <div style={{ fontSize: '0.65rem', opacity: 0.6, marginTop: 4 }}>{new Date(resp.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</div>
+
+                {/* Messages Body */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 24, padding: 20, background: '#f8fafc', height: 380, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20, scrollBehavior: 'smooth' }}>
+                  {(() => {
+                    const messages = selectedComplaint.messages || []
+                    if (messages.length === 0) {
+                      return (
+                        <div style={{ margin: 'auto', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
+                          No responses yet. Our team will respond within 24 hours.
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    }
+                    
+                    let lastDateStr = ""
+                    return messages.map((resp, idx) => {
+                      const isCustomer = resp.persona === 'CUSTOMER'
+                      const msgDate = new Date(resp.created_at)
+                      const dateStr = msgDate.toDateString()
+                      
+                      // Check if divider should be shown
+                      const showDivider = dateStr !== lastDateStr
+                      lastDateStr = dateStr
+                      
+                      // WhatsApp-style date helper
+                      let dateLabel = ""
+                      const today = new Date()
+                      const yesterday = new Date()
+                      yesterday.setDate(today.getDate() - 1)
+                      if (msgDate.toDateString() === today.toDateString()) {
+                        dateLabel = "Today"
+                      } else if (msgDate.toDateString() === yesterday.toDateString()) {
+                        dateLabel = "Yesterday"
+                      } else {
+                        dateLabel = msgDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+                      }
+                      
+                      return (
+                        <React.Fragment key={resp.id}>
+                          {showDivider && (
+                            <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 16px', selectNone: 'none' }}>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', background: '#e2e8f0', padding: '3px 12px', borderRadius: 99 }}>
+                                {dateLabel}
+                              </span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: isCustomer ? 'flex-end' : 'flex-start' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: isCustomer ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+                              <div style={{
+                                padding: '12px 16px',
+                                borderRadius: isCustomer ? '18px 18px 2px 18px' : '18px 18px 18px 2px',
+                                background: isCustomer ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#ffffff',
+                                color: isCustomer ? 'white' : '#0f172a',
+                                border: isCustomer ? 'none' : '1px solid #e2e8f0',
+                                fontSize: '0.88rem',
+                                lineHeight: 1.5,
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+                              }}>
+                                {resp.message}
+                              </div>
+                              <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 4, padding: '0 4px', fontWeight: 600 }}>
+                                {isCustomer ? 'You' : 'Support Agent'} • {msgDate.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()}
+                              </span>
+                            </div>
+                          </div>
+                        </React.Fragment>
+                      )
+                    })
+                  })()}
+                  <div ref={messageEndRef} />
                 </div>
+
+                {/* Footer Input */}
                 {selectedComplaint.status !== 'CLOSED' && selectedComplaint.status !== 'RESOLVED' && (
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <input value={complaintReply} onChange={e => setComplaintReply(e.target.value)} placeholder="Type your reply..." onKeyDown={e => e.key === 'Enter' && handleComplaintReply(selectedComplaint.id)}
-                      style={{ flex: 1, padding: '0.8rem 1rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#0f172a' }} />
-                    <button onClick={() => handleComplaintReply(selectedComplaint.id)} disabled={complaintReplying || !complaintReply.trim()}
-                      style={{ padding: '0.8rem 1.2rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer', opacity: complaintReplying ? 0.7 : 1 }}>
-                      Send
+                    <input
+                      value={complaintReply}
+                      onChange={e => setComplaintReply(e.target.value)}
+                      placeholder="Type your reply to customer care..."
+                      onKeyDown={e => e.key === 'Enter' && handleComplaintReply(selectedComplaint.id)}
+                      style={{ flex: 1, padding: '0.85rem 1.2rem', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', outline: 'none' }}
+                    />
+                    <button
+                      onClick={() => handleComplaintReply(selectedComplaint.id)}
+                      disabled={complaintReplying || !complaintReply.trim()}
+                      style={{ padding: '0.85rem 1.5rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', opacity: (complaintReplying || !complaintReply.trim()) ? 0.7 : 1 }}
+                    >
+                      {complaintReplying ? 'Sending...' : 'Send'}
                     </button>
                   </div>
                 )}
               </div>
             ) : (
-              // Complaints list view
+              // Complaints list view & New Chat Start
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Complaints</h3>
-                  <button onClick={() => { setShowComplaintForm(true); setComplaintError(''); setComplaintSuccess(''); }}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Customer Support</h3>
+                  <button onClick={() => { setShowComplaintForm(true); setSelectedComplaint(null); setComplaintDesc(''); }}
                     style={{ padding: '8px 18px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <MessageSquare size={14} /> New Complaint
+                    <MessageSquare size={14} /> New Chat Session
                   </button>
                 </div>
 
-                {complaintSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, marginBottom: 16 }}>•œ… {complaintSuccess}</div>}
+                {/* Live Chat Start Window */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 20, background: 'white', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', marginBottom: 24 }}>
+                  <div style={{ background: 'linear-gradient(135deg, #7C3AED, #a855f7)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12, color: 'white' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                      🛡️
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>CalTrack Customer Support</div>
+                      <div style={{ fontSize: '0.72rem', opacity: 0.9 }}>Typically replies in a few minutes</div>
+                    </div>
+                  </div>
 
-                {showComplaintForm && (
-                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                    style={{ border: '1.5px solid #7C3AED30', borderRadius: 16, padding: '1.5rem', background: '#faf5ff', marginBottom: 20 }}>
-                    <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a', marginBottom: 16 }}>File a New Complaint</div>
-                    {complaintError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '8px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, marginBottom: 12 }}>{complaintError}</div>}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 6 }}>Category</label>
-                        <select value={complaintCategory} onChange={e => setComplaintCategory(e.target.value)}
-                          style={{ width: '100%', padding: '0.8rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', background: 'white' }}>
-                          <option value="SERVICE_QUALITY">Service Quality</option>
-                          <option value="EMPLOYEE_BEHAVIOR">Employee Behavior</option>
-                          <option value="BILLING">Billing</option>
-                          <option value="SCHEDULING">Scheduling</option>
-                          <option value="OTHER">Other</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 6 }}>Booking ID (optional)</label>
-                        <input value={complaintBookingId} onChange={e => setComplaintBookingId(e.target.value)} placeholder="Leave blank for general complaint" type="text"
-                          style={{ width: '100%', padding: '0.8rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 6 }}>Describe Your Issue</label>
-                        <textarea value={complaintDesc} onChange={e => setComplaintDesc(e.target.value)} rows={4} placeholder="Please describe your issue in detail..."
-                          style={{ width: '100%', padding: '0.8rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', resize: 'none' }} />
-                      </div>
-                      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                        <button onClick={handleSubmitComplaint} disabled={complaintSubmitting || !complaintDesc}
-                          style={{ padding: '10px 20px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', opacity: complaintSubmitting ? 0.7 : 1 }}>
-                          {complaintSubmitting ? 'Submitting...' : 'Submit Complaint'}
-                        </button>
-                        <button onClick={() => setShowComplaintForm(false)}
-                          style={{ padding: '10px 20px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 10, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', color: '#475569' }}>
-                          Cancel
-                        </button>
+                  <div style={{ padding: 20, background: '#f8fafc', minHeight: 180, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 16 }}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <div style={{ maxWidth: '85%', padding: '12px 16px', borderRadius: '2px 14px 14px 14px', background: 'white', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: '0.85rem', lineHeight: 1.5, boxShadow: '0 2px 5px rgba(0,0,0,0.02)' }}>
+                        <div style={{ fontWeight: 800, fontSize: '0.7rem', color: '#7C3AED', marginBottom: 4 }}>Support Team</div>
+                        Hi there! Welcome to CalTrack support. How can we help you today? Please type your message below to start chatting with our agent.
                       </div>
                     </div>
-                  </motion.div>
-                )}
 
-                {complaintsLoading ? (
-                  <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading complaints...</div>
-                ) : complaints.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94a3b8' }}>
-                    <MessageSquare size={36} style={{ marginBottom: 12, opacity: 0.4 }} />
-                    <div style={{ fontWeight: 700 }}>No complaints filed yet.</div>
-                    <div style={{ fontSize: '0.85rem', marginTop: 4 }}>If you have an issue with a service, let us know!</div>
+                    {complaintError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '8px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600 }}>{complaintError}</div>}
+
+                    {/* Chat Input */}
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <input
+                        value={complaintDesc}
+                        onChange={e => setComplaintDesc(e.target.value)}
+                        placeholder="Describe your issue or type a message..."
+                        onKeyDown={e => e.key === 'Enter' && handleStartSupportChat()}
+                        style={{ flex: 1, padding: '0.85rem 1.2rem', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', outline: 'none' }}
+                      />
+                      <button
+                        onClick={handleStartSupportChat}
+                        disabled={complaintSubmitting || !complaintDesc.trim()}
+                        style={{ padding: '0.85rem 1.5rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', opacity: (complaintSubmitting || !complaintDesc.trim()) ? 0.7 : 1 }}
+                      >
+                        {complaintSubmitting ? 'Sending...' : 'Send'}
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {complaints.map(c => {
-                      const sc = { OPEN: '#F59E0B', IN_PROGRESS: '#3B82F6', RESOLVED: '#10B981', ESCALATED: '#EF4444', CLOSED: '#94a3b8' }[c.status] || '#64748b'
-                      return (
-                        <div key={c.id} onClick={async () => {
-                          const res = await apiRequest(`/booking/complaints/${c.id}/`)
-                          setSelectedComplaint(res.data)
-                        }}
-                          style={{ border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'border-color 0.2s' }}
-                          onMouseEnter={e => e.currentTarget.style.borderColor = '#7C3AED50'}
-                          onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                            <div>
-                              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', marginBottom: 2 }}>{c.category_display}</div>
-                              {c.booking_request_id && <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>{c.booking_request_id}</div>}
+                </div>
+
+                {/* Previous Support Tickets */}
+                {complaintsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading chat history...</div>
+                ) : complaints.length > 0 && (
+                  <div>
+                    <h4 style={{ margin: '24px 0 12px', color: '#0f172a', fontSize: '1rem', fontWeight: 800 }}>Previous Chat Sessions</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {complaints.map(c => {
+                        const sc = { OPEN: '#F59E0B', IN_PROGRESS: '#3B82F6', RESOLVED: '#10B981', ESCALATED: '#EF4444', CLOSED: '#94a3b8' }[c.status] || '#64748b'
+                        return (
+                          <div key={c.id} onClick={async () => {
+                            const res = await apiRequest(`/booking/complaints/${c.id}/`)
+                            setSelectedComplaint(res.data)
+                          }}
+                            style={{ border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'border-color 0.2s' }}
+                            onMouseEnter={e => e.currentTarget.style.borderColor = '#7C3AED50'}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                              <div>
+                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', marginBottom: 2 }}>{c.category_display || c.category} Support Ticket</div>
+                                {c.booking_request_id && <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>{c.booking_request_id}</div>}
+                              </div>
+                              <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, fontWeight: 800, background: sc + '18', color: sc, border: `1px solid ${sc}30` }}>{c.status_display || c.status}</span>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, fontWeight: 800, background: sc + '18', color: sc, border: `1px solid ${sc}30`, display: 'block', marginBottom: 4 }}>{c.status_display}</span>
-                              {c.attachment_count > 0 && <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>ðŸ“Ž {c.attachment_count} file{c.attachment_count > 1 ? 's' : ''}</span>}
+                            <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.description}</div>
+                            <div style={{ marginTop: 10, fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span>{new Date(c.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                              <span style={{ color: '#7C3AED', fontWeight: 700 }}>Open Chat Room →</span>
                             </div>
                           </div>
-                          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.description}</div>
-                          <div style={{ marginTop: 10, fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span>{new Date(c.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                            <span style={{ color: '#7C3AED', fontWeight: 700 }}>View Thread •†’</span>
-                          </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -6243,10 +6393,10 @@ function StepWorkflowCheckout({
   const origTotal = Math.round(itemTotal * 1.1)
   const discount = appliedCoupon
     ? (appliedCoupon.discountAmount != null
-        ? appliedCoupon.discountAmount
-        : (appliedCoupon.discountType === "flat"
-            ? Math.min(itemTotal, appliedCoupon.discountValue)
-            : Math.min(appliedCoupon.maxDiscount || itemTotal, Math.floor(itemTotal * (appliedCoupon.discountValue / 100)))))
+      ? appliedCoupon.discountAmount
+      : (appliedCoupon.discountType === "flat"
+        ? Math.min(itemTotal, appliedCoupon.discountValue)
+        : Math.min(appliedCoupon.maxDiscount || itemTotal, Math.floor(itemTotal * (appliedCoupon.discountValue / 100)))))
     : (couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 0)
   const taxFee = itemTotal === 0 ? 49 : (itemTotal === 49 || (items && items.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
   const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
@@ -6746,13 +6896,11 @@ function StepWorkflowCheckout({
           </div>
 
           {/* Coupons Card */}
-          <div className={`border rounded-2xl p-4 shadow-xs flex items-center justify-between transition-all ${
-            appliedCoupon ? "bg-emerald-50/80 border-emerald-300" : "bg-white border-slate-200/80"
-          }`}>
+          <div className={`border rounded-2xl p-4 shadow-xs flex items-center justify-between transition-all ${appliedCoupon ? "bg-emerald-50/80 border-emerald-300" : "bg-white border-slate-200/80"
+            }`}>
             <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                appliedCoupon ? "bg-emerald-600 text-white" : "bg-indigo-100 text-indigo-700"
-              }`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${appliedCoupon ? "bg-emerald-600 text-white" : "bg-indigo-100 text-indigo-700"
+                }`}>
                 {appliedCoupon ? "✓" : "%"}
               </div>
               <div>
@@ -6777,7 +6925,7 @@ function StepWorkflowCheckout({
                   onClick={() => setIsCouponDrawerOpen(true)}
                   className="text-xs font-extrabold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
                 >
-                  9 offers &gt;
+                  {dbCoupons.length > 0 ? `${dbCoupons.length} offer${dbCoupons.length !== 1 ? "s" : ""} >` : "View offers >"}
                 </button>
               )}
             </div>
@@ -6889,8 +7037,15 @@ function StepWorkflowCheckout({
         <SavedAddressesModal
           onClose={() => setShowSavedAddrModal(false)}
           currentAddress={formData.address}
-          onSelectAddress={(addr) => {
-            onChange({ target: { name: "address", value: addr } })
+          onSelectAddress={(addrObj) => {
+            if (typeof addrObj === "object" && addrObj !== null) {
+              const fullAddr = addrObj.formatted_address || [addrObj.address_line1, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(", ");
+              onChange({ target: { name: "address", value: fullAddr } });
+              if (addrObj.latitude) onChange({ target: { name: "latitude", value: String(addrObj.latitude) } });
+              if (addrObj.longitude) onChange({ target: { name: "longitude", value: String(addrObj.longitude) } });
+            } else if (typeof addrObj === "string") {
+              onChange({ target: { name: "address", value: addrObj } });
+            }
           }}
           onAddNewAddress={() => {
             setShowSavedAddrModal(false)
@@ -6902,12 +7057,17 @@ function StepWorkflowCheckout({
       {showAddSearchModal && (
         <AddAddressSearchModal
           onClose={() => setShowAddSearchModal(false)}
-          onSelectLocation={(loc) => {
+          onSelectLocation={(loc, coords) => {
             setShowAddSearchModal(false)
             if (loc) {
-              onChange({ target: { name: "address", value: loc } })
-              if (typeof setLocation === "function") setLocation(loc)
-              localStorage.setItem("calservice_user_location", loc)
+              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
+              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
+              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
+              onChange({ target: { name: "address", value: addrStr } });
+              if (latVal) onChange({ target: { name: "latitude", value: String(latVal) } });
+              if (lngVal) onChange({ target: { name: "longitude", value: String(lngVal) } });
+              if (typeof setLocation === "function") setLocation(addrStr)
+              localStorage.setItem("calservice_user_location", addrStr)
             }
           }}
           onUseCurrentLocation={() => {
@@ -6915,13 +7075,17 @@ function StepWorkflowCheckout({
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(async (pos) => {
                 try {
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                  const lat = pos.coords.latitude;
+                  const lng = pos.coords.longitude;
+                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
                   const data = await res.json();
                   if (data?.features?.[0]?.properties) {
                     const p = data.features[0].properties;
                     const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
                     if (display) {
                       onChange({ target: { name: "address", value: display } });
+                      onChange({ target: { name: "latitude", value: String(lat) } });
+                      onChange({ target: { name: "longitude", value: String(lng) } });
                       if (typeof setLocation === "function") setLocation(display);
                       localStorage.setItem("calservice_user_location", display);
                     }
@@ -6995,11 +7159,10 @@ function StepWorkflowCheckout({
                   return (
                     <div
                       key={cpn.id || cpn.code}
-                      className={`p-4 rounded-2xl border transition-all ${
-                        isApplied
+                      className={`p-4 rounded-2xl border transition-all ${isApplied
                           ? "border-emerald-500 bg-emerald-50/40 shadow-xs"
                           : "border-slate-200/80 bg-white hover:border-slate-300"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -7149,7 +7312,7 @@ export function BookingPage() {
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
   const [notes, setNotes] = useState("")
-  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "" })
+  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "", latitude: "", longitude: "" })
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [showPackageModal, setShowPackageModal] = useState(false)
@@ -7349,7 +7512,41 @@ export function BookingPage() {
     data.append("phone", formData.phone)
     data.append("email", formData.email || "")
     data.append("service_category", category?.id || "general")
-    data.append("issue_title", formData.issue_title || `${cart.map(c => c.name).join(', ')} — ${category?.name}`)
+
+    const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
+    const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
+    const defaultTitle = extraCount > 0
+      ? `${firstName} (+${extraCount} other item${extraCount > 1 ? 's' : ''})`
+      : firstName;
+
+    let finalIssueTitle = formData.issue_title || defaultTitle;
+    if (finalIssueTitle.length > 280) {
+      const shortName = firstName.length > 200 ? firstName.slice(0, 200) + "..." : firstName;
+      finalIssueTitle = extraCount > 0
+        ? `${shortName} (+${extraCount} other items)`
+        : shortName;
+    }
+
+    console.log("========== REAL BOOKING SUBMISSION ==========");
+    console.log("CONFIRM BOOKING CLICKED");
+    console.log("API URL: /api/booking/");
+    console.log("METHOD: POST");
+    console.log("customer_name:", formData.customer_name);
+    console.log("phone:", formData.phone);
+    console.log("email:", formData.email);
+    console.log("service_category:", category?.id || "general");
+    console.log("issue_title:", finalIssueTitle);
+    console.log("cart_data item count:", cart?.length || 0);
+    console.log("address:", formData.address);
+    console.log("latitude:", formData.latitude);
+    console.log("longitude:", formData.longitude);
+    console.log("preferred_date:", selDate);
+    console.log("preferred_time:", selTime);
+    console.log("payment_method:", backendPaymentMethod);
+    console.log("total_amount:", cart.reduce((a, c) => a + (c.price * c.quantity), 0));
+    console.log("==============================================");
+
+    data.append("issue_title", finalIssueTitle)
     let finalDesc = formData.description || "";
     if (urgency && urgency !== "Standard") {
       finalDesc += `\n[Urgency: ${urgency}]`;
@@ -7359,10 +7556,12 @@ export function BookingPage() {
     }
     data.append("description", finalDesc);
     data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
+    if (formData.latitude) data.append("latitude", formData.latitude)
+    if (formData.longitude) data.append("longitude", formData.longitude)
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
     data.append("total_amount", cart.reduce((a, c) => a + (c.price * c.quantity), 0))
-    // Serialize cart_data as JSON string •” backend will parse it robustly
+    // Serialize cart_data as JSON string
     data.append("cart_data", JSON.stringify(cart.map(c => ({
       id: c.id, name: c.name, price: c.price, quantity: c.quantity,
       categoryName: c.categoryName || category?.name || ""
@@ -7422,7 +7621,22 @@ export function BookingPage() {
         setCart={setCart}
         category={category}
         user={user}
-        onBack={() => navigate(routes.landing || "/home", { replace: true })}
+        onBack={() => {
+          const restoredFoodCart = {}
+          cart.forEach(item => {
+            const key = item.displayName || item.name
+            restoredFoodCart[key] = item.quantity || 1
+          })
+          navigate(routes.landing || "/home", {
+            replace: true,
+            state: {
+              openFoodHealthModal: true,
+              openVegetablesModal: true,
+              openFoodSubModuleId: "vegetables",
+              foodCart: restoredFoodCart
+            }
+          })
+        }}
       />
     )
   }
@@ -7770,12 +7984,20 @@ export function BookingPage() {
       {showLocPicker && (
         <AddAddressSearchModal
           onClose={() => setShowLocPicker(false)}
-          onSelectLocation={(loc) => {
+          onSelectLocation={(loc, coords) => {
             setShowLocPicker(false)
             if (loc) {
-              setLocation(loc)
-              setFormData(prev => ({ ...prev, address: loc }))
-              localStorage.setItem("calservice_user_location", loc)
+              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
+              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
+              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
+              setLocation(addrStr)
+              setFormData(prev => ({
+                ...prev,
+                address: addrStr,
+                latitude: latVal ? String(latVal) : prev.latitude,
+                longitude: lngVal ? String(lngVal) : prev.longitude
+              }))
+              localStorage.setItem("calservice_user_location", addrStr)
             }
           }}
           onUseCurrentLocation={() => {
@@ -7783,14 +8005,21 @@ export function BookingPage() {
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(async (pos) => {
                 try {
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                  const lat = pos.coords.latitude;
+                  const lng = pos.coords.longitude;
+                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
                   const data = await res.json();
                   if (data?.features?.[0]?.properties) {
                     const p = data.features[0].properties;
                     const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
                     if (display) {
                       setLocation(display);
-                      setFormData(prev => ({ ...prev, address: display }));
+                      setFormData(prev => ({
+                        ...prev,
+                        address: display,
+                        latitude: String(lat),
+                        longitude: String(lng)
+                      }));
                       localStorage.setItem("calservice_user_location", display);
                     }
                   }
@@ -8093,6 +8322,175 @@ const PAINTING_DETAILS_EXTRA = {
   }
 };
 
+const PAINTING_SERVICES = [
+  {
+    id: "paint-interior",
+    name: "Interior Painting",
+    rating: "4.8",
+    reviews: "18K",
+    image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
+    points: [
+      "Complete wall prep & putty application",
+      "Double coat premium emulsion paint",
+      "Detailed masking & post-cleanup protection",
+      "1-Year Service Warranty"
+    ],
+    benefits: ["Premium Quality", "Verified Painters", "Clean Post-Service", "1-Year Warranty"],
+    includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
+    excludes: ["Major plastering work", "Dampness treatment (available separately)", "Electrical/re-wiring work"],
+    inspectionHighlights: ["Digital Wall Measurement", "Moisture Meter Inspection", "Wall Putty/Paint Damage Assessment"],
+    steps: ["Select Areas", "Free Inspection", "Detailed Quote", "Design Approval", "Expert Painting"],
+    subOptions: [
+      { id: "int-single-wall", name: "Single Wall", price: 0 },
+      { id: "int-one-room", name: "One Room", price: 0 },
+      { id: "int-multi-room", name: "Two or More Rooms", price: 0 },
+      { id: "int-full-home", name: "Full Home", price: 0 },
+      { id: "int-ceiling", name: "Ceiling", price: 0 }
+    ]
+  },
+  {
+    id: "paint-exterior",
+    name: "Exterior Painting",
+    rating: "4.7",
+    reviews: "15K",
+    image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&fit=crop",
+    points: [
+      "Pressure washing & crack filling",
+      "Anti-fungal primer coat",
+      "Double coat weather-defense paint",
+      "Dust and dirt resistant finish"
+    ],
+    benefits: ["Weatherproof Shield", "Scaffolding Safety", "Crack Treatment", "3-Year Warranty"],
+    includes: ["High Pressure Washing", "Sanding & Crack Filling", "Anti-Algae Exterior Primer", "2 Coats Weatherproof Paint", "Grill & Pipe Protective Coating", "Post-Service Cleaning"],
+    excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)", "Structural masonry / re-plastering"],
+    inspectionHighlights: ["Façade Crack Audit", "Moisture Meter Checking", "Safety & Scaffolding Planning"],
+    steps: ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
+    subOptions: [
+      { id: "ext-wall", name: "Exterior Wall", price: 0 },
+      { id: "ext-building", name: "Building Exterior", price: 0 },
+      { id: "ext-compound", name: "Compound Wall", price: 0 },
+      { id: "ext-terrace", name: "Terrace", price: 0 }
+    ]
+  },
+  {
+    id: "paint-waterproofing",
+    name: "Waterproofing",
+    rating: "4.6",
+    reviews: "12K",
+    image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800&q=80&fit=crop",
+    points: [
+      "Expert Leakage Detection & Dampness Solutions",
+      "Terrace, Bathroom & External Wall Waterproofing",
+      "We diagnose the cause. Fix it right. Waterproofing that lasts."
+    ],
+    benefits: ["Leakage Proof", "Damp & Mold Proof", "Advanced Chemicals", "3-Year Warranty"],
+    includes: ["Thermal Moisture Inspection", "Leakage Source Detection", "Terrace Joint Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Structural Crack Filling"],
+    excludes: ["Re-tiling charges (if floor tile needs to be broken)", "Major concrete reconstruction", "Plumbing piping re-routing"],
+    inspectionHighlights: ["Moisture Meter Scan", "Leakage Trace Mapping", "Wall/Ceiling Dampness Audit"],
+    steps: ["Inspect & Scan", "Detect Leakage Source", "Seal Cracks & Grout", "Apply Waterproof Barrier", "Water Tightness Test"],
+    subOptions: [
+      { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
+      { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
+      { id: "wp-wall", name: "Wall Waterproofing", price: 0 },
+      { id: "wp-roof", name: "Roof Waterproofing", price: 0 },
+      { id: "wp-crack", name: "Crack Filling", price: 0 }
+    ]
+  },
+  {
+    id: "paint-wood-metal",
+    name: "Wood & Metal Painting",
+    rating: "4.7",
+    reviews: "9K",
+    image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=800&q=80&fit=crop",
+    points: [
+      "Rust removal & sanding treatment",
+      "Specialized wood/metal primer application",
+      "PU coating or premium enamel paint",
+      "High gloss or sophisticated matte finish"
+    ],
+    benefits: ["Anti-Rust Shield", "Premium Wood Polish", "High Gloss Spray Finish", "Durability Guarantee"],
+    includes: ["Rust Scraping & Mechanical Sanding", "Wood Sanding & Filler", "Metal Anti-Corrosion Primer", "Wood Base Primer", "2 Coats PU or Enamel Paint", "Finishing Selection (Gloss/Matte)"],
+    excludes: ["New wood carving or carpentry repairs", "Replacement of broken wood sections", "Glass frame replacements"],
+    inspectionHighlights: ["Rust Depth Measurement", "Wood Termite/Rot Inspection", "Measurement of Grills/Doors"],
+    steps: ["Select Items", "Sanding & Scraping", "Apply Protection Primer", "PU Polish / Enamel Paint", "Final Quality Polish"],
+    subOptions: [
+      { id: "wm-doors", name: "Doors", price: 0 },
+      { id: "wm-windows", name: "Windows", price: 0 },
+      { id: "wm-grills", name: "Grills", price: 0 },
+      { id: "wm-cabinets", name: "Cabinets", price: 0 },
+      { id: "wm-gates", name: "Gates", price: 0 }
+    ]
+  },
+  {
+    id: "paint-texture",
+    name: "Texture & Decorative Painting",
+    rating: "4.8",
+    reviews: "8K",
+    image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&q=80&fit=crop",
+    points: [
+      "Specialty textured finishes & stencils",
+      "Premium metallic & non-metallic glazes",
+      "Vibrant accent wall styling consultation"
+    ],
+    benefits: ["Accent Metallic Wall", "Custom Stencil Designs", "Textured Accent Finish", "Designer Showcase"],
+    includes: ["Texture / Pattern Consultation", "Accent Wall Preparation", "Premium Metallic Pattern Painting", "Custom Stencil Painting", "Post-Service Clean-up"],
+    excludes: ["Full room plain painting (available separately)", "Wallpaper scraping/removal", "Plaster board reconstruction"],
+    inspectionHighlights: ["Texture Catalog Consultation", "Accent Wall Surface Suitability Check", "Wall Size & Lighting Review"],
+    steps: ["Select Designer Theme", "Wall Surface Preparation", "Apply Base Coating", "Create Textured Finish", "Accent Highlights Finish"],
+    subOptions: [
+      { id: "td-texture", name: "Texture Finish", price: 0 },
+      { id: "td-designer", name: "Designer Finish", price: 0 },
+      { id: "td-stencil", name: "Stencil Decor", price: 0 },
+      { id: "td-accent", name: "Accent Wall Painting", price: 0 }
+    ]
+  }
+];
+
+const getSubOptionDescription = (id, serviceName) => {
+  switch (id) {
+    case "int-single-wall": return "Inspection of one focus wall, moisture checking, and measurement.";
+    case "int-one-room": return "Measurement and putty/paint assessment for a single room.";
+    case "int-multi-room": return "Comprehensive consultation for two or more rooms.";
+    case "int-full-home": return "Complete house painting assessment including all walls and ceilings.";
+    case "int-ceiling": return "Ceiling inspection, leakage check, and measurement.";
+
+    case "ext-wall": return "Exterior wall check, cracks checking, and pressure wash assessment.";
+    case "ext-building": return "Full building external paint assessment and safety review.";
+    case "ext-compound": return "Compound wall length measurement and weather-coat suggestions.";
+    case "ext-terrace": return "Terrace floor assessment and heat-resistant paint options.";
+
+    case "wp-terrace": return "Terrace leakage detection, mapping, and joint water testing.";
+    case "wp-bathroom": return "Bathroom floor and wall tile joint inspection for moisture.";
+    case "wp-wall": return "Moisture meter check of internal damp walls and leakage source detection.";
+    case "wp-roof": return "Roof slab checking, crack width testing, and protective coating assessment.";
+    case "wp-crack": return "Identification of structural/hairline cracks and sealant suggestions.";
+
+    case "wm-doors": return "Wooden/metal doors surface rust check, sanding estimation.";
+    case "wm-windows": return "Window grill and frame surface protection check.";
+    case "wm-grills": return "Balcony/staircase grills rust removal and paint planning.";
+    case "wm-cabinets": return "Kitchen or bedroom wooden cabinet wood condition review.";
+    case "wm-gates": return "Main gate rust scraping and PU/enamel coat assessment.";
+
+    case "td-texture": return "Consultation on accent wall patterns, stencils, and metallic textures.";
+    case "td-designer": return "Custom high-end designs, glazes, and pattern catalog showcase.";
+    case "td-stencil": return "Living room or bedroom stencil pattern consultation.";
+    case "td-accent": return "Single focal wall color selection and texture mockups.";
+
+    default: return `Assessment and digital measurement of your ${serviceName.toLowerCase()}.`;
+  }
+}
+
+const getFallbackService = (slug) => {
+  let norm = slug;
+  if (slug === "interior-painting") norm = "paint-interior";
+  else if (slug === "exterior-painting") norm = "paint-exterior";
+  else if (slug === "waterproofing") norm = "paint-waterproofing";
+  else if (slug === "wood-metal") norm = "paint-wood-metal";
+  else if (slug === "texture-decor") norm = "paint-texture";
+
+  return PAINTING_SERVICES.find(s => s.id === norm) || {};
+}
+
 export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate }) {
   const [showPriceList, setShowPriceList] = React.useState(false);
   const [selectedPaintType, setSelectedPaintType] = React.useState('premium-emulsion');
@@ -8103,6 +8501,102 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const [paintLocation, setPaintLocation] = useState(() => localStorage.getItem("calservice_user_location") || "Hosur, Tamil Nadu")
   const [paintSearchRotateIdx, setPaintSearchRotateIdx] = useState(0)
   const [expandedFaq, setExpandedFaq] = React.useState(null)
+  const [dbPackages, setDbPackages] = useState([])
+  const [dbLoading, setDbLoading] = useState(false)
+
+  useEffect(() => {
+    const fetchPaintingPackages = async () => {
+      setDbLoading(true)
+      try {
+        const res = await apiRequest("/settings/catalog/public/packages/?category_slug=paintings")
+        if (res?.success && Array.isArray(res.data)) {
+          setDbPackages(res.data)
+        }
+      } catch (err) {
+        console.error("Failed to fetch painting packages:", err)
+      } finally {
+        setDbLoading(false)
+      }
+    }
+    fetchPaintingPackages()
+  }, [])
+
+  const mappedServices = useMemo(() => {
+    if (dbPackages.length === 0) {
+      return PAINTING_SERVICES
+    }
+
+    // Group database packages by parent service slug
+    const grouped = {}
+    dbPackages.forEach(pkg => {
+      const sSlug = pkg.service_slug || "other-services"
+      if (!grouped[sSlug]) {
+        grouped[sSlug] = {
+          service_name: pkg.service_name || pkg.name,
+          service_slug: sSlug,
+          service_description: pkg.service_description || "",
+          packages: []
+        }
+      }
+      grouped[sSlug].packages.push(pkg)
+    })
+
+    return Object.values(grouped).map(group => {
+      const fallbackPkg = getFallbackService(group.service_slug)
+      const firstPkg = group.packages[0] || {}
+
+      const benefitList = Array.isArray(firstPkg.tools) && firstPkg.tools.length > 0
+        ? firstPkg.tools
+        : (fallbackPkg.benefits || ["Weatherproof Shield", "Crack Treatment", "3-Year Warranty"])
+      const includesList = Array.isArray(firstPkg.includes) && firstPkg.includes.length > 0
+        ? firstPkg.includes
+        : (fallbackPkg.includes || [])
+      const excludesList = Array.isArray(firstPkg.excludes) && firstPkg.excludes.length > 0
+        ? firstPkg.excludes
+        : (fallbackPkg.excludes || [])
+      const readyList = Array.isArray(firstPkg.ready) && firstPkg.ready.length > 0
+        ? firstPkg.ready
+        : (fallbackPkg.inspectionHighlights || [])
+      const pointList = includesList.slice(0, 4)
+
+      // The sub-options are the individual packages in the database under this service
+      const subOpts = group.packages.map(p => {
+        const fallbackDesc = getSubOptionDescription(p.slug, group.service_name)
+        return {
+          id: p.slug || String(p.id),
+          name: p.name,
+          price: Number(p.base_price) || 0,
+          description: p.description || fallbackDesc,
+          includes: p.includes || [],
+          excludes: p.excludes || [],
+          tools: p.tools || [],
+          ready: p.ready || [],
+          reviews: p.reviews || [],
+          faqs: p.faqs || [],
+          image: p.image
+        }
+      })
+
+      return {
+        id: group.service_slug,
+        name: group.service_name,
+        rating: fallbackPkg.rating || "4.7",
+        reviews: fallbackPkg.reviews || "15K",
+        image: firstPkg.image || fallbackPkg.image || "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
+        points: pointList.length > 0 ? pointList : (fallbackPkg.points || []),
+        benefits: benefitList,
+        includes: includesList,
+        excludes: excludesList,
+        inspectionHighlights: readyList,
+        steps: fallbackPkg.steps || ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
+        subOptions: subOpts,
+        db_id: firstPkg.id,
+        dbReviews: firstPkg.reviews || [],
+        dbFaqs: firstPkg.faqs || []
+      }
+    })
+  }, [dbPackages])
+
   const { user } = useAuth();
   const navigate = useNavigate();
   const PAINT_SEARCH_HINTS = ["Interior Painting", "Exterior Painting", "Waterproofing", "Wood Polish", "Texture Finish"];
@@ -8115,171 +8609,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     setExpandedFaq(null);
   }, [activeDetailService]);
 
-  const getSubOptionDescription = (id, serviceName) => {
-    switch (id) {
-      case "int-single-wall": return "Inspection of one focus wall, moisture checking, and measurement.";
-      case "int-one-room": return "Measurement and putty/paint assessment for a single room.";
-      case "int-multi-room": return "Comprehensive consultation for two or more rooms.";
-      case "int-full-home": return "Complete house painting assessment including all walls and ceilings.";
-      case "int-ceiling": return "Ceiling inspection, leakage check, and measurement.";
-
-      case "ext-wall": return "Exterior wall check, cracks checking, and pressure wash assessment.";
-      case "ext-building": return "Full building external paint assessment and safety review.";
-      case "ext-compound": return "Compound wall length measurement and weather-coat suggestions.";
-      case "ext-terrace": return "Terrace floor assessment and heat-resistant paint options.";
-
-      case "wp-terrace": return "Terrace leakage detection, mapping, and joint water testing.";
-      case "wp-bathroom": return "Bathroom floor and wall tile joint inspection for moisture.";
-      case "wp-wall": return "Moisture meter check of internal damp walls and leakage source detection.";
-      case "wp-roof": return "Roof slab checking, crack width testing, and protective coating assessment.";
-      case "wp-crack": return "Identification of structural/hairline cracks and sealant suggestions.";
-
-      case "wm-doors": return "Wooden/metal doors surface rust check, sanding estimation.";
-      case "wm-windows": return "Window grill and frame surface protection check.";
-      case "wm-grills": return "Balcony/staircase grills rust removal and paint planning.";
-      case "wm-cabinets": return "Kitchen or bedroom wooden cabinet wood condition review.";
-      case "wm-gates": return "Main gate rust scraping and PU/enamel coat assessment.";
-
-      case "td-texture": return "Consultation on accent wall patterns, stencils, and metallic textures.";
-      case "td-designer": return "Custom high-end designs, glazes, and pattern catalog showcase.";
-      case "td-stencil": return "Living room or bedroom stencil pattern consultation.";
-      case "td-accent": return "Single focal wall color selection and texture mockups.";
-
-      default: return `Assessment and digital measurement of your ${serviceName.toLowerCase()}.`;
-    }
-  }
-
-  const PAINTING_SERVICES = [
-    {
-      id: "paint-interior",
-      name: "Interior Painting",
-      rating: "4.8",
-      reviews: "18K",
-      image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
-      points: [
-        "Complete wall prep & putty application",
-        "Double coat premium emulsion paint",
-        "Detailed masking & post-cleanup protection",
-        "1-Year Service Warranty"
-      ],
-      benefits: ["Premium Quality", "Verified Painters", "Clean Post-Service", "1-Year Warranty"],
-      includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
-      excludes: ["Major plastering work", "Dampness treatment (available separately)", "Electrical/re-wiring work"],
-      inspectionHighlights: ["Digital Wall Measurement", "Moisture Meter Inspection", "Wall Putty/Paint Damage Assessment"],
-      steps: ["Select Areas", "Free Inspection", "Detailed Quote", "Design Approval", "Expert Painting"],
-      subOptions: [
-        { id: "int-single-wall", name: "Single Wall", price: 0 },
-        { id: "int-one-room", name: "One Room", price: 0 },
-        { id: "int-multi-room", name: "Two or More Rooms", price: 0 },
-        { id: "int-full-home", name: "Full Home", price: 0 },
-        { id: "int-ceiling", name: "Ceiling", price: 0 }
-      ]
-    },
-    {
-      id: "paint-exterior",
-      name: "Exterior Painting",
-      rating: "4.7",
-      reviews: "15K",
-      image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&fit=crop",
-      points: [
-        "Pressure washing & crack filling",
-        "Anti-fungal primer coat",
-        "Double coat weather-defense paint",
-        "Dust and dirt resistant finish"
-      ],
-      benefits: ["Weatherproof Shield", "Scaffolding Safety", "Crack Treatment", "3-Year Warranty"],
-      includes: ["High Pressure Washing", "Sanding & Crack Filling", "Anti-Algae Exterior Primer", "2 Coats Weatherproof Paint", "Grill & Pipe Protective Coating", "Post-Service Cleaning"],
-      excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)", "Structural masonry / re-plastering"],
-      inspectionHighlights: ["Façade Crack Audit", "Moisture Meter Checking", "Safety & Scaffolding Planning"],
-      steps: ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
-      subOptions: [
-        { id: "ext-wall", name: "Exterior Wall", price: 0 },
-        { id: "ext-building", name: "Building Exterior", price: 0 },
-        { id: "ext-compound", name: "Compound Wall", price: 0 },
-        { id: "ext-terrace", name: "Terrace", price: 0 }
-      ]
-    },
-    {
-      id: "paint-waterproofing",
-      name: "Waterproofing",
-      rating: "4.6",
-      reviews: "12K",
-      image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800&q=80&fit=crop",
-      points: [
-        "Expert Leakage Detection & Dampness Solutions",
-        "Terrace, Bathroom & External Wall Waterproofing",
-        "We diagnose the cause. Fix it right. Waterproofing that lasts."
-      ],
-      benefits: ["Leakage Proof", "Damp & Mold Proof", "Advanced Chemicals", "3-Year Warranty"],
-      includes: ["Thermal Moisture Inspection", "Leakage Source Detection", "Terrace Joint Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Structural Crack Filling"],
-      excludes: ["Re-tiling charges (if floor tile needs to be broken)", "Major concrete reconstruction", "Plumbing piping re-routing"],
-      inspectionHighlights: ["Moisture Meter Scan", "Leakage Trace Mapping", "Wall/Ceiling Dampness Audit"],
-      steps: ["Inspect & Scan", "Detect Leakage Source", "Seal Cracks & Grout", "Apply Waterproof Barrier", "Water Tightness Test"],
-      subOptions: [
-        { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
-        { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
-        { id: "wp-wall", name: "Wall Waterproofing", price: 0 },
-        { id: "wp-roof", name: "Roof Waterproofing", price: 0 },
-        { id: "wp-crack", name: "Crack Filling", price: 0 }
-      ]
-    },
-    {
-      id: "paint-wood-metal",
-      name: "Wood & Metal Painting",
-      rating: "4.7",
-      reviews: "9K",
-      image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=800&q=80&fit=crop",
-      points: [
-        "Rust removal & sanding treatment",
-        "Specialized wood/metal primer application",
-        "PU coating or premium enamel paint",
-        "High gloss or sophisticated matte finish"
-      ],
-      benefits: ["Anti-Rust Shield", "Premium Wood Polish", "High Gloss Spray Finish", "Durability Guarantee"],
-      includes: ["Rust Scraping & Mechanical Sanding", "Wood Sanding & Filler", "Metal Anti-Corrosion Primer", "Wood Base Primer", "2 Coats PU or Enamel Paint", "Finishing Selection (Gloss/Matte)"],
-      excludes: ["New wood carving or carpentry repairs", "Replacement of broken wood sections", "Glass frame replacements"],
-      inspectionHighlights: ["Rust Depth Measurement", "Wood Termite/Rot Inspection", "Measurement of Grills/Doors"],
-      steps: ["Select Items", "Sanding & Scraping", "Apply Protection Primer", "PU Polish / Enamel Paint", "Final Quality Polish"],
-      subOptions: [
-        { id: "wm-doors", name: "Doors", price: 0 },
-        { id: "wm-windows", name: "Windows", price: 0 },
-        { id: "wm-grills", name: "Grills", price: 0 },
-        { id: "wm-cabinets", name: "Cabinets", price: 0 },
-        { id: "wm-gates", name: "Gates", price: 0 }
-      ]
-    },
-    {
-      id: "paint-texture",
-      name: "Texture & Decorative Painting",
-      rating: "4.8",
-      reviews: "8K",
-      image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&q=80&fit=crop",
-      points: [
-        "Specialty textured finishes & stencils",
-        "Premium metallic & non-metallic glazes",
-        "Vibrant accent wall styling consultation"
-      ],
-      benefits: ["Accent Metallic Wall", "Custom Stencil Designs", "Textured Accent Finish", "Designer Showcase"],
-      includes: ["Texture / Pattern Consultation", "Accent Wall Preparation", "Premium Metallic Pattern Painting", "Custom Stencil Painting", "Post-Service Clean-up"],
-      excludes: ["Full room plain painting (available separately)", "Wallpaper scraping/removal", "Plaster board reconstruction"],
-      inspectionHighlights: ["Texture Catalog Consultation", "Accent Wall Surface Suitability Check", "Wall Size & Lighting Review"],
-      steps: ["Select Designer Theme", "Wall Surface Preparation", "Apply Base Coating", "Create Textured Finish", "Accent Highlights Finish"],
-      subOptions: [
-        { id: "td-texture", name: "Texture Finish", price: 0 },
-        { id: "td-designer", name: "Designer Finish", price: 0 },
-        { id: "td-stencil", name: "Stencil Decor", price: 0 },
-        { id: "td-accent", name: "Accent Wall Painting", price: 0 }
-      ]
-    }
-  ];
-
-  const cardRefs = {
-    "paint-interior": useRef(null),
-    "paint-exterior": useRef(null),
-    "paint-waterproofing": useRef(null),
-    "paint-wood-metal": useRef(null),
-    "paint-texture": useRef(null),
-  }
+  const cardRefs = useRef({})
 
   const contentRef = useRef(null);
 
@@ -8290,7 +8620,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   }, [searchQuery]);
 
   const scrollToCard = (id) => {
-    const card = cardRefs[id]?.current;
+    const card = cardRefs.current[id];
     if (!card) return;
     const container = contentRef.current;
     if (!container) {
@@ -8391,7 +8721,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   };
 
   const filteredServices = searchQuery
-    ? PAINTING_SERVICES.filter(s => {
+    ? mappedServices.filter(s => {
       try {
         const queryLower = searchQuery.toLowerCase().trim();
         if (!queryLower) return true;
@@ -8415,7 +8745,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         return s.name && s.name.toLowerCase().includes(queryLower);
       }
     })
-    : PAINTING_SERVICES;
+    : mappedServices;
 
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -8556,52 +8886,18 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                 {category?.name || "Painting Services"}
               </h2>
             </div>
-            <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", margin: 0, padding: "8px 0" }}>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-interior")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"
-                  alt="Interior Painting"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Interior Painting</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-exterior")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=150&auto=format&fit=crop&q=60"
-                  alt="Exterior Painting"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Exterior Painting</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-waterproofing")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=150&auto=format&fit=crop&q=60"
-                  alt="Waterproofing"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Waterproofing</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-wood-metal")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=150&auto=format&fit=crop&q=60"
-                  alt="Wood & Metal"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Wood & Metal</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-texture")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=150&auto=format&fit=crop&q=60"
-                  alt="Texture Decor"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Texture Decor</span>
-              </button>
+            <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", margin: 0, padding: "8px 0", gap: "10px" }}>
+              {filteredServices.map(service => (
+                <button key={service.id} className="uc-paint-tab-btn" onClick={() => scrollToCard(service.id)}>
+                  <img
+                    className="uc-paint-tab-img"
+                    src={service.image}
+                    alt={service.name}
+                    onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+                  />
+                  <span className="uc-paint-tab-label">{service.name}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -8631,7 +8927,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                       const isExpanded = !!expanded[service.id];
                       const count = getCartCount(service.id);
                       return (
-                        <div key={service.id} className="uc-paint-card" ref={cardRefs[service.id]}>
+                        <div key={service.id} className="uc-paint-card" ref={el => { cardRefs.current[service.id] = el; }}>
                           <div className="uc-paint-card-img-box">
                             <img
                               src={service.image}
@@ -9422,7 +9718,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           </h4>
                           {activeDetailService.subOptions.map(subOpt => {
                             const isSelected = getSubOptionCartCount(subOpt.id) > 0;
-                            const description = getSubOptionDescription(subOpt.id, activeDetailService.name);
+                            const description = subOpt.description || getSubOptionDescription(subOpt.id, activeDetailService.name);
                             return (
                               <div
                                 key={subOpt.id}
@@ -9665,13 +9961,16 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
                         {/* CUSTOMER REVIEWS LIST */}
                         {(() => {
-                          const extra = PAINTING_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
-                          if (extra.reviews.length === 0) return null;
+                          const dbReviews = activeDetailService?.dbReviews || []
+                          const reviewsToRender = dbReviews.length > 0
+                            ? dbReviews.map(r => ({ name: r.name, rating: parseFloat(r.rating) || 5.0, comment: r.text || r.comment }))
+                            : (PAINTING_DETAILS_EXTRA[activeDetailService?.id]?.reviews || [])
+                          if (reviewsToRender.length === 0) return null;
                           return (
                             <div style={{ textAlign: 'left', marginTop: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                               <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Customer Reviews</h4>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                {extra.reviews.map((rev, idx) => (
+                                {reviewsToRender.map((rev, idx) => (
                                   <div key={idx} style={{ padding: '0.75rem 1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                       <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e293b' }}>{rev.name}</span>
@@ -9691,13 +9990,16 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
                         {/* FREQUENTLY ASKED QUESTIONS */}
                         {(() => {
-                          const extra = PAINTING_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
-                          if (extra.faqs.length === 0) return null;
+                          const dbFaqs = activeDetailService?.dbFaqs || []
+                          const faqsToRender = dbFaqs.length > 0
+                            ? dbFaqs.map(f => ({ q: f.q || f.question, a: f.a || f.answer }))
+                            : (PAINTING_DETAILS_EXTRA[activeDetailService?.id]?.faqs || [])
+                          if (faqsToRender.length === 0) return null;
                           return (
                             <div style={{ textAlign: 'left', marginTop: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                               <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Frequently Asked Questions</h4>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                {extra.faqs.map((faq, idx) => {
+                                {faqsToRender.map((faq, idx) => {
                                   const isExpanded = expandedFaq === idx;
                                   return (
                                     <div key={idx} style={{ border: '1.5px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
@@ -10093,40 +10395,44 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       id: "brick-new",
       catId: "brick",
       name: "Brick Wall Construction",
-      price: 999,
-      priceStr: "Starting from ₹999",
+      price: 1499,
+      priceStr: "Starts at ₹1,499",
+      badge: "Popular",
+      badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.2K",
       image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
-      includes: ["Material assessment", "Wall alignment checking", "Mortar preparation", "Brick laying", "Curing guidance"],
+      includes: ["Red brick supply & laying", "Mortar alignment check", "Curing guidance"],
       excludes: ["Plastering (available separately)", "Painting and structural slab work"],
       inspectionHighlights: ["Site layout measurement", "Load-bearing suitability check"],
       steps: ["Layout Planning", "Mortar Preparation", "Brick Alignment Laying", "Level Inspection", "Initial Curing"],
-      desc: "Build sturdy, high-quality new brick walls using premium cement mortar."
+      desc: "High-quality red clay brick masonry work with standard cement-mortar mix."
     },
     {
       id: "brick-block",
       catId: "brick",
       name: "Block Wall Construction",
-      price: 1299,
-      priceStr: "Starting from ₹1,299",
+      price: 1799,
+      priceStr: "Starts at ₹1,799",
+      badge: "Lightweight",
+      badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
       duration: "Flexible",
       rating: "4.7",
       reviews: "950",
       image: "/mockups/kitchen_cleaning_hero.png",
-      includes: ["Concrete blocks supply", "Mortar mixing & application", "Joint reinforcement check", "Block laying"],
+      includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"],
       excludes: ["Foundation excavation", "Plastering"],
       inspectionHighlights: ["Ground leveling check", "Alignment verification"],
       steps: ["Site Prep", "Mortar Mix", "Block Laying", "Alignment Check", "Curing"],
-      desc: "Solid or hollow concrete block wall construction for durability and strength."
+      desc: "AAC concrete block laying using thin-bed adhesive mortar for fast execution."
     },
     {
       id: "brick-repair",
       catId: "brick",
       name: "Brick/Block Wall Repair",
       price: 499,
-      priceStr: "Starting from ₹499",
+      priceStr: "Starts at ₹499",
       duration: "1-2 hrs",
       rating: "4.6",
       reviews: "1.1K",
@@ -10144,7 +10450,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "plastering",
       name: "Wall Plastering",
       price: 499,
-      priceStr: "Starting from ₹499",
+      priceStr: "Starts at ₹499",
+      badge: "Flawless",
+      badgeColor: "bg-teal-50 text-teal-700 border-teal-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.4K",
@@ -10160,7 +10468,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "plastering",
       name: "Plaster Repair",
       price: 349,
-      priceStr: "Starting from ₹349",
+      priceStr: "Starts at ₹349",
       duration: "1-2 hrs",
       rating: "4.7",
       reviews: "1.8K",
@@ -10176,7 +10484,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "plastering",
       name: "Crack Repair",
       price: 399,
-      priceStr: "Starting from ₹399",
+      priceStr: "Starts at ₹399",
+      badge: "Heavy Duty",
+      badgeColor: "bg-red-50 text-red-700 border-red-100",
       duration: "1 hr",
       rating: "4.6",
       reviews: "3.2K",
@@ -10194,7 +10504,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "partition",
       name: "New Partition Wall",
       price: 1999,
-      priceStr: "Starting from ₹1,999",
+      priceStr: "Starts at ₹1,999",
+      badge: "Sturdy",
+      badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "780",
@@ -10210,7 +10522,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "partition",
       name: "Room Partition",
       price: 1999,
-      priceStr: "Starting from ₹1,999",
+      priceStr: "Starts at ₹1,999",
+      badge: "Most Booked",
+      badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "950",
@@ -10226,7 +10540,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "partition",
       name: "Half-Wall Construction",
       price: 1499,
-      priceStr: "Starting from ₹1,499",
+      priceStr: "Starts at ₹1,499",
+      badge: "Trending",
+      badgeColor: "bg-pink-50 text-pink-700 border-pink-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.1K",
@@ -10244,7 +10560,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "demolition",
       name: "Wall Breaking",
       price: 999,
-      priceStr: "Starting from ₹999",
+      priceStr: "Starts at ₹999",
+      badge: "Safety Certified",
+      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
       duration: "Flexible",
       rating: "4.7",
       reviews: "1.5K",
@@ -10260,7 +10578,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "demolition",
       name: "Partition Removal",
       price: 399,
-      priceStr: "Starting from ₹399",
+      priceStr: "Starts at ₹399",
       duration: "1-2 hrs",
       rating: "4.8",
       reviews: "1.3K",
@@ -10276,7 +10594,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "demolition",
       name: "Door/Window Opening",
       price: 599,
-      priceStr: "Starting from ₹599",
+      priceStr: "Starts at ₹599",
+      badge: "Precision Cut",
+      badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
       duration: "2 hrs",
       rating: "4.7",
       reviews: "820",
@@ -10321,28 +10641,54 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   };
 
   const addToCart = (pkg) => {
+    console.log("DEBUG [addToCart] called with pkg:", pkg);
+    if (!pkg) return;
+    if (typeof setCart !== "function") {
+      console.error("DEBUG [addToCart] error: setCart is not a function", setCart);
+      return;
+    }
     setCart(prev => {
-      const existing = prev.find(c => c.id === pkg.id);
+      const currentCart = Array.isArray(prev) ? prev : [];
+      const cartId = pkg.id.startsWith("serv-mason-") ? pkg.id : `serv-mason-${pkg.id}`;
+      const existing = currentCart.find(c => c.id === cartId);
       if (existing) {
-        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
+        const updated = currentCart.map(c => c.id === cartId ? { ...c, quantity: c.quantity + 1 } : c);
+        console.log("DEBUG [addToCart] incremented existing item. New cart:", updated);
+        return updated;
       }
-      return [...prev, { ...pkg, quantity: 1, categoryName: "Mason" }];
+      const rawName = pkg.name.endsWith(" (Site Consultation)") ? pkg.name : `${pkg.name} (Site Consultation)`;
+      const newItem = { id: cartId, name: rawName, price: 49, quantity: 1, categoryName: "Mason" };
+      const updated = [...currentCart, newItem];
+      console.log("DEBUG [addToCart] added new item. New cart:", updated);
+      return updated;
     });
   };
 
   const removeFromCart = (pkgId) => {
+    console.log("DEBUG [removeFromCart] called with pkgId:", pkgId);
+    if (!pkgId) return;
+    if (typeof setCart !== "function") {
+      console.error("DEBUG [removeFromCart] error: setCart is not a function", setCart);
+      return;
+    }
     setCart(prev => {
-      const existing = prev.find(c => c.id === pkgId);
-      if (!existing) return prev;
-      if (existing.quantity === 1) {
-        return prev.filter(c => c.id !== pkgId);
+      const currentCart = Array.isArray(prev) ? prev : [];
+      const cartId = pkgId.startsWith("serv-mason-") ? pkgId : `serv-mason-${pkgId}`;
+      const existing = currentCart.find(c => c.id === cartId);
+      if (existing && existing.quantity > 1) {
+        const updated = currentCart.map(c => c.id === cartId ? { ...c, quantity: c.quantity - 1 } : c);
+        console.log("DEBUG [removeFromCart] decremented item. New cart:", updated);
+        return updated;
       }
-      return prev.map(c => c.id === pkgId ? { ...c, quantity: c.quantity - 1 } : c);
+      const updated = currentCart.filter(c => c.id !== cartId);
+      console.log("DEBUG [removeFromCart] removed item completely. New cart:", updated);
+      return updated;
     });
   };
 
   const getCartCount = (pkgId) => {
-    const item = cart.find(c => c.id === pkgId);
+    if (!cart || !Array.isArray(cart)) return 0;
+    const item = cart.find(c => c && c.id === pkgId);
     return item ? item.quantity : 0;
   };
 
@@ -10573,50 +10919,78 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                     </div>
                   )}
 
-                  <div className="uc-paint-list" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <div className="uc-paint-list" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
                     {filteredServices.map(service => {
-                      const count = getCartCount(service.id);
+                      const count = getCartCount("serv-mason-" + service.id);
                       return (
                         <div
                           key={service.id}
                           ref={cardRefs[service.id]}
                           style={{
-                            borderBottom: "1.5px solid #f1f5f9", padding: "1.25rem 0",
-                            background: "#ffffff", display: "flex", flexDirection: "column"
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "20px",
+                            padding: "1.25rem",
+                            background: "#ffffff",
+                            display: "flex",
+                            flexDirection: "column",
+                            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)"
                           }}
                         >
                           <div style={{ display: "flex", gap: "1.25rem", textAlign: "left", alignItems: "flex-start" }}>
                             {/* Left Info Column */}
                             <div style={{ flex: 1 }}>
-                              <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: "0 0 4px 0" }}>{service.name}</h4>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
+                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>{service.name}</h4>
+                                {service.badge && (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${service.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
+                                    {service.badge}
+                                  </span>
+                                )}
+                              </div>
                               <p style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0d9488", margin: 0 }}>
                                 {service.priceStr}
                                 {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
                               </p>
+                              <div style={{ display: "inline-flex", alignItems: "center", background: "#ecfdf5", border: "1px solid #d1fae5", borderRadius: "6px", padding: "2px 8px", margin: "4px 0", fontSize: "0.7rem", fontWeight: 800, color: "#047857" }}>
+                                Consultation & Visit Charge: ₹49
+                              </div>
                               <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
 
-                              {/* Includes Badges */}
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                              {/* Includes Bullet Points */}
+                              <ul style={{ listStyleType: "none", padding: 0, margin: "6px 0 10px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
                                 {service.includes.slice(0, 3).map((inc, i) => (
-                                  <span key={i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: "12px" }}>
-                                    ✓ {inc}
-                                  </span>
+                                  <li key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", color: "#475569", fontWeight: 600 }}>
+                                    <span style={{ color: "#94a3b8", fontSize: "1rem", lineHeight: 0 }}>•</span>
+                                    {inc}
+                                  </li>
                                 ))}
-                              </div>
+                              </ul>
 
-                              <button
-                                onClick={() => setActiveDetailService(service)}
-                                style={{
-                                  background: "none", border: "none", color: "#0d9488", fontWeight: 800, fontSize: "0.75rem",
-                                  cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", marginTop: "12px", padding: 0
-                                }}
-                              >
-                                View details <ChevronRight size={13} />
-                              </button>
+                              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
+                                <button
+                                  onClick={() => setActiveDetailService(service)}
+                                  style={{
+                                    background: "none", border: "none", color: "#2563eb", fontWeight: 850, fontSize: "0.75rem",
+                                    cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", padding: 0
+                                  }}
+                                >
+                                  View details <ChevronRight size={13} style={{ strokeWidth: 2.5 }} />
+                                </button>
+                                <button
+                                  onClick={() => addToCart(service)}
+                                  style={{
+                                    background: "#0d9488", border: "none", color: "#ffffff", borderRadius: "8px",
+                                    padding: "6px 14px", fontSize: "0.68rem", fontWeight: 850, cursor: "pointer",
+                                    boxShadow: "0 2px 4px rgba(13,148,136,0.2)", textTransform: "uppercase", letterSpacing: "0.02em"
+                                  }}
+                                >
+                                  Book Consultation
+                                </button>
+                              </div>
                             </div>
 
                             {/* Right Image/Button Column */}
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                            <div style={{ position: "relative", width: "112px", height: "108px", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                               <div style={{ width: "112px", height: "96px", borderRadius: "16px", overflow: "hidden", background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
                                 <img
                                   src={service.image}
@@ -10629,28 +11003,32 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                 />
                               </div>
 
-                              {/* Cart Controls */}
-                              {count > 0 ? (
-                                <div style={{
-                                  display: "flex", alignItems: "center", gap: "12px", border: "1.5px solid #0d9488",
-                                  background: "#f0fdf4", borderRadius: "20px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 900, color: "#0f766e"
-                                }}>
-                                  <button onClick={() => removeFromCart(service.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>-</button>
-                                  <span>{count}</span>
-                                  <button onClick={() => addToCart(service)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>+</button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => addToCart(service)}
-                                  style={{
-                                    background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0d9488", borderRadius: "20px",
-                                    padding: "5px 16px", fontSize: "0.72rem", fontWeight: 800, cursor: "pointer",
-                                    boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
-                                  }}
-                                >
-                                  + ADD
-                                </button>
-                              )}
+                              {/* Cart Controls overlaid on image */}
+                              <div style={{ position: "absolute", bottom: "4px", left: "50%", transform: "translateX(-50%)", zIndex: 10 }}>
+                                {count > 0 ? (
+                                  <div style={{
+                                    display: "flex", alignItems: "center", gap: "10px", border: "1px solid #0d9488",
+                                    background: "#ffffff", borderRadius: "8px", padding: "4px 10px", fontSize: "0.7rem", fontWeight: 900, color: "#0f766e",
+                                    boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", minWidth: "76px", justifyContent: "space-between"
+                                  }}>
+                                    <button onClick={() => removeFromCart(service.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900, fontSize: "0.9rem", padding: "0 2px" }}>-</button>
+                                    <span>{count}</span>
+                                    <button onClick={() => addToCart(service)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900, fontSize: "0.9rem", padding: "0 2px" }}>+</button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => addToCart(service)}
+                                    style={{
+                                      background: "#ffffff", border: "1px solid #e2e8f0", color: "#0d9488", borderRadius: "8px",
+                                      padding: "5px 12px", fontSize: "0.68rem", fontWeight: 850, cursor: "pointer",
+                                      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", gap: "4px",
+                                      whiteSpace: "nowrap"
+                                    }}
+                                  >
+                                    <ShoppingCart size={11} style={{ strokeWidth: 2.5 }} /> ADD
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -10760,34 +11138,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                               </div>
                             </div>
                           )}
-                          {/* General description box for standard masonry when added */}
-                          {count > 0 && (
-                            <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                              <div style={{ textAlign: "left" }}>
-                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Describe requirement (optional)</label>
-                                <textarea
-                                  value={generalDesc}
-                                  onChange={e => setGeneralDesc(e.target.value)}
-                                  placeholder="Explain your needs in detail (e.g. wall size, crack types)..."
-                                  style={{ width: "100%", height: "60px", padding: "0.5rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem", resize: "none", fontFamily: "inherit" }}
-                                />
-                              </div>
-                              <div style={{ textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                <div>
-                                  <label style={{ fontSize: "0.75rem", fontWeight: 800, color: "#475569", display: "inline-block", marginRight: "10px" }}>Upload photo</label>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={e => handlePhotoUpload(e, "general")}
-                                    style={{ fontSize: "0.75rem", color: "#64748b" }}
-                                  />
-                                </div>
-                                {generalPhotoPreview && (
-                                  <img src={generalPhotoPreview} alt="Preview" style={{ width: "60px", height: "45px", objectFit: "cover", borderRadius: "4px", border: "1px solid #cbd5e1" }} />
-                                )}
-                              </div>
-                            </div>
-                          )}
+
                         </div>
                       );
                     })}
@@ -10892,30 +11243,88 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
               {/* Right Column - Promise & Cart Summary */}
               <div className="uc-paint-right-col">
-                <div className="uc-paint-promise-card">
-                  <div className="uc-paint-promise-title-row">
-                    <ShieldCheck size={18} style={{ color: "#059669" }} />
-                    <span>CalServices Promise</span>
+                {/* Why Choose Us Box */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-sm text-left mb-4">
+                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-widest mb-3">
+                    Why choose us?
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      {
+                        title: "Trained Masons",
+                        bg: "bg-indigo-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#4f46e5" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Accurate Estimate",
+                        bg: "bg-teal-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#0d9488" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m9 11 3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Premium Materials",
+                        bg: "bg-pink-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#db2777" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Alignment Check",
+                        bg: "bg-amber-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#ea580c" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            <path d="m9 12 2 2 4-4" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Site Cleanup",
+                        bg: "bg-blue-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#2563eb" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Service Warranty",
+                        bg: "bg-emerald-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#059669" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          </svg>
+                        )
+                      }
+                    ].map((item, idx) => (
+                      <div key={idx} className="bg-white border border-slate-100 rounded-xl p-2 flex flex-col items-center justify-center text-center gap-1 shadow-2xs">
+                        <div className={`w-7 h-7 rounded-full ${item.bg} flex items-center justify-center`}>
+                          {item.icon}
+                        </div>
+                        <span className="text-[8px] font-black text-slate-800 uppercase tracking-tight leading-tight">
+                          {item.title}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <ul className="uc-paint-promise-list">
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>Verified Professionals</span>
-                    </li>
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>1-Year Structural Warranty</span>
-                    </li>
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>Debris Post-Service Cleanup</span>
-                    </li>
-                  </ul>
                 </div>
+
+
 
                 <div className="uc-paint-cart-card">
                   <h4 className="uc-paint-cart-card-title">Your Cart</h4>
-                  {cart.filter(c => c.id.startsWith("mason-")).length === 0 ? (
+                  {cart.filter(c => c.id.includes("mason")).length === 0 ? (
                     <div>
                       <ShoppingCart className="uc-paint-empty-cart-img" style={{ color: "#94a3b8" }} />
                       <p className="uc-paint-empty-cart-text">No items in your cart</p>
@@ -10923,7 +11332,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   ) : (
                     <div>
                       <div className="uc-paint-cart-items">
-                        {cart.filter(c => c.id.startsWith("mason-")).map(item => (
+                        {cart.filter(c => c.id.includes("mason")).map(item => (
                           <div key={item.id} className="uc-paint-cart-item">
                             <div className="uc-paint-cart-item-info">
                               <span className="uc-paint-cart-item-name">{item.name}</span>
@@ -11398,6 +11807,12 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
 function getCategoryFaqsAndReviews(pkg) {
   if (!pkg) return { reviews: [], faqs: [] };
+  if (Array.isArray(pkg.reviews) && pkg.reviews.length > 0 && Array.isArray(pkg.faqs) && pkg.faqs.length > 0) {
+    return {
+      reviews: pkg.reviews,
+      faqs: pkg.faqs
+    };
+  }
   const name = (pkg.name || "").toLowerCase();
   const desc = (pkg.description || "").toLowerCase();
 
@@ -11800,12 +12215,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
   const CATEGORY_SUBCATEGORIES = {
     refrigerator: [
-      { name: "Refrigerator Service & Repair", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Gas & Compressor", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cleaning & Maintenance", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      { name: "Refrigerator Service & Repair", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Gas & Compressor", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Cleaning & Maintenance", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" }
     ],
     microwave: [
       { name: "Microwave Repair", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
@@ -11819,52 +12234,52 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     ],
     tv_display: [
       { name: "TV Service & Repair", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-      { name: "TV Installation & Setup", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
+      { name: "TV Installation & Setup", image: "https://images.unsplash.com/photo-1577979749830-f1d742b96791?w=300&q=80&fit=crop" },
       { name: "TV Screen & Display", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
       { name: "TV Sound & Speaker", image: "https://images.unsplash.com/photo-1540574163026-643ea20ade25?w=300&q=80&fit=crop" },
       { name: "TV Software & Smart Features", image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&q=80&fit=crop" },
-      { name: "TV Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      { name: "TV Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1577979749830-f1d742b96791?w=300&q=80&fit=crop" }
     ],
     hvac: [
       { name: "AC Service & Cleaning", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-      { name: "AC Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "AC Gas & Refrigerant", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
+      { name: "AC Repair", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
+      { name: "AC Gas & Refrigerant", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
       { name: "AC Installation & Uninstallation", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-      { name: "AC PCB & Electrical", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "AC Parts & Accessories", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+      { name: "AC PCB & Electrical", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+      { name: "AC Parts & Accessories", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" }
     ],
     washing_machine: [
-      { name: "Washing Machine Jet Service", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-      { name: "Washing Machine Check-up", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Installation & Uninstallation", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Washing Machine Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      { name: "Washing Machine Jet Service", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=300&q=80&fit=crop" },
+      { name: "Washing Machine Check-up", image: "https://images.unsplash.com/photo-1610557892470-55d9e80c0bce?w=300&q=80&fit=crop" },
+      { name: "Installation & Uninstallation", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=300&q=80&fit=crop" },
+      { name: "Washing Machine Repair", image: "https://images.unsplash.com/photo-1610557892470-55d9e80c0bce?w=300&q=80&fit=crop" }
     ],
     electrical: [
-      { name: "Switches & Sockets", image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
+      { name: "Switches & Sockets", image: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=300&q=80&fit=crop" },
       { name: "Fan & Lighting", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-      { name: "MCB & Wiring", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Inverter & Heavy Appliance", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      { name: "MCB & Wiring", image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=300&q=80&fit=crop" },
+      { name: "Inverter & Heavy Appliance", image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=300&q=80&fit=crop" }
     ],
     plumbing: [
-      { name: "Tap & Mixer", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-      { name: "Toilet", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+      { name: "Tap & Mixer", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Toilet", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
       { name: "Basin & Sink", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Bath Fittings", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Bath Fittings", image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=300&q=80&fit=crop" },
       { name: "Water Tank & Motor", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Drainage", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-      { name: "Water Filter", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Grouting", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Plumber On-Demand", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+      { name: "Drainage", image: "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=300&q=80&fit=crop" },
+      { name: "Water Filter", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
+      { name: "Grouting", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Plumber On-Demand", image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=300&q=80&fit=crop" }
     ],
     carpentry: [
-      { name: "Lock & Handle", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-      { name: "Cupboard & Drawer", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-      { name: "Kitchen Fittings", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Lock & Handle", image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=300&q=80&fit=crop" },
+      { name: "Cupboard & Drawer", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=300&q=80&fit=crop" },
+      { name: "Kitchen Fittings", image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=300&q=80&fit=crop" },
       { name: "Hangers & Drying Solutions", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Furniture Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Doors & Windows", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
+      { name: "Furniture Services", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop" },
+      { name: "Doors & Windows", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
       { name: "Drill & Hanging", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
-      { name: "Carpenter On-Demand", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      { name: "Carpenter On-Demand", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop" }
     ],
     painting: [
       { name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
@@ -12099,6 +12514,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [selectedMasonDetail, setSelectedMasonDetail] = useState(null);
   const [selectedPackageDetail, setSelectedPackageDetail] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [dbCatalogPackages, setDbCatalogPackages] = useState([]);
+
+  useEffect(() => {
+    apiRequest("/settings/catalog/public/packages/")
+      .then((res) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setDbCatalogPackages(res.data);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch public catalog packages:", err));
+  }, []);
 
   // Disable background page scrolling when detailed modal is open
   useEffect(() => {
@@ -12292,36 +12718,36 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const OTHER_SERVICES = {
     electrical: {
       "Switches & Sockets": [
-        { id: "elec-sw-1", name: "Modular Switch Replacement", price: 199, duration: "20 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing faulty switch and fitting premium brand modular switch plate.", includes: ["Old switch removal", "New modular switch fit", "Live wire test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-2", name: "5/15A Socket Replacement", price: 199, duration: "20 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe 5A or 15A wall socket replacement with shutter mechanism.", includes: ["Socket removal", "ISI marked socket fit", "Earth continuity check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-3", name: "16A Heavy Duty Socket for AC/Geyser", price: 249, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Heavy gauge 16A moulded socket fitting for high-power appliances.", includes: ["16A socket fit", "Earthing check", "Load test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-4", name: "Switchboard Installation", price: 349, duration: "30 mins", badge: "New Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "New modular switchboard fitting with up to 4 switch/socket positions.", includes: ["Board frame fit", "Wiring connection", "Safety check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-5", name: "USB Charging Socket Fit", price: 299, duration: "25 mins", badge: "Smart Home", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dual USB + 5A socket combo fitting for bedside or office desk.", includes: ["USB socket installation", "Flush mount fitting", "Charging test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-sw-6", name: "Faulty Switch Diagnosis", price: 149, duration: "15 mins", badge: "Quick Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Multi-meter testing to identify tripped, arcing, or loose contact switches.", includes: ["Multi-meter test", "Arc trace check", "Fix or replace advice"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "elec-sw-1", name: "Modular Switch Replacement", price: 199, duration: "20 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing faulty switch and fitting premium brand modular switch plate.", includes: ["Old switch removal", "New modular switch fit", "Live wire test"], image: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&q=80&fit=crop" },
+        { id: "elec-sw-2", name: "5/15A Socket Replacement", price: 199, duration: "20 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe 5A or 15A wall socket replacement with shutter mechanism.", includes: ["Socket removal", "ISI marked socket fit", "Earth continuity check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
+        { id: "elec-sw-3", name: "16A Heavy Duty Socket for AC/Geyser", price: 249, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Heavy gauge 16A moulded socket fitting for high-power appliances.", includes: ["16A socket fit", "Earthing check", "Load test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
+        { id: "elec-sw-4", name: "Switchboard Installation", price: 349, duration: "30 mins", badge: "New Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "New modular switchboard fitting with up to 4 switch/socket positions.", includes: ["Board frame fit", "Wiring connection", "Safety check"], image: "https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=500&q=80&fit=crop" },
+        { id: "elec-sw-5", name: "USB Charging Socket Fit", price: 299, duration: "25 mins", badge: "Smart Home", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dual USB + 5A socket combo fitting for bedside or office desk.", includes: ["USB socket installation", "Flush mount fitting", "Charging test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" },
+        { id: "elec-sw-6", name: "Faulty Switch Diagnosis", price: 149, duration: "15 mins", badge: "Quick Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Multi-meter testing to identify tripped, arcing, or loose contact switches.", includes: ["Multi-meter test", "Arc trace check", "Fix or replace advice"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" }
       ],
       "Fan & Lighting": [
-        { id: "elec-fan-1", name: "Ceiling Fan Installation", price: 249, duration: "30 mins", badge: "Standard Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe hook bolt ceiling fit, blade balancing and speed regulator connection.", includes: ["Hook bolt ceiling fit", "Blade balance", "Regulator wiring"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-2", name: "Ceiling Fan Repair", price: 299, duration: "30 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fan capacitor replacement, bearing lubrication or speed problem fix.", includes: ["Capacitor replacement", "Bearing lubrication", "Speed test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-3", name: "Exhaust Fan Installation", price: 199, duration: "25 mins", badge: "Ventilation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Kitchen or bathroom exhaust fan wall/ceiling fitting with louvre cover.", includes: ["Hole cutting if needed", "Fan bracket fit", "Power connection"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-4", name: "LED Light Installation", price: 149, duration: "15 mins", badge: "Energy Save", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Panel light, spot light or batten fitting with safe driver connection.", includes: ["Driver connection", "Flush panel fit", "Brightness test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-5", name: "Fan Regulator Replacement", price: 149, duration: "15 mins", badge: "Speed Control", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Replacing faulty step regulator or electronic dimmer with new unit.", includes: ["Old regulator removal", "New regulator fit", "Speed step test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-        { id: "elec-fan-6", name: "Light Fixture Replacement", price: 199, duration: "20 mins", badge: "Upgrade", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Removing old bulb holder and fitting new LED bulb holder or batten light.", includes: ["Holder removal", "New fixture fit", "Wire connection"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" }
+        { id: "elec-fan-1", name: "Ceiling Fan Installation", price: 249, duration: "30 mins", badge: "Standard Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe hook bolt ceiling fit, blade balancing and speed regulator connection.", includes: ["Hook bolt ceiling fit", "Blade balance", "Regulator wiring"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
+        { id: "elec-fan-2", name: "Ceiling Fan Repair", price: 299, duration: "30 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fan capacitor replacement, bearing lubrication or speed problem fix.", includes: ["Capacitor replacement", "Bearing lubrication", "Speed test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
+        { id: "elec-fan-3", name: "Exhaust Fan Installation", price: 199, duration: "25 mins", badge: "Ventilation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Kitchen or bathroom exhaust fan wall/ceiling fitting with louvre cover.", includes: ["Hole cutting if needed", "Fan bracket fit", "Power connection"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
+        { id: "elec-fan-4", name: "LED Light Installation", price: 149, duration: "15 mins", badge: "Energy Save", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Panel light, spot light or batten fitting with safe driver connection.", includes: ["Driver connection", "Flush panel fit", "Brightness test"], image: "https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?w=500&q=80&fit=crop" },
+        { id: "elec-fan-5", name: "Fan Regulator Replacement", price: 149, duration: "15 mins", badge: "Speed Control", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Replacing faulty step regulator or electronic dimmer with new unit.", includes: ["Old regulator removal", "New regulator fit", "Speed step test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
+        { id: "elec-fan-6", name: "Light Fixture Replacement", price: 199, duration: "20 mins", badge: "Upgrade", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Removing old bulb holder and fitting new LED bulb holder or batten light.", includes: ["Holder removal", "New fixture fit", "Wire connection"], image: "https://images.unsplash.com/photo-1565814636199-ae8133055c1c?w=500&q=80&fit=crop" }
       ],
       "MCB & Wiring": [
-        { id: "elec-mcb-1", name: "MCB Replacement", price: 299, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing tripped or faulty MCB with new ISI marked circuit breaker.", includes: ["MCB rating check", "New MCB installation", "Trip test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-2", name: "Main DB Box Inspection", price: 249, duration: "30 mins", badge: "Safety Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Full distribution board inspection, terminal tightening and leakage check.", includes: ["Terminal tightening", "RCCB/ELCB test", "Wiring health audit"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-3", name: "Earthing Check & Repair", price: 349, duration: "30 mins", badge: "Grounding", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Earth continuity resistance test and earthing wire repair.", includes: ["Resistance measurement", "Earth wire tracing", "Safe earth restoration"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-4", name: "Short Circuit Repair", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Tracing and repairing burnt wire short circuits causing repeated MCB trips.", includes: ["Fault circuit tracing", "Burnt wire replacement", "MCB reset test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-5", name: "New Point Wiring", price: 599, duration: "1 hr", badge: "New Connection", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Adding a new electrical power point with conduit wiring from nearest junction.", includes: ["Conduit routing", "3-core wire pull", "Socket/switch fit"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop" },
-        { id: "elec-mcb-6", name: "RCCB / ELCB Installation", price: 799, duration: "45 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Residual current circuit breaker installation for shock protection.", includes: ["RCCB rating selection", "DB box fitting", "Leakage trip test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "elec-mcb-1", name: "MCB Replacement", price: 299, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing tripped or faulty MCB with new ISI marked circuit breaker.", includes: ["MCB rating check", "New MCB installation", "Trip test"], image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-2", name: "Main DB Box Inspection", price: 249, duration: "30 mins", badge: "Safety Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Full distribution board inspection, terminal tightening and leakage check.", includes: ["Terminal tightening", "RCCB/ELCB test", "Wiring health audit"], image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-3", name: "Earthing Check & Repair", price: 349, duration: "30 mins", badge: "Grounding", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Earth continuity resistance test and earthing wire repair.", includes: ["Resistance measurement", "Earth wire tracing", "Safe earth restoration"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-4", name: "Short Circuit Repair", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Tracing and repairing burnt wire short circuits causing repeated MCB trips.", includes: ["Fault circuit tracing", "Burnt wire replacement", "MCB reset test"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-5", name: "New Point Wiring", price: 599, duration: "1 hr", badge: "New Connection", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Adding a new electrical power point with conduit wiring from nearest junction.", includes: ["Conduit routing", "3-core wire pull", "Socket/switch fit"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-6", name: "RCCB / ELCB Installation", price: 799, duration: "45 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Residual current circuit breaker installation for shock protection.", includes: ["RCCB rating selection", "DB box fitting", "Leakage trip test"], image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&q=80&fit=crop" }
       ],
       "Inverter & Heavy Appliance": [
-        { id: "elec-inv-1", name: "Inverter Battery Checkup", price: 299, duration: "30 mins", badge: "Battery Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Battery water level check, terminal cleaning, charging current test & backup estimate.", includes: ["Electrolyte level check", "Terminal cleaning", "Charging voltage test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "elec-inv-2", name: "Inverter Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Inverter PCB repair, MOSFET replacement, charger fault or display board fix.", includes: ["PCB diagnostic", "Faulty component replace", "Output voltage test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "elec-inv-3", name: "Inverter Wiring", price: 399, duration: "45 mins", badge: "Safe Wiring", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Safe inverter bypass wiring for selected power points in the home.", includes: ["Bypass circuit routing", "3-core inverter wire", "Load test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "elec-inv-4", name: "Geyser Installation", price: 399, duration: "45 mins", badge: "Hot Water", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Wall mounting bracket fitting, plumbing inlet/outlet & 16A socket connection.", includes: ["Bracket wall mount", "Inlet/outlet pipe fit", "16A socket connection"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "elec-inv-5", name: "Geyser Repair", price: 499, duration: "45 mins", badge: "Element Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Heating element resistance test, thermostat replacement or pressure valve fix.", includes: ["Element resistance check", "Thermostat swap", "Pressure valve check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "elec-inv-6", name: "Voltage Stabilizer Installation", price: 299, duration: "30 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Stabilizer wall/shelf mounting with dedicated input wiring & load test.", includes: ["Shelf/wall mounting", "Input wiring", "Voltage regulation test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "elec-inv-1", name: "Inverter Battery Checkup", price: 299, duration: "30 mins", badge: "Battery Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Battery water level check, terminal cleaning, charging current test & backup estimate.", includes: ["Electrolyte level check", "Terminal cleaning", "Charging voltage test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" },
+        { id: "elec-inv-2", name: "Inverter Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Inverter PCB repair, MOSFET replacement, charger fault or display board fix.", includes: ["PCB diagnostic", "Faulty component replace", "Output voltage test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" },
+        { id: "elec-inv-3", name: "Inverter Wiring", price: 399, duration: "45 mins", badge: "Safe Wiring", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Safe inverter bypass wiring for selected power points in the home.", includes: ["Bypass circuit routing", "3-core inverter wire", "Load test"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" },
+        { id: "elec-inv-4", name: "Geyser Installation", price: 399, duration: "45 mins", badge: "Hot Water", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Wall mounting bracket fitting, plumbing inlet/outlet & 16A socket connection.", includes: ["Bracket wall mount", "Inlet/outlet pipe fit", "16A socket connection"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "elec-inv-5", name: "Geyser Repair", price: 499, duration: "45 mins", badge: "Element Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Heating element resistance test, thermostat replacement or pressure valve fix.", includes: ["Element resistance check", "Thermostat swap", "Pressure valve check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "elec-inv-6", name: "Voltage Stabilizer Installation", price: 299, duration: "30 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Stabilizer wall/shelf mounting with dedicated input wiring & load test.", includes: ["Shelf/wall mounting", "Input wiring", "Voltage regulation test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" }
       ]
     },
     washing_machine: {
@@ -12384,23 +12810,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         { id: "hvac-prt-fst", name: "Floor Stand", price: 399, duration: "30 mins", badge: "Floor Mount", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Heavy duty floor stand for rooftop or balcony outdoor unit positioning.", includes: ["Floor stand assembly", "Vibration dampening", "Rubber foot fit"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
         { id: "hvac-prt-bpl", name: "Universal Back Plate", price: 199, duration: "20 mins", badge: "Mounting Plate", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Galvanized steel indoor unit mounting backplate installation.", includes: ["Wall alignment", "Rawl plug drilling", "Spirit level check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
         { id: "hvac-prt-fast", name: "Fastener Set", price: 99, duration: "15 mins", badge: "Hardware", badgeColor: "bg-gray-50 text-gray-700 border-gray-100", description: "Heavy anchor dash fasteners and stainless steel mounting bolts set.", includes: ["4x anchor bolts", "Rawl plug anchors", "Tightening test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
-      ]
-    },
-    washing_machine: {
-      "Washing Machine Jet Service": [
-        { id: "wm-jet-1", name: "Jet Service", price: 599, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "High-pressure foam & water jet deep cleaning for inner steel tub, outer drum scale & lint filter.", includes: ["High pressure foam jet wash", "Chemical tub descaling", "30-day service warranty"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
-      ],
-      "Washing Machine Check-up": [
-        { id: "wm-chk-1", name: "Washing Machine Check-up", price: 299, duration: "30 mins", badge: "Diagnostic", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Complete 21-point system check-up, drum spin balance audit, water flow & electrical safety inspection.", includes: ["21-point system diagnostic", "Fault inspection report", "Repair cost estimate"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
-      ],
-      "Installation & Uninstallation": [
-        { id: "wm-inst-1", name: "Washing Machine Installation", price: 399, duration: "45 mins", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional top load / front load unboxing, inlet pipe tap adapter fitting, drain hose setup & demo.", includes: ["Unboxing & positioning", "Inlet & outlet pipe connection", "Live run demo"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "wm-inst-2", name: "Washing Machine Uninstallation", price: 249, duration: "30 mins", badge: "Safe Dismount", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe disconnection of water inlet hose, power cord, drain pipe & transit safety bolt fitting.", includes: ["Water line disconnection", "Drain hose detachment", "Transit bolt fit"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
-      ],
-      "Washing Machine Repair": [
-        { id: "wm-rep-1", name: "Washer Spinning Abnormally", price: 499, duration: "45 mins", badge: "Spin Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix uneven tub rotation, spin drum vibration, shock absorber check, or drive belt tension adjustment.", includes: ["Shock absorber inspection", "Drive belt tension check", "Drum spin test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "wm-rep-2", name: "Machine Making Sound", price: 449, duration: "45 mins", badge: "Noise Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnosis & fix for loud grinding, squeaking, or thumping sounds during wash/spin cycles.", includes: ["Coin trap clearance", "Motor pulley check", "Bearing noise test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "wm-rep-3", name: "Other / Other Issue", price: 399, duration: "45 mins", badge: "General Fix", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "General diagnosis for water inlet leak, PCB error codes, door lock failure, or timer issues.", includes: ["Full system diagnostic", "Faulty component fix", "Safety circuit check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
       ]
     },
     refrigerator: {
@@ -12544,109 +12953,109 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     },
     plumbing: {
       "Tap & Mixer": [
-        { id: "plum-tap-1", name: "Tap Repair", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or internal seal tuning.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-tap-2", name: "Tap Installation / Replacement", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unmounting old tap and fitting new sink/basin/wall tap with Teflon thread sealing.", includes: ["Old tap dismount", "New tap fitting", "Teflon seal check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-tap-3", name: "Tap Accessory Installation", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fitting aerators, extension nozzles, foamers, or water filter adapters on taps.", includes: ["Accessory mounting", "Aerator cleaning", "Spray test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-tap-4", name: "Mixer Repair", price: 399, duration: "45 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hot & cold water mixer valve cartridge replacement, shower diverter repair, and thread sealing.", includes: ["Internal cartridge fix", "Teflon tape seal", "Flow pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-tap-5", name: "Mixer Installation", price: 499, duration: "1 hr", badge: "New Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Wall mixer or counter-top mixer installation with hot & cold braided pipe connection.", includes: ["Hot/cold alignment", "Wall flange fit", "Pressure leak test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-tap-6", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Overhead shower arm mounting, hand shower bracket fitting, and flow test.", includes: ["Shower arm fit", "Teflon thread seal", "Spray pattern check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-tap-1", name: "Tap Repair", price: 149, duration: "30 mins", badge: "Value", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix dripping taps, washer replacement, spindle fix, or internal seal tuning.", includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-tap-2", name: "Tap Installation / Replacement", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Unmounting old tap and fitting new sink/basin/wall tap with Teflon thread sealing.", includes: ["Old tap dismount", "New tap fitting", "Teflon seal check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-tap-3", name: "Tap Accessory Installation", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fitting aerators, extension nozzles, foamers, or water filter adapters on taps.", includes: ["Accessory mounting", "Aerator cleaning", "Spray test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-tap-4", name: "Mixer Repair", price: 399, duration: "45 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hot & cold water mixer valve cartridge replacement, shower diverter repair, and thread sealing.", includes: ["Internal cartridge fix", "Teflon tape seal", "Flow pressure test"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" },
+        { id: "plum-tap-5", name: "Mixer Installation", price: 499, duration: "1 hr", badge: "New Fit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Wall mixer or counter-top mixer installation with hot & cold braided pipe connection.", includes: ["Hot/cold alignment", "Wall flange fit", "Pressure leak test"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" },
+        { id: "plum-tap-6", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Overhead shower arm mounting, hand shower bracket fitting, and flow test.", includes: ["Shower arm fit", "Teflon thread seal", "Spray pattern check"], image: "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=500&q=80&fit=crop" }
       ],
       "Toilet": [
-        { id: "plum-toil-1", name: "Jet Spray Repair / Replacement", price: 199, duration: "25 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix leaking health faucet jet spray, trigger replacement or new hose installation.", includes: ["Trigger repair/replace", "Braided hose connection", "Pressure test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-2", name: "Jet Spray Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "New health faucet jet spray wall bracket fitting and 2-way angle valve connection.", includes: ["Wall bracket drill & fit", "Angle valve connection", "Leakage test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-3", name: "Toilet Seat Cover Installation", price: 199, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Removing old damaged seat cover and installing new soft-close hydraulic toilet seat cover.", includes: ["Old cover removal", "Hinge bolt alignment", "Soft-close test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-4", name: "Flush Tank Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix continuous flushing water leakage, syphon kit change, or float valve adjustment.", includes: ["Syphon kit check", "Float valve adjustment", "Leak tightness check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-5", name: "Flush Tank Replacement", price: 699, duration: "1 hr", badge: "Full Kit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Dismounting old flush tank and installing new PVC single/dual flush tank assembly.", includes: ["Old tank removal", "New tank mounting", "Dual flush calibration"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-6", name: "Western Toilet Replacement", price: 1299, duration: "1.5 hrs", badge: "Heavy Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Dismounting old commode, wax seal ring installation, floor bolt fixing, and silicone sealing.", includes: ["Old commode dismount", "Wax ring & gasket seal", "Floor anchorage & silicone seal"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-7", name: "Indian Toilet Installation", price: 1499, duration: "2 hrs", badge: "Sanitary Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Squatting pan alignment, P-trap sealing, cement joint packing, and flush connection.", includes: ["P-trap alignment", "Cement mortar packing", "Flush pipe seal"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "plum-toil-8", name: "Toilet Pot Blockage Removal", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "High-pressure auger drain snake clearing for toilet pot blockage and waste line backup.", includes: ["Drain snake clearing", "Pressure flush test", "Sanitizing cleanup"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" }
+        { id: "plum-toil-1", name: "Jet Spray Repair / Replacement", price: 199, duration: "25 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix leaking health faucet jet spray, trigger replacement or new hose installation.", includes: ["Trigger repair/replace", "Braided hose connection", "Pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-2", name: "Jet Spray Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "New health faucet jet spray wall bracket fitting and 2-way angle valve connection.", includes: ["Wall bracket drill & fit", "Angle valve connection", "Leakage test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-3", name: "Toilet Seat Cover Installation", price: 199, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Removing old damaged seat cover and installing new soft-close hydraulic toilet seat cover.", includes: ["Old cover removal", "Hinge bolt alignment", "Soft-close test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-4", name: "Flush Tank Repair", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fix continuous flushing water leakage, syphon kit change, or float valve adjustment.", includes: ["Syphon kit check", "Float valve adjustment", "Leak tightness check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-5", name: "Flush Tank Replacement", price: 699, duration: "1 hr", badge: "Full Kit", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Dismounting old flush tank and installing new PVC single/dual flush tank assembly.", includes: ["Old tank removal", "New tank mounting", "Dual flush calibration"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-6", name: "Western Toilet Replacement", price: 1299, duration: "1.5 hrs", badge: "Heavy Fit", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Dismounting old commode, wax seal ring installation, floor bolt fixing, and silicone sealing.", includes: ["Old commode dismount", "Wax ring & gasket seal", "Floor anchorage & silicone seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-7", name: "Indian Toilet Installation", price: 1499, duration: "2 hrs", badge: "Sanitary Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Squatting pan alignment, P-trap sealing, cement joint packing, and flush connection.", includes: ["P-trap alignment", "Cement mortar packing", "Flush pipe seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-toil-8", name: "Toilet Pot Blockage Removal", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "High-pressure auger drain snake clearing for toilet pot blockage and waste line backup.", includes: ["Drain snake clearing", "Pressure flush test", "Sanitizing cleanup"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" }
       ],
       "Basin & Sink": [
-        { id: "plum-bs-1", name: "Wash Basin Installation", price: 499, duration: "45 mins", badge: "Recommended", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Wall bracket mounting, ceramic wash basin positioning, waste coupling, and pillar tap fit.", includes: ["Wall bracket drilling", "Basin positioning & leveling", "Waste coupling seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-bs-2", name: "Waste Pipe Replacement", price: 199, duration: "25 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing cracked or leaking flexible corrugated waste pipe under sink/basin.", includes: ["Old pipe removal", "Heavy duty flexible hose fit", "Drain flush check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-bs-3", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "De-clog", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Clearing food sludge, grease buildup, and debris in kitchen sink bottle trap or drain line.", includes: ["Bottle trap dismount & clean", "Spring snake clearing", "Water drain flush"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-        { id: "plum-bs-4", name: "Waste Coupling Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Brass or stainless steel waste coupling installation with rubber gasket and pop-up plug.", includes: ["Old coupling removal", "Rubber gasket positioning", "Leak-free tightness test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-bs-1", name: "Wash Basin Installation", price: 499, duration: "45 mins", badge: "Recommended", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Wall bracket mounting, ceramic wash basin positioning, waste coupling, and pillar tap fit.", includes: ["Wall bracket drilling", "Basin positioning & leveling", "Waste coupling seal"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-bs-2", name: "Waste Pipe Replacement", price: 199, duration: "25 mins", badge: "Quick Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Replacing cracked or leaking flexible corrugated waste pipe under sink/basin.", includes: ["Old pipe removal", "Heavy duty flexible hose fit", "Drain flush check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-bs-3", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "De-clog", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Clearing food sludge, grease buildup, and debris in kitchen sink bottle trap or drain line.", includes: ["Bottle trap dismount & clean", "Spring snake clearing", "Water drain flush"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" },
+        { id: "plum-bs-4", name: "Waste Coupling Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Brass or stainless steel waste coupling installation with rubber gasket and pop-up plug.", includes: ["Old coupling removal", "Rubber gasket positioning", "Leak-free tightness test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
       ],
       "Bath Fittings": [
-        { id: "plum-bf-1", name: "Bath Accessory Installation", price: 199, duration: "20 mins", badge: "Fitting", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Towel rod, soap dish, robe hook, tumbler holder or mirror bracket wall mounting.", includes: ["Tile drilling with precision", "Rawl plug anchor fit", "Leveling check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-bf-2", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Rain shower head, shower arm extension or hand shower sliding rail fitting.", includes: ["Shower arm connection", "Flange placement", "Spray nozzle check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-bf-3", name: "Bathroom Fitting Repair", price: 249, duration: "30 mins", badge: "Repair", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fixing loose bathroom fixtures, leaking angle valves, or damaged flanges.", includes: ["Loose screw tightening", "Washer replacement", "Sealing check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-bf-4", name: "Bathroom Fitting Replacement", price: 349, duration: "45 mins", badge: "Upgrade", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Complete replacement of old worn out bathroom metallic/CP accessories with new fixtures.", includes: ["Dismounting old fittings", "New accessory fitting", "Alignment test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-bf-1", name: "Bath Accessory Installation", price: 199, duration: "20 mins", badge: "Fitting", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Towel rod, soap dish, robe hook, tumbler holder or mirror bracket wall mounting.", includes: ["Tile drilling with precision", "Rawl plug anchor fit", "Leveling check"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" },
+        { id: "plum-bf-2", name: "Shower Installation", price: 299, duration: "30 mins", badge: "Shower Fit", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Rain shower head, shower arm extension or hand shower sliding rail fitting.", includes: ["Shower arm connection", "Flange placement", "Spray nozzle check"], image: "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=500&q=80&fit=crop" },
+        { id: "plum-bf-3", name: "Bathroom Fitting Repair", price: 249, duration: "30 mins", badge: "Repair", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Fixing loose bathroom fixtures, leaking angle valves, or damaged flanges.", includes: ["Loose screw tightening", "Washer replacement", "Sealing check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-bf-4", name: "Bathroom Fitting Replacement", price: 349, duration: "45 mins", badge: "Upgrade", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Complete replacement of old worn out bathroom metallic/CP accessories with new fixtures.", includes: ["Dismounting old fittings", "New accessory fitting", "Alignment test"], image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=500&q=80&fit=crop" }
       ],
       "Water Tank & Motor": [
-        { id: "plum-wt-1", name: "Overhead Water Tank Installation", price: 1499, duration: "2 hrs", badge: "Heavy Duty", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "500L/1000L PVC water tank positioning, inlet/outlet tank nipple fitting, and overflow pipe setup.", includes: ["Tank alignment", "Tank nipple sealing", "Ball valve & overflow fit"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wt-2", name: "Water Tank Repair", price: 599, duration: "1 hr", badge: "Leak Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing crack leaks in plastic water tanks using thermal plastic welding or leak proof sealant.", includes: ["Crack surface prep", "Thermal welding / sealant", "Water fill test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wt-3", name: "Motor Installation", price: 799, duration: "1 hr", badge: "Motor Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Submersible or monoblock water pump motor piping connection, check valve, and union fitting.", includes: ["Inlet/outlet pipe jointing", "Non-return valve fit", "Priming & run test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wt-4", name: "Motor Air Cavity Removal", price: 399, duration: "45 mins", badge: "Air Lock", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Resolving motor air lock issues, suction line priming, and foot valve air bleeding.", includes: ["Suction line priming", "Air bleed valve opening", "Water pumping test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-wt-1", name: "Overhead Water Tank Installation", price: 1499, duration: "2 hrs", badge: "Heavy Duty", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "500L/1000L PVC water tank positioning, inlet/outlet tank nipple fitting, and overflow pipe setup.", includes: ["Tank alignment", "Tank nipple sealing", "Ball valve & overflow fit"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-wt-2", name: "Water Tank Repair", price: 599, duration: "1 hr", badge: "Leak Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Fixing crack leaks in plastic water tanks using thermal plastic welding or leak proof sealant.", includes: ["Crack surface prep", "Thermal welding / sealant", "Water fill test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-wt-3", name: "Motor Installation", price: 799, duration: "1 hr", badge: "Motor Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Submersible or monoblock water pump motor piping connection, check valve, and union fitting.", includes: ["Inlet/outlet pipe jointing", "Non-return valve fit", "Priming & run test"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
+        { id: "plum-wt-4", name: "Motor Air Cavity Removal", price: 399, duration: "45 mins", badge: "Air Lock", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Resolving motor air lock issues, suction line priming, and foot valve air bleeding.", includes: ["Suction line priming", "Air bleed valve opening", "Water pumping test"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" }
       ],
       "Drainage": [
-        { id: "plum-dr-1", name: "Drain Blockage Removal", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High pressure water jet flushing or heavy rotary snake clearing for clogged bathroom floor drains.", includes: ["Rotary spring snake clear", "Grease & hair extraction", "Drain flush test"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-        { id: "plum-dr-2", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "Kitchen Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Clearing stubborn food oil and debris blockage in kitchen sink drain trap line.", includes: ["Sink trap removal & clean", "Pipe flush treatment", "Flow restoration"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-        { id: "plum-dr-3", name: "Pipe Blockage Removal", price: 499, duration: "1 hr", badge: "Deep Clear", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Clearing main chamber or underground PVC drainage pipe line blockage.", includes: ["Chamber inspection", "Heavy duty cable snake", "Debris extraction"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
-        { id: "plum-dr-4", name: "Drainage Repair", price: 599, duration: "1 hr", badge: "Pipe Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Repairing broken PVC drain pipe section, replacing damaged nahani trap, or solvent joint sealing.", includes: ["Damaged pipe cut & patch", "PVC solvent weld joint", "Leak test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-dr-1", name: "Drain Blockage Removal", price: 399, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High pressure water jet flushing or heavy rotary snake clearing for clogged bathroom floor drains.", includes: ["Rotary spring snake clear", "Grease & hair extraction", "Drain flush test"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" },
+        { id: "plum-dr-2", name: "Sink Drainage Removal", price: 349, duration: "30 mins", badge: "Kitchen Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Clearing stubborn food oil and debris blockage in kitchen sink drain trap line.", includes: ["Sink trap removal & clean", "Pipe flush treatment", "Flow restoration"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" },
+        { id: "plum-dr-3", name: "Pipe Blockage Removal", price: 499, duration: "1 hr", badge: "Deep Clear", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Clearing main chamber or underground PVC drainage pipe line blockage.", includes: ["Chamber inspection", "Heavy duty cable snake", "Debris extraction"], image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=500&q=80&fit=crop" },
+        { id: "plum-dr-4", name: "Drainage Repair", price: 599, duration: "1 hr", badge: "Pipe Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Repairing broken PVC drain pipe section, replacing damaged nahani trap, or solvent joint sealing.", includes: ["Damaged pipe cut & patch", "PVC solvent weld joint", "Leak test"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" }
       ],
       "Water Filter": [
-        { id: "plum-wf-1", name: "Shower Filter Installation", price: 249, duration: "25 mins", badge: "Hard Water", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Connecting anti-scale hard water filter cartridge to shower arm or tap.", includes: ["Filter adapter attachment", "Cartridge insert", "Flow check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wf-2", name: "Washing Machine Filter Installation", price: 299, duration: "30 mins", badge: "Appliance Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Inline hard water descaling filter connection to washing machine water inlet tap.", includes: ["Tap adapter fitting", "Inline filter installation", "Leak check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wf-3", name: "Water Filter Installation", price: 499, duration: "45 mins", badge: "Purifier Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Main water purifier / RO pre-filter housing installation with diverter valve connection.", includes: ["Diverter valve connection", "Pre-filter housing mount", "Pure water pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "plum-wf-4", name: "Filter Replacement", price: 199, duration: "20 mins", badge: "Quick Swap", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Replacing exhausted sediment or carbon filter candle with new fresh cartridge.", includes: ["Housing opening", "Old candle removal & wash", "New cartridge insertion"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "plum-wf-1", name: "Shower Filter Installation", price: 249, duration: "25 mins", badge: "Hard Water", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Connecting anti-scale hard water filter cartridge to shower arm or tap.", includes: ["Filter adapter attachment", "Cartridge insert", "Flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
+        { id: "plum-wf-2", name: "Washing Machine Filter Installation", price: 299, duration: "30 mins", badge: "Appliance Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Inline hard water descaling filter connection to washing machine water inlet tap.", includes: ["Tap adapter fitting", "Inline filter installation", "Leak check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
+        { id: "plum-wf-3", name: "Water Filter Installation", price: 499, duration: "45 mins", badge: "Purifier Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Main water purifier / RO pre-filter housing installation with diverter valve connection.", includes: ["Diverter valve connection", "Pre-filter housing mount", "Pure water pressure test"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" },
+        { id: "plum-wf-4", name: "Filter Replacement", price: 199, duration: "20 mins", badge: "Quick Swap", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Replacing exhausted sediment or carbon filter candle with new fresh cartridge.", includes: ["Housing opening", "Old candle removal & wash", "New cartridge insertion"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&q=80&fit=crop" }
       ],
       "Grouting": [
-        { id: "plum-gr-1", name: "Bathroom Tile Grouting", price: 699, duration: "1 hr", badge: "Waterproof Seal", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Scraping old damaged grout lines and applying epoxy / waterproof white cement grout in bathroom tiles.", includes: ["Tile joint scraping", "Waterproof epoxy grout application", "Tile surface sponge clean"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "plum-gr-2", name: "Kitchen Tile Grouting", price: 599, duration: "1 hr", badge: "Hygienic Seal", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Sealing kitchen wall & counter tile joints with anti-bacterial stain-proof grout.", includes: ["Joint cleaning & degreasing", "Stain-proof epoxy grout fill", "Sponge finishing"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "plum-gr-1", name: "Bathroom Tile Grouting", price: 699, duration: "1 hr", badge: "Waterproof Seal", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Scraping old damaged grout lines and applying epoxy / waterproof white cement grout in bathroom tiles.", includes: ["Tile joint scraping", "Waterproof epoxy grout application", "Tile surface sponge clean"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "plum-gr-2", name: "Kitchen Tile Grouting", price: 599, duration: "1 hr", badge: "Hygienic Seal", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Sealing kitchen wall & counter tile joints with anti-bacterial stain-proof grout.", includes: ["Joint cleaning & degreasing", "Stain-proof epoxy grout fill", "Sponge finishing"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
       ],
       "Plumber On-Demand": [
-        { id: "plum-od-1", name: "30-Minute Plumber Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert plumber for quick minor repairs, leak inspection, or small fittings.", includes: ["Rapid response plumber", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-od-2", name: "Hourly Plumber Service", price: 399, duration: "1 hr", badge: "Flexible Labor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Hourly plumbing labor for multiple custom repair jobs, piping work, or fixture replacements.", includes: ["1 hr professional plumber labor", "Multiple small tasks handled", "Tools included"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-od-3", name: "Full-Day Plumber Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated plumber booking for new home setup, bathroom renovation, or major pipe work.", includes: ["8 hrs dedicated master plumber", "Complete plumbing overhaul", "Daily progress check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "plum-od-4", name: "Plumber Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site plumbing system health audit, piping leakage trace, and renovation estimate.", includes: ["Detailed on-site audit", "Leakage point trace", "Itemized cost estimate"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" }
+        { id: "plum-od-1", name: "30-Minute Plumber Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert plumber for quick minor repairs, leak inspection, or small fittings.", includes: ["Rapid response plumber", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
+        { id: "plum-od-2", name: "Hourly Plumber Service", price: 399, duration: "1 hr", badge: "Flexible Labor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Hourly plumbing labor for multiple custom repair jobs, piping work, or fixture replacements.", includes: ["1 hr professional plumber labor", "Multiple small tasks handled", "Tools included"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
+        { id: "plum-od-3", name: "Full-Day Plumber Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated plumber booking for new home setup, bathroom renovation, or major pipe work.", includes: ["8 hrs dedicated master plumber", "Complete plumbing overhaul", "Daily progress check"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" },
+        { id: "plum-od-4", name: "Plumber Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site plumbing system health audit, piping leakage trace, and renovation estimate.", includes: ["Detailed on-site audit", "Leakage point trace", "Itemized cost estimate"], image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=500&q=80&fit=crop" }
       ]
     },
     carpentry: {
       "Lock & Handle": [
-        { id: "carp-lock-1", name: "Main Door Lock / Handle Installation", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Mortise lock fitting, cylindrical lock replace, latch alignment, key smooth turn check.", includes: ["Lock slot chisel & fit", "Latch strike plate alignment", "Key smooth test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-lock-2", name: "Mortise Lock Repair & Replacement", price: 299, duration: "45 mins", badge: "Heavy Lock", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repairing or replacing heavy mortise door locks, handles, and key cylinders.", includes: ["Chisel mortise pocket", "Key cylinder alignment", "Latching check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-lock-3", name: "Cylindrical Door Lock Installation", price: 249, duration: "30 mins", badge: "Popular", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fitting cylindrical knob / lever lock for bedroom and office wooden doors.", includes: ["Hole saw drilling", "Latch mechanism fit", "Key test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-lock-4", name: "Door Latch & Tower Bolt Fitting", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Installing brass/steel tower bolts, aldrop latches, or magnetic door catchers.", includes: ["Screw pilot drilling", "Tower bolt fit", "Latching check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "carp-lock-1", name: "Main Door Lock / Handle Installation", price: 199, duration: "30 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Mortise lock fitting, cylindrical lock replace, latch alignment, key smooth turn check.", includes: ["Lock slot chisel & fit", "Latch strike plate alignment", "Key smooth test"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" },
+        { id: "carp-lock-2", name: "Mortise Lock Repair & Replacement", price: 299, duration: "45 mins", badge: "Heavy Lock", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Repairing or replacing heavy mortise door locks, handles, and key cylinders.", includes: ["Chisel mortise pocket", "Key cylinder alignment", "Latching check"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" },
+        { id: "carp-lock-3", name: "Cylindrical Door Lock Installation", price: 249, duration: "30 mins", badge: "Popular", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Fitting cylindrical knob / lever lock for bedroom and office wooden doors.", includes: ["Hole saw drilling", "Latch mechanism fit", "Key test"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" },
+        { id: "carp-lock-4", name: "Door Latch & Tower Bolt Fitting", price: 149, duration: "20 mins", badge: "Quick Fit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Installing brass/steel tower bolts, aldrop latches, or magnetic door catchers.", includes: ["Screw pilot drilling", "Tower bolt fit", "Latching check"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" }
       ],
       "Cupboard & Drawer": [
-        { id: "carp-cup-1", name: "Cupboard Repair", price: 299, duration: "45 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fixing sagging cupboard shelves, loose wooden joints, door misalignment, and latch fixes.", includes: ["Shelf support reinforcement", "Hinge adjustment", "Joint glue & screw"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-cup-2", name: "Cupboard Lock & Latches", price: 199, duration: "30 mins", badge: "Security", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Installing or replacing multi-purpose cupboard locks, cam locks, and magnetic catches.", includes: ["Cam lock fitting", "Strike plate alignment", "Key smoothness test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-cup-3", name: "Drawer Repair & Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Repairing broken wooden drawer boxes, alignment adjustment, and smooth slide setup.", includes: ["Drawer box alignment", "Telescopic channel fix", "Smooth slide test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-cup-4", name: "Drawer Channel Slide Replacement", price: 199, duration: "25 mins", badge: "Smooth Slide", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing rusty or broken ball-bearing drawer telescopic channels for quiet sliding.", includes: ["Old channel dismount", "Heavy-duty channel fit", "Slide alignment test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+        { id: "carp-cup-1", name: "Cupboard Repair", price: 299, duration: "45 mins", badge: "Popular", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fixing sagging cupboard shelves, loose wooden joints, door misalignment, and latch fixes.", includes: ["Shelf support reinforcement", "Hinge adjustment", "Joint glue & screw"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" },
+        { id: "carp-cup-2", name: "Cupboard Lock & Latches", price: 199, duration: "30 mins", badge: "Security", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Installing or replacing multi-purpose cupboard locks, cam locks, and magnetic catches.", includes: ["Cam lock fitting", "Strike plate alignment", "Key smoothness test"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" },
+        { id: "carp-cup-3", name: "Drawer Repair & Installation", price: 249, duration: "30 mins", badge: "Essential", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Repairing broken wooden drawer boxes, alignment adjustment, and smooth slide setup.", includes: ["Drawer box alignment", "Telescopic channel fix", "Smooth slide test"], image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=500&q=80&fit=crop" },
+        { id: "carp-cup-4", name: "Drawer Channel Slide Replacement", price: 199, duration: "25 mins", badge: "Smooth Slide", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing rusty or broken ball-bearing drawer telescopic channels for quiet sliding.", includes: ["Old channel dismount", "Heavy-duty channel fit", "Slide alignment test"], image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=500&q=80&fit=crop" }
       ],
       "Kitchen Fittings": [
-        { id: "carp-kit-1", name: "Pull-Out Drawer Repair / Replacement", price: 349, duration: "45 mins", badge: "Kitchen Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Modular kitchen stainless steel wire pull-out drawer repair, channel alignment, or basket replacement.", includes: ["Basket channel alignment", "Roller wheel replace", "Load test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-kit-2", name: "Cabinet Hinges", price: 199, duration: "30 mins", badge: "Hinge Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing loose, squeaking, or rusted auto-close cabinet hinges on modular kitchen doors.", includes: ["Auto-close hinge swap", "Door gap adjustment", "Closing test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-kit-3", name: "Cabinet Hydraulic Repair", price: 299, duration: "45 mins", badge: "Hydraulic", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing weak gas lift struts and hydraulic stay arms for overhead kitchen cabinets.", includes: ["Gas strut replacement", "Pressure bracket mount", "Lift & stay test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-kit-4", name: "Utensil Rack Installation", price: 249, duration: "30 mins", badge: "Storage Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Wall drilling and mounting stainless steel dish drying rack, spice rack, or cup holder.", includes: ["Precision tile drilling", "Stainless rack anchor fit", "Weight test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+        { id: "carp-kit-1", name: "Pull-Out Drawer Repair / Replacement", price: 349, duration: "45 mins", badge: "Kitchen Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Modular kitchen stainless steel wire pull-out drawer repair, channel alignment, or basket replacement.", includes: ["Basket channel alignment", "Roller wheel replace", "Load test"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" },
+        { id: "carp-kit-2", name: "Cabinet Hinges", price: 199, duration: "30 mins", badge: "Hinge Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing loose, squeaking, or rusted auto-close cabinet hinges on modular kitchen doors.", includes: ["Auto-close hinge swap", "Door gap adjustment", "Closing test"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" },
+        { id: "carp-kit-3", name: "Cabinet Hydraulic Repair", price: 299, duration: "45 mins", badge: "Hydraulic", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Replacing weak gas lift struts and hydraulic stay arms for overhead kitchen cabinets.", includes: ["Gas strut replacement", "Pressure bracket mount", "Lift & stay test"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" },
+        { id: "carp-kit-4", name: "Utensil Rack Installation", price: 249, duration: "30 mins", badge: "Storage Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Wall drilling and mounting stainless steel dish drying rack, spice rack, or cup holder.", includes: ["Precision tile drilling", "Stainless rack anchor fit", "Weight test"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" }
       ],
       "Hangers & Drying Solutions": [
-        { id: "carp-hng-1", name: "Ceiling-Mounted Hanger Installation", price: 499, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Installing 6-pipe pulley ceiling cloth drying hanger with smooth rope hoisting mechanism.", includes: ["Ceiling anchor drilling", "Pulley wheel alignment", "Hoisting rope test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "carp-hng-2", name: "Wall Hanger Installation", price: 249, duration: "30 mins", badge: "Wall Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Foldable wall-mounted cloth drying rack installation for balcony or utility area.", includes: ["Wall bracket drilling", "Foldable rack fit", "Weight test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "carp-hng-3", name: "Cloth Drying Rope Installation", price: 199, duration: "25 mins", badge: "Quick Rope", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Hook anchor drilling and nylon / stainless steel plastic-coated clothesline stringing.", includes: ["Hook anchor drilling", "High-tension rope knot", "Tension check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "carp-hng-1", name: "Ceiling-Mounted Hanger Installation", price: 499, duration: "1 hr", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Installing 6-pipe pulley ceiling cloth drying hanger with smooth rope hoisting mechanism.", includes: ["Ceiling anchor drilling", "Pulley wheel alignment", "Hoisting rope test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "carp-hng-2", name: "Wall Hanger Installation", price: 249, duration: "30 mins", badge: "Wall Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Foldable wall-mounted cloth drying rack installation for balcony or utility area.", includes: ["Wall bracket drilling", "Foldable rack fit", "Weight test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
+        { id: "carp-hng-3", name: "Cloth Drying Rope Installation", price: 199, duration: "25 mins", badge: "Quick Rope", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Hook anchor drilling and nylon / stainless steel plastic-coated clothesline stringing.", includes: ["Hook anchor drilling", "High-tension rope knot", "Tension check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" }
       ],
       "Furniture Services": [
-        { id: "carp-furn-1", name: "Furniture Repair", price: 399, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Tighten loose joints, replace broken wooden slats, wardrobe door realignment, or sofa frame repair.", includes: ["Joint tightening & glueing", "Leveling check", "30-day warranty"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "carp-furn-2", name: "Furniture Making", price: 1499, duration: "2 hrs", badge: "Custom Wood", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Custom carpentry wood cutting, plywood framing, laminate pasting, and custom furniture crafting.", includes: ["Custom wood cutting", "Frame joinery", "Edge banding & sanding"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "carp-furn-3", name: "Furniture Assembly", price: 499, duration: "1 hr", badge: "Flatpack Assembly", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Professional IKEA / Pepperfry flatpack furniture unboxing, cam lock assembly, and leveling.", includes: ["Unboxing & hardware sort", "Cam lock structural assembly", "Stability check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-        { id: "carp-furn-4", name: "Wooden Furniture Fixes", price: 299, duration: "45 mins", badge: "Wood Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fixing wobbly chair legs, cracked table surfaces, drawer wood swelling, or loose veneer.", includes: ["Wood putty filling", "Veneer glue clamping", "Sanding smoothing"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
+        { id: "carp-furn-1", name: "Furniture Repair", price: 399, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Tighten loose joints, replace broken wooden slats, wardrobe door realignment, or sofa frame repair.", includes: ["Joint tightening & glueing", "Leveling check", "30-day warranty"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" },
+        { id: "carp-furn-2", name: "Furniture Making", price: 1499, duration: "2 hrs", badge: "Custom Wood", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Custom carpentry wood cutting, plywood framing, laminate pasting, and custom furniture crafting.", includes: ["Custom wood cutting", "Frame joinery", "Edge banding & sanding"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" },
+        { id: "carp-furn-3", name: "Furniture Assembly", price: 499, duration: "1 hr", badge: "Flatpack Assembly", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Professional IKEA / Pepperfry flatpack furniture unboxing, cam lock assembly, and leveling.", includes: ["Unboxing & hardware sort", "Cam lock structural assembly", "Stability check"], image: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=500&q=80&fit=crop" },
+        { id: "carp-furn-4", name: "Wooden Furniture Fixes", price: 299, duration: "45 mins", badge: "Wood Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fixing wobbly chair legs, cracked table surfaces, drawer wood swelling, or loose veneer.", includes: ["Wood putty filling", "Veneer glue clamping", "Sanding smoothing"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" }
       ],
       "Doors & Windows": [
-        { id: "carp-door-1", name: "Cabinet Soft-Close Hinge Fix", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hydraulic soft-close hinge replacement, magnetic catch fitting, drawer channel smooth slide fix.", includes: ["Hinge replacement", "Door gap alignment", "Magnetic catch fit"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-door-2", name: "Door Alignment & Shaving", price: 299, duration: "45 mins", badge: "Smooth Close", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Planing / shaving jammed wooden doors swelling in monsoon, hinge tightening, and smooth latching.", includes: ["Door edge planing", "Hinge screw tightening", "Latch clearance check"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-door-3", name: "Wooden Window Latch Repair", price: 199, duration: "30 mins", badge: "Window Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Replacing wooden window stay handles, tower bolts, hinges, and glass bead strips.", includes: ["Stay handle replacement", "Hinge lubrication", "Latch test"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
-        { id: "carp-door-4", name: "Door Stopper & Rubber Buffer Fit", price: 149, duration: "20 mins", badge: "Wall Safety", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Floor or wall door stopper installation with rubber buffer to prevent door handle wall damage.", includes: ["Floor anchor drilling", "Stopper screw fit", "Impact check"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "carp-door-1", name: "Cabinet Soft-Close Hinge Fix", price: 249, duration: "45 mins", badge: "Popular", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Hydraulic soft-close hinge replacement, magnetic catch fitting, drawer channel smooth slide fix.", includes: ["Hinge replacement", "Door gap alignment", "Magnetic catch fit"], image: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=500&q=80&fit=crop" },
+        { id: "carp-door-2", name: "Door Alignment & Shaving", price: 299, duration: "45 mins", badge: "Smooth Close", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Planing / shaving jammed wooden doors swelling in monsoon, hinge tightening, and smooth latching.", includes: ["Door edge planing", "Hinge screw tightening", "Latch clearance check"], image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&q=80&fit=crop" },
+        { id: "carp-door-3", name: "Wooden Window Latch Repair", price: 199, duration: "30 mins", badge: "Window Fix", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Replacing wooden window stay handles, tower bolts, hinges, and glass bead strips.", includes: ["Stay handle replacement", "Hinge lubrication", "Latch test"], image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&q=80&fit=crop" },
+        { id: "carp-door-4", name: "Door Stopper & Rubber Buffer Fit", price: 149, duration: "20 mins", badge: "Wall Safety", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Floor or wall door stopper installation with rubber buffer to prevent door handle wall damage.", includes: ["Floor anchor drilling", "Stopper screw fit", "Impact check"], image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=500&q=80&fit=crop" }
       ],
       "Drill & Hanging": [
-        { id: "carp-drill-1", name: "Wall Shelf / TV Bracket Mounting", price: 249, duration: "30 mins", badge: "Quick Drill", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Laser level drilling, rawl plug anchor insertion, heavy concealed bracket shelf fitting.", includes: ["Laser leveling check", "Concealed bracket fitting", "Weight test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
-        { id: "carp-drill-2", name: "Photo Frame & Wall Decor Hanging", price: 149, duration: "20 mins", badge: "Decor Drill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Hanging heavy photo frames, paintings, wall clocks, or decorative mirrors safely.", includes: ["Spirit level positioning", "Heavy duty wall anchor drill", "Hang stability test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
-        { id: "carp-drill-3", name: "Curtain Rod & Blind Installation", price: 199, duration: "25 mins", badge: "Curtain Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Single/Double curtain rod bracket drilling, roller blind, or wooden Venetian blind mounting.", includes: ["Rod bracket anchor drilling", "Finial alignment", "Smooth pull check"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" }
+        { id: "carp-drill-1", name: "Wall Shelf / TV Bracket Mounting", price: 249, duration: "30 mins", badge: "Quick Drill", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Laser level drilling, rawl plug anchor insertion, heavy concealed bracket shelf fitting.", includes: ["Laser leveling check", "Concealed bracket fitting", "Weight test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=500&q=80&fit=crop" },
+        { id: "carp-drill-2", name: "Photo Frame & Wall Decor Hanging", price: 149, duration: "20 mins", badge: "Decor Drill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Hanging heavy photo frames, paintings, wall clocks, or decorative mirrors safely.", includes: ["Spirit level positioning", "Heavy duty wall anchor drill", "Hang stability test"], image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=500&q=80&fit=crop" },
+        { id: "carp-drill-3", name: "Curtain Rod & Blind Installation", price: 199, duration: "25 mins", badge: "Curtain Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Single/Double curtain rod bracket drilling, roller blind, or wooden Venetian blind mounting.", includes: ["Rod bracket anchor drilling", "Finial alignment", "Smooth pull check"], image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&q=80&fit=crop" }
       ],
       "Carpenter On-Demand": [
-        { id: "carp-od-1", name: "30-Minute Carpenter Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert carpenter for quick minor wood repairs, hinge tuning, or small drill jobs.", includes: ["Rapid response carpenter", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-od-2", name: "Full-Day Carpenter Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated master carpenter booking for home renovation, custom woodworking, or major repairs.", includes: ["8 hrs dedicated master carpenter", "Complete carpentry service", "Tools included"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "carp-od-3", name: "Carpenter Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site woodworking health audit, furniture measurement, and custom work cost estimate.", includes: ["On-site wood inspection", "Precision measurement", "Itemized estimate"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "carp-od-1", name: "30-Minute Carpenter Service", price: 199, duration: "30 mins", badge: "Express Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "On-demand expert carpenter for quick minor wood repairs, hinge tuning, or small drill jobs.", includes: ["Rapid response carpenter", "30 mins dedicated labor", "Diagnostic & minor fix"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" },
+        { id: "carp-od-2", name: "Full-Day Carpenter Booking", price: 1999, duration: "8 hrs", badge: "Full Day Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Full 8-hour dedicated master carpenter booking for home renovation, custom woodworking, or major repairs.", includes: ["8 hrs dedicated master carpenter", "Complete carpentry service", "Tools included"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" },
+        { id: "carp-od-3", name: "Carpenter Consultation", price: 149, duration: "20 mins", badge: "Inspection", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "On-site woodworking health audit, furniture measurement, and custom work cost estimate.", includes: ["On-site wood inspection", "Precision measurement", "Itemized estimate"], image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=500&q=80&fit=crop" }
       ]
     },
     painting: {
@@ -12831,13 +13240,78 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   };
 
   const isApartmentVilla = normalizedKey === "cleaning" && ["Furnished Apartment", "Unfurnished Apartment", "Furnished Villa", "Unfurnished Villa"].includes(activeSubTab);
-  const currentOtherPlans = (OTHER_SERVICES[effectiveKey] && OTHER_SERVICES[effectiveKey][activeSubTab]) ||
+  const rawOtherPlans = (OTHER_SERVICES[effectiveKey] && OTHER_SERVICES[effectiveKey][activeSubTab]) ||
     (OTHER_SERVICES["electrical"] && OTHER_SERVICES["electrical"][activeSubTab]) ||
     (OTHER_SERVICES["refrigerator"] && OTHER_SERVICES["refrigerator"][activeSubTab]) ||
     (OTHER_SERVICES["tv_display"] && OTHER_SERVICES["tv_display"][activeSubTab]) ||
     (OTHER_SERVICES["washing_machine"] && OTHER_SERVICES["washing_machine"][activeSubTab]) ||
     (OTHER_SERVICES["hvac"] && OTHER_SERVICES["hvac"][activeSubTab]) ||
     (OTHER_SERVICES["appliance_repair"] && OTHER_SERVICES["appliance_repair"][activeSubTab]) || [];
+
+  const currentOtherPlans = useMemo(() => {
+    if (!dbCatalogPackages || dbCatalogPackages.length === 0) return rawOtherPlans;
+
+    // 1. Map existing catalog items with latest DB values (100% DB-driven)
+    const seenIds = new Set();
+    const mapped = rawOtherPlans.map(plan => {
+      const normPlanName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const dbMatch = dbCatalogPackages.find(p => {
+        if (p.slug && (p.slug === plan.slug || p.slug === plan.id)) return true;
+        if (String(p.id) === String(plan.id)) return true;
+        const normDbName = (p.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return normDbName && normPlanName && (normDbName.includes(normPlanName) || normPlanName.includes(normDbName));
+      });
+      if (!dbMatch) return plan;
+      seenIds.add(String(dbMatch.id));
+      if (dbMatch.slug) seenIds.add(dbMatch.slug);
+      return {
+        ...plan,
+        ...dbMatch,
+        id: plan.id || dbMatch.id,
+        name: dbMatch.name,
+        price: Math.round(Number(dbMatch.base_price) || plan.price),
+        duration: dbMatch.duration || plan.duration,
+        description: dbMatch.description || plan.description,
+        includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : plan.includes,
+        image: dbMatch.image || plan.image,
+        badge: dbMatch.tag || plan.badge,
+        tools: dbMatch.tools,
+        ready: dbMatch.ready,
+        reviews: dbMatch.reviews,
+        faqs: dbMatch.faqs,
+      };
+    });
+
+    // 2. Append any extra packages created in database for this service / subtab
+    const extraDbPackages = dbCatalogPackages.filter(p => {
+      if (seenIds.has(String(p.id)) || (p.slug && seenIds.has(p.slug))) return false;
+      const sSlug = (p.service_slug || (p.service && p.service.slug) || "").toLowerCase();
+      const sName = (p.service_name || (p.service && p.service.name) || "").toLowerCase();
+      const pName = (p.name || "").toLowerCase();
+      const eff = (effectiveKey || "").toLowerCase();
+      const tab = (activeSubTab || "").toLowerCase();
+      
+      const matchesService = sSlug === eff || sName.includes(eff) || eff.includes(sSlug);
+      const matchesTab = sName.includes(tab) || tab.includes(sName) || pName.includes(tab) || tab.includes(pName);
+      return matchesService || matchesTab;
+    }).map(p => ({
+      id: p.slug || p.id,
+      name: p.name,
+      price: Math.round(Number(p.base_price) || 0),
+      duration: p.duration || "30 mins",
+      description: p.description || "",
+      includes: Array.isArray(p.includes) ? p.includes : [],
+      image: p.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+      badge: p.tag || "Standard",
+      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+      tools: p.tools,
+      ready: p.ready,
+      reviews: p.reviews,
+      faqs: p.faqs,
+    }));
+
+    return [...mapped, ...extraDbPackages];
+  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
   const isWmTab = washingMachineSubtabs.includes(activeSubTab);
@@ -12858,12 +13332,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     : `fixed inset-0 z-[9999] bg-white text-slate-700 w-full min-h-screen flex flex-col ${selectedMasonDetail ? "overflow-hidden" : "overflow-y-auto"}`;
 
   const containerClass = isFullPage
-    ? "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4"
+    ? "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto py-4"
     : "bg-white relative flex flex-col text-slate-700 w-full max-w-7xl mx-auto min-h-screen px-4 sm:px-6 lg:px-8 py-4";
 
-  const mainAreaClass = "flex flex-col lg:flex-row flex-1 gap-8 mt-4";
+  const mainAreaClass = "flex flex-col lg:flex-row flex-1 gap-9 mt-4";
 
-  const leftColumnClass = "flex-1 space-y-5 lg:pr-4";
+  const leftColumnClass = "flex-1 space-y-5";
 
   const rightColumnClass = "w-full lg:w-[380px] bg-slate-50 border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between lg:sticky lg:top-24 h-fit space-y-5 shadow-sm shrink-0";
 
@@ -12944,7 +13418,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                   params.set("subTab", tab.name);
                   navigate(`?${params.toString()}`, { replace: true });
                 }}
-                className="flex flex-col items-center justify-center p-1 transition-all cursor-pointer text-center bg-transparent w-[68px] shrink-0 group"
+                className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[85px] sm:w-[90px] shrink-0 group"
               >
                 <img
                   src={tab.image}
@@ -12953,12 +13427,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     e.target.onerror = null;
                     e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
                   }}
-                  className={`w-10 h-10 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected
-                    ? "scale-[1.08] shadow-sm border-2 border-slate-800"
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected
+                    ? "scale-[1.05] shadow-md border-2 border-slate-800"
                     : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
                     }`}
                 />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-900 font-black" : "text-slate-600 font-bold"
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
                   }`}>
                   {tab.name}
                 </span>
@@ -13050,8 +13524,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       </div>
 
                       {/* Right side image & add button */}
-                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
-                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50">
                           <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                             {count > 0 ? (
@@ -13109,8 +13583,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </ul>
                       </div>
 
-                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
-                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50">
                           <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                             {count > 0 ? (
@@ -13168,8 +13642,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </ul>
                       </div>
 
-                      <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
-                        <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                        <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50">
                           <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                             {count > 0 ? (
@@ -13201,7 +13675,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 .map((p, idx) => {
                   const cartId = `serv-${normalizedKey}-${p.id}`;
                   const count = getCartItemCount(cartId);
-                  const isFirst = normalizedKey === "mason" && idx === 0 && !searchQuery;
+                  const isFirst = idx === 0 && !searchQuery;
 
                   return (
                     <div
@@ -13209,7 +13683,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative"
                     >
                       {isFirst && (
-                        <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/50">
+                        <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/60">
                           <img
                             src={p.image}
                             alt={p.name}
@@ -13350,8 +13824,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                         </div>
 
                         {/* Right side image & floating ADD button */}
-                        <div className="w-full md:w-36 flex flex-col items-center justify-center shrink-0">
-                          <div className="relative w-32 h-32 md:w-36 md:h-36 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                        <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
+                          <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50">
                             <img
                               src={p.image}
                               alt={p.name}
@@ -14050,14 +14524,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                 <div className="space-y-2">
-                  {(selectedPackageDetail.includes && selectedPackageDetail.includes.length > 0
-                    ? selectedPackageDetail.includes
-                    : [
-                      "Professional grade safety & service tools",
-                      "Microfiber cloths & non-abrasive scrubbers",
-                      "High performance diagnostic equipment",
-                      "Safety gear & protective floor covers"
-                    ]
+                  {((Array.isArray(selectedPackageDetail.tools) && selectedPackageDetail.tools.length > 0)
+                    ? selectedPackageDetail.tools
+                    : (Array.isArray(selectedPackageDetail.includes) && selectedPackageDetail.includes.length > 0
+                      ? selectedPackageDetail.includes
+                      : [
+                        "Professional grade safety & service tools",
+                        "Microfiber cloths & non-abrasive scrubbers",
+                        "High performance diagnostic equipment",
+                        "Safety gear & protective floor covers"
+                      ]
+                    )
                   ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
@@ -14071,12 +14548,15 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
                 <div className="space-y-2">
-                  {[
-                    "Continuous water supply",
-                    "Working power connection",
-                    "Service area accessible and cleared",
-                    "Fragile items and valuables kept safely"
-                  ].map((item, i) => (
+                  {((Array.isArray(selectedPackageDetail.ready) && selectedPackageDetail.ready.length > 0)
+                    ? selectedPackageDetail.ready
+                    : [
+                      "Continuous water supply",
+                      "Working power connection",
+                      "Service area accessible and cleared",
+                      "Fragile items and valuables kept safely"
+                    ]
+                  ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
                       <span className="leading-relaxed">{item}</span>
@@ -14114,9 +14594,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                             return (
                               <div
                                 key={idx}
-                                className={`border rounded-xl overflow-hidden transition-all duration-200 ${
-                                  isFaqOpen ? "border-emerald-500/50 bg-emerald-50/20 shadow-xs" : "border-slate-200/80 bg-white hover:border-slate-300"
-                                }`}
+                                className={`border rounded-xl overflow-hidden transition-all duration-200 ${isFaqOpen ? "border-emerald-500/50 bg-emerald-50/20 shadow-xs" : "border-slate-200/80 bg-white hover:border-slate-300"
+                                  }`}
                               >
                                 <button
                                   onClick={() => setActiveFaq(isFaqOpen ? -1 : idx)}
@@ -17054,7 +17533,8 @@ export function BkStyles() {
         color:#1e293b; margin:0 0 0.3rem;
         letter-spacing:-0.02em;
       }
-      .uc-step-sub { font-size:0.82rem; color:#64748b; margin:0 0 1.5rem; font-weight:500; }
+      .uc-step-sub { font-size:0.82rem; color:#64748b; margin:0 0 1.5rem; font-weight:500
+; }
 
       /* ── Package Cards ── */
       .uc-pkg-grid {
@@ -19002,7 +19482,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
       <div className="flex flex-col lg:flex-row flex-1 pt-4">
 
         {/* Left Column */}
-        <div className="flex-1 space-y-5 lg:pr-6">
+        <div className="flex-1 space-y-5">
 
           {/* Section title */}
           <div className="pt-1">
@@ -19020,7 +19500,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all">
                   {/* First item image hero */}
                   {isFirst && (
-                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4">
+                    <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4 border border-slate-100/60">
                       <img
                         src={activeTab === "packages" ? "/mockups/kitchen_top_new.png" : activeTab === "appliance" ? "/mockups/appliance_cleaning_hero.png" : activeTab === "cabinet_tile" ? "/mockups/kitchen_cleaning_hero.png" : "/mockups/quick_extra_services_hero.png"}
                         alt={service.name}
@@ -19328,7 +19808,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 );
               })()}
 
-                            {/* Sub-options selector */}
+              {/* Sub-options selector */}
               {selectedServiceDetails.subOptions && (
                 <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
                   <h4 className="text-xs font-black text-slate-850 uppercase tracking-wider mb-3">Choose Variant</h4>

@@ -459,14 +459,20 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
       list = list.map(item => {
         if (Array.isArray(item.subOptions)) {
           item.subOptions = item.subOptions.map(subOpt => {
-            const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
+            const dbMatch = dbPackages.find(p => p.slug === subOpt.id || p.id === subOpt.id);
             if (dbMatch) {
               return {
                 ...subOpt,
+                ...dbMatch,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 duration: dbMatch.duration || subOpt.duration,
-                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : subOpt.includes
+                includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : subOpt.includes,
+                tools: dbMatch.tools,
+                ready: dbMatch.ready,
+                reviews: dbMatch.reviews,
+                faqs: dbMatch.faqs,
+                image: dbMatch.image || subOpt.image,
               };
             }
             return subOpt;
@@ -475,13 +481,19 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             item.price = item.subOptions[0].price;
           }
         } else {
-          const dbMatch = dbPackages.find(p => p.slug === item.id);
+          const dbMatch = dbPackages.find(p => p.slug === item.id || p.id === item.id);
           if (dbMatch) {
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : item.includes;
+            item.tools = dbMatch.tools;
+            item.ready = dbMatch.ready;
+            item.reviews = dbMatch.reviews;
+            item.faqs = dbMatch.faqs;
+            item.image = dbMatch.image || item.image;
+            item.badge = dbMatch.tag || item.badge;
           }
         }
         return item;
@@ -519,7 +531,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
     const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
     if (details.bathroomRates && selectedRateIdx === null) return 0;
     const basePrice = details.bathroomRates ? details.bathroomRates[selectedRateIdx]?.price || selectedServiceDetails.price : selectedServiceDetails.price;
-    
+
     let multiplier = 1;
     if (details.isSubscription && selectedSubFreqWeeks && selectedSubMonths) {
       const months = parseInt(selectedSubMonths) || 1;
@@ -617,7 +629,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             const bannerUrl = banners[activeTab];
             if (!bannerUrl) return null;
             return (
-              <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5">
+              <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/60">
                 <img
                   src={bannerUrl}
                   alt={getSectionTitle()}
@@ -751,11 +763,11 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
       {/* View Details Drawer/Modal */}
       {selectedServiceDetails && createPortal(
-        <div 
+        <div
           onClick={() => setSelectedServiceDetails(null)}
           className="fixed inset-0 z-[250] bg-black/45 flex items-center justify-center p-4"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative font-sans"
           >
@@ -813,7 +825,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 return (
                   <div className="space-y-5">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">Select Requirements</h4>
-                    
+
                     {/* 1. Select Number of Bathrooms/Fans */}
                     {details.bathroomRates && (
                       <div className="space-y-2">
@@ -827,11 +839,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                               <button
                                 key={idx}
                                 onClick={() => setSelectedRateIdx(idx)}
-                                className={`px-3 py-2 text-xs font-bold border rounded-xl transition-all cursor-pointer ${
-                                  isChosen 
-                                    ? "border-emerald-600 bg-emerald-50/50 text-emerald-800" 
+                                className={`px-3 py-2 text-xs font-bold border rounded-xl transition-all cursor-pointer ${isChosen
+                                    ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                     : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                                }`}
+                                  }`}
                               >
                                 <div>{rate.label}</div>
                                 <div className="text-[10px] text-slate-400 mt-0.5">₹{rate.price}{details.isSubscription ? "/service" : ""}</div>
@@ -853,11 +864,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                               <button
                                 key={idx}
                                 onClick={() => setSelectedSubFreqWeeks(freq)}
-                                className={`px-4 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer ${
-                                  isChosen
+                                className={`px-4 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer ${isChosen
                                     ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                     : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                                }`}
+                                  }`}
                               >
                                 {freq}
                               </button>
@@ -878,11 +888,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                               <button
                                 key={idx}
                                 onClick={() => setSelectedSubMonths(monthOpt)}
-                                className={`px-4 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer ${
-                                  isChosen
+                                className={`px-4 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer ${isChosen
                                     ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                     : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                                }`}
+                                  }`}
                               >
                                 {monthOpt}
                               </button>
@@ -903,11 +912,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                               <button
                                 key={idx}
                                 onClick={() => setSelectedFreq(freq)}
-                                className={`px-4 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer ${
-                                  isChosen
+                                className={`px-4 py-2 text-xs font-semibold border rounded-xl transition-all cursor-pointer ${isChosen
                                     ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
                                     : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                                }`}
+                                  }`}
                               >
                                 {freq}
                               </button>
@@ -927,9 +935,8 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                             return (
                               <div
                                 key={addon.id}
-                                className={`flex justify-between items-center p-3 border rounded-xl transition-all ${
-                                  isSelected ? "border-emerald-600 bg-emerald-50/30" : "border-slate-100"
-                                }`}
+                                className={`flex justify-between items-center p-3 border rounded-xl transition-all ${isSelected ? "border-emerald-600 bg-emerald-50/30" : "border-slate-100"
+                                  }`}
                               >
                                 <span className="text-xs font-medium text-slate-700">{addon.name}</span>
                                 <div className="flex items-center gap-3">
@@ -942,11 +949,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                                         setSelectedAddons(prev => [...prev, addon]);
                                       }
                                     }}
-                                    className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer border ${
-                                      isSelected
+                                    className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer border ${isSelected
                                         ? "bg-emerald-600 border-emerald-600 text-white"
                                         : "bg-white border-slate-200 text-emerald-600 hover:bg-slate-50"
-                                    }`}
+                                      }`}
                                   >
                                     {isSelected ? "✓" : "+"}
                                   </button>

@@ -14,7 +14,10 @@ import {
   changeTicketStatus, escalateTicket, addTicketMessage, uploadTicketAttachment,
   requestTicketRefund, approveTicketRefund, rejectTicketRefund,
   sendRefundToFinance, completeRefund, logTicketCommunication,
-  fetchCareAgents, fetchCareAnalytics
+  fetchCareAgents, fetchCareAnalytics,
+  fetchTicketContext, requestReschedule, confirmReschedule, requestCancellation,
+  approveCancellation, searchCustomers, fetchCustomer360,
+  fetchCustomerCommunicationHistory, fetchMessageTemplates, createMessageTemplate
 } from "../../api/customerCareService.js"
 
 import { Card, Button, Input, Select, TextArea, Pill, formatDateTime } from "../components/kit.jsx"
@@ -114,6 +117,7 @@ export default function CustomerCarePage() {
   const [filterPriority, setFilterPriority] = useState("")
   const [filterStatus, setFilterStatus] = useState("")
   const [filterAgent, setFilterAgent] = useState("")
+  const [filterSlaBreached, setFilterSlaBreached] = useState(false)
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -156,7 +160,74 @@ export default function CustomerCarePage() {
   const [refundApprovalNote, setRefundApprovalNote] = useState("")
   const [refundRejectNote, setRefundRejectNote] = useState("")
 
-  const showToast = (message, type = "success") => setToast({ message, type })
+  // Message templates state
+  const [templates, setTemplates] = useState([])
+  const [selectedTemplate, setSelectedTemplate] = useState("")
+
+  // Autocomplete customer search state
+  const [searchResults, setSearchResults] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+
+  // Ticket Context State
+  const [ticketContext, setTicketContext] = useState(null)
+  const [contextLoading, setContextLoading] = useState(false)
+
+  // Reschedule Form States
+  const [rescheduleDate, setRescheduleDate] = useState("")
+  const [rescheduleTimeSlot, setRescheduleTimeSlot] = useState("09:00 - 11:00")
+  const [rescheduleReason, setRescheduleReason] = useState("")
+  const [rescheduleNotes, setRescheduleNotes] = useState("")
+
+  // Cancellation Form States
+  const [cancelReason, setCancelReason] = useState("Customer changed mind")
+  const [cancelReasonNote, setCancelReasonNote] = useState("")
+  const [cancelRetentionOffered, setCancelRetentionOffered] = useState(false)
+  const [cancelRetentionOutcome, setCancelRetentionOutcome] = useState("")
+
+  // Customer 360 view state
+  const [is360Open, setIs360Open] = useState(false)
+  const [customer360Data, setCustomer360Data] = useState(null)
+  const [loading360, setLoading360] = useState(false)
+
+  const showToast = (message, type = "success") => {
+    let cleanMessage = message;
+    if (message && typeof message === "object") {
+      // Handle Django DRF API client errors
+      if (message.body) {
+        const body = message.body;
+        if (typeof body === "string") {
+          cleanMessage = body;
+        } else if (body.detail) {
+          cleanMessage = Array.isArray(body.detail) ? body.detail[0] : body.detail;
+        } else if (body.non_field_errors) {
+          cleanMessage = Array.isArray(body.non_field_errors) ? body.non_field_errors[0] : body.non_field_errors;
+        } else {
+          const firstKey = Object.keys(body)[0];
+          if (firstKey) {
+            const val = body[firstKey];
+            cleanMessage = Array.isArray(val) ? val[0] : val;
+          }
+        }
+      } else if (message.detail) {
+        cleanMessage = message.detail;
+      } else if (message.message) {
+        cleanMessage = message.message;
+      } else {
+        cleanMessage = JSON.stringify(message);
+      }
+    }
+    
+    // Fallback if the parsed message is still an object or has ErrorDetail string format
+    if (typeof cleanMessage === "string" && cleanMessage.includes("ErrorDetail")) {
+      // Regex clean up: ErrorDetail(string="...", code="...") -> "..."
+      const match = cleanMessage.match(/string=["'](.*?)["']/);
+      if (match && match[1]) {
+        cleanMessage = match[1];
+      }
+    }
+
+    setToast({ message: String(cleanMessage), type });
+  };
 
   const canApproveRefund = useMemo(() => {
     if (!currentUser) return false
@@ -170,19 +241,188 @@ export default function CustomerCarePage() {
     setLoading(true)
     setError(null)
     try {
-      // Get current logged-in user profile
       const meRes = await apiRequest("/auth/me/")
       if (meRes) setCurrentUser(meRes)
 
       await Promise.all([
         loadTickets(),
         loadAgents(),
-        loadAnalytics()
+        loadAnalytics(),
+        loadTemplates()
       ])
     } catch (err) {
       setError("Failed to fetch initial customer care details.")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadTemplates = async () => {
+    try {
+      const res = await fetchMessageTemplates()
+      if (res?.success) {
+        setTemplates(res.data)
+      }
+    } catch (err) {}
+  }
+
+  const fetchContextData = async () => {
+    if (!selectedTicket) return
+    setContextLoading(true)
+    try {
+      const res = await fetchTicketContext(selectedTicket.id)
+      if (res?.success) {
+        setTicketContext(res.data)
+      }
+    } catch (err) {
+      console.error("Error fetching context:", err)
+    } finally {
+      setContextLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (selectedTicket?.id) {
+      fetchContextData()
+    } else {
+      setTicketContext(null)
+    }
+  }, [selectedTicket?.id])
+
+  const handleCustomerNameChange = async (val) => {
+    setNewCustomerName(val)
+    if (val.trim().length >= 2) {
+      try {
+        const res = await searchCustomers(val)
+        if (res?.success) {
+          setSearchResults(res.data)
+          setShowSuggestions(true)
+        }
+      } catch (err) {}
+    } else {
+      setSearchResults([])
+      setShowSuggestions(false)
+    }
+  }
+
+  const selectCustomer = (cust) => {
+    setNewCustomerName(cust.name)
+    setNewPhone(cust.phone)
+    setNewEmail(cust.email)
+    setSearchResults([])
+    setShowSuggestions(false)
+  }
+
+  const openCustomer360 = async (customerId) => {
+    if (!customerId) return
+    setLoading360(true)
+    setIs360Open(true)
+    try {
+      const res = await fetchCustomer360(customerId)
+      if (res?.success) {
+        setCustomer360Data(res.data)
+      }
+    } catch (err) {
+      showToast("Failed to load Customer 360 details", "error")
+    } finally {
+      setLoading360(false)
+    }
+  }
+
+  const handleCreateReschedule = async (e) => {
+    e.preventDefault()
+    if (!rescheduleDate) {
+      showToast("Date is required", "warn")
+      return
+    }
+    setActionLoading(true)
+    try {
+      const res = await requestReschedule(selectedTicket.id, {
+        new_date: rescheduleDate,
+        new_time_slot: rescheduleTimeSlot,
+        reason: rescheduleReason,
+        notes: rescheduleNotes
+      })
+      if (res?.success) {
+        showToast("Reschedule request submitted!", "success")
+        setRescheduleReason("")
+        setRescheduleNotes("")
+        await refreshTicketDetail()
+      } else {
+        showToast(res?.message || "Failed to submit reschedule", "error")
+      }
+    } catch (err) {
+      showToast(err?.body?.detail || err?.body?.message || "Error requesting reschedule", "error")
+    } finally {
+      setActionLoading(false)
+    }
+
+  }
+
+  const handleConfirmReschedule = async (rescheduleId, approved) => {
+    setActionLoading(true)
+    try {
+      const res = await confirmReschedule(selectedTicket.id, {
+        reschedule_id: rescheduleId,
+        approved,
+        notes: rescheduleNotes || "Processed by Care Agent"
+      })
+      if (res?.success) {
+        showToast(`Reschedule request ${approved ? "approved" : "rejected"}`, "success")
+        setRescheduleNotes("")
+        await refreshTicketDetail()
+      } else {
+        showToast(res?.message || "Failed to confirm reschedule", "error")
+      }
+    } catch (err) {
+      showToast("Error processing reschedule decision", "error")
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleCreateCancellation = async (e) => {
+    e.preventDefault()
+    setActionLoading(true)
+    try {
+      const res = await requestCancellation(selectedTicket.id, {
+        reason: cancelReason,
+        reason_note: cancelReasonNote,
+        retention_offered: cancelRetentionOffered,
+        retention_outcome: cancelRetentionOutcome
+      })
+      if (res?.success) {
+        showToast("Cancellation request submitted!", "success")
+        setCancelReasonNote("")
+        setCancelRetentionOutcome("")
+        setCancelRetentionOffered(false)
+        await refreshTicketDetail()
+      } else {
+        showToast(res?.message || "Failed to request cancellation", "error")
+      }
+    } catch (err) {
+      showToast("Error requesting cancellation", "error")
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleConfirmCancellation = async (approved) => {
+    setActionLoading(true)
+    try {
+      const res = await approveCancellation(selectedTicket.id, {
+        is_approved: approved
+      })
+      if (res?.success) {
+        showToast(`Cancellation request ${approved ? "approved" : "rejected"}`, "success")
+        await refreshTicketDetail()
+      } else {
+        showToast(res?.message || "Failed to approve cancellation", "error")
+      }
+    } catch (err) {
+      showToast("Error processing cancellation decision", "error")
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -194,6 +434,7 @@ export default function CustomerCarePage() {
       if (filterStatus) filters.status = filterStatus
       if (filterAgent) filters.assigned_agent = filterAgent
       if (searchQuery) filters.search = searchQuery
+      if (filterSlaBreached) filters.sla_breached = true
       // Cache-bust so the GET dedup cache never returns a stale promise
       filters._ts = Date.now()
 
@@ -239,7 +480,7 @@ export default function CustomerCarePage() {
   // Reload tickets whenever filters change
   useEffect(() => {
     loadTickets()
-  }, [filterCategory, filterPriority, filterStatus, filterAgent])
+  }, [filterCategory, filterPriority, filterStatus, filterAgent, filterSlaBreached])
 
   // Search keyword trigger
   const handleSearchSubmit = (e) => {
@@ -564,7 +805,10 @@ export default function CustomerCarePage() {
 
   return (
     <div className="p-6 md:p-8 space-y-6 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen">
-      {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
+      {toast && createPortal(
+        <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />,
+        document.body
+      )}
 
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -639,9 +883,9 @@ export default function CustomerCarePage() {
           {/* Quick Metrics Grid */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div 
-              onClick={() => setFilterStatus("")}
+              onClick={() => { setFilterStatus(""); setFilterSlaBreached(false) }}
               className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/5 dark:hover:bg-indigo-500/5 transition-all ${
-                !filterStatus 
+                !filterStatus && !filterSlaBreached
                   ? "border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/20" 
                   : "border-slate-200 dark:border-slate-800"
               }`}
@@ -650,7 +894,7 @@ export default function CustomerCarePage() {
               <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">{analytics?.total_tickets || 0}</h2>
             </div>
             <div 
-              onClick={() => setFilterStatus("new")}
+              onClick={() => { setFilterStatus("new"); setFilterSlaBreached(false) }}
               className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-sky-400 hover:bg-sky-50/5 dark:hover:bg-sky-500/5 transition-all ${
                 filterStatus === "new" 
                   ? "border-sky-500 dark:border-sky-500 ring-2 ring-sky-500/20" 
@@ -663,7 +907,7 @@ export default function CustomerCarePage() {
               </h2>
             </div>
             <div 
-              onClick={() => setFilterStatus("escalated")}
+              onClick={() => { setFilterStatus("escalated"); setFilterSlaBreached(false) }}
               className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-red-400 hover:bg-red-50/5 dark:hover:bg-red-500/5 transition-all ${
                 filterStatus === "escalated" 
                   ? "border-red-500 dark:border-red-500 ring-2 ring-red-500/20" 
@@ -673,12 +917,19 @@ export default function CustomerCarePage() {
               <span className="text-[9px] font-black uppercase text-red-500 tracking-wider">Escalated</span>
               <h2 className="text-xl font-black text-red-600 dark:text-red-400 mt-1">{analytics?.status_counts?.escalated || 0}</h2>
             </div>
-            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm opacity-80">
+            <div
+              onClick={() => { setFilterSlaBreached(f => !f); setFilterStatus("") }}
+              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-rose-400 hover:bg-rose-50/5 dark:hover:bg-rose-500/5 transition-all ${
+                filterSlaBreached
+                  ? "border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20"
+                  : "border-slate-200 dark:border-slate-800"
+              }`}
+            >
               <span className="text-[9px] font-black uppercase text-rose-500 tracking-wider">SLA Breached</span>
               <h2 className="text-xl font-black text-rose-600 dark:text-rose-400 mt-1">{analytics?.sla_breached_count || 0}</h2>
             </div>
             <div 
-              onClick={() => setFilterStatus("resolved")}
+              onClick={() => { setFilterStatus("resolved"); setFilterSlaBreached(false) }}
               className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm col-span-2 md:col-span-1 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/5 dark:hover:bg-emerald-500/5 transition-all ${
                 filterStatus === "resolved" 
                   ? "border-emerald-500 dark:border-emerald-500 ring-2 ring-emerald-500/20" 
@@ -1108,13 +1359,33 @@ export default function CustomerCarePage() {
                   ]}
                 />
 
-                <Input
-                  label="Customer Name"
-                  placeholder="Enter customer's name"
-                  value={newCustomerName}
-                  onChange={e => setNewCustomerName(e.target.value)}
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    label="Customer Name"
+                    placeholder="Enter customer name (type 2+ chars to search)..."
+                    value={newCustomerName}
+                    onChange={e => handleCustomerNameChange(e.target.value)}
+                    onFocus={() => { if (searchResults.length > 0) setShowSuggestions(true) }}
+                    required
+                  />
+                  {showSuggestions && searchResults.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl divide-y divide-slate-100 dark:divide-slate-800">
+                      {searchResults.map(cust => (
+                        <div
+                          key={cust.id}
+                          onClick={() => selectCustomer(cust)}
+                          className="p-3 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer flex justify-between items-center transition-colors"
+                        >
+                          <div>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{cust.name}</span>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">{cust.email}</span>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-500 font-bold">{cust.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <Input
@@ -1174,20 +1445,20 @@ export default function CustomerCarePage() {
       {createPortal(
         <AnimatePresence>
           {selectedTicket && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-end">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"
               onClick={() => setSelectedTicket(null)}
             />
             <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="relative w-full max-w-2xl h-screen bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl z-10 flex flex-col"
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ type: "spring", damping: 28, stiffness: 260 }}
+              className="relative w-full max-w-7xl h-[92vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden"
             >
               {/* Drawer Header */}
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
@@ -1211,27 +1482,81 @@ export default function CustomerCarePage() {
               </div>
 
               {/* Drawer Body - Split Layout */}
-              <div className="flex-1 flex overflow-hidden">
+              <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
                 {/* Left Side: Metadata column */}
-                <div className="w-1/3 border-r border-slate-150 dark:border-slate-800/80 p-4 space-y-5 overflow-y-auto text-xs bg-slate-50/30 dark:bg-slate-950/10">
+                <div className="w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-150 dark:border-slate-800/80 p-5 space-y-5 overflow-y-auto lg:overflow-y-auto text-xs bg-slate-50/30 dark:bg-slate-950/10">
                   <div>
                     <span className="text-[9px] uppercase tracking-wider font-black text-slate-400 block mb-1">Customer info</span>
                     <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-2.5 rounded-xl space-y-1.5 shadow-sm">
                       <span className="font-black text-slate-800 dark:text-slate-200 block">{selectedTicket.customer_name}</span>
                       {selectedTicket.phone && <span className="text-[10px] text-slate-500 block">📞 {selectedTicket.phone}</span>}
                       {selectedTicket.email && <span className="text-[10px] text-slate-500 block truncate">✉️ {selectedTicket.email}</span>}
+                      
+                      <button
+                        onClick={() => openCustomer360(selectedTicket.customer)}
+                        disabled={!selectedTicket.customer}
+                        className="mt-2 w-full py-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/20 dark:hover:bg-indigo-950/40 dark:text-indigo-300 font-bold text-[9px] uppercase tracking-wider rounded-lg border border-indigo-150 dark:border-indigo-900 flex items-center justify-center gap-1 transition-all disabled:opacity-50"
+                      >
+                        <Users size={10} />
+                        View Customer 360
+                      </button>
                     </div>
                   </div>
 
-                  <div>
+                   <div>
                     <span className="text-[9px] uppercase tracking-wider font-black text-slate-400 block mb-1">Related links</span>
                     <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-2.5 rounded-xl space-y-1.5 shadow-sm font-mono text-[10px]">
-                      <div className="flex justify-between">
+                      <div className="flex justify-between items-center">
                         <span className="text-slate-400 font-sans">Booking ID:</span>
                         <span className="font-extrabold text-indigo-600 dark:text-indigo-400">
                           {selectedTicket.booking_request_id || "None"}
                         </span>
                       </div>
+                      
+                      {!selectedTicket.booking && (
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-1">
+                          <span className="text-[8px] font-black uppercase text-slate-400 block mb-1">Link Booking</span>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="number"
+                              placeholder="Enter Booking ID (e.g. 15)"
+                              id="link-booking-id-input"
+                              className="flex-1 px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[9px] font-bold focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const bId = document.getElementById("link-booking-id-input")?.value;
+                                if (!bId) {
+                                  showToast("Please enter a valid booking ID", "error");
+                                  return;
+                                }
+                                setActionLoading(true);
+                                try {
+                                  const res = await apiRequest(`/customer-care/tickets/${selectedTicket.id}/`, {
+                                    method: "PATCH",
+                                    json: { booking: parseInt(bId) }
+                                  });
+                                  if (res?.id || res?.success) {
+                                    showToast("Booking linked successfully!", "success");
+                                    await refreshTicketDetail();
+                                  } else {
+                                    showToast("Failed to link booking request.", "error");
+                                  }
+                                } catch (err) {
+                                  showToast("Error linking booking request. Make sure ID exists.", "error");
+                                } finally {
+                                  setActionLoading(false);
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-black rounded-lg uppercase tracking-wider transition-all"
+                            >
+                              Link
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {selectedTicket.linked_refund_request_refund_id && (
                         <div className="flex justify-between">
                           <span className="text-slate-400 font-sans">Refund ID:</span>
@@ -1242,6 +1567,7 @@ export default function CustomerCarePage() {
                       )}
                     </div>
                   </div>
+
 
                   {/* Quick State transitions */}
                   <div>
@@ -1358,35 +1684,47 @@ export default function CustomerCarePage() {
                     </button>
                   </form>
                 </div>
-
-                {/* Right Side: Tabbed timeline detail view */}
-                <div className="w-2/3 flex flex-col h-full bg-white dark:bg-slate-900">
+                {/* Right panel: Subtabs + Content */}
+                <div className="flex-1 flex flex-col overflow-visible lg:overflow-hidden min-h-[480px] lg:min-h-0">
                   {/* Internal Subtabs */}
-                  <div className="flex border-b border-slate-100 dark:border-slate-800 text-[10px] font-black uppercase tracking-wider bg-slate-50/50 dark:bg-slate-950/10 px-4">
+                  <div className="flex border-b border-slate-100 dark:border-slate-800 text-[9px] font-black uppercase tracking-wider bg-slate-50/50 dark:bg-slate-950/10 overflow-x-auto whitespace-nowrap">
                     <button
                       onClick={() => setDetailTab("messages")}
-                      className={`py-3.5 px-3 border-b-2 transition-all ${detailTab === "messages" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
+                      className={`py-2.5 px-2.5 border-b-2 transition-all ${detailTab === "messages" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
                     >
                       Messages
                     </button>
                     <button
+                      onClick={() => setDetailTab("reschedule")}
+                      className={`py-2.5 px-2.5 border-b-2 transition-all ${detailTab === "reschedule" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
+                    >
+                      Reschedule
+                    </button>
+                    <button
+                      onClick={() => setDetailTab("cancellation")}
+                      className={`py-2.5 px-2.5 border-b-2 transition-all ${detailTab === "cancellation" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
+                    >
+                      Cancel Booking
+                    </button>
+                    <button
                       onClick={() => setDetailTab("refund")}
-                      className={`py-3.5 px-3 border-b-2 transition-all ${detailTab === "refund" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
+                      className={`py-2.5 px-2.5 border-b-2 transition-all ${detailTab === "refund" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
                     >
                       Refund Bridge
                     </button>
                     <button
                       onClick={() => setDetailTab("communication")}
-                      className={`py-3.5 px-3 border-b-2 transition-all ${detailTab === "communication" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
+                      className={`py-2.5 px-2.5 border-b-2 transition-all ${detailTab === "communication" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
                     >
                       Call Log
                     </button>
                     <button
                       onClick={() => setDetailTab("audit")}
-                      className={`py-3.5 px-3 border-b-2 transition-all ${detailTab === "audit" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
+                      className={`py-2.5 px-2.5 border-b-2 transition-all ${detailTab === "audit" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
                     >
-                      Audit
+                      Audit Log
                     </button>
+
                   </div>
 
                   {/* Subtab content blocks */}
@@ -1401,41 +1739,61 @@ export default function CustomerCarePage() {
                               No messages logged yet. Use the composer below.
                             </div>
                           ) : (
-                            selectedTicket.messages?.map(msg => (
-                              <div
-                                key={msg.id}
-                                className={`flex flex-col max-w-[85%] ${
-                                  msg.sender_persona === "customer"
-                                    ? "mr-auto items-start"
-                                    : "ml-auto items-end"
-                                }`}
-                              >
-                                <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-slate-400 mb-0.5 px-1">
-                                  <span>{msg.sender_username}</span>
-                                  <span>•</span>
-                                  <span>{msg.sender_persona}</span>
-                                </div>
-                                <div
-                                  className={`p-3 rounded-2xl border text-xs leading-relaxed ${
-                                    msg.is_internal_note
-                                      ? "bg-amber-50/70 border-amber-200 text-slate-800 dark:bg-amber-950/20 dark:border-amber-900/60 dark:text-amber-300"
-                                      : msg.sender_persona === "customer"
-                                      ? "bg-slate-100 border-slate-200 text-slate-800 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
-                                      : "bg-indigo-600 border-indigo-700 text-white"
-                                  }`}
-                                >
-                                  {msg.is_internal_note && (
-                                    <div className="flex items-center gap-1 text-[8px] font-black uppercase text-amber-600 dark:text-amber-400 mb-1 border-b border-amber-200 dark:border-amber-900/60 pb-0.5">
-                                      <Lock size={8} /> Internal Note
+                            (() => {
+                              let lastDateStr = null;
+                              return selectedTicket.messages?.map(msg => {
+                                const msgDate = new Date(msg.created_at)
+                                const dateStr = msgDate.toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })
+                                let showDivider = false
+                                if (dateStr !== lastDateStr) {
+                                  showDivider = true
+                                  lastDateStr = dateStr
+                                }
+                                return (
+                                  <React.Fragment key={msg.id}>
+                                    {showDivider && (
+                                      <div className="w-full flex justify-center my-3 select-none">
+                                        <span className="text-[9px] font-black tracking-widest uppercase text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-200/50 dark:border-slate-800">
+                                          {dateStr}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div
+                                      className={`flex flex-col max-w-[85%] ${
+                                        msg.sender_persona === "customer"
+                                          ? "mr-auto items-start"
+                                          : "ml-auto items-end"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-slate-400 mb-0.5 px-1">
+                                        <span>{msg.sender_username}</span>
+                                        <span>•</span>
+                                        <span>{msg.sender_persona === "employee" ? "Support Agent" : msg.sender_persona}</span>
+                                      </div>
+                                      <div
+                                        className={`p-3 rounded-2xl border text-xs leading-relaxed ${
+                                          msg.is_internal_note
+                                            ? "bg-amber-50/70 border-amber-200 text-slate-800 dark:bg-amber-950/20 dark:border-amber-900/60 dark:text-amber-300"
+                                            : msg.sender_persona === "customer"
+                                            ? "bg-slate-100 border-slate-200 text-slate-800 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
+                                            : "bg-indigo-600 border-indigo-700 text-white"
+                                        }`}
+                                      >
+                                        {msg.is_internal_note && (
+                                          <div className="flex items-center gap-1 text-[8px] font-black uppercase text-amber-600 dark:text-amber-400 mb-1 border-b border-amber-200 dark:border-amber-900/60 pb-0.5">
+                                            <Lock size={8} /> Internal Note
+                                          </div>
+                                        )}
+                                        <p>{msg.message}</p>
+                                      </div>
+                                      <span className="text-[8px] text-slate-400 mt-0.5 px-1">
+                                        {msgDate.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
+                                      </span>
                                     </div>
-                                  )}
-                                  <p>{msg.message}</p>
-                                </div>
-                                <span className="text-[8px] text-slate-400 mt-0.5 px-1">
-                                  {new Date(msg.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
-                                </span>
-                              </div>
-                            ))
+                                  </React.Fragment>
+                                )
+                              })
+                            })()
                           )}
                         </div>
 
@@ -1453,11 +1811,32 @@ export default function CustomerCarePage() {
                               <span>Internal Note</span>
                             </label>
                             
-                            <label className="flex items-center gap-1 cursor-pointer text-indigo-600 dark:text-indigo-400 hover:underline">
-                              <Paperclip size={12} />
-                              <span className="font-bold">Attach File</span>
-                              <input type="file" className="hidden" onChange={handleUploadAttachment} />
-                            </label>
+                            <div className="flex gap-3 items-center">
+                              {templates.length > 0 && (
+                                <select
+                                  value={selectedTemplate}
+                                  onChange={e => {
+                                    const body = e.target.value
+                                    setSelectedTemplate(body)
+                                    if (body) {
+                                      setChatMessage(prev => (prev ? prev + "\n" + body : body))
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-indigo-600 dark:text-indigo-400 focus:outline-none"
+                                >
+                                  <option value="">Insert Canned Reply</option>
+                                  {templates.map(t => (
+                                    <option key={t.id} value={t.body}>{t.name}</option>
+                                  ))}
+                                </select>
+                              )}
+
+                              <label className="flex items-center gap-1 cursor-pointer text-indigo-600 dark:text-indigo-400 hover:underline">
+                                <Paperclip size={12} />
+                                <span className="font-bold">Attach File</span>
+                                <input type="file" className="hidden" onChange={handleUploadAttachment} />
+                              </label>
+                            </div>
                           </div>
 
                           <div className="flex gap-2">
@@ -1477,6 +1856,311 @@ export default function CustomerCarePage() {
                             </button>
                           </div>
                         </form>
+                      </div>
+                    )}
+
+                    {detailTab === "reschedule" && (
+                      <div className="space-y-4">
+                        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+                          <h4 className="font-black text-[10px] uppercase text-slate-400 tracking-wider">Current Schedule Context</h4>
+                          {ticketContext?.booking ? (
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-slate-400">Scheduled Date:</span>
+                                <span className="font-extrabold block text-slate-800 dark:text-slate-200 mt-0.5">
+                                  {ticketContext.booking.preferred_date}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400">Time Slot:</span>
+                                <span className="font-extrabold block text-slate-800 dark:text-slate-200 mt-0.5">
+                                  {ticketContext.booking.preferred_time || "—"}
+                                </span>
+                              </div>
+                              {ticketContext.booking.technician && (
+                                <div className="col-span-2">
+                                  <span className="text-slate-400">Assigned Tech:</span>
+                                  <span className="font-extrabold block text-slate-800 dark:text-slate-200 mt-0.5">
+                                    {ticketContext.booking.technician.name} ({ticketContext.booking.technician.phone || "No phone"})
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-400 italic">Loading booking details...</p>
+                          )}
+                        </div>
+
+                        {selectedTicket.linked_reschedule_request ? (
+                          <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+                            <h4 className="font-black text-[10px] uppercase text-slate-400 tracking-wider">Active Reschedule Request</h4>
+                            <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                              <div>
+                                <span className="text-slate-400">Status:</span>
+                                <span className="font-black block uppercase text-amber-600 dark:text-amber-400 text-[10px] mt-0.5">
+                                  {selectedTicket.linked_reschedule_request.status || "PENDING"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400">Requested Date & Slot:</span>
+                                <span className="font-extrabold block text-slate-800 dark:text-slate-200 mt-0.5">
+                                  {selectedTicket.linked_reschedule_request.new_date} ({selectedTicket.linked_reschedule_request.new_time_slot})
+                                </span>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="text-slate-400">Reason:</span>
+                                <span className="font-semibold block text-slate-700 dark:text-slate-300 mt-0.5">
+                                  {selectedTicket.linked_reschedule_request.reason}
+                                </span>
+                              </div>
+                            </div>
+
+                            {["pending", "pending_admin_review", "admin_review"].includes(selectedTicket.linked_reschedule_request.status?.toLowerCase()) && (
+                              <div className="border-t border-slate-200 dark:border-slate-800 pt-3 space-y-2">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Process Reschedule</span>
+                                <Input
+                                  placeholder="Provide optional review notes..."
+                                  value={rescheduleNotes}
+                                  onChange={e => setRescheduleNotes(e.target.value)}
+                                />
+                                <div className="grid grid-cols-2 gap-2.5">
+                                  <button
+                                    onClick={() => handleConfirmReschedule(selectedTicket.linked_reschedule_request.id, false)}
+                                    disabled={actionLoading}
+                                    className="py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all disabled:opacity-50"
+                                  >
+                                    Reject
+                                  </button>
+                                  <button
+                                    onClick={() => handleConfirmReschedule(selectedTicket.linked_reschedule_request.id, true)}
+                                    disabled={actionLoading}
+                                    className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all disabled:opacity-50"
+                                  >
+                                    Approve & Sync
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <form onSubmit={handleCreateReschedule} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-4">
+                            <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                              <Calendar size={14} className="text-indigo-500" />
+                              Submit Reschedule Request
+                            </h4>
+                            <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+                              Submitting this form checks technician availability. Requests &ge; 24h prior with free slots are automatically approved.
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">New Date</label>
+                                <input
+                                  type="date"
+                                  value={rescheduleDate}
+                                  onChange={e => setRescheduleDate(e.target.value)}
+                                  className="w-full bg-white dark:bg-slate-855 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  required
+                                />
+                              </div>
+                              <Select
+                                label="New Time Slot"
+                                value={rescheduleTimeSlot}
+                                onChange={e => setRescheduleTimeSlot(e.target.value)}
+                                options={[
+                                  { value: "09:00 - 11:00", label: "09:00 AM - 11:00 AM" },
+                                  { value: "11:00 - 13:00", label: "11:00 AM - 01:00 PM" },
+                                  { value: "13:00 - 15:00", label: "01:00 PM - 03:00 PM" },
+                                  { value: "15:00 - 17:00", label: "03:00 PM - 05:00 PM" },
+                                  { value: "17:00 - 19:00", label: "05:00 PM - 07:00 PM" }
+                                ]}
+                              />
+                            </div>
+
+                            <Input
+                              label="Reschedule Reason"
+                              placeholder="e.g. Customer not at home, requested delay..."
+                              value={rescheduleReason}
+                              onChange={e => setRescheduleReason(e.target.value)}
+                              required
+                            />
+
+                            <TextArea
+                              label="Additional Notes / Review Log"
+                              placeholder="Review comments..."
+                              value={rescheduleNotes}
+                              onChange={e => setRescheduleNotes(e.target.value)}
+                            />
+
+                            <button
+                              type="submit"
+                              disabled={actionLoading || !selectedTicket.booking}
+                              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all disabled:opacity-50"
+                            >
+                              {!selectedTicket.booking ? "Needs Booking Linkage" : "Request Reschedule"}
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    )}
+
+                    {detailTab === "cancellation" && (
+                      <div className="space-y-4">
+                        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+                          <h4 className="font-black text-[10px] uppercase text-slate-400 tracking-wider">Payment & Booking Details</h4>
+                          {ticketContext?.booking ? (
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-slate-400">Total Price:</span>
+                                <span className="font-extrabold block text-slate-800 dark:text-slate-200 mt-0.5">
+                                  ₹{ticketContext.booking.final_amount || ticketContext.booking.total_amount}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400">Payment Status:</span>
+                                <span className="font-black block uppercase text-indigo-600 dark:text-indigo-400 text-[10px] mt-0.5">
+                                  {ticketContext.booking.payment_status}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-400 italic">Loading booking details...</p>
+                          )}
+                        </div>
+
+                        {selectedTicket.cancellation_requests && selectedTicket.cancellation_requests.length > 0 ? (
+                          (() => {
+                            const creq = selectedTicket.cancellation_requests[0]
+                            return (
+                              <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+                                <h4 className="font-black text-[10px] uppercase text-slate-400 tracking-wider">Active Cancellation Request</h4>
+                                <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                                  <div>
+                                    <span className="text-slate-400">Status:</span>
+                                    <span className="font-black block uppercase text-rose-600 dark:text-rose-450 text-[10px] mt-0.5">
+                                      {creq.status || "PENDING"}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400">Reason:</span>
+                                    <span className="font-extrabold block text-slate-800 dark:text-slate-200 mt-0.5">
+                                      {creq.reason}
+                                    </span>
+                                  </div>
+                                  <div className="col-span-2">
+                                    <span className="text-slate-400">Reason Note:</span>
+                                    <span className="font-semibold block text-slate-600 dark:text-slate-400 mt-0.5">
+                                      {creq.reason_note || "No note provided."}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400">Retention Offered:</span>
+                                    <span className="font-extrabold block text-slate-800 dark:text-slate-200 mt-0.5">
+                                      {creq.retention_offered ? "Yes" : "No"}
+                                    </span>
+                                  </div>
+                                  {creq.retention_outcome && (
+                                    <div>
+                                      <span className="text-slate-400">Retention Outcome:</span>
+                                      <span className="font-extrabold block text-slate-800 dark:text-slate-200 mt-0.5">
+                                        {creq.retention_outcome}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {creq.refund_request_refund_id && (
+                                    <div className="col-span-2 border-t border-slate-105 dark:border-slate-800 pt-2 mt-1">
+                                      <span className="text-slate-400">Linked Refund:</span>
+                                      <span className="font-bold block text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+                                        {creq.refund_request_refund_id} (Full Refund Drafted)
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {creq.status?.toLowerCase() === "pending" && (
+                                  <div className="border-t border-slate-200 dark:border-slate-800 pt-3 flex gap-2">
+                                    <button
+                                      onClick={() => handleConfirmCancellation(false)}
+                                      disabled={actionLoading}
+                                      className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all disabled:opacity-50"
+                                    >
+                                      Reject Request
+                                    </button>
+                                    <button
+                                      onClick={() => handleConfirmCancellation(true)}
+                                      disabled={actionLoading}
+                                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all disabled:opacity-50"
+                                    >
+                                      Approve (Cancel Booking)
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()
+                        ) : (
+                          <form onSubmit={handleCreateCancellation} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-4">
+                            <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                              <AlertTriangle size={14} className="text-rose-500" />
+                              Submit Booking Cancellation
+                            </h4>
+                            <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+                              Creates a CancellationRequest ticket. If paid, it automatically drafts a linked RefundRequest request for finance.
+                            </p>
+
+                            <Select
+                              label="Cancellation Reason"
+                              value={cancelReason}
+                              onChange={e => setCancelReason(e.target.value)}
+                              options={[
+                                { value: "Customer changed mind", label: "Customer changed mind" },
+                                { value: "Price too high", label: "Price too high" },
+                                { value: "Technician delay", label: "Technician delay" },
+                                { value: "Booked by mistake", label: "Booked by mistake" },
+                                { value: "Other", label: "Other" }
+                              ]}
+                            />
+
+                            <TextArea
+                              label="Reason Notes"
+                              placeholder="Detail why customer wants to cancel..."
+                              value={cancelReasonNote}
+                              onChange={e => setCancelReasonNote(e.target.value)}
+                              required
+                            />
+
+                            <div className="border-t border-slate-200 dark:border-slate-805 pt-3 space-y-3">
+                              <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Customer Retention Audit</span>
+                              
+                              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                                <input
+                                  type="checkbox"
+                                  checked={cancelRetentionOffered}
+                                  onChange={e => setCancelRetentionOffered(e.target.checked)}
+                                  className="rounded text-indigo-600"
+                                />
+                                <span>Did you offer retention discounts/options?</span>
+                              </label>
+
+                              {cancelRetentionOffered && (
+                                <Input
+                                  label="Retention Outcome Note"
+                                  placeholder="e.g. Customer declined discount, insisted on full refund..."
+                                  value={cancelRetentionOutcome}
+                                  onChange={e => setCancelRetentionOutcome(e.target.value)}
+                                />
+                              )}
+                            </div>
+
+                            <button
+                              type="submit"
+                              disabled={actionLoading || !selectedTicket.booking}
+                              className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all disabled:opacity-50"
+                            >
+                              {!selectedTicket.booking ? "Needs Booking Linkage" : "Initiate Cancellation Process"}
+                            </button>
+                          </form>
+                        )}
                       </div>
                     )}
 
@@ -1795,6 +2479,161 @@ export default function CustomerCarePage() {
                 </div>
               </div>
             </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Customer 360 Modal */}
+      {createPortal(
+        <AnimatePresence>
+          {is360Open && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                onClick={() => setIs360Open(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.98 }}
+                className="relative w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl z-10 flex flex-col max-h-[90vh]"
+              >
+                {/* Premium Header Line */}
+                <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-500" />
+                
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/40 dark:bg-slate-950/10">
+                  <h3 className="font-black text-sm uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Users size={16} className="text-emerald-500" />
+                    Customer 360 Profile Overview
+                  </h3>
+                  <button onClick={() => setIs360Open(false)} className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl transition-all">
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {loading360 ? (
+                  <div className="p-12 text-center text-slate-400 text-sm flex items-center justify-center gap-2">
+                    <RefreshCw className="animate-spin" size={16} /> Loading Customer 360 Profile...
+                  </div>
+                ) : customer360Data ? (
+                  <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
+                    {/* Warning for frequent complainants */}
+                    {customer360Data.metrics?.is_frequent_complainant && (
+                      <div className="flex items-center gap-2.5 p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl text-xs font-bold animate-pulse">
+                        <AlertTriangle size={15} />
+                        <span>Warning: This customer is marked as a Frequent Complainant. Handle interactions with care.</span>
+                      </div>
+                    )}
+
+                    {/* Customer Profile Card */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-950/40 p-4 border border-slate-150 dark:border-slate-800 rounded-2xl">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase text-slate-400">Name</span>
+                        <h4 className="font-extrabold text-sm text-slate-850 dark:text-white">{customer360Data.profile?.name}</h4>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase text-slate-400">Email</span>
+                        <h4 className="font-extrabold text-sm text-slate-850 dark:text-white truncate">{customer360Data.profile?.email}</h4>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase text-slate-400">Phone</span>
+                        <h4 className="font-extrabold text-sm text-slate-850 dark:text-white">{customer360Data.profile?.phone || "—"}</h4>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase text-slate-400">Customer Since</span>
+                        <h4 className="font-extrabold text-sm text-slate-855 dark:text-white">
+                          {customer360Data.profile?.created_at ? new Date(customer360Data.profile.created_at).toLocaleDateString() : "—"}
+                        </h4>
+                      </div>
+                    </div>
+
+                    {/* Metrics Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+                      <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl shadow-sm">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Total Bookings</span>
+                        <span className="text-lg font-black block mt-0.5 text-slate-900 dark:text-white">{customer360Data.metrics?.total_bookings || 0}</span>
+                      </div>
+                      <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl shadow-sm">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Open Tickets</span>
+                        <span className="text-lg font-black block mt-0.5 text-slate-900 dark:text-white">{customer360Data.metrics?.open_tickets || 0}</span>
+                      </div>
+                      <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl shadow-sm">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Refunds Disbursed</span>
+                        <span className="text-lg font-black block mt-0.5 text-emerald-600 dark:text-emerald-450">₹{customer360Data.metrics?.total_refunds_paid || "0.00"}</span>
+                      </div>
+                      <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl shadow-sm">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Total Complaints</span>
+                        <span className="text-lg font-black block mt-0.5 text-slate-900 dark:text-white">{customer360Data.metrics?.total_complaints || 0}</span>
+                      </div>
+                    </div>
+
+                    {/* Recent Bookings & Tickets Lists */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Bookings */}
+                      <div className="space-y-2.5">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Recent Service Bookings</h4>
+                        {customer360Data.recent_bookings?.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic">No bookings found.</p>
+                        ) : (
+                          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                            {customer360Data.recent_bookings?.map(b => (
+                              <div key={b.id} className="p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl text-xs flex justify-between items-center shadow-sm">
+                                <div>
+                                  <span className="font-extrabold text-[10px] text-indigo-600 dark:text-indigo-400 block font-mono">{b.request_id}</span>
+                                  <span className="font-bold text-slate-700 dark:text-slate-300 block mt-0.5 capitalize">{b.service_category}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-extrabold block text-slate-850 dark:text-white">₹{b.total_amount}</span>
+                                  <span className="text-[9px] font-bold block text-slate-400 mt-0.5 capitalize">{b.status}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Tickets */}
+                      <div className="space-y-2.5">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Care Tickets History</h4>
+                        {customer360Data.recent_tickets?.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic">No tickets found.</p>
+                        ) : (
+                          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                            {customer360Data.recent_tickets?.map(t => (
+                              <div key={t.id} className="p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl text-xs flex justify-between items-center shadow-sm">
+                                <div>
+                                  <span className="font-extrabold text-[10px] text-slate-850 dark:text-white block font-mono">{t.ticket_number}</span>
+                                  <span className="font-bold text-slate-700 dark:text-slate-300 block mt-0.5 capitalize">{t.category}</span>
+                                </div>
+                                <div className="text-right font-bold">
+                                  <span className="text-[10px] block text-indigo-600 dark:text-indigo-400 capitalize">{t.status}</span>
+                                  <span className="text-[9px] block text-slate-400 mt-0.5 uppercase tracking-wide">{t.priority} priority</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-slate-400 text-xs">Failed to load customer profile details.</div>
+                )}
+
+                <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                  <button
+                    onClick={() => setIs360Open(false)}
+                    className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all"
+                  >
+                    Close Profile
+                  </button>
+                </div>
+              </motion.div>
             </div>
           )}
         </AnimatePresence>,

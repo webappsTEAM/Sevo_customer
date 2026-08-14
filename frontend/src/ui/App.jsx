@@ -97,6 +97,10 @@ const GetStartedPage = lazy(() =>
   import("./pages/GetStartedPage.jsx").then(m => ({ default: m.GetStartedPage }))
 )
 
+const HomePageCustomizerPage = lazy(() =>
+  import("./pages/HomePageCustomizerPage.jsx")
+)
+
 const LiveLocationsPage = lazy(() =>
   import("./pages/LiveLocationsPage.jsx").then(m => ({ default: m.LiveLocationsPage }))
 )
@@ -485,6 +489,7 @@ export function App() {
               <Route path={routes.marketing_coupons} element={<CouponsPage />} />
               <Route path={routes.marketing_offers} element={<OffersPage />} />
               <Route path={routes.marketing_referrals} element={<ReferralsPage />} />
+              <Route path={routes.homepage_customizer} element={<HomePageCustomizerPage />} />
               <Route path={routes.admin_service_requests} element={<ServiceRequestsPage />} />
               <Route path={routes.admin_feedback} element={<FeedbackManagementPage />} />
               <Route path="/customers/list" element={<ServiceRequestsPage />} />

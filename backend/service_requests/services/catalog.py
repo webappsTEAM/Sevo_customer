@@ -156,7 +156,131 @@ def create_package(data, actor):
             )
     except Exception:
         pass
+    _sync_goods_tables(package)
     return package
+
+
+def _sync_goods_tables(package):
+    try:
+        from django.db import connection
+        import json
+        with connection.cursor() as cursor:
+            # Sync to goods_packages
+            cursor.execute("""
+                UPDATE goods_packages
+                SET base_price = %s,
+                    name = %s,
+                    duration = %s,
+                    tag = %s,
+                    description = %s,
+                    includes = %s::jsonb,
+                    status = %s,
+                    is_active = (%s = 'ACTIVE'),
+                    updated_at = NOW()
+                WHERE id = %s;
+            """, [
+                package.base_price or 0, package.name, package.duration,
+                package.tag, package.description,
+                json.dumps(package.includes if isinstance(package.includes, list) else []),
+                package.status or 'ACTIVE', package.status, package.id
+            ])
+            # Sync to goods_and_transport
+            cursor.execute("""
+                WITH updated_json AS (
+                    SELECT 
+                        12 as cat_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'id', s.id,
+                                'name', s.name,
+                                'slug', s.slug,
+                                'description', s.description,
+                                'packages', COALESCE((
+                                    SELECT jsonb_agg(
+                                        jsonb_build_object(
+                                            'id', p.id,
+                                            'name', p.name,
+                                            'price', p.base_price,
+                                            'duration', p.duration,
+                                            'tag', p.tag,
+                                            'description', p.description
+                                        ) ORDER BY p.id
+                                    )
+                                    FROM service_requests_package p
+                                    WHERE p.service_id = s.id
+                                ), '[]'::jsonb)
+                            ) ORDER BY s.id
+                        ) as services_json
+                    FROM service_requests_service s
+                    WHERE s.category_id = 12
+                )
+                UPDATE goods_and_transport gt
+                SET services = uj.services_json,
+                    updated_at = NOW()
+                FROM updated_json uj
+                WHERE gt.category_id = uj.cat_id;
+            """)
+
+            # Sync to vegetables_packages
+            cursor.execute("""
+                UPDATE vegetables_packages
+                SET base_price = %s,
+                    name = %s,
+                    duration = %s,
+                    tag = %s,
+                    description = %s,
+                    image = %s,
+                    includes = %s::jsonb,
+                    status = %s,
+                    is_active = (%s = 'ACTIVE'),
+                    updated_at = NOW()
+                WHERE master_package_id = %s OR id = %s;
+            """, [
+                package.base_price or 0, package.name, package.duration,
+                package.tag, package.description, package.image or '',
+                json.dumps(package.includes if isinstance(package.includes, list) else []),
+                package.status or 'ACTIVE', package.status, package.id, package.id
+            ])
+
+            # Sync to vegetables_and_groceries
+            cursor.execute("""
+                WITH updated_json AS (
+                    SELECT 
+                        18 as cat_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'id', s.id,
+                                'name', s.name,
+                                'slug', s.slug,
+                                'description', s.description,
+                                'packages', COALESCE((
+                                    SELECT jsonb_agg(
+                                        jsonb_build_object(
+                                            'id', p.id,
+                                            'name', p.name,
+                                            'price', p.base_price,
+                                            'duration', p.duration,
+                                            'tag', p.tag,
+                                            'description', p.description,
+                                            'image', p.image
+                                        ) ORDER BY p.id
+                                    )
+                                    FROM service_requests_package p
+                                    WHERE p.service_id = s.id
+                                ), '[]'::jsonb)
+                            ) ORDER BY s.id
+                        ) as services_json
+                    FROM service_requests_service s
+                    WHERE s.category_id = 18
+                )
+                UPDATE vegetables_and_groceries vg
+                SET services = uj.services_json,
+                    updated_at = NOW()
+                FROM updated_json uj
+                WHERE vg.category_id = uj.cat_id;
+            """)
+    except Exception:
+        pass
 
 
 def update_package(package, data, actor, reason=None):
@@ -199,6 +323,7 @@ def update_package(package, data, actor, reason=None):
                 tier.save(update_fields=fields_to_update)
     except Exception:
         pass
+    _sync_goods_tables(pkg)
     return pkg
 
 
@@ -235,6 +360,7 @@ def transition_package_status(package, new_status, actor, reason=None):
             tier.save(update_fields=["is_active"])
     except Exception:
         pass
+    _sync_goods_tables(package)
     return package
 
 

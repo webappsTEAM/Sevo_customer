@@ -28,6 +28,38 @@ import {
   Tag
 } from "lucide-react";
 
+const AVAILABLE_CATEGORIES = [
+  { id: "hvac", name: "AC & Heating", desc: "AC servicing, repair & installation" },
+  { id: "cleaning", name: "Home Cleaning", desc: "Deep cleaning & house sanitization" },
+  { id: "bathroom_cleaning", name: "Bathroom Cleaning", desc: "Bathroom deep clean & scrub" },
+  { id: "kitchen_cleaning", name: "Kitchen Cleaning", desc: "Kitchen degreasing & appliance clean" },
+  { id: "sofa_cleaning", name: "Sofa & Carpet Cleaning", desc: "Upholstery shampoo & stain removal" },
+  { id: "electrical", name: "Electrical Services", desc: "Wiring, switchboard & lighting" },
+  { id: "plumbing", name: "Plumbing Services", desc: "Pipes, taps & water tank repair" },
+  { id: "pest_control", name: "Pest Control", desc: "Cockroaches, bedbugs & termites" },
+  { id: "painting", name: "Painting & Waterproofing", desc: "Wall painting & waterproofing" },
+  { id: "mason", name: "Mason Work", desc: "Civil, brick & plastering repairs" },
+  { id: "appliance_repair", name: "Appliance Repair", desc: "Washing machine, fridge & microwave" },
+  { id: "groceries", name: "Groceries & Vegetables", desc: "Fresh produce & daily essentials" }
+];
+
+const AVAILABLE_SERVICES = [
+  { id: "ac_foam_jet", name: "AC Foam Jet Service" },
+  { id: "bathroom_deep", name: "Deep Bathroom Sanitization" },
+  { id: "full_house_clean", name: "Full House Deep Cleaning" },
+  { id: "cockroach_control", name: "Cockroach Control Spray" },
+  { id: "kitchen_degreasing", name: "Kitchen Chimney & Stove Clean" },
+  { id: "switchboard_repair", name: "Switchboard & Wiring Repair" },
+  { id: "tap_leak_fix", name: "Tap & Pipe Leak Fix" }
+];
+
+const AVAILABLE_PACKAGES = [
+  { id: "pkg_ac_combo", name: "2-AC Foam Jet Service Combo" },
+  { id: "pkg_home_annual", name: "Annual Home Cleaning Membership" },
+  { id: "pkg_pest_quarterly", name: "Quarterly Pest Control Subscription" },
+  { id: "pkg_bathroom_sub", name: "Monthly Bathroom Cleaning Pass" }
+];
+
 export default function CouponsPage() {
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,8 +68,37 @@ export default function CouponsPage() {
   const [copiedCode, setCopiedCode] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [maxStepReached, setMaxStepReached] = useState(1);
+  const [editingCouponId, setEditingCouponId] = useState(null);
+  const [stepError, setStepError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [analytics, setAnalytics] = useState(null);
+
+  const defaultFormData = {
+    code: "",
+    name: "",
+    description: "",
+    discountType: "flat",
+    discountValue: "",
+    maxDiscount: "",
+    customerEligibility: "All Customers",
+    orderType: "Any Order",
+    serviceEligibility: "All Services",
+    targetCategories: [],
+    targetServices: [],
+    targetPackages: [],
+    minBooking: "",
+    usagePerCustomer: 1,
+    totalUsageLimit: "",
+    stacking: "No",
+    startDate: "",
+    endDate: "",
+    startTime: "00:00",
+    endTime: "23:59"
+  };
+
+  const [formData, setFormData] = useState(defaultFormData);
 
   const fetchCoupons = async () => {
     try {
@@ -63,31 +124,107 @@ export default function CouponsPage() {
     fetchCoupons();
   }, []);
 
-  // Form State for Create Coupon Wizard
-  const [formData, setFormData] = useState({
-    code: "",
-    name: "",
-    description: "",
-    discountType: "flat",
-    discountValue: "",
-    maxDiscount: "",
-    customerEligibility: "All Customers",
-    orderType: "Any Order",
-    serviceEligibility: "All Services",
-    minBooking: "",
-    usagePerCustomer: 1,
-    totalUsageLimit: "",
-    stacking: "No",
-    startDate: "",
-    endDate: "",
-    startTime: "00:00",
-    endTime: "23:59"
-  });
-
   const handleCopyCode = (code) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  const handleOpenCreate = () => {
+    setEditingCouponId(null);
+    setFormData(defaultFormData);
+    setCurrentStep(1);
+    setMaxStepReached(1);
+    setStepError("");
+    setIsModalOpen(true);
+  };
+
+  const handleEditCoupon = (coupon) => {
+    setEditingCouponId(coupon.id);
+    setFormData({
+      code: coupon.code || "",
+      name: coupon.name || "",
+      description: coupon.description || "",
+      discountType: coupon.discountType || "flat",
+      discountValue: coupon.discountValue != null ? String(coupon.discountValue) : "",
+      maxDiscount: coupon.maxDiscount != null ? String(coupon.maxDiscount) : "",
+      customerEligibility: coupon.customerEligibility || "All Customers",
+      orderType: coupon.orderType || "Any Order",
+      serviceEligibility: coupon.serviceEligibility || "All Services",
+      targetCategories: coupon.targetCategories || [],
+      targetServices: coupon.targetServices || [],
+      targetPackages: coupon.targetPackages || [],
+      minBooking: coupon.minBooking != null ? String(coupon.minBooking) : "",
+      usagePerCustomer: coupon.usagePerCustomer || 1,
+      totalUsageLimit: coupon.totalUsageLimit != null ? String(coupon.totalUsageLimit) : "",
+      stacking: coupon.stacking || "No",
+      startDate: coupon.startDate || "",
+      endDate: coupon.endDate || "",
+      startTime: coupon.startTime || "00:00",
+      endTime: coupon.endTime || "23:59"
+    });
+    setCurrentStep(1);
+    setMaxStepReached(7);
+    setStepError("");
+    setIsModalOpen(true);
+  };
+
+  const validateStep = (stepNum) => {
+    if (stepNum === 1) {
+      if (!formData.code.trim()) return "Please enter a unique coupon code.";
+      if (!formData.name.trim()) return "Please enter a coupon name.";
+      if (!formData.description.trim()) return "Please enter a coupon description.";
+    } else if (stepNum === 2) {
+      if (!formData.discountValue || Number(formData.discountValue) <= 0) {
+        return "Please enter a valid discount value greater than 0.";
+      }
+      if (formData.discountType === "percentage" && Number(formData.discountValue) > 100) {
+        return "Percentage discount cannot exceed 100%.";
+      }
+    } else if (stepNum === 3) {
+      if (!formData.customerEligibility) return "Please select customer eligibility.";
+    } else if (stepNum === 4) {
+      if (!formData.serviceEligibility) return "Please select service eligibility scope.";
+      if (formData.serviceEligibility === "Selected Category" && formData.targetCategories.length === 0) {
+        return "Please choose at least one category.";
+      }
+      if (formData.serviceEligibility === "Selected Service" && formData.targetServices.length === 0) {
+        return "Please choose at least one service.";
+      }
+      if (formData.serviceEligibility === "Selected Package" && formData.targetPackages.length === 0) {
+        return "Please choose at least one package.";
+      }
+    } else if (stepNum === 5) {
+      if (formData.minBooking === "" || Number(formData.minBooking) < 0) {
+        return "Please enter a valid minimum booking value (e.g. 0 or higher).";
+      }
+    } else if (stepNum === 6) {
+      if (!formData.startDate) return "Please select a start date.";
+      if (!formData.endDate) return "Please select an end date.";
+      if (new Date(formData.endDate) < new Date(formData.startDate)) {
+        return "End date cannot be earlier than start date.";
+      }
+    }
+    return "";
+  };
+
+  const handleNextStep = () => {
+    const err = validateStep(currentStep);
+    if (err) {
+      setStepError(err);
+      return;
+    }
+    setStepError("");
+    const nextStep = currentStep + 1;
+    setCurrentStep(nextStep);
+    setMaxStepReached(prev => Math.max(prev, nextStep));
+  };
+
+  const handleStepClick = (targetStep) => {
+    if (targetStep <= maxStepReached || targetStep <= currentStep) {
+      setStepError("");
+      setCurrentStep(targetStep);
+    }
   };
 
   const handleStatusToggle = async (id, currentStatus) => {
@@ -136,20 +273,82 @@ export default function CouponsPage() {
     Draft: coupons.filter(c => c.status === "Draft").length
   };
 
+  const handleSaveDraft = async () => {
+    if (!formData.code.trim()) {
+      setStepError("Please enter at least a coupon code to save draft.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const draftPayload = {
+      code: formData.code.toUpperCase().trim(),
+      name: formData.name || formData.code.toUpperCase().trim(),
+      description: formData.description || "Draft coupon",
+      discountType: formData.discountType,
+      discountValue: Number(formData.discountValue) || 0,
+      maxDiscount: Number(formData.maxDiscount) || 0,
+      customerEligibility: formData.customerEligibility,
+      orderType: formData.orderType,
+      serviceEligibility: formData.serviceEligibility,
+      targetCategories: formData.targetCategories,
+      targetServices: formData.targetServices,
+      targetPackages: formData.targetPackages,
+      minBooking: Number(formData.minBooking) || 0,
+      usagePerCustomer: Number(formData.usagePerCustomer) || 1,
+      totalUsageLimit: Number(formData.totalUsageLimit) || 1000,
+      stacking: formData.stacking,
+      startDate: formData.startDate || null,
+      endDate: formData.endDate || null,
+      status: "Draft"
+    };
+
+    try {
+      if (editingCouponId) {
+        await apiRequest(`/api/admin/coupons/${editingCouponId}/`, {
+          method: "PATCH",
+          body: JSON.stringify(draftPayload)
+        });
+      } else {
+        await apiRequest("/api/admin/coupons/", {
+          method: "POST",
+          body: JSON.stringify(draftPayload)
+        });
+      }
+      await fetchCoupons();
+      setIsModalOpen(false);
+    } catch (e) {
+      console.error("Failed to save draft coupon", e);
+      setStepError(e.message || "Failed to save draft coupon.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleCreateCouponSubmit = async () => {
-    const newCoupon = {
-      code: formData.code.toUpperCase(),
+    const err = validateStep(6);
+    if (err) {
+      setStepError(err);
+      setCurrentStep(6);
+      return;
+    }
+
+    setIsSubmitting(true);
+    const couponPayload = {
+      code: formData.code.toUpperCase().trim(),
       name: formData.name,
       description: formData.description,
       discountType: formData.discountType,
       discountValue: Number(formData.discountValue),
-      maxDiscount: Number(formData.maxDiscount),
+      maxDiscount: Number(formData.maxDiscount) || 0,
       customerEligibility: formData.customerEligibility,
       orderType: formData.orderType,
       serviceEligibility: formData.serviceEligibility,
-      minBooking: Number(formData.minBooking),
-      usagePerCustomer: Number(formData.usagePerCustomer),
-      totalUsageLimit: Number(formData.totalUsageLimit),
+      targetCategories: formData.targetCategories,
+      targetServices: formData.targetServices,
+      targetPackages: formData.targetPackages,
+      minBooking: Number(formData.minBooking) || 0,
+      usagePerCustomer: Number(formData.usagePerCustomer) || 1,
+      totalUsageLimit: Number(formData.totalUsageLimit) || 1000,
       stacking: formData.stacking,
       startDate: formData.startDate,
       endDate: formData.endDate,
@@ -157,15 +356,24 @@ export default function CouponsPage() {
     };
 
     try {
-      await apiRequest("/api/admin/coupons/", {
-        method: "POST",
-        body: JSON.stringify(newCoupon)
-      });
-      fetchCoupons();
+      if (editingCouponId) {
+        await apiRequest(`/api/admin/coupons/${editingCouponId}/`, {
+          method: "PATCH",
+          body: JSON.stringify(couponPayload)
+        });
+      } else {
+        await apiRequest("/api/admin/coupons/", {
+          method: "POST",
+          body: JSON.stringify(couponPayload)
+        });
+      }
+      await fetchCoupons();
       setIsModalOpen(false);
-      setCurrentStep(1);
     } catch (e) {
-      console.error("Failed to create coupon", e);
+      console.error("Failed to save coupon", e);
+      setStepError(e.message || "Failed to save coupon to database.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -188,10 +396,7 @@ export default function CouponsPage() {
         </div>
 
         <button
-          onClick={() => {
-            setIsModalOpen(true);
-            setCurrentStep(1);
-          }}
+          onClick={handleOpenCreate}
           className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-5 py-3 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 uppercase tracking-wider cursor-pointer border-none"
         >
           <Plus size={16} /> Create Coupon
@@ -401,6 +606,13 @@ export default function CouponsPage() {
                     <td className="py-4 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => handleEditCoupon(coupon)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors cursor-pointer border-none bg-transparent"
+                          title="Edit Coupon"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
                           onClick={() => handleStatusToggle(coupon.id, coupon.status)}
                           className="px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700"
                         >
@@ -431,7 +643,7 @@ export default function CouponsPage() {
             <div className="p-5 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between shrink-0">
               <div>
                 <div className="text-[10px] font-black text-purple-600 uppercase tracking-widest">
-                  STEP {currentStep} OF 7
+                  STEP {currentStep} OF 7 {editingCouponId ? "• EDITING COUPON" : ""}
                 </div>
                 <h3 className="text-lg font-black text-slate-900 mt-0.5">
                   {currentStep === 1 && "Basic Details"}
@@ -451,6 +663,44 @@ export default function CouponsPage() {
               </button>
             </div>
 
+            {/* Step Navigation Pill Bar */}
+            <div className="px-5 py-2.5 bg-slate-100/70 border-b border-slate-200/60 flex items-center justify-between overflow-x-auto gap-1 scrollbar-none shrink-0">
+              {[
+                { num: 1, label: "Basic" },
+                { num: 2, label: "Discount" },
+                { num: 3, label: "Customer" },
+                { num: 4, label: "Scope" },
+                { num: 5, label: "Rules" },
+                { num: 6, label: "Validity" },
+                { num: 7, label: "Preview" }
+              ].map(s => {
+                const isCurrent = currentStep === s.num;
+                const isAccessible = s.num <= maxStepReached || s.num <= currentStep;
+                return (
+                  <button
+                    key={s.num}
+                    type="button"
+                    disabled={!isAccessible}
+                    onClick={() => handleStepClick(s.num)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all flex items-center gap-1 shrink-0 ${
+                      isCurrent
+                        ? "bg-purple-600 text-white shadow-xs"
+                        : isAccessible
+                        ? "bg-white text-slate-700 hover:bg-purple-50 hover:text-purple-700 border border-slate-200 cursor-pointer"
+                        : "bg-slate-200/50 text-slate-400 cursor-not-allowed border border-transparent"
+                    }`}
+                  >
+                    <span className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-black ${
+                      isCurrent ? "bg-white text-purple-700" : "bg-slate-200 text-slate-600"
+                    }`}>
+                      {s.num}
+                    </span>
+                    <span>{s.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Wizard Progress Bar */}
             <div className="w-full bg-slate-100 h-1.5 shrink-0">
               <div
@@ -461,6 +711,12 @@ export default function CouponsPage() {
 
             {/* Modal Body (Scrollable) */}
             <div className="flex-1 overflow-y-auto p-6 text-left space-y-6">
+              {stepError && (
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs font-bold text-rose-700 flex items-center gap-2">
+                  <AlertCircle size={16} className="shrink-0 text-rose-600" />
+                  <span>{stepError}</span>
+                </div>
+              )}
               {/* STEP 1: Basic Details */}
               {currentStep === 1 && (
                 <div className="space-y-4">
@@ -611,41 +867,181 @@ export default function CouponsPage() {
 
               {/* STEP 4: Service Eligibility */}
               {currentStep === 4 && (
-                <div className="space-y-3">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                    Applicable Services Scope
-                  </label>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      Applicable Services Scope
+                    </label>
 
-                  {[
-                    { id: "All Services", title: "All Services", desc: "Applies across all service categories and packages" },
-                    { id: "Selected Category", title: "Selected Category", desc: "Restricted to specific categories (e.g. AC & Heating)" },
-                    { id: "Selected Service", title: "Selected Service", desc: "Restricted to specific sub-services (e.g. Foam Jet Wash)" },
-                    { id: "Selected Package", title: "Selected Package", desc: "Restricted to individual service packages" }
-                  ].map(opt => (
-                    <div
-                      key={opt.id}
-                      onClick={() => setFormData({ ...formData, serviceEligibility: opt.id })}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
-                        formData.serviceEligibility === opt.id
-                          ? "border-purple-600 bg-purple-50/50 shadow-xs"
-                          : "border-slate-200 bg-white hover:border-slate-300"
-                      }`}
-                    >
-                      <div>
-                        <div className="text-xs font-extrabold text-slate-900">{opt.title}</div>
-                        <div className="text-[11px] text-slate-500 font-medium">{opt.desc}</div>
+                    <div className="space-y-2.5">
+                      {[
+                        { id: "All Services", title: "All Services", desc: "Applies across all service categories and packages" },
+                        { id: "Selected Category", title: "Selected Category", desc: "Restricted to specific categories (e.g. AC & Heating, Cleaning)" },
+                        { id: "Selected Service", title: "Selected Service", desc: "Restricted to specific sub-services (e.g. Foam Jet Wash)" },
+                        { id: "Selected Package", title: "Selected Package", desc: "Restricted to individual service packages" }
+                      ].map(opt => (
+                        <div
+                          key={opt.id}
+                          onClick={() => setFormData({ ...formData, serviceEligibility: opt.id })}
+                          className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                            formData.serviceEligibility === opt.id
+                              ? "border-purple-600 bg-purple-50/50 shadow-xs"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          <div>
+                            <div className="text-xs font-extrabold text-slate-900">{opt.title}</div>
+                            <div className="text-[11px] text-slate-500 font-medium">{opt.desc}</div>
+                          </div>
+                          <div
+                            className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                              formData.serviceEligibility === opt.id
+                                ? "border-purple-600 bg-purple-600 text-white"
+                                : "border-slate-300 bg-white"
+                            }`}
+                          >
+                            {formData.serviceEligibility === opt.id && <Check size={12} />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Sub-Selection: Categories */}
+                  {formData.serviceEligibility === "Selected Category" && (
+                    <div className="p-4 bg-slate-50 border border-purple-200 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-extrabold text-purple-900 uppercase tracking-wider">
+                          Choose Target Categories ({formData.targetCategories.length} selected)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allCatIds = AVAILABLE_CATEGORIES.map(c => c.id);
+                            const allSelected = formData.targetCategories.length === AVAILABLE_CATEGORIES.length;
+                            setFormData({ ...formData, targetCategories: allSelected ? [] : allCatIds });
+                          }}
+                          className="text-[11px] font-bold text-purple-700 hover:underline cursor-pointer bg-transparent border-none"
+                        >
+                          {formData.targetCategories.length === AVAILABLE_CATEGORIES.length ? "Deselect All" : "Select All"}
+                        </button>
                       </div>
-                      <div
-                        className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                          formData.serviceEligibility === opt.id
-                            ? "border-purple-600 bg-purple-600 text-white"
-                            : "border-slate-300 bg-white"
-                        }`}
-                      >
-                        {formData.serviceEligibility === opt.id && <Check size={12} />}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                        {AVAILABLE_CATEGORIES.map(cat => {
+                          const isSelected = formData.targetCategories.includes(cat.id);
+                          return (
+                            <div
+                              key={cat.id}
+                              onClick={() => {
+                                const next = isSelected
+                                  ? formData.targetCategories.filter(id => id !== cat.id)
+                                  : [...formData.targetCategories, cat.id];
+                                setFormData({ ...formData, targetCategories: next });
+                              }}
+                              className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all flex items-center gap-2.5 ${
+                                isSelected
+                                  ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                                  : "bg-white text-slate-800 border-slate-200 hover:border-purple-300"
+                              }`}
+                            >
+                              <div
+                                className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                                  isSelected ? "bg-white text-purple-700 border-white" : "border-slate-300 bg-white"
+                                }`}
+                              >
+                                {isSelected && <Check size={10} strokeWidth={3} />}
+                              </div>
+                              <div className="truncate">
+                                <div className="text-xs font-extrabold truncate">{cat.name}</div>
+                                <div className={`text-[10px] truncate ${isSelected ? "text-purple-100" : "text-slate-400"}`}>
+                                  {cat.desc}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* Sub-Selection: Services */}
+                  {formData.serviceEligibility === "Selected Service" && (
+                    <div className="p-4 bg-slate-50 border border-purple-200 rounded-2xl space-y-3">
+                      <label className="block text-xs font-extrabold text-purple-900 uppercase tracking-wider">
+                        Choose Target Services ({formData.targetServices.length} selected)
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto">
+                        {AVAILABLE_SERVICES.map(svc => {
+                          const isSelected = formData.targetServices.includes(svc.id);
+                          return (
+                            <div
+                              key={svc.id}
+                              onClick={() => {
+                                const next = isSelected
+                                  ? formData.targetServices.filter(id => id !== svc.id)
+                                  : [...formData.targetServices, svc.id];
+                                setFormData({ ...formData, targetServices: next });
+                              }}
+                              className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all flex items-center gap-2.5 ${
+                                isSelected
+                                  ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                                  : "bg-white text-slate-800 border-slate-200 hover:border-purple-300"
+                              }`}
+                            >
+                              <div
+                                className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                                  isSelected ? "bg-white text-purple-700 border-white" : "border-slate-300 bg-white"
+                                }`}
+                              >
+                                {isSelected && <Check size={10} strokeWidth={3} />}
+                              </div>
+                              <div className="text-xs font-extrabold truncate">{svc.name}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sub-Selection: Packages */}
+                  {formData.serviceEligibility === "Selected Package" && (
+                    <div className="p-4 bg-slate-50 border border-purple-200 rounded-2xl space-y-3">
+                      <label className="block text-xs font-extrabold text-purple-900 uppercase tracking-wider">
+                        Choose Target Packages ({formData.targetPackages.length} selected)
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto">
+                        {AVAILABLE_PACKAGES.map(pkg => {
+                          const isSelected = formData.targetPackages.includes(pkg.id);
+                          return (
+                            <div
+                              key={pkg.id}
+                              onClick={() => {
+                                const next = isSelected
+                                  ? formData.targetPackages.filter(id => id !== pkg.id)
+                                  : [...formData.targetPackages, pkg.id];
+                                setFormData({ ...formData, targetPackages: next });
+                              }}
+                              className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all flex items-center gap-2.5 ${
+                                isSelected
+                                  ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                                  : "bg-white text-slate-800 border-slate-200 hover:border-purple-300"
+                              }`}
+                            >
+                              <div
+                                className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                                  isSelected ? "bg-white text-purple-700 border-white" : "border-slate-300 bg-white"
+                                }`}
+                              >
+                                {isSelected && <Check size={10} strokeWidth={3} />}
+                              </div>
+                              <div className="text-xs font-extrabold truncate">{pkg.name}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -835,7 +1231,11 @@ export default function CouponsPage() {
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
               {currentStep > 1 ? (
                 <button
-                  onClick={() => setCurrentStep(prev => prev - 1)}
+                  type="button"
+                  onClick={() => {
+                    setStepError("");
+                    setCurrentStep(prev => prev - 1);
+                  }}
                   className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100 flex items-center gap-1 cursor-pointer bg-white"
                 >
                   <ChevronLeft size={15} /> Back
@@ -846,25 +1246,39 @@ export default function CouponsPage() {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-100 cursor-pointer bg-white"
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={handleSaveDraft}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-100 cursor-pointer bg-white disabled:opacity-50"
                 >
                   Save Draft
                 </button>
 
                 {currentStep < 7 ? (
                   <button
-                    onClick={() => setCurrentStep(prev => prev + 1)}
+                    type="button"
+                    onClick={handleNextStep}
                     className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-extrabold flex items-center gap-1 shadow-md cursor-pointer border-none"
                   >
                     Next <ChevronRight size={15} />
                   </button>
                 ) : (
                   <button
+                    type="button"
+                    disabled={isSubmitting}
                     onClick={handleCreateCouponSubmit}
-                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md cursor-pointer border-none"
+                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md cursor-pointer border-none disabled:opacity-50"
                   >
-                    <CheckCircle2 size={16} /> Create Coupon
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} /> {editingCouponId ? "Update Coupon" : "Create Coupon"}
+                      </>
+                    )}
                   </button>
                 )}
               </div>

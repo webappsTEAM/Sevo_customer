@@ -363,13 +363,19 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
     if (dbPackages.length > 0) {
       Object.keys(services).forEach(key => {
         services[key] = services[key].map(item => {
-          const dbMatch = dbPackages.find(p => p.slug === item.id);
+          const dbMatch = dbPackages.find(p => p.slug === item.id || p.id === item.id);
           if (dbMatch) {
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : item.includes;
+            item.tools = dbMatch.tools;
+            item.ready = dbMatch.ready;
+            item.reviews = dbMatch.reviews;
+            item.faqs = dbMatch.faqs;
+            item.image = dbMatch.image || item.image;
+            item.badge = dbMatch.tag || item.badge;
           }
           return item;
         });

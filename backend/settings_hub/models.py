@@ -1,3 +1,4 @@
+import uuid
 import secrets
 import hashlib
 from django.db import models
@@ -181,3 +182,73 @@ class Invoice(models.Model):
 
     def __str__(self):
         return f"{self.invoice_number} - {self.company.company_name}"
+
+
+class HomePageConfig(models.Model):
+    """
+    Persists published customer homepage content and layout settings.
+    Stores only `image_path` string references in `config_data`.
+    """
+    key = models.CharField(max_length=50, unique=True, default="default")
+    config_data = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="homepage_configs"
+    )
+
+    class Meta:
+        verbose_name = "Home Page Config"
+        verbose_name_plural = "Home Page Configs"
+
+    def __str__(self):
+        return f"HomePageConfig ({self.key}) - {self.updated_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class HomePageMedia(models.Model):
+    """
+    Tracks all uploaded media assets stored in Supabase Storage.
+    Maintains cleanup_status and reference tracking to prevent orphaned storage files.
+    """
+    CLEANUP_STATUS_CHOICES = [
+        ("ACTIVE", "Active"),
+        ("UNREFERENCED", "Unreferenced"),
+        ("PENDING_DELETE", "Pending Delete"),
+        ("DELETED", "Deleted"),
+        ("DELETE_FAILED", "Delete Failed"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    section = models.CharField(max_length=50)
+    original_name = models.CharField(max_length=255)
+    image_path = models.CharField(max_length=500, unique=True)
+    mime_type = models.CharField(max_length=50, default="image/webp")
+    file_size = models.IntegerField(default=0)
+    dimensions = models.CharField(max_length=50, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    uploaded_by = models.ForeignKey(
+        AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="homepage_uploads"
+    )
+    is_active = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    cleanup_status = models.CharField(
+        max_length=30,
+        choices=CLEANUP_STATUS_CHOICES,
+        default="UNREFERENCED"
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Home Page Media"
+        verbose_name_plural = "Home Page Media Items"
+
+    def __str__(self):
+        return f"[{self.section}] {self.image_path} ({self.cleanup_status})"
+

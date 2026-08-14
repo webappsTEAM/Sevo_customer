@@ -181,9 +181,9 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
       formatted_address: addressData?.formatted_address ?? "",
       flat_house_no:    state.flat_house_no.trim(),
       landmark:         state.landmark.trim(),
-      locality:         state.locality.trim(),
-      city:             state.city.trim(),
-      state:            state.state.trim(),
+      locality:         state.locality.trim() || addressData?.locality || "",
+      city:             state.city.trim() || addressData?.city || addressData?.locality || "City",
+      state:            state.state.trim() || addressData?.state || "State",
       pincode:          state.pincode.trim(),
       label:            state.label,
       receiver_name:    state.receiver_name.trim(),
@@ -193,11 +193,28 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
     setSaving(true)
     setSaveError(null)
     try {
-      const res = await apiCreateSavedAddress(payload)
-      const saved = res?.data ?? res
-      console.log("[AddressDetailsForm] saved address:", saved)
+      let saved = null
+      if (user) {
+        try {
+          const res = await apiCreateSavedAddress(payload)
+          saved = res?.data ?? res
+          console.log("[AddressDetailsForm] saved address:", saved)
+        } catch (err) {
+          console.warn("[AddressDetailsForm] API save address warning:", err)
+          if (err?.status === 401) {
+            // Guest or unauthenticated session — fallback to guest address payload
+            saved = { ...payload, id: `guest_${Date.now()}` }
+          } else {
+            throw err
+          }
+        }
+      } else {
+        // Guest user — pass location payload directly to caller
+        saved = { ...payload, id: `guest_${Date.now()}` }
+      }
+
       if (typeof onSubmit === "function") {
-        onSubmit(saved)
+        onSubmit(saved || payload)
       }
     } catch (err) {
       console.error("[AddressDetailsForm] save error:", err)
@@ -569,7 +586,6 @@ const s = {
     color: "#0f172a", outline: "none", transition: "border-color 0.15s",
     boxSizing: "border-box",
     fontFamily: "inherit",
-    "::placeholder": { color: "#94a3b8" },
   },
   inputMuted: {
     background: "#f8fafc", color: "#475569",
@@ -604,7 +620,6 @@ const s = {
     border: "1.5px solid #e2e8f0", borderRadius: 12,
     background: "#fff", overflow: "hidden",
     transition: "border-color 0.15s",
-    ":focus-within": { borderColor: "#6366f1" },
   },
   phonePrefix: {
     display: "flex", alignItems: "center",
