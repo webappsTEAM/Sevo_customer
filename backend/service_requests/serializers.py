@@ -135,6 +135,7 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         fields = (
             "customer_name", "phone", "email",
             "service_category", "issue_title", "description", "address",
+            "latitude", "longitude",
             "preferred_date", "preferred_time", "total_amount", "cart_data",
             "photo", "payment_method",
             # Goods Transport / Packers & Movers — optional, unused by other categories
@@ -143,6 +144,8 @@ class ServiceRequestPublicCreateSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "description":    {"required": False, "allow_blank": True},
             "email":          {"required": False, "allow_blank": True, "allow_null": True},
+            "latitude":       {"required": False, "allow_null": True},
+            "longitude":      {"required": False, "allow_null": True},
             "photo":          {"required": False, "allow_null": True},
             "payment_method": {"required": False, "allow_null": True, "allow_blank": True},
             "preferred_time": {"required": False, "allow_blank": True, "allow_null": True},
@@ -498,7 +501,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
         fields = (
             "id", "request_id", "customer_name", "phone", "email",
             "service_category", "service_category_display",
-            "issue_title", "description", "address", "preferred_date", "preferred_time",
+            "issue_title", "description", "address", "latitude", "longitude", "preferred_date", "preferred_time",
             "total_amount", "base_amount", "extension_amount", "cart_data",
             "payment_method", "payment_method_display",
             "payment_status", "payment_status_display",
@@ -735,9 +738,19 @@ class ServiceFeedbackAdminSerializer(serializers.ModelSerializer):
 class EmployeeJobListSerializer(serializers.ModelSerializer):
     request_id       = serializers.CharField(source="service_request.request_id", read_only=True)
     customer_name    = serializers.CharField(source="service_request.customer_name", read_only=True)
+    phone            = serializers.CharField(source="service_request.phone", read_only=True)
+    email            = serializers.CharField(source="service_request.email", read_only=True)
     service_category = serializers.CharField(source="service_request.get_service_category_display", read_only=True)
+    issue_title      = serializers.CharField(source="service_request.issue_title", read_only=True)
+    description      = serializers.CharField(source="service_request.description", read_only=True)
     address          = serializers.CharField(source="service_request.address", read_only=True)
+    latitude         = serializers.DecimalField(source="service_request.latitude", max_digits=9, decimal_places=6, read_only=True)
+    longitude        = serializers.DecimalField(source="service_request.longitude", max_digits=9, decimal_places=6, read_only=True)
     preferred_date   = serializers.DateField(source="service_request.preferred_date", read_only=True)
+    preferred_time   = serializers.CharField(source="service_request.preferred_time", read_only=True)
+    payment_method   = serializers.CharField(source="service_request.payment_method", read_only=True)
+    payment_status   = serializers.CharField(source="service_request.payment_status", read_only=True)
+    total_amount     = serializers.DecimalField(source="service_request.total_amount", max_digits=10, decimal_places=2, read_only=True)
     sr_status        = serializers.CharField(source="service_request.status", read_only=True)
     priority         = serializers.CharField(source="service_request.priority", read_only=True)
     proofs_count     = serializers.SerializerMethodField()
@@ -745,10 +758,12 @@ class EmployeeJobListSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmployeeJob
         fields = (
-            "id", "request_id", "customer_name", "service_category",
-            "address", "preferred_date", "sr_status", "priority",
-            "status", "assigned_date", "accepted_date", "started_date",
-            "completed_date", "notes", "proofs_count",
+            "id", "service_request_id", "request_id", "customer_name", "phone", "email",
+            "service_category", "issue_title", "description", "address",
+            "latitude", "longitude", "preferred_date", "preferred_time",
+            "payment_method", "payment_status", "total_amount", "sr_status",
+            "priority", "status", "assigned_date", "accepted_date",
+            "started_date", "completed_date", "notes", "proofs_count",
         )
 
     def get_proofs_count(self, obj):
