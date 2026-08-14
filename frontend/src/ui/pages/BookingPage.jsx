@@ -202,7 +202,7 @@ const PACKAGES = {
 
 const TIME_SLOTS = [
   { period: "Morning", icon: "ðŸŒ…", slots: [{ t: "07:00", l: "7:00 AM" }, { t: "08:00", l: "8:00 AM" }, { t: "09:00", l: "9:00 AM" }, { t: "10:00", l: "10:00 AM" }, { t: "11:00", l: "11:00 AM" }] },
-  { period: "Afternoon", icon: "•˜•ï¸", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
+  { period: "Afternoon", icon: "•˜•ï¸ ", slots: [{ t: "12:00", l: "12:00 PM" }, { t: "13:00", l: "1:00 PM" }, { t: "14:00", l: "2:00 PM" }, { t: "15:00", l: "3:00 PM" }, { t: "16:00", l: "4:00 PM" }] },
   { period: "Evening", icon: "ðŸŒ†", slots: [{ t: "17:00", l: "5:00 PM" }, { t: "18:00", l: "6:00 PM" }, { t: "19:00", l: "7:00 PM" }] },
 ]
 
@@ -1376,7 +1376,7 @@ function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicRe
           <div className="uc-hero">
             <div className="uc-hero-inner">
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                <p className="uc-hero-tag">•­ India's #1 Home Services Platform</p>
+                <p className="uc-hero-tag">•­  India's #1 Home Services Platform</p>
                 <h1 className="uc-hero-h1">
                   Professional
                   <br />
@@ -1585,7 +1585,7 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
             >
               {pkg.tag && (
                 <div className="uc-pkg-tag" style={{ background: pkg.popular ? "#7C3AED" : "#059669" }}>
-                  {pkg.popular ? "•­ " : "•œ… "}{pkg.tag}
+                  {pkg.popular ? "•­  " : "•œ… "}{pkg.tag}
                 </div>
               )}
 
@@ -2691,7 +2691,7 @@ function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTi
               <img src={MOCK_TECH.avatar} alt={MOCK_TECH.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '2px solid #7C3AED30' }} />
               <div style={{ flex: 1, textAlign: 'left' }}>
                 <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{MOCK_TECH.name}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>•­ {MOCK_TECH.rating} Â· {MOCK_TECH.jobs} jobs</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>•­  {MOCK_TECH.rating} Â· {MOCK_TECH.jobs} jobs</div>
               </div>
               <div style={{ background: '#10B98115', color: '#10B981', fontWeight: 800, fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, border: '1px solid #10B98130' }}>ETA {MOCK_TECH.eta}</div>
             </motion.div>
@@ -2725,9 +2725,9 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
 
   const trackSteps = [
     { label: "Booking Confirmed", icon: "•œ…", done: true, time: "Just now" },
-    { label: "Expert Assigned", icon: "ðŸ‘¨•ðŸ”§", done: false, time: "Pending" },
+    { label: "Expert Assigned", icon: "ðŸ‘¨• ðŸ”§", done: false, time: "Pending" },
     { label: "Expert On The Way", icon: "ðŸ›µ", done: false, time: "Pending" },
-    { label: "Service In Progress", icon: "•š™ï¸", done: false, time: "Scheduled" },
+    { label: "Service In Progress", icon: "•š™ï¸ ", done: false, time: "Scheduled" },
     { label: "Service Completed", icon: "ðŸŒŸ", done: false, time: "Pending" },
   ]
 
@@ -2765,7 +2765,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{tech.name}</div>
-            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>•­ {tech.rating} Â· {tech.jobs} jobs completed</div>
+            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>•­  {tech.rating} Â· {tech.jobs} jobs completed</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               <span style={{ background: '#10B98112', color: '#10B981', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #10B98125' }}>Verified Pro</span>
               <span style={{ background: '#7C3AED12', color: '#7C3AED', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #7C3AED25' }}>Background Checked</span>
@@ -2811,7 +2811,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
         style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
       >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>ðŸ—ºï¸ Live Tracking</div>
+        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>ðŸ—ºï¸  Live Tracking</div>
         {trackSteps.map((s, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.5rem 0', position: 'relative' }}>
             {i < trackSteps.length - 1 && <div style={{ position: 'absolute', left: 18, top: 36, width: 2, height: 24, background: s.done ? '#10B981' : '#e2e8f0' }} />}
@@ -4384,7 +4384,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
             </div>
 
             {rescheduleSuccess && (
-              <div style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', padding: '12px 16px', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
+ padding: '12px 16px', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
                 ✓ {rescheduleSuccess}
               </div>
             )}
@@ -5054,7 +5055,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     return (
                       <div key={resp.id} style={{ display: 'flex', justifyContent: isCustomer ? 'flex-end' : 'flex-start' }}>
                         <div style={{ maxWidth: '75%', padding: '10px 14px', borderRadius: isCustomer ? '14px 14px 2px 14px' : '14px 14px 14px 2px', background: isCustomer ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#f1f5f9', color: isCustomer ? 'white' : '#0f172a', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.7rem', opacity: 0.75, marginBottom: 4 }}>{isCustomer ? 'You' : resp.persona === 'ADMIN' ? 'ðŸ›¡ï¸ Support Team' : 'ðŸ‘· Employee'}</div>
+                          <div style={{ fontWeight: 700, fontSize: '0.7rem', opacity: 0.75, marginBottom: 4 }}>{isCustomer ? 'You' : resp.persona === 'ADMIN' ? 'ðŸ›¡ï¸  Support Team' : 'ðŸ‘· Employee'}</div>
                           {resp.message}
                           <div style={{ fontSize: '0.65rem', opacity: 0.6, marginTop: 4 }}>{new Date(resp.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</div>
                         </div>
@@ -5616,7 +5617,7 @@ function QuickCommerceCartCheckout({
   const deliveryCharge = itemsTotal >= 199 ? 0 : 30
   const handlingCharge = itemsTotal > 0 ? 5 : 0
   const surgeCharge = 15
-  const donationAmount = isDonationChecked ? 1 : 0
+  const donationAmount = 0
   const tipAmount = selectedTip === "custom" ? (parseInt(customTip) || 0) : (selectedTip || 0)
   const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + surgeCharge + donationAmount + tipAmount)
 
@@ -5662,7 +5663,8 @@ function QuickCommerceCartCheckout({
         phone: user?.phone || "9876543210",
         service_category: "vegetables_quick_delivery",
         issue_title: `Farm-Fresh Vegetables Delivery (${cart.length} items)`,
-        description: `Quick Commerce Vegetable Order\nDelivering to: ${activeAddressObj?.address || "Hosur"}`,
+        description: `Quick Commerce Vegetable Order
+Delivering to: ${activeAddressObj?.address || "Hosur"}`,
         address: activeAddressObj?.address || "Hosur, Tamil Nadu",
         preferred_date: today,
         total_amount: grandTotal,
@@ -5681,7 +5683,6 @@ function QuickCommerceCartCheckout({
       try {
         res = await apiRequest("/booking/", { method: "POST", data: payload })
       } catch (e) {
-        // Fallback response for rapid mock checkout
         res = { success: true, request_id: `VEG-HOS-${Math.floor(100000 + Math.random() * 900000)}` }
       }
 
@@ -5699,84 +5700,32 @@ function QuickCommerceCartCheckout({
     }
   }
 
-  if (orderConfirmedData) {
-    return (
-      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-4">
-        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-xl border border-slate-100 text-center animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-600/30">
-            <CheckCircle2 className="w-9 h-9" />
-          </div>
-          <h3 className="text-2xl font-black text-slate-900 mb-1">Order Confirmed!</h3>
-          <p className="text-xs text-slate-500 font-semibold mb-6">
-            Order ID: <span className="text-emerald-700 font-bold">{orderConfirmedData.requestId}</span>
-          </p>
-
-          <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 text-left space-y-2 mb-6">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-bold">Estimated Delivery:</span>
-              <span className="text-emerald-800 font-extrabold flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                {orderConfirmedData.eta}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-bold">Items Count:</span>
-              <span className="text-slate-800 font-bold">{orderConfirmedData.itemsCount} items</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-bold">Total (Cash on Delivery):</span>
-              <span className="text-slate-900 font-black text-sm">₹{orderConfirmedData.total}</span>
-            </div>
-            <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-slate-600">
-              <span className="font-bold text-slate-700">Delivering to: </span>
-              {orderConfirmedData.address}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (onBack) {
-                onBack()
-              } else {
-                window.location.href = "/home"
-              }
-            }}
-            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer"
-          >
-            Back to Home
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // Address Selection View (Image 3)
+  // Address Selection View
   if (isAddressScreenOpen) {
     return (
-      <div className="min-h-screen bg-[#f3f5f8] text-slate-800 flex justify-center py-4 px-2 sm:px-4 font-sans">
-        <div className="max-w-md w-full bg-[#f8fafc] min-h-screen shadow-lg rounded-2xl flex flex-col justify-between overflow-hidden border border-slate-200/80">
+      <div className="min-h-screen bg-slate-50 text-slate-800 flex justify-center py-4 px-2 sm:px-4 font-sans">
+        <div className="max-w-md w-full bg-[#f8fafc] min-h-screen shadow-2xl rounded-3xl flex flex-col justify-between overflow-hidden border border-slate-100">
           <div>
             {/* Header */}
-            <div className="bg-white px-4 py-3.5 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-20">
+            <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center gap-3 sticky top-0 z-20">
               <button
                 type="button"
                 onClick={() => setIsAddressScreenOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 cursor-pointer"
+                className="w-8 h-8 rounded-full hover:bg-slate-50 flex items-center justify-center text-slate-700 transition-colors cursor-pointer border border-transparent hover:border-slate-100"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <h2 className="text-base font-extrabold text-slate-900">Select delivery address</h2>
+              <h2 className="text-base font-bold text-slate-900">Select Delivery Address</h2>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-5 space-y-4">
               {/* Add a new address button */}
               <button
                 type="button"
                 onClick={() => setShowAddAddressModal(true)}
-                className="w-full bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex items-center gap-3 text-emerald-700 hover:border-emerald-500 font-extrabold text-sm transition-all cursor-pointer"
+                className="w-full bg-white rounded-2xl p-4 border border-slate-200 hover:border-slate-350 shadow-2xs flex items-center gap-3 text-slate-700 hover:text-slate-900 font-extrabold text-sm transition-all cursor-pointer"
               >
-                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black">
+                <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-black">
                   <Plus className="w-4 h-4" />
                 </div>
                 <span>Add a new address</span>
@@ -5784,8 +5733,8 @@ function QuickCommerceCartCheckout({
 
               {/* Your saved address Section */}
               <div>
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 px-1">
-                  Your saved address
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">
+                  Saved Addresses
                 </h3>
                 <div className="space-y-3">
                   {savedAddresses.map((addr) => {
@@ -5797,22 +5746,24 @@ function QuickCommerceCartCheckout({
                           setSelectedAddressId(addr.id)
                           setIsAddressScreenOpen(false)
                         }}
-                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-xs ${isSelected ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200/90 hover:border-slate-300"
+                        className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer flex items-start justify-between gap-3 shadow-2xs ${isSelected
+                          ? "border-emerald-600 ring-2 ring-emerald-500/10 bg-emerald-50/10"
+                          : "border-slate-200/80 hover:border-slate-300"
                           }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                          <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 text-slate-600 flex items-center justify-center shrink-0 mt-0.5 shadow-3xs">
                             {addr.type.toLowerCase() === "work" ? (
-                              <Users className="w-5 h-5" />
+                              <Users className="w-4 h-4" />
                             ) : (
-                              <Home className="w-5 h-5" />
+                              <Home className="w-4 h-4" />
                             )}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-extrabold text-slate-900">{addr.type}</h4>
+                              <h4 className="text-sm font-bold text-slate-800">{addr.type}</h4>
                               {isSelected && (
-                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                                <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                   SELECTED
                                 </span>
                               )}
@@ -5830,9 +5781,9 @@ function QuickCommerceCartCheckout({
                             setNewAddressType(addr.type)
                             setShowAddAddressModal(true)
                           }}
-                          className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-emerald-700 transition-colors shrink-0"
+                          className="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors shrink-0 border border-slate-100"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
@@ -5846,24 +5797,26 @@ function QuickCommerceCartCheckout({
 
           {/* Add Address Modal */}
           {showAddAddressModal && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-extrabold text-slate-900">Add Address in Hosur</h3>
-                  <button onClick={() => setShowAddAddressModal(false)} className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+            <div className="fixed inset-0 z-50 bg-slate-955/40 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-base font-bold text-slate-900">Add Address in Hosur</h3>
+                  <button onClick={() => setShowAddAddressModal(false)} className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center border border-slate-100 text-slate-400 transition-colors">
                     <X className="w-4 h-4 text-slate-600" />
                   </button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Save Address as</label>
+                    <label className="block text-xs font-bold text-slate-505 uppercase tracking-wider mb-2">Save Address as</label>
                     <div className="flex gap-2">
                       {["Home", "Work", "Other"].map(t => (
                         <button
                           key={t}
                           type="button"
                           onClick={() => setNewAddressType(t)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${newAddressType === t ? "bg-emerald-600 text-white border-emerald-600" : "bg-slate-50 text-slate-700 border-slate-200"
+                          className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${newAddressType === t
+                            ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
+                            : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100/60"
                             }`}
                         >
                           {t}
@@ -5872,19 +5825,19 @@ function QuickCommerceCartCheckout({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Complete Address</label>
+                    <label className="block text-xs font-bold text-slate-505 uppercase tracking-wider mb-2">Complete Address</label>
                     <textarea
                       rows={3}
                       value={newAddressText}
                       onChange={(e) => setNewAddressText(e.target.value)}
                       placeholder="House/Flat No., Building, Street, Area, Hosur..."
-                      className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-emerald-600"
+                      className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={handleAddNewAddress}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md cursor-pointer transition-all"
+                    className="w-full py-3 bg-slate-900 hover:bg-slate-950 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all active:scale-98"
                   >
                     Save &amp; Select Address
                   </button>
@@ -5897,24 +5850,24 @@ function QuickCommerceCartCheckout({
     )
   }
 
-  // Main "My Cart" View (Image 2 & Image 4)
+  // Main "My Cart" View
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-800 flex justify-center py-0 sm:py-8 px-0 sm:px-4 font-sans">
-      <div className="max-w-md sm:max-w-xl md:max-w-2xl w-full bg-white sm:rounded-3xl shadow-xl border border-slate-200/80 flex flex-col justify-between overflow-hidden">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex justify-center py-0 sm:py-8 px-0 sm:px-4 font-sans">
+      <div className="max-w-md sm:max-w-xl md:max-w-2xl w-full bg-white sm:rounded-3xl shadow-2xl border border-slate-100 flex flex-col justify-between overflow-hidden">
         <div>
           {/* Header */}
-          <div className="bg-white/95 backdrop-blur-md px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
+          <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 z-30">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={onBack}
-                className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+                className="w-9 h-9 rounded-full hover:bg-slate-105 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-lg sm:text-xl font-black text-slate-900 leading-none">My Cart</h1>
-                <span className="text-[11px] font-semibold text-slate-400">Hosur Express Delivery</span>
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-none">My Cart</h1>
+                <span className="text-[11px] font-semibold text-slate-400 mt-0.5 block">Hosur Express Delivery</span>
               </div>
             </div>
             <button
@@ -5924,37 +5877,40 @@ function QuickCommerceCartCheckout({
                   navigator.share({ title: "My Vegetables Cart", url: window.location.href }).catch(() => { })
                 }
               }}
-              className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100/60 cursor-pointer bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200/60 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-650 hover:text-slate-900 border border-slate-200/80 bg-white hover:bg-slate-50 px-3.5 py-2 rounded-xl transition-all shadow-3xs cursor-pointer active:scale-98"
             >
-              <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
+              <ShoppingCart className="w-3.5 h-3.5 text-slate-500" />
               <span>Share Cart</span>
             </button>
           </div>
 
-          <div className="p-4 sm:p-6 space-y-4 bg-slate-50/50">
-            {/* Delivery Time Banner (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/70 flex items-center justify-center shrink-0 shadow-2xs">
-                <Clock className="w-6 h-6 text-amber-600 stroke-[2.5]" />
+          <div className="p-5 sm:p-6 space-y-4 bg-slate-50/30">
+            {/* Delivery Time Banner */}
+            <div className="bg-gradient-to-r from-emerald-50/60 to-emerald-50/20 rounded-2xl p-4 border border-emerald-100 flex items-center gap-4 shadow-3xs border-l-4 border-l-emerald-600">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center shrink-0 shadow-3xs">
+                <Clock className="w-5 h-5 stroke-[2.5]" />
               </div>
               <div>
-                <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Delivery in 15 minutes</h3>
-                <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                  Shipment of {cart.reduce((a, b) => a + (b.quantity || 1), 0)} farm-fresh items
+                <h3 className="text-sm font-bold text-slate-955 flex items-center gap-1.5">
+                  Priority Express Delivery
+                  <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Active</span>
+                </h3>
+                <p className="text-xs text-slate-600 font-medium mt-0.5">
+                  Arriving in <span className="font-bold text-emerald-800">15 minutes</span> • {cart.reduce((a, b) => a + (b.quantity || 1), 0)} fresh items
                 </p>
               </div>
             </div>
 
-            {/* Cart Items List (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs divide-y divide-slate-100 space-y-3.5">
+            {/* Cart Items List */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs divide-y divide-slate-100 space-y-4">
               {cart.map((item, idx) => (
-                <div key={item.id || idx} className={`flex items-center justify-between gap-3.5 ${idx > 0 ? "pt-3.5" : ""}`}>
+                <div key={item.id || idx} className={`flex items-center justify-between gap-3.5 ${idx > 0 ? "pt-4" : ""}`}>
                   {/* Left: Product Thumbnail */}
-                  <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-[#f5f1eb] overflow-hidden shrink-0 border border-slate-100 shadow-2xs">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-50 overflow-hidden shrink-0 border border-slate-100 shadow-3xs">
                     <img
                       src={item.image || "/mockups/category_food_health.png"}
                       alt={item.name}
-                      className="w-full h-full object-cover hover:scale-105 transition-transform"
+                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-350"
                       onError={(e) => {
                         e.target.onerror = null
                         e.target.src = "/mockups/category_food_health.png"
@@ -5964,36 +5920,36 @@ function QuickCommerceCartCheckout({
 
                   {/* Middle: Details */}
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-1">
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-805 line-clamp-1 leading-snug">
                       {item.displayName || item.name}
                     </h4>
                     <p className="text-[11px] font-semibold text-slate-400 mt-0.5">{item.unit || "1 unit"}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-sm font-black text-slate-900">₹{item.price}</span>
                       {item.mrp && (
-                        <span className="text-xs line-through text-slate-400 font-semibold">
+                        <span className="text-xs line-through text-slate-400 font-medium">
                           ₹{item.mrp}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Right: Counter Button (Green style matching Image 2 & 4) */}
-                  <div className="flex items-center bg-[#15803d] hover:bg-[#166534] text-white rounded-xl px-2.5 py-1.5 shadow-xs shrink-0 transition-colors">
+                  {/* Right: Counter Button */}
+                  <div className="flex items-center bg-white border border-slate-200/80 hover:border-slate-350 rounded-xl px-1 py-1 shadow-3xs shrink-0 transition-all">
                     <button
                       type="button"
                       onClick={() => handleUpdateQty(item.id, -1)}
-                      className="text-white hover:text-emerald-100 font-black text-sm px-1.5 cursor-pointer"
+                      className="w-6 h-6 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center font-bold text-xs cursor-pointer transition-colors"
                     >
                       -
                     </button>
-                    <span className="text-xs font-black min-w-[18px] text-center px-1">
+                    <span className="text-xs font-bold min-w-[20px] text-center text-slate-800">
                       {item.quantity || 1}
                     </span>
                     <button
                       type="button"
                       onClick={() => handleUpdateQty(item.id, 1)}
-                      className="text-white hover:text-emerald-100 font-black text-sm px-1.5 cursor-pointer"
+                      className="w-6 h-6 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 flex items-center justify-center font-bold text-xs cursor-pointer transition-colors"
                     >
                       +
                     </button>
@@ -6002,16 +5958,16 @@ function QuickCommerceCartCheckout({
               ))}
             </div>
 
-            {/* Bill Details Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-3">
-              <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Bill details</h3>
+            {/* Bill Details Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-4">
+              <h3 className="text-sm font-bold text-slate-900 tracking-tight pb-1 border-b border-slate-50">Bill Details</h3>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-650">
                 <div className="flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-slate-400" />
                   <span>Items total</span>
                   {savings > 0 && (
-                    <span className="text-[10px] font-black bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">
+                    <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-100/60">
                       Saved ₹{savings}
                     </span>
                   )}
@@ -6024,77 +5980,55 @@ function QuickCommerceCartCheckout({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Truck className="w-4 h-4 text-slate-400" />
                   <span>Delivery charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
-                <span className={`font-bold ${deliveryCharge === 0 ? "text-emerald-700" : "text-slate-900"}`}>
+                <span className={`font-bold ${deliveryCharge === 0 ? "text-emerald-600" : "text-slate-900"}`}>
                   {deliveryCharge === 0 ? "FREE" : `₹${deliveryCharge}`}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Package className="w-4 h-4 text-slate-400" />
                   <span>Handling charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
                 <span className="font-bold text-slate-900">₹{handlingCharge}</span>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-600">
+              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Droplets className="w-4 h-4 text-slate-400" />
                   <span>Rain surge / High demand charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-300" />
+                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
                 <span className="font-bold text-slate-900">₹{surgeCharge}</span>
               </div>
 
-              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-sm sm:text-base font-extrabold text-slate-900">Grand total</span>
-                <span className="text-base sm:text-lg font-black text-slate-900">₹{grandTotal}</span>
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-sm font-bold text-slate-900">Grand Total</span>
+                <span className="text-base font-black text-slate-900">₹{grandTotal}</span>
               </div>
             </div>
 
-            {/* Feeding India Donation Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
-                  <span className="text-lg">🍲</span>
-                </div>
-                <div>
-                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900">Feeding India donation</h4>
-                  <p className="text-[11px] text-slate-500 font-medium mt-0.5 line-clamp-1">
-                    Working towards a malnutrition free India.
-                  </p>
-                </div>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer shrink-0">
-                <span className="text-xs font-black text-slate-900">₹1</span>
-                <input
-                  type="checkbox"
-                  checked={isDonationChecked}
-                  onChange={(e) => setIsDonationChecked(e.target.checked)}
-                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                />
-              </label>
-            </div>
+            {/* (Donation box removed) */}
 
-            {/* Tip Your Delivery Partner Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-2.5">
-              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">Tip your delivery partner</h3>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
-                Your kindness means a lot! 100% of your tip will go directly to your delivery partner.
+            {/* Tip Your Delivery Partner Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-3">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900">Support your delivery partner</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-relaxed">
+                Add a tip to show appreciation. 100% of the tip goes directly to your rider.
               </p>
               <div className="grid grid-cols-4 gap-2 pt-1">
                 {[
-                  { label: "₹20", val: 20, icon: "👏" },
-                  { label: "₹30", val: 30, icon: "💌" },
-                  { label: "₹50", val: 50, icon: "❤️" },
-                  { label: "Custom", val: "custom", icon: "✨" },
+                  { label: "₹20", val: 20, desc: "Say Thanks" },
+                  { label: "₹30", val: 30, desc: "Buy a Chai" },
+                  { label: "₹50", val: 50, desc: "Show Love" },
+                  { label: "Custom", val: "custom", desc: "Other" },
                 ].map((t) => {
                   const isSelected = selectedTip === t.val
                   return (
@@ -6110,13 +6044,13 @@ function QuickCommerceCartCheckout({
                           setIsCustomTipOpen(t.val === "custom")
                         }
                       }}
-                      className={`py-2.5 px-2 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${isSelected
-                        ? "bg-emerald-50 border-emerald-600 text-emerald-800 shadow-2xs"
-                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700"
+                      className={`py-3 px-2 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 active:scale-95 ${isSelected
+                        ? "bg-slate-900 border-slate-900 text-white shadow-2xs"
+                        : "bg-slate-50 hover:bg-white border-slate-200 text-slate-700 hover:border-slate-350"
                         }`}
                     >
-                      <span>{t.icon}</span>
-                      <span>{t.label}</span>
+                      <span className="text-sm font-bold">{t.label}</span>
+                      <span className="text-[9px] font-semibold text-slate-405">{t.desc}</span>
                     </button>
                   )
                 })}
@@ -6128,35 +6062,35 @@ function QuickCommerceCartCheckout({
                     value={customTip}
                     onChange={(e) => setCustomTip(e.target.value)}
                     placeholder="Enter custom tip amount (₹)"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-600"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400"
                   />
                 </div>
               )}
             </div>
 
-            {/* Cancellation Policy Card (Image 2 & 4) */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-1">
-              <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">Cancellation Policy</h3>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-relaxed">
+            {/* Cancellation Policy Card */}
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4.5 space-y-1.5 shadow-3xs">
+              <h3 className="text-xs font-bold text-slate-800">Cancellation Policy</h3>
+              <p className="text-[10px] sm:text-xs text-slate-550 font-semibold leading-relaxed">
                 Orders cannot be cancelled once packed for delivery. In case of unexpected delays, a refund will be provided, if applicable.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Delivering to Home & Sticky Bottom Checkout Bar (Image 2 & 4) */}
-        <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-4 sm:p-5 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] z-30 space-y-3">
+        {/* Delivering to Home & Sticky Bottom Checkout Bar */}
+        <div className="sticky bottom-0 bg-white/90 backdrop-blur-lg border-t border-slate-100 p-4 sm:p-5 shadow-[0_-12px_24px_rgba(0,0,0,0.04)] z-30 space-y-4">
           {/* Delivering to Home Address Bar */}
           <div className="flex items-center justify-between gap-3 text-xs sm:text-sm">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
+              <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center shrink-0 border border-slate-100 shadow-3xs">
                 <MapPin className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <span className="font-extrabold text-slate-900 block leading-tight">
+                <span className="font-bold text-slate-800 block leading-tight">
                   Delivering to {activeAddressObj?.type || "Home"}
                 </span>
-                <p className="text-[11px] text-slate-500 font-medium truncate max-w-[220px] sm:max-w-[340px]">
+                <p className="text-[11px] text-slate-400 font-semibold truncate max-w-[220px] sm:max-w-[340px] mt-0.5">
                   {activeAddressObj?.address || "Hosur, Tamil Nadu"}
                 </p>
               </div>
@@ -6164,7 +6098,7 @@ function QuickCommerceCartCheckout({
             <button
               type="button"
               onClick={() => setIsAddressScreenOpen(true)}
-              className="text-xs sm:text-sm font-extrabold text-emerald-700 hover:text-emerald-800 hover:underline shrink-0 cursor-pointer"
+              className="text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95"
             >
               Change
             </button>
@@ -6179,15 +6113,15 @@ function QuickCommerceCartCheckout({
             type="button"
             disabled={isSubmitting || cart.length === 0}
             onClick={handleProceedToPay}
-            className="w-full bg-[#15803d] hover:bg-[#166534] disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-emerald-700/20 cursor-pointer active:scale-98 transition-all"
+            className="w-full bg-slate-900 hover:bg-slate-950 disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-slate-955/20 cursor-pointer active:scale-98 transition-all duration-200"
           >
             <div className="text-left flex flex-col">
-              <span className="text-base sm:text-lg font-black leading-none">₹{grandTotal}</span>
-              <span className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider mt-0.5">TOTAL</span>
+              <span className="text-base sm:text-lg font-black text-white leading-none">₹{grandTotal}</span>
+              <span className="text-[9px] font-black text-emerald-450 uppercase tracking-widest mt-1">TOTAL AMOUNT</span>
             </div>
-            <div className="flex items-center gap-2 font-black">
-              <span>{isSubmitting ? "Placing Order..." : "Proceed To Pay"}</span>
-              <ChevronRight className="w-5 h-5" />
+            <div className="flex items-center gap-1.5 font-bold text-emerald-455 hover:text-white transition-colors">
+              <span className="text-white">{isSubmitting ? "Placing Order..." : "Proceed to Pay"}</span>
+              <ChevronRight className="w-5 h-5 text-emerald-450" />
             </div>
           </button>
         </div>
@@ -10159,40 +10093,44 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       id: "brick-new",
       catId: "brick",
       name: "Brick Wall Construction",
-      price: 999,
-      priceStr: "Starting from ₹999",
+      price: 1499,
+      priceStr: "Starts at ₹1,499",
+      badge: "Popular",
+      badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.2K",
       image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
-      includes: ["Material assessment", "Wall alignment checking", "Mortar preparation", "Brick laying", "Curing guidance"],
+      includes: ["Red brick supply & laying", "Mortar alignment check", "Curing guidance"],
       excludes: ["Plastering (available separately)", "Painting and structural slab work"],
       inspectionHighlights: ["Site layout measurement", "Load-bearing suitability check"],
       steps: ["Layout Planning", "Mortar Preparation", "Brick Alignment Laying", "Level Inspection", "Initial Curing"],
-      desc: "Build sturdy, high-quality new brick walls using premium cement mortar."
+      desc: "High-quality red clay brick masonry work with standard cement-mortar mix."
     },
     {
       id: "brick-block",
       catId: "brick",
       name: "Block Wall Construction",
-      price: 1299,
-      priceStr: "Starting from ₹1,299",
+      price: 1799,
+      priceStr: "Starts at ₹1,799",
+      badge: "Lightweight",
+      badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
       duration: "Flexible",
       rating: "4.7",
       reviews: "950",
       image: "/mockups/kitchen_cleaning_hero.png",
-      includes: ["Concrete blocks supply", "Mortar mixing & application", "Joint reinforcement check", "Block laying"],
+      includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"],
       excludes: ["Foundation excavation", "Plastering"],
       inspectionHighlights: ["Ground leveling check", "Alignment verification"],
       steps: ["Site Prep", "Mortar Mix", "Block Laying", "Alignment Check", "Curing"],
-      desc: "Solid or hollow concrete block wall construction for durability and strength."
+      desc: "AAC concrete block laying using thin-bed adhesive mortar for fast execution."
     },
     {
       id: "brick-repair",
       catId: "brick",
       name: "Brick/Block Wall Repair",
       price: 499,
-      priceStr: "Starting from ₹499",
+      priceStr: "Starts at ₹499",
       duration: "1-2 hrs",
       rating: "4.6",
       reviews: "1.1K",
@@ -10210,7 +10148,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "plastering",
       name: "Wall Plastering",
       price: 499,
-      priceStr: "Starting from ₹499",
+      priceStr: "Starts at ₹499",
+      badge: "Flawless",
+      badgeColor: "bg-teal-50 text-teal-700 border-teal-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.4K",
@@ -10226,7 +10166,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "plastering",
       name: "Plaster Repair",
       price: 349,
-      priceStr: "Starting from ₹349",
+      priceStr: "Starts at ₹349",
       duration: "1-2 hrs",
       rating: "4.7",
       reviews: "1.8K",
@@ -10242,7 +10182,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "plastering",
       name: "Crack Repair",
       price: 399,
-      priceStr: "Starting from ₹399",
+      priceStr: "Starts at ₹399",
+      badge: "Heavy Duty",
+      badgeColor: "bg-red-50 text-red-700 border-red-100",
       duration: "1 hr",
       rating: "4.6",
       reviews: "3.2K",
@@ -10260,7 +10202,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "partition",
       name: "New Partition Wall",
       price: 1999,
-      priceStr: "Starting from ₹1,999",
+      priceStr: "Starts at ₹1,999",
+      badge: "Sturdy",
+      badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "780",
@@ -10276,7 +10220,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "partition",
       name: "Room Partition",
       price: 1999,
-      priceStr: "Starting from ₹1,999",
+      priceStr: "Starts at ₹1,999",
+      badge: "Most Booked",
+      badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "950",
@@ -10292,7 +10238,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "partition",
       name: "Half-Wall Construction",
       price: 1499,
-      priceStr: "Starting from ₹1,499",
+      priceStr: "Starts at ₹1,499",
+      badge: "Trending",
+      badgeColor: "bg-pink-50 text-pink-700 border-pink-100",
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.1K",
@@ -10310,7 +10258,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "demolition",
       name: "Wall Breaking",
       price: 999,
-      priceStr: "Starting from ₹999",
+      priceStr: "Starts at ₹999",
+      badge: "Safety Certified",
+      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
       duration: "Flexible",
       rating: "4.7",
       reviews: "1.5K",
@@ -10326,7 +10276,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "demolition",
       name: "Partition Removal",
       price: 399,
-      priceStr: "Starting from ₹399",
+      priceStr: "Starts at ₹399",
       duration: "1-2 hrs",
       rating: "4.8",
       reviews: "1.3K",
@@ -10342,7 +10292,9 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       catId: "demolition",
       name: "Door/Window Opening",
       price: 599,
-      priceStr: "Starting from ₹599",
+      priceStr: "Starts at ₹599",
+      badge: "Precision Cut",
+      badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
       duration: "2 hrs",
       rating: "4.7",
       reviews: "820",
@@ -10387,28 +10339,54 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   };
 
   const addToCart = (pkg) => {
+    console.log("DEBUG [addToCart] called with pkg:", pkg);
+    if (!pkg) return;
+    if (typeof setCart !== "function") {
+      console.error("DEBUG [addToCart] error: setCart is not a function", setCart);
+      return;
+    }
     setCart(prev => {
-      const existing = prev.find(c => c.id === pkg.id);
+      const currentCart = Array.isArray(prev) ? prev : [];
+      const cartId = pkg.id.startsWith("serv-mason-") ? pkg.id : `serv-mason-${pkg.id}`;
+      const existing = currentCart.find(c => c.id === cartId);
       if (existing) {
-        return prev.map(c => c.id === pkg.id ? { ...c, quantity: c.quantity + 1 } : c);
+        const updated = currentCart.map(c => c.id === cartId ? { ...c, quantity: c.quantity + 1 } : c);
+        console.log("DEBUG [addToCart] incremented existing item. New cart:", updated);
+        return updated;
       }
-      return [...prev, { ...pkg, quantity: 1, categoryName: "Mason" }];
+      const rawName = pkg.name.endsWith(" (Site Consultation)") ? pkg.name : `${pkg.name} (Site Consultation)`;
+      const newItem = { id: cartId, name: rawName, price: 49, quantity: 1, categoryName: "Mason" };
+      const updated = [...currentCart, newItem];
+      console.log("DEBUG [addToCart] added new item. New cart:", updated);
+      return updated;
     });
   };
 
   const removeFromCart = (pkgId) => {
+    console.log("DEBUG [removeFromCart] called with pkgId:", pkgId);
+    if (!pkgId) return;
+    if (typeof setCart !== "function") {
+      console.error("DEBUG [removeFromCart] error: setCart is not a function", setCart);
+      return;
+    }
     setCart(prev => {
-      const existing = prev.find(c => c.id === pkgId);
-      if (!existing) return prev;
-      if (existing.quantity === 1) {
-        return prev.filter(c => c.id !== pkgId);
+      const currentCart = Array.isArray(prev) ? prev : [];
+      const cartId = pkgId.startsWith("serv-mason-") ? pkgId : `serv-mason-${pkgId}`;
+      const existing = currentCart.find(c => c.id === cartId);
+      if (existing && existing.quantity > 1) {
+        const updated = currentCart.map(c => c.id === cartId ? { ...c, quantity: c.quantity - 1 } : c);
+        console.log("DEBUG [removeFromCart] decremented item. New cart:", updated);
+        return updated;
       }
-      return prev.map(c => c.id === pkgId ? { ...c, quantity: c.quantity - 1 } : c);
+      const updated = currentCart.filter(c => c.id !== cartId);
+      console.log("DEBUG [removeFromCart] removed item completely. New cart:", updated);
+      return updated;
     });
   };
 
   const getCartCount = (pkgId) => {
-    const item = cart.find(c => c.id === pkgId);
+    if (!cart || !Array.isArray(cart)) return 0;
+    const item = cart.find(c => c && c.id === pkgId);
     return item ? item.quantity : 0;
   };
 
@@ -10639,50 +10617,78 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                     </div>
                   )}
 
-                  <div className="uc-paint-list" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <div className="uc-paint-list" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
                     {filteredServices.map(service => {
-                      const count = getCartCount(service.id);
+                      const count = getCartCount("serv-mason-" + service.id);
                       return (
                         <div
                           key={service.id}
                           ref={cardRefs[service.id]}
                           style={{
-                            borderBottom: "1.5px solid #f1f5f9", padding: "1.25rem 0",
-                            background: "#ffffff", display: "flex", flexDirection: "column"
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "20px",
+                            padding: "1.25rem",
+                            background: "#ffffff",
+                            display: "flex",
+                            flexDirection: "column",
+                            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02)"
                           }}
                         >
                           <div style={{ display: "flex", gap: "1.25rem", textAlign: "left", alignItems: "flex-start" }}>
                             {/* Left Info Column */}
                             <div style={{ flex: 1 }}>
-                              <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: "0 0 4px 0" }}>{service.name}</h4>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
+                                <h4 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>{service.name}</h4>
+                                {service.badge && (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-full ${service.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100"}`}>
+                                    {service.badge}
+                                  </span>
+                                )}
+                              </div>
                               <p style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0d9488", margin: 0 }}>
                                 {service.priceStr}
                                 {service.duration && <span style={{ color: "#94a3b8", fontWeight: 500, marginLeft: "8px" }}>• {service.duration}</span>}
                               </p>
+                              <div style={{ display: "inline-flex", alignItems: "center", background: "#ecfdf5", border: "1px solid #d1fae5", borderRadius: "6px", padding: "2px 8px", margin: "4px 0", fontSize: "0.7rem", fontWeight: 800, color: "#047857" }}>
+                                Consultation & Visit Charge: ₹49
+                              </div>
                               <p style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "6px", lineHeight: 1.4, margin: "6px 0 10px 0" }}>{service.desc}</p>
 
-                              {/* Includes Badges */}
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                              {/* Includes Bullet Points */}
+                              <ul style={{ listStyleType: "none", padding: 0, margin: "6px 0 10px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
                                 {service.includes.slice(0, 3).map((inc, i) => (
-                                  <span key={i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#475569", fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: "12px" }}>
-                                    ✓ {inc}
-                                  </span>
+                                  <li key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", color: "#475569", fontWeight: 600 }}>
+                                    <span style={{ color: "#94a3b8", fontSize: "1rem", lineHeight: 0 }}>•</span>
+                                    {inc}
+                                  </li>
                                 ))}
-                              </div>
+                              </ul>
 
-                              <button
-                                onClick={() => setActiveDetailService(service)}
-                                style={{
-                                  background: "none", border: "none", color: "#0d9488", fontWeight: 800, fontSize: "0.75rem",
-                                  cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", marginTop: "12px", padding: 0
-                                }}
-                              >
-                                View details <ChevronRight size={13} />
-                              </button>
+                              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
+                                <button
+                                  onClick={() => setActiveDetailService(service)}
+                                  style={{
+                                    background: "none", border: "none", color: "#2563eb", fontWeight: 850, fontSize: "0.75rem",
+                                    cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", padding: 0
+                                  }}
+                                >
+                                  View details <ChevronRight size={13} style={{ strokeWidth: 2.5 }} />
+                                </button>
+                                <button
+                                  onClick={() => addToCart(service)}
+                                  style={{
+                                    background: "#0d9488", border: "none", color: "#ffffff", borderRadius: "8px",
+                                    padding: "6px 14px", fontSize: "0.68rem", fontWeight: 850, cursor: "pointer",
+                                    boxShadow: "0 2px 4px rgba(13,148,136,0.2)", textTransform: "uppercase", letterSpacing: "0.02em"
+                                  }}
+                                >
+                                  Book Consultation
+                                </button>
+                              </div>
                             </div>
 
                             {/* Right Image/Button Column */}
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                            <div style={{ position: "relative", width: "112px", height: "108px", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                               <div style={{ width: "112px", height: "96px", borderRadius: "16px", overflow: "hidden", background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
                                 <img
                                   src={service.image}
@@ -10695,28 +10701,32 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                 />
                               </div>
 
-                              {/* Cart Controls */}
-                              {count > 0 ? (
-                                <div style={{
-                                  display: "flex", alignItems: "center", gap: "12px", border: "1.5px solid #0d9488",
-                                  background: "#f0fdf4", borderRadius: "20px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 900, color: "#0f766e"
-                                }}>
-                                  <button onClick={() => removeFromCart(service.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>-</button>
-                                  <span>{count}</span>
-                                  <button onClick={() => addToCart(service)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900 }}>+</button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => addToCart(service)}
-                                  style={{
-                                    background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0d9488", borderRadius: "20px",
-                                    padding: "5px 16px", fontSize: "0.72rem", fontWeight: 800, cursor: "pointer",
-                                    boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
-                                  }}
-                                >
-                                  + ADD
-                                </button>
-                              )}
+                              {/* Cart Controls overlaid on image */}
+                              <div style={{ position: "absolute", bottom: "4px", left: "50%", transform: "translateX(-50%)", zIndex: 10 }}>
+                                {count > 0 ? (
+                                  <div style={{
+                                    display: "flex", alignItems: "center", gap: "10px", border: "1px solid #0d9488",
+                                    background: "#ffffff", borderRadius: "8px", padding: "4px 10px", fontSize: "0.7rem", fontWeight: 900, color: "#0f766e",
+                                    boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", minWidth: "76px", justifyContent: "space-between"
+                                  }}>
+                                    <button onClick={() => removeFromCart(service.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900, fontSize: "0.9rem", padding: "0 2px" }}>-</button>
+                                    <span>{count}</span>
+                                    <button onClick={() => addToCart(service)} style={{ background: "none", border: "none", cursor: "pointer", color: "#0d9488", fontWeight: 900, fontSize: "0.9rem", padding: "0 2px" }}>+</button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => addToCart(service)}
+                                    style={{
+                                      background: "#ffffff", border: "1px solid #e2e8f0", color: "#0d9488", borderRadius: "8px",
+                                      padding: "5px 12px", fontSize: "0.68rem", fontWeight: 850, cursor: "pointer",
+                                      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", gap: "4px",
+                                      whiteSpace: "nowrap"
+                                    }}
+                                  >
+                                    <ShoppingCart size={11} style={{ strokeWidth: 2.5 }} /> ADD
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -10826,34 +10836,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                               </div>
                             </div>
                           )}
-                          {/* General description box for standard masonry when added */}
-                          {count > 0 && (
-                            <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "12px", border: "1px solid #e2e8f0", margin: "1rem 0 0", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                              <div style={{ textAlign: "left" }}>
-                                <label style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569", display: "block", marginBottom: "4px" }}>Describe requirement (optional)</label>
-                                <textarea
-                                  value={generalDesc}
-                                  onChange={e => setGeneralDesc(e.target.value)}
-                                  placeholder="Explain your needs in detail (e.g. wall size, crack types)..."
-                                  style={{ width: "100%", height: "60px", padding: "0.5rem", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "0.8rem", resize: "none", fontFamily: "inherit" }}
-                                />
-                              </div>
-                              <div style={{ textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                <div>
-                                  <label style={{ fontSize: "0.75rem", fontWeight: 800, color: "#475569", display: "inline-block", marginRight: "10px" }}>Upload photo</label>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={e => handlePhotoUpload(e, "general")}
-                                    style={{ fontSize: "0.75rem", color: "#64748b" }}
-                                  />
-                                </div>
-                                {generalPhotoPreview && (
-                                  <img src={generalPhotoPreview} alt="Preview" style={{ width: "60px", height: "45px", objectFit: "cover", borderRadius: "4px", border: "1px solid #cbd5e1" }} />
-                                )}
-                              </div>
-                            </div>
-                          )}
+
                         </div>
                       );
                     })}
@@ -10958,30 +10941,88 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
               {/* Right Column - Promise & Cart Summary */}
               <div className="uc-paint-right-col">
-                <div className="uc-paint-promise-card">
-                  <div className="uc-paint-promise-title-row">
-                    <ShieldCheck size={18} style={{ color: "#059669" }} />
-                    <span>CalServices Promise</span>
+                {/* Why Choose Us Box */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-sm text-left mb-4">
+                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-widest mb-3">
+                    Why choose us?
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      {
+                        title: "Trained Masons",
+                        bg: "bg-indigo-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#4f46e5" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Accurate Estimate",
+                        bg: "bg-teal-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#0d9488" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m9 11 3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Premium Materials",
+                        bg: "bg-pink-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#db2777" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Alignment Check",
+                        bg: "bg-amber-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#ea580c" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            <path d="m9 12 2 2 4-4" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Site Cleanup",
+                        bg: "bg-blue-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#2563eb" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )
+                      },
+                      {
+                        title: "Service Warranty",
+                        bg: "bg-emerald-50",
+                        icon: (
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="#059669" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          </svg>
+                        )
+                      }
+                    ].map((item, idx) => (
+                      <div key={idx} className="bg-white border border-slate-100 rounded-xl p-2 flex flex-col items-center justify-center text-center gap-1 shadow-2xs">
+                        <div className={`w-7 h-7 rounded-full ${item.bg} flex items-center justify-center`}>
+                          {item.icon}
+                        </div>
+                        <span className="text-[8px] font-black text-slate-800 uppercase tracking-tight leading-tight">
+                          {item.title}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <ul className="uc-paint-promise-list">
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>Verified Professionals</span>
-                    </li>
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>1-Year Structural Warranty</span>
-                    </li>
-                    <li className="uc-paint-promise-item">
-                      <CheckCircle2 size={14} style={{ color: "#10b981" }} />
-                      <span>Debris Post-Service Cleanup</span>
-                    </li>
-                  </ul>
                 </div>
+
+
 
                 <div className="uc-paint-cart-card">
                   <h4 className="uc-paint-cart-card-title">Your Cart</h4>
-                  {cart.filter(c => c.id.startsWith("mason-")).length === 0 ? (
+                  {cart.filter(c => c.id.includes("mason")).length === 0 ? (
                     <div>
                       <ShoppingCart className="uc-paint-empty-cart-img" style={{ color: "#94a3b8" }} />
                       <p className="uc-paint-empty-cart-text">No items in your cart</p>
@@ -10989,7 +11030,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   ) : (
                     <div>
                       <div className="uc-paint-cart-items">
-                        {cart.filter(c => c.id.startsWith("mason-")).map(item => (
+                        {cart.filter(c => c.id.includes("mason")).map(item => (
                           <div key={item.id} className="uc-paint-cart-item">
                             <div className="uc-paint-cart-item-info">
                               <span className="uc-paint-cart-item-name">{item.name}</span>
@@ -17120,7 +17161,8 @@ export function BkStyles() {
         color:#1e293b; margin:0 0 0.3rem;
         letter-spacing:-0.02em;
       }
-      .uc-step-sub { font-size:0.82rem; color:#64748b; margin:0 0 1.5rem; font-weight:500; }
+      .uc-step-sub { font-size:0.82rem; color:#64748b; margin:0 0 1.5rem; font-weight:500
+; }
 
       /* ── Package Cards ── */
       .uc-pkg-grid {
@@ -17827,7 +17869,7 @@ const APPLIANCE_SERVICES = [
     options: "3 options",
     duration: "1.5 hrs",
     description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
-    image: "/mockups/appliance_cleaning_hero.png",
+    image: "/mockups/appliance_cleaning_thumb.png",
     includes: [
       "Interior & exterior cleaning",
       "Shelves, trays & compartments cleaning",
@@ -17858,7 +17900,7 @@ const APPLIANCE_SERVICES = [
         price: 799,
         rating: "4.80",
         reviews: "9K reviews",
-        image: "/mockups/appliance_cleaning_hero.png",
+        image: "/mockups/appliance_cleaning_thumb.png",
         duration: "2 hrs"
       }
     ]
@@ -17871,7 +17913,7 @@ const APPLIANCE_SERVICES = [
     price: 199,
     duration: "15 mins",
     description: "Complete interior grease removal and sanitization of turntable.",
-    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop",
+    image: "/mockups/microwave_clean.png",
     includes: [
       "Interior & exterior cleaning",
       "Turntable & glass door cleaning",
@@ -17886,7 +17928,7 @@ const APPLIANCE_SERVICES = [
     price: 399,
     duration: "45 mins",
     description: "Deep filter degreasing and external hood surface cleaning.",
-    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    image: "/mockups/chimney_clean.png",
     includes: [
       "Filter & exterior cleaning",
       "Grease & oil buildup removal",
@@ -17901,7 +17943,7 @@ const APPLIANCE_SERVICES = [
     price: 499,
     duration: "1 hr 10 mins",
     description: "Combined steam deep cleaning of kitchen chimney and gas stove.",
-    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    image: "/mockups/chimney_stove_clean.png",
     includes: [
       "Stovetops, burners, mesh & filter cleaning with steam",
       "Includes motor cleaning, repair & automatic chimney cleaning"
@@ -17916,7 +17958,7 @@ const APPLIANCE_SERVICES = [
     options: "3 options",
     duration: "45 mins",
     description: "Surface cleaning of gas stove burners and knobs to remove grease.",
-    image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=300&q=80&fit=crop",
+    image: "/mockups/gas_stove_clean.png",
     includes: [
       "Stove / hob surface cleaning",
       "Burner & knob cleaning",
@@ -17929,7 +17971,7 @@ const APPLIANCE_SERVICES = [
         price: 99,
         rating: "4.81",
         reviews: "30K reviews",
-        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        image: "/mockups/gas_stove_clean.png",
         duration: "30 mins"
       },
       {
@@ -17938,7 +17980,7 @@ const APPLIANCE_SERVICES = [
         price: 149,
         rating: "4.79",
         reviews: "15K reviews",
-        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        image: "/mockups/gas_stove_clean.png",
         duration: "45 mins"
       },
       {
@@ -17947,7 +17989,7 @@ const APPLIANCE_SERVICES = [
         price: 199,
         rating: "4.78",
         reviews: "15K reviews",
-        image: "https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=200&q=80&fit=crop",
+        image: "/mockups/gas_stove_clean.png",
         duration: "1 hr"
       }
     ]
@@ -17958,7 +18000,7 @@ const APPLIANCE_SERVICES = [
     price: 599,
     duration: "1 hr",
     description: "Thorough interior rack wash and food debris clearing.",
-    image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop",
+    image: "/mockups/dishwasher_clean.png",
     includes: [
       "Interior & exterior cleaning",
       "Filter, racks & tray cleaning",
@@ -17973,7 +18015,7 @@ const APPLIANCE_SERVICES = [
     price: 199,
     duration: "30 mins",
     description: "Air fryer interior wet wipe and tray wash.",
-    image: "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?w=600&q=80&fit=crop",
+    image: "/mockups/air_fryer_clean.png",
     includes: [
       "Wet wiping of interior to remove oil stains & odour",
       "Cleaning of tray to remove food spills"
@@ -17987,7 +18029,7 @@ const APPLIANCE_SERVICES = [
     price: 399,
     duration: "50 mins",
     description: "Oven interior crumb removal and grease wipe down.",
-    image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=600&q=80&fit=crop",
+    image: "/mockups/otg_clean.png",
     includes: [
       "Cleaning of interior to remove food crumbs & spills",
       "Exterior & back panel cleaning to remove oil & grease"
@@ -18016,7 +18058,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 129,
     duration: "20 mins",
     description: "Deep scrubbing of sink and under-sink sanitization.",
-    image: "/mockups/drain_clean.png",
+    image: "/mockups/washbasin.png",
     includes: [
       "Deep scrub & sanitization of kitchen sink",
       "Wiping and disinfecting under-sink area",
@@ -18029,7 +18071,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Detailed glass panel and frame grease cleaning.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
     includes: [
       "Glass panes dusting and wet wiping",
       "Window frames, sill, and tracks cleaning",
@@ -18042,7 +18084,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 449,
     duration: "30 mins",
     description: "Detailed dining table surface cleaning and grease removal.",
-    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1577140917170-285929fb55b7?w=300&q=80&fit=crop",
     includes: [
       "Surface cleaning & sanitation",
       "Removal of food stains & greasy layers",
@@ -18055,7 +18097,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 89,
     duration: "30 mins",
     description: "Detailed ceiling fan dusting and blade wipe down.",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+    image: "/mockups/ceiling_fan.png",
     includes: [
       "Fan blade cleaning",
       "Motor housing & cover dusting",
@@ -18068,7 +18110,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 99,
     duration: "30 mins",
     description: "Kitchen exhaust fan degreasing and grill dusting.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    image: "/mockups/exhaust_fan.png",
     includes: [
       "Exhaust fan blades cleaning",
       "Fan cover / grill cleaning",
@@ -18081,7 +18123,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Washing and scrubbing of balcony floor and railings.",
-    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop",
     includes: [
       "Balcony floor washing & scrubbing",
       "Dusting of railing and windows",
@@ -18094,7 +18136,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 549,
     duration: "50 mins",
     description: "Deep floor scrubbing and mesh cleaning for large balconies.",
-    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=300&q=80&fit=crop",
     includes: [
       "Deep floor scrubbing & balcony washing",
       "Railing, windows, and mesh cleaning",

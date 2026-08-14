@@ -20,6 +20,7 @@ import { useAuth } from "../../state/auth/useAuth.js"
 import { apiUpdateCustomerLastLocation } from "../../api/authService.js"
 import { getAddress } from "../../api/geocoding.js"
 import { motion, AnimatePresence } from "framer-motion"
+import { apiRequest } from "../../api/client.js"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -1040,6 +1041,39 @@ export function LandingPage() {
   const [activeLocationLabel, setActiveLocationLabel] = useState(() => {
     return localStorage.getItem("calservice_user_location") || null;
   })
+  const [packagesData, setPackagesData] = useState({})
+
+  useEffect(() => {
+    async function loadCatalog() {
+      try {
+        const svcRes = await apiRequest("/catalog/services/")
+        if (svcRes.success) {
+          const pkgs = {}
+          svcRes.data.forEach(s => {
+            const cid = s.category.toString()
+            if (!pkgs[cid]) pkgs[cid] = []
+            pkgs[cid].push({
+              id: s.id.toString(),
+              name: s.name,
+              price: parseFloat(s.price),
+              priceStr: "₹" + s.price,
+              duration: s.duration || "1 hr",
+              payment_policy: s.payment_policy,
+              image: s.image,
+              includes: s.includes || [],
+              excludes: s.excludes || [],
+              popular: !!s.popular,
+              tag: s.tag || ""
+            })
+          })
+          setPackagesData(pkgs)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    loadCatalog()
+  }, [])
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -1338,6 +1372,25 @@ export function LandingPage() {
                   category={activeCategory}
                   cart={modalCart}
                   setCart={setModalCart}
+                  packagesData={packagesData}
+                  onClose={handleCloseCategory}
+                  onCheckout={(customCart) => {
+                    const finalCart = resolveCartArg(customCart);
+                    setModalCart(cleanConsultationItems(finalCart));
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+                  }}
+                  onGetEstimate={(customCart) => {
+                    const finalCart = resolveCartArg(customCart);
+                    setModalCart(cleanConsultationItems(finalCart));
+                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+                  }}
+                />
+              ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+                <MasonPackageModal
+                  category={activeCategory}
+                  cart={modalCart}
+                  setCart={setModalCart}
+                  packagesData={packagesData}
                   onClose={handleCloseCategory}
                   onCheckout={(customCart) => {
                     const finalCart = resolveCartArg(customCart);
@@ -2347,6 +2400,25 @@ export function LandingPage() {
             category={activeCategory}
             cart={modalCart}
             setCart={setModalCart}
+            packagesData={packagesData}
+            onClose={() => navigate("/home")}
+            onCheckout={(customCart) => {
+              const finalCart = resolveCartArg(customCart);
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+            }}
+            onGetEstimate={(customCart) => {
+              const finalCart = resolveCartArg(customCart);
+              setModalCart(cleanConsultationItems(finalCart));
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+            }}
+          />
+        ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+          <MasonPackageModal
+            category={activeCategory}
+            cart={modalCart}
+            setCart={setModalCart}
+            packagesData={packagesData}
             onClose={() => navigate("/home")}
             onCheckout={(customCart) => {
               const finalCart = resolveCartArg(customCart);
@@ -3985,6 +4057,25 @@ export function LandingPage() {
           category={activeCategory}
           cart={modalCart}
           setCart={setModalCart}
+          packagesData={packagesData}
+          onClose={() => navigate("/home")}
+          onCheckout={(customCart) => {
+            const finalCart = resolveCartArg(customCart);
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+          }}
+          onGetEstimate={(customCart) => {
+            const finalCart = resolveCartArg(customCart);
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+          }}
+        />
+      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+        <MasonPackageModal
+          category={activeCategory}
+          cart={modalCart}
+          setCart={setModalCart}
+          packagesData={packagesData}
           onClose={() => navigate("/home")}
           onCheckout={(customCart) => {
             const finalCart = resolveCartArg(customCart);

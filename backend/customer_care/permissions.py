@@ -3,8 +3,7 @@ from .models import CareAgentProfile
 
 CARE_ROLE_REFUND_LIMITS = {
     CareAgentProfile.CareRole.CARE_EXECUTIVE: 0,
-    CareAgentProfile.CareRole.SENIOR_CARE: 2000,
-    CareAgentProfile.CareRole.OPS_MANAGER: 10000,
+    CareAgentProfile.CareRole.OPS_MANAGER: 15000,
     CareAgentProfile.CareRole.ADMIN: None,
 }
 
@@ -59,4 +58,4 @@ class CanAssignTickets(permissions.BasePermission):
         access = get_care_access(request.user)
         if not access["has_access"]:
             return False
-        return access["tier"] in ["senior_care", "ops_manager", "admin"]
+        return access["tier"] in ["ops_manager", "admin"]
