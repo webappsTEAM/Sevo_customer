@@ -992,15 +992,31 @@ export function LandingPage() {
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
   const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(location.state?.openHomePestModal || false)
   const [isForYouModalOpen, setIsForYouModalOpen] = useState(false)
-  const [isFoodHealthModalOpen, setIsFoodHealthModalOpen] = useState(false)
+  const [isFoodHealthModalOpen, setIsFoodHealthModalOpen] = useState(
+    () => Boolean(location.state?.openFoodHealthModal || location.state?.openVegetablesModal || location.state?.openFoodSubModuleId) || false
+  )
   const [isHomeServicesCombinedModalOpen, setIsHomeServicesCombinedModalOpen] = useState(false)
   const [foodHealthSub, setFoodHealthSub] = useState(FOOD_HEALTH_SUB)
-  const [selectedFoodSubModuleId, setSelectedFoodSubModuleId] = useState(null)
+  const [selectedFoodSubModuleId, setSelectedFoodSubModuleId] = useState(
+    () => location.state?.openFoodSubModuleId || (location.state?.openVegetablesModal ? "vegetables" : null)
+  )
   const selectedFoodSubModule = useMemo(() => {
     return foodHealthSub.find((sub) => sub.id === selectedFoodSubModuleId) || null
   }, [foodHealthSub, selectedFoodSubModuleId])
-  const [foodCart, setFoodCart] = useState({})
+  const [foodCart, setFoodCart] = useState(() => location.state?.foodCart || {})
   const [foodOrderPlaced, setFoodOrderPlaced] = useState(false)
+
+  useEffect(() => {
+    if (location.state?.openVegetablesModal || location.state?.openFoodSubModuleId || location.state?.openFoodHealthModal) {
+      setIsFoodHealthModalOpen(true)
+      setSelectedFoodSubModuleId(location.state?.openFoodSubModuleId || "vegetables")
+      if (location.state?.foodCart) {
+        setFoodCart(location.state.foodCart)
+      }
+      // Clear the temporary state from router history so future navigations don't accidentally re-trigger it
+      navigate(".", { replace: true, state: {} })
+    }
+  }, [location.state, navigate])
   const [variantModalItem, setVariantModalItem] = useState(null)
   const [vegCategoryFilter, setVegCategoryFilter] = useState("All")
   const [vegSearchQuery, setVegSearchQuery] = useState("")
@@ -3415,7 +3431,7 @@ export function LandingPage() {
                                       {/* Left: Product Thumbnail */}
                                       <div className="w-14 h-14 rounded-xl bg-[#f5f1eb] overflow-hidden shrink-0">
                                         <img
-                                          src={getFoodItemPhoto(variantModalItem.name, false)}
+                                          src={variantModalItem.image || getFoodItemPhoto(variantModalItem.name, false)}
                                           alt={variantModalItem.name}
                                           className="w-full h-full object-cover"
                                         />
@@ -3585,7 +3601,7 @@ export function LandingPage() {
                           price: price || 30,
                           mrp: mrp || (price ? Math.round(price * 1.2) : 36),
                           quantity: qty,
-                          image: getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
+                          image: matchedItem?.image || getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
                           serviceType: "vegetables_quick_delivery",
                           deliveryMins: "15-25 mins",
                         })

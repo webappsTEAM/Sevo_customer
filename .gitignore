@@ -19,6 +19,8 @@ env/
 
 # Django
 media/
+!backend/media/catalog/
+!backend/media/catalog/**
 staticfiles/
 
 # Environment Variables — never commit real secrets
