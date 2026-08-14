@@ -59,226 +59,8 @@ const CATEGORY_THEMES = {
   }
 }
 
-// Curated packages matching customer portal specifications
-const CURATED_PACKAGES_BY_SLUG = {
-  carpentry: [
-    {
-      id: "carp-lock-1",
-      categoryName: "Lock & Handle",
-      name: "Main Door Lock / Handle Installation",
-      tag: "Essential",
-      tagColor: "bg-blue-50 text-blue-700 border-blue-200/70",
-      price: "₹199",
-      duration: "30 mins",
-      description: "Mortise lock fitting, cylindrical lock replace, latch alignment, key smooth turn check.",
-      includes: ["Lock slot chisel & fit", "Latch strike plate alignment", "Key smooth test"]
-    },
-    {
-      id: "carp-furn-1",
-      categoryName: "Furniture Repair",
-      name: "Bed & Wardrobe Assembly / Repair",
-      tag: "Best Value",
-      tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
-      price: "₹399",
-      duration: "1 hr",
-      description: "Tighten loose joints, replace broken wooden slats, wardrobe door realignment, or new flatpack assembly.",
-      includes: ["Joint tightening & glueing", "Leveling check", "30-day warranty"]
-    },
-    {
-      id: "carp-door-1",
-      categoryName: "Doors & Windows",
-      name: "Cabinet Soft-Close Hinge Fix",
-      tag: "Popular",
-      tagColor: "bg-purple-50 text-purple-700 border-purple-200/70",
-      price: "₹249",
-      duration: "45 mins",
-      description: "Hydraulic soft-close hinge replacement, magnetic catch fitting, drawer channel smooth slide fix.",
-      includes: ["Hinge replacement", "Door gap alignment", "Magnetic catch fit"]
-    },
-    {
-      id: "carp-drill-1",
-      categoryName: "Drill & Hanging",
-      name: "Wall Shelf / TV Bracket Mounting",
-      tag: "Quick Drill",
-      tagColor: "bg-amber-50 text-amber-700 border-amber-200/70",
-      price: "₹249",
-      duration: "30 mins",
-      description: "Laser level drilling, rawl plug anchor insertion, heavy concealed bracket shelf fitting.",
-      includes: ["Laser leveling check", "Concealed bracket fitting", "Weight test"]
-    }
-  ],
-  electrician: [
-    {
-      id: "elec-sw-1",
-      categoryName: "Switches & Sockets",
-      name: "Switch / Socket Replacement",
-      tag: "Quick Fix",
-      tagColor: "bg-blue-50 text-blue-700 border-blue-200/70",
-      price: "₹149",
-      duration: "30 mins",
-      description: "Replacement or new fitting of modular switch, 6A/16A socket, or regulator.",
-      includes: ["Old socket removal & new fit", "Earth voltage verification", "30-day warranty"]
-    },
-    {
-      id: "elec-sw-2",
-      categoryName: "Switches & Sockets",
-      name: "Heavy Appliance Socket (16A/25A)",
-      tag: "Heavy Load",
-      tagColor: "bg-amber-50 text-amber-700 border-amber-200/70",
-      price: "₹249",
-      duration: "45 mins",
-      description: "High-grade 16A power socket installation for AC, Geyser, Washing Machine, or Oven.",
-      includes: ["Heavy wire stripping & terminal clamp", "MCB safety check"]
-    },
-    {
-      id: "elec-sw-3",
-      categoryName: "Switches & Sockets",
-      name: "Bedside Switchboard / 3-Pin Socket Fix",
-      tag: "Daily Fix",
-      tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
-      price: "₹199",
-      duration: "30 mins",
-      description: "Fix loose contact socket, burnt switch plate, or add new extension point.",
-      includes: ["Internal wire tightening", "Insulation sleeve fit", "Voltage load check"]
-    },
-    {
-      id: "elec-fan-1",
-      categoryName: "Fan & Lighting",
-      name: "Ceiling Fan Repair / Fitting",
-      tag: "Best Seller",
-      tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
-      price: "₹249",
-      duration: "45 mins",
-      description: "Ceiling fan installation, downrod assembly, canopy alignment & safety wire hook mounting.",
-      includes: ["New fan mounting & downrod fit", "Safety wire hook installation", "Speed & balance test"]
-    },
-    {
-      id: "elec-fan-2",
-      categoryName: "Fan & Lighting",
-      name: "Fan Regulator / Speed Switch Replacement",
-      tag: "Quick Fix",
-      tagColor: "bg-blue-50 text-blue-700 border-blue-200/70",
-      price: "₹149",
-      duration: "30 mins",
-      description: "Replace burnt or non-working step regulator knob to restore 5-speed fan control.",
-      includes: ["Modular regulator replace", "Terminal insulation check", "5-speed current test"]
-    },
-    {
-      id: "elec-mcb-1",
-      categoryName: "MCB & Wiring",
-      name: "MCB Fuse Breaker Replacement",
-      tag: "Safety Essential",
-      tagColor: "bg-rose-50 text-rose-700 border-rose-200/70",
-      price: "₹399",
-      duration: "45 mins",
-      description: "Single/Double pole MCB replacement to stop frequent tripping & electrical overload.",
-      includes: ["Tripping diagnosis", "Single/Double Pole MCB fit", "Distribution board check"]
-    },
-    {
-      id: "elec-inv-1",
-      categoryName: "Inverter & Heavy Appliance",
-      name: "Inverter & Battery Setup",
-      tag: "Heavy Power",
-      tagColor: "bg-indigo-50 text-indigo-700 border-indigo-200/70",
-      price: "₹499",
-      duration: "1 hr",
-      description: "Inverter wall connection, battery terminal grease, bypass switch setup & load division.",
-      includes: ["Heavy terminal wiring", "Distilled water top-up check", "Automatic switchover test"]
-    }
-  ],
-  plumber: [
-    {
-      id: "plum-tap-1",
-      categoryName: "Taps & Mixers",
-      name: "Tap & Faucet Repair / Fit",
-      tag: "Value",
-      tagColor: "bg-blue-50 text-blue-700 border-blue-200/70",
-      price: "₹149",
-      duration: "30 mins",
-      description: "Fix dripping taps, washer replacement, spindle fix, or install new sink/basin tap.",
-      includes: ["Washer & spindle replace", "Leak tightness test", "Water flow check"]
-    },
-    {
-      id: "plum-drain-1",
-      categoryName: "Drainage & Clog",
-      name: "Sink & Drain Pipe Unclogging",
-      tag: "Best Seller",
-      tagColor: "bg-amber-50 text-amber-700 border-amber-200/70",
-      price: "₹349",
-      duration: "45 mins",
-      description: "High-flex spring wire cleaning to clear food debris, grease, and hair clogs in waste pipes.",
-      includes: ["Spring wire clog removal", "Waste pipe trap cleaning", "Full flow test"]
-    },
-    {
-      id: "plum-toilet-1",
-      categoryName: "Toilet & Flush Tank",
-      name: "Flush Tank Syphon & Valve Repair",
-      tag: "Popular",
-      tagColor: "bg-purple-50 text-purple-700 border-purple-200/70",
-      price: "₹499",
-      duration: "1 hr",
-      description: "Fix continuous tank water leakage, syphon kit change, ball valve replacement, or flush button fix.",
-      includes: ["Syphon kit replacement", "Internal float valve fix", "Sanitary seal check"]
-    },
-    {
-      id: "plum-geyser-1",
-      categoryName: "Water Heater & Tank",
-      name: "Geyser Water Heater Installation",
-      tag: "Heavy Fit",
-      tagColor: "bg-indigo-50 text-indigo-700 border-indigo-200/70",
-      price: "₹799",
-      duration: "1.5 hrs",
-      description: "Wall fastener drilling, inlet/outlet braided pipe connection, safety valve fitting.",
-      includes: ["Heavy wall fastener mounting", "Braided pipe connection", "Heating & leak test"]
-    }
-  ],
-  truck: [
-    {
-      id: "trk-1",
-      categoryName: "Light Fleet",
-      name: "3 Wheeler (500kg)",
-      tag: "Light Load",
-      tagColor: "bg-blue-50 text-blue-700 border-blue-200/70",
-      price: "₹160",
-      duration: "15 mins",
-      description: "5ft x 6ft cargo bed, ideal for groceries, small appliances & up to 500kg parcels.",
-      includes: ["Verified driver", "Instant GPS tracking", "Loading assistance"]
-    },
-    {
-      id: "trk-2",
-      categoryName: "Light Fleet",
-      name: "Tata Ace (750kg)",
-      tag: "Best Seller",
-      tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
-      price: "₹205",
-      duration: "20 mins",
-      description: "6ft x 7ft bed, ideal for 1 BHK furniture, refrigerators & business stock up to 750kg.",
-      includes: ["Verified driver", "Tie-down ropes", "Doorstep pickup"]
-    },
-    {
-      id: "trk-3",
-      categoryName: "Heavy Fleet (above 750kg)",
-      name: "Pickup 8ft (1250 kg)",
-      tag: "Heavy Load",
-      tagColor: "bg-amber-50 text-amber-700 border-amber-200/70",
-      price: "₹300",
-      duration: "20 mins",
-      description: "5.5ft x 8ft covered bed, ideal for sofas, double beds & commercial inventory up to 1250kg.",
-      includes: ["Closed container", "Weather protection", "Transit safety"]
-    },
-    {
-      id: "trk-4",
-      categoryName: "Heavy Fleet (above 750kg)",
-      name: "1.7 ton (1700 kg)",
-      tag: "Max Capacity",
-      tagColor: "bg-purple-50 text-purple-700 border-purple-200/70",
-      price: "₹380",
-      duration: "30 mins",
-      description: "6.1ft x 9ft heavy Bolero bed for industrial machinery & large commercial loads up to 1700kg.",
-      includes: ["Heavy payload chassis", "Express transit", "Toll/E-way support"]
-    }
-  ]
-}
+// All package data is loaded live from /settings/catalog/v2/packages/ — nothing hardcoded here.
+
 
 export function CatalogServicesPage() {
   const [categories, setCategories] = useState([])
@@ -443,26 +225,21 @@ export function CatalogServicesPage() {
     ...categories.map((c) => ({ value: String(c.id), label: c.name }))
   ]
 
+  // Always use live DB packages — no hardcoded fallbacks
   const getPackagesForService = (svc) => {
-    const curated = CURATED_PACKAGES_BY_SLUG[svc.slug]
-    if (curated && curated.length > 0) return curated
-
     const dbPkgs = dbPackages.filter((p) => p.service === svc.id || p.service_id === svc.id)
-    if (dbPkgs.length > 0) {
-      return dbPkgs.map((p) => ({
-        id: p.id,
-        categoryName: svc.name,
-        name: p.name,
-        tag: p.tag || (p.popular ? "Popular" : "Standard"),
-        tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
-        price: `₹${p.base_price}`,
-        duration: p.duration || "1 hr",
-        description: p.description,
-        includes: Array.isArray(p.includes) ? p.includes : [],
-        image: p.image || svc.image
-      }))
-    }
-    return []
+    return dbPkgs.map((p) => ({
+      id: p.id,
+      categoryName: svc.name,
+      name: p.name,
+      tag: p.tag || (p.popular ? "Popular" : "Standard"),
+      tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
+      price: `\u20b9${p.base_price}`,
+      duration: p.duration || "1 hr",
+      description: p.description,
+      includes: Array.isArray(p.includes) ? p.includes : [],
+      image: p.image || svc.image
+    }))
   }
 
   return (

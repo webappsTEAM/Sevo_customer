@@ -215,7 +215,20 @@ class BookingCreateView(APIView):
 
     def post(self, request):
         serializer = ServiceRequestPublicCreateSerializer(data=request.data)
-        if not serializer.is_valid():
+        is_valid = serializer.is_valid()
+
+        print("========== BACKEND BOOKING TRACE ==========")
+        print("REQUEST RECEIVED")
+        print("request.user:", request.user)
+        print("request.data:", request.data)
+        print("serializer valid:", is_valid)
+        if not is_valid:
+            print("serializer errors:", serializer.errors)
+        else:
+            print("validated_data:", serializer.validated_data)
+        print("============================================")
+
+        if not is_valid:
             return Response(
                 {"success": False, "message": "Validation error.", "errors": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -243,62 +256,106 @@ class BookingCreateView(APIView):
             initial_status = ServiceRequest.Status.CONFIRMED
             initial_payment_status = ServiceRequest.PaymentStatus.PENDING
 
-        # Link authenticated customer if logged in
-        if request.user and request.user.is_authenticated and hasattr(request.user, 'role') and request.user.role == 'customer':
-            user = request.user
+        # Link authenticated or registered customer accounts_user
+        from django.contrib.auth import get_user_model
+        import uuid
+        User = get_user_model()
+
+        customer_user = None
+        if request.user and request.user.is_authenticated:
+            customer_user = request.user
+        else:
+            phone_clean = str(request.data.get("phone") or "").strip()
+            email_clean = str(request.data.get("email") or "").strip().lower()
+            if phone_clean:
+                customer_user = User.objects.filter(phone=phone_clean, role=User.Role.CUSTOMER).first()
+            if not customer_user and email_clean:
+                customer_user = User.objects.filter(email__iexact=email_clean, role=User.Role.CUSTOMER).first()
+
+            if not customer_user and (phone_clean or email_clean):
+                cust_name = str(request.data.get("customer_name") or "").strip()
+                first_name = ""
+                last_name = ""
+                if cust_name:
+                    parts = cust_name.split(" ")
+                    first_name = parts[0]
+                    last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
+
+                uname_base = f"cust_{phone_clean}" if phone_clean else f"cust_{email_clean.split('@')[0]}"
+                uname = uname_base
+                if User.objects.filter(username=uname).exists():
+                    uname = f"{uname_base}_{uuid.uuid4().hex[:6]}"
+
+                customer_user = User.objects.create(
+                    username=uname,
+                    phone=phone_clean,
+                    email=email_clean,
+                    first_name=first_name,
+                    last_name=last_name,
+                    role=User.Role.CUSTOMER
+                )
+
+        sr = serializer.save(
+            company=company,
+            customer=customer_user,
+            status=initial_status,
+            payment_method=payment_method,
+            payment_status=initial_payment_status,
+            total_amount=corrected_fare,
+        )
+
+        print("========== CREATED SERVICE REQUEST ==========")
+        print("DB ID:", sr.id)
+        print("REQUEST ID:", sr.request_id)
+        print("customer_id:", sr.customer_id)
+        print("customer_name:", sr.customer_name)
+        print("phone:", sr.phone)
+        print("email:", sr.email)
+        print("service_category:", sr.service_category)
+        print("issue_title:", sr.issue_title)
+        print("address:", sr.address)
+        print("latitude:", sr.latitude)
+        print("longitude:", sr.longitude)
+        print("preferred_date:", sr.preferred_date)
+        print("preferred_time:", sr.preferred_time)
+        print("payment_method:", sr.payment_method)
+        print("payment_status:", sr.payment_status)
+        print("total_amount:", sr.total_amount)
+        print("status:", sr.status)
+        print("created_at:", sr.created_at)
+        print("==============================================")
+
+        if customer_user and customer_user.is_authenticated:
             customer_name = request.data.get("customer_name", "")
             email = request.data.get("email", "")
             phone = request.data.get("phone", "")
 
-            sr = serializer.save(
-                company=company,
-                customer=user,
-                status=initial_status,
-                payment_method=payment_method,
-                payment_status=initial_payment_status,
-                total_amount=corrected_fare,
-            )
-
-            # Sync name
-            if customer_name and not user.first_name and not user.last_name:
+            if customer_name and not customer_user.first_name and not customer_user.last_name:
                 parts = customer_name.strip().split(" ")
-                user.first_name = parts[0]
-                user.last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
-
-            # Sync email and merge profiles if duplicates exist
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
+                customer_user.first_name = parts[0]
+                customer_user.last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
 
             email_clean = email.lower().strip() if email else ""
-            if email_clean and not user.email:
-                other_user = User.objects.filter(email__iexact=email_clean, role=User.Role.CUSTOMER).exclude(pk=user.pk).first()
+            if email_clean and not customer_user.email:
+                other_user = User.objects.filter(email__iexact=email_clean, role=User.Role.CUSTOMER).exclude(pk=customer_user.pk).first()
                 if other_user:
-                    other_user.service_requests_as_customer.all().update(customer=user)
-                    if other_user.phone and not user.phone:
-                        user.phone = other_user.phone
+                    other_user.service_requests_as_customer.all().update(customer=customer_user)
+                    if other_user.phone and not customer_user.phone:
+                        customer_user.phone = other_user.phone
                     other_user.delete()
-                user.email = email_clean
+                customer_user.email = email_clean
 
-            # Sync phone and merge profiles if duplicates exist
             phone_clean = phone.strip() if phone else ""
-            if phone_clean and not user.phone:
-                other_user = User.objects.filter(phone=phone_clean, role=User.Role.CUSTOMER).exclude(pk=user.pk).first()
+            if phone_clean and not customer_user.phone:
+                other_user = User.objects.filter(phone=phone_clean, role=User.Role.CUSTOMER).exclude(pk=customer_user.pk).first()
                 if other_user:
-                    other_user.service_requests_as_customer.all().update(customer=user)
-                    if other_user.email and not user.email:
-                        user.email = other_user.email
+                    other_user.service_requests_as_customer.all().update(customer=customer_user)
+                    if other_user.email and not customer_user.email:
+                        customer_user.email = other_user.email
                     other_user.delete()
-                user.phone = phone_clean
+                customer_user.phone = phone_clean
 
-            user.save()
-        else:
-            sr = serializer.save(
-                company=company,
-                status=initial_status,
-                payment_method=payment_method,
-                payment_status=initial_payment_status,
-                total_amount=corrected_fare,
-            )
+            customer_user.save()
 
         # Coupon Processing & Usage Snapshot
         coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
@@ -940,8 +997,27 @@ class EmployeeJobDetailView(APIView):
         return _success(data=EmployeeJobDetailSerializer(job, context={"request": request}).data)
 
 
+class EmployeeJobReceiveView(APIView):
+    """PATCH /api/employee/jobs/<id>/receive/ → Assigned → Received"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            job = _emp_job_qs(request).get(pk=pk)
+        except EmployeeJob.DoesNotExist:
+            return _error("Job not found.", 404)
+
+        with transaction.atomic():
+            apply_transition(job.service_request, ServiceRequest.Status.RECEIVED)
+            job.service_request.save(update_fields=["status", "updated_at"])
+            job.status = EmployeeJob.Status.RECEIVED
+            job.save(update_fields=["status"])
+
+        return _success(message="Job marked as Received.")
+
+
 class EmployeeJobAcceptView(APIView):
-    """PATCH /api/employee/jobs/<id>/accept/ → Assigned → Accepted"""
+    """PATCH /api/employee/jobs/<id>/accept/ → Assigned/Received → Accepted"""
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, pk):
@@ -970,8 +1046,8 @@ class EmployeeJobRejectView(APIView):
         except EmployeeJob.DoesNotExist:
             return _error("Job not found.", 404)
 
-        if job.status not in [EmployeeJob.Status.ASSIGNED]:
-            return _error("You can only reject a job in Assigned status.")
+        if job.status not in [EmployeeJob.Status.ASSIGNED, EmployeeJob.Status.RECEIVED]:
+            return _error("You can only reject a job in Assigned or Received status.")
 
         with transaction.atomic():
             job.status = EmployeeJob.Status.REJECTED
@@ -983,6 +1059,66 @@ class EmployeeJobRejectView(APIView):
             sr.save(update_fields=["status", "assigned_employee", "updated_at"])
 
         return _success(message="Job rejected. Admin has been notified.")
+
+
+class EmployeeJobArrivedView(APIView):
+    """PATCH /api/employee/jobs/<id>/arrived/ → On The Way → Arrived"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            job = _emp_job_qs(request).get(pk=pk)
+        except EmployeeJob.DoesNotExist:
+            return _error("Job not found.", 404)
+
+        with transaction.atomic():
+            apply_transition(job.service_request, ServiceRequest.Status.ARRIVED)
+            job.service_request.save(update_fields=["status", "updated_at"])
+            job.status = EmployeeJob.Status.ARRIVED
+            job.save(update_fields=["status"])
+
+        return _success(message="Status updated: Arrived at location.")
+
+
+class CustomerBookingLiveLocationView(APIView):
+    """
+    GET /api/booking/<pk>/live-location/
+    Returns customer service destination + employee live tracking location.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk):
+        try:
+            sr = ServiceRequest.objects.select_related("assigned_employee", "assigned_employee__user").get(pk=pk)
+        except ServiceRequest.DoesNotExist:
+            return _error("Booking not found.", 404)
+
+        emp = sr.assigned_employee
+        latest_ping = None
+        if emp:
+            from live_locations.models import EmployeeLocation
+            latest_ping = EmployeeLocation.objects.filter(employee=emp).order_by("-timestamp").first()
+
+        data = {
+            "booking_id": sr.id,
+            "request_id": sr.request_id,
+            "status": sr.status,
+            "status_display": sr.get_status_display(),
+            "destination": {
+                "address": sr.address,
+                "latitude": float(sr.latitude) if sr.latitude else None,
+                "longitude": float(sr.longitude) if sr.longitude else None,
+            },
+            "employee_live_location": {
+                "employee_id": emp.employee_id if emp else None,
+                "employee_name": emp.user.get_full_name() or emp.user.username if emp else None,
+                "phone": emp.phone if emp else None,
+                "latitude": float(latest_ping.lat) if latest_ping else None,
+                "longitude": float(latest_ping.lng) if latest_ping else None,
+                "updated_at": latest_ping.timestamp.isoformat() if latest_ping else None,
+            } if emp else None
+        }
+        return _success(data=data)
 
 
 class EmployeeJobStartView(APIView):

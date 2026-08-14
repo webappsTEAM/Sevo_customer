@@ -755,14 +755,20 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
       list = list.map(item => {
         if (Array.isArray(item.subOptions)) {
           item.subOptions = item.subOptions.map(subOpt => {
-            const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
+            const dbMatch = dbPackages.find(p => p.slug === subOpt.id || p.id === subOpt.id);
             if (dbMatch) {
               return {
                 ...subOpt,
+                ...dbMatch,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 duration: dbMatch.duration || subOpt.duration,
-                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : subOpt.includes
+                includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : subOpt.includes,
+                tools: dbMatch.tools,
+                ready: dbMatch.ready,
+                reviews: dbMatch.reviews,
+                faqs: dbMatch.faqs,
+                image: dbMatch.image || subOpt.image,
               };
             }
             return subOpt;
@@ -771,13 +777,19 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
             item.price = item.subOptions[0].price;
           }
         } else {
-          const dbMatch = dbPackages.find(p => p.slug === item.id);
+          const dbMatch = dbPackages.find(p => p.slug === item.id || p.id === item.id);
           if (dbMatch) {
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : item.includes;
+            item.tools = dbMatch.tools;
+            item.ready = dbMatch.ready;
+            item.reviews = dbMatch.reviews;
+            item.faqs = dbMatch.faqs;
+            item.image = dbMatch.image || item.image;
+            item.badge = dbMatch.tag || item.badge;
           }
         }
         return item;

@@ -351,7 +351,7 @@ function SavedAddressesModal({
   useEffect(() => {
     async function loadSavedAddresses() {
       try {
-        const res = await apiRequest("/customer/addresses/")
+        const res = await apiRequest("/auth/customer/addresses/")
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
           const list = res.data.map(a => ({
             id: String(a.id),
@@ -775,7 +775,7 @@ export function AddAddressSearchModal({
                       return (
                         <div
                           key={addr.id || idx}
-                          onClick={() => onSelectLocation(displayAddr)}
+                          onClick={() => onSelectLocation(displayAddr, { lat: addr.latitude, lng: addr.longitude })}
                           className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
                         >
                           <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
@@ -857,7 +857,7 @@ export function AddAddressSearchModal({
                 ? addressData
                 : addressData?.formatted_address || [addressData?.flat_house_no, addressData?.locality, addressData?.city].filter(Boolean).join(", ")
               if (typeof onSelectLocation === "function") {
-                onSelectLocation(locStr || addressData)
+                onSelectLocation(locStr || addressData, { lat: addressData?.latitude, lng: addressData?.longitude })
               }
               onClose()
             }}
@@ -2092,9 +2092,14 @@ function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoCha
   }, [globalLocation, formData.address])
 
   useEffect(() => {
-    if (!formData.issue_title && cart && cart.length > 0) {
-      const defaultTitle = cart.map(c => c.name).join(', ') + (category ? ` •” ${category.name}` : '');
-      onChange({ target: { name: 'issue_title', value: defaultTitle } })
+    if (cart && cart.length > 0) {
+      const firstName = cart[0].name || category?.name || "Service Item";
+      const defaultTitle = cart.length === 1
+        ? firstName
+        : `${firstName} (+${cart.length - 1} other item${cart.length - 1 > 1 ? 's' : ''})`;
+      if (!formData.issue_title) {
+        onChange({ target: { name: 'issue_title', value: defaultTitle } })
+      }
     }
   }, [cart, category, formData.issue_title])
 
@@ -4324,6 +4329,12 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     })
                     if (saveRes.success || saveRes.data || saveRes.id) {
                       setAddrSuccess('Address pin location updated!')
+                      const finalLat = confirmedPayload.latitude || mapAddress.latitude;
+                      const finalLng = confirmedPayload.longitude || mapAddress.longitude;
+                      if (finalLat && finalLng) {
+                        onChange({ target: { name: "latitude", value: String(finalLat) } });
+                        onChange({ target: { name: "longitude", value: String(finalLng) } });
+                      }
                       fetchAddresses()
                     }
                   } catch (e) {
@@ -7026,8 +7037,15 @@ function StepWorkflowCheckout({
         <SavedAddressesModal
           onClose={() => setShowSavedAddrModal(false)}
           currentAddress={formData.address}
-          onSelectAddress={(addr) => {
-            onChange({ target: { name: "address", value: addr } })
+          onSelectAddress={(addrObj) => {
+            if (typeof addrObj === "object" && addrObj !== null) {
+              const fullAddr = addrObj.formatted_address || [addrObj.address_line1, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(", ");
+              onChange({ target: { name: "address", value: fullAddr } });
+              if (addrObj.latitude) onChange({ target: { name: "latitude", value: String(addrObj.latitude) } });
+              if (addrObj.longitude) onChange({ target: { name: "longitude", value: String(addrObj.longitude) } });
+            } else if (typeof addrObj === "string") {
+              onChange({ target: { name: "address", value: addrObj } });
+            }
           }}
           onAddNewAddress={() => {
             setShowSavedAddrModal(false)
@@ -7039,12 +7057,17 @@ function StepWorkflowCheckout({
       {showAddSearchModal && (
         <AddAddressSearchModal
           onClose={() => setShowAddSearchModal(false)}
-          onSelectLocation={(loc) => {
+          onSelectLocation={(loc, coords) => {
             setShowAddSearchModal(false)
             if (loc) {
-              onChange({ target: { name: "address", value: loc } })
-              if (typeof setLocation === "function") setLocation(loc)
-              localStorage.setItem("calservice_user_location", loc)
+              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
+              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
+              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
+              onChange({ target: { name: "address", value: addrStr } });
+              if (latVal) onChange({ target: { name: "latitude", value: String(latVal) } });
+              if (lngVal) onChange({ target: { name: "longitude", value: String(lngVal) } });
+              if (typeof setLocation === "function") setLocation(addrStr)
+              localStorage.setItem("calservice_user_location", addrStr)
             }
           }}
           onUseCurrentLocation={() => {
@@ -7052,13 +7075,17 @@ function StepWorkflowCheckout({
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(async (pos) => {
                 try {
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                  const lat = pos.coords.latitude;
+                  const lng = pos.coords.longitude;
+                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
                   const data = await res.json();
                   if (data?.features?.[0]?.properties) {
                     const p = data.features[0].properties;
                     const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
                     if (display) {
                       onChange({ target: { name: "address", value: display } });
+                      onChange({ target: { name: "latitude", value: String(lat) } });
+                      onChange({ target: { name: "longitude", value: String(lng) } });
                       if (typeof setLocation === "function") setLocation(display);
                       localStorage.setItem("calservice_user_location", display);
                     }
@@ -7285,7 +7312,7 @@ export function BookingPage() {
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
   const [notes, setNotes] = useState("")
-  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "" })
+  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "", latitude: "", longitude: "" })
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [showPackageModal, setShowPackageModal] = useState(false)
@@ -7485,7 +7512,41 @@ export function BookingPage() {
     data.append("phone", formData.phone)
     data.append("email", formData.email || "")
     data.append("service_category", category?.id || "general")
-    data.append("issue_title", formData.issue_title || `${cart.map(c => c.name).join(', ')} — ${category?.name}`)
+
+    const firstName = (cart && cart.length > 0 && cart[0].name) ? cart[0].name : (category?.name || "Service Booking");
+    const extraCount = cart && cart.length > 1 ? cart.length - 1 : 0;
+    const defaultTitle = extraCount > 0
+      ? `${firstName} (+${extraCount} other item${extraCount > 1 ? 's' : ''})`
+      : firstName;
+
+    let finalIssueTitle = formData.issue_title || defaultTitle;
+    if (finalIssueTitle.length > 280) {
+      const shortName = firstName.length > 200 ? firstName.slice(0, 200) + "..." : firstName;
+      finalIssueTitle = extraCount > 0
+        ? `${shortName} (+${extraCount} other items)`
+        : shortName;
+    }
+
+    console.log("========== REAL BOOKING SUBMISSION ==========");
+    console.log("CONFIRM BOOKING CLICKED");
+    console.log("API URL: /api/booking/");
+    console.log("METHOD: POST");
+    console.log("customer_name:", formData.customer_name);
+    console.log("phone:", formData.phone);
+    console.log("email:", formData.email);
+    console.log("service_category:", category?.id || "general");
+    console.log("issue_title:", finalIssueTitle);
+    console.log("cart_data item count:", cart?.length || 0);
+    console.log("address:", formData.address);
+    console.log("latitude:", formData.latitude);
+    console.log("longitude:", formData.longitude);
+    console.log("preferred_date:", selDate);
+    console.log("preferred_time:", selTime);
+    console.log("payment_method:", backendPaymentMethod);
+    console.log("total_amount:", cart.reduce((a, c) => a + (c.price * c.quantity), 0));
+    console.log("==============================================");
+
+    data.append("issue_title", finalIssueTitle)
     let finalDesc = formData.description || "";
     if (urgency && urgency !== "Standard") {
       finalDesc += `\n[Urgency: ${urgency}]`;
@@ -7495,10 +7556,12 @@ export function BookingPage() {
     }
     data.append("description", finalDesc);
     data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
+    if (formData.latitude) data.append("latitude", formData.latitude)
+    if (formData.longitude) data.append("longitude", formData.longitude)
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
     data.append("total_amount", cart.reduce((a, c) => a + (c.price * c.quantity), 0))
-    // Serialize cart_data as JSON string •” backend will parse it robustly
+    // Serialize cart_data as JSON string
     data.append("cart_data", JSON.stringify(cart.map(c => ({
       id: c.id, name: c.name, price: c.price, quantity: c.quantity,
       categoryName: c.categoryName || category?.name || ""
@@ -7558,7 +7621,22 @@ export function BookingPage() {
         setCart={setCart}
         category={category}
         user={user}
-        onBack={() => navigate(routes.landing || "/home", { replace: true })}
+        onBack={() => {
+          const restoredFoodCart = {}
+          cart.forEach(item => {
+            const key = item.displayName || item.name
+            restoredFoodCart[key] = item.quantity || 1
+          })
+          navigate(routes.landing || "/home", {
+            replace: true,
+            state: {
+              openFoodHealthModal: true,
+              openVegetablesModal: true,
+              openFoodSubModuleId: "vegetables",
+              foodCart: restoredFoodCart
+            }
+          })
+        }}
       />
     )
   }
@@ -7906,12 +7984,20 @@ export function BookingPage() {
       {showLocPicker && (
         <AddAddressSearchModal
           onClose={() => setShowLocPicker(false)}
-          onSelectLocation={(loc) => {
+          onSelectLocation={(loc, coords) => {
             setShowLocPicker(false)
             if (loc) {
-              setLocation(loc)
-              setFormData(prev => ({ ...prev, address: loc }))
-              localStorage.setItem("calservice_user_location", loc)
+              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
+              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
+              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
+              setLocation(addrStr)
+              setFormData(prev => ({
+                ...prev,
+                address: addrStr,
+                latitude: latVal ? String(latVal) : prev.latitude,
+                longitude: lngVal ? String(lngVal) : prev.longitude
+              }))
+              localStorage.setItem("calservice_user_location", addrStr)
             }
           }}
           onUseCurrentLocation={() => {
@@ -7919,14 +8005,21 @@ export function BookingPage() {
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(async (pos) => {
                 try {
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+                  const lat = pos.coords.latitude;
+                  const lng = pos.coords.longitude;
+                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
                   const data = await res.json();
                   if (data?.features?.[0]?.properties) {
                     const p = data.features[0].properties;
                     const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
                     if (display) {
                       setLocation(display);
-                      setFormData(prev => ({ ...prev, address: display }));
+                      setFormData(prev => ({
+                        ...prev,
+                        address: display,
+                        latitude: String(lat),
+                        longitude: String(lng)
+                      }));
                       localStorage.setItem("calservice_user_location", display);
                     }
                   }
@@ -11714,6 +11807,12 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
 function getCategoryFaqsAndReviews(pkg) {
   if (!pkg) return { reviews: [], faqs: [] };
+  if (Array.isArray(pkg.reviews) && pkg.reviews.length > 0 && Array.isArray(pkg.faqs) && pkg.faqs.length > 0) {
+    return {
+      reviews: pkg.reviews,
+      faqs: pkg.faqs
+    };
+  }
   const name = (pkg.name || "").toLowerCase();
   const desc = (pkg.description || "").toLowerCase();
 
@@ -12415,6 +12514,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [selectedMasonDetail, setSelectedMasonDetail] = useState(null);
   const [selectedPackageDetail, setSelectedPackageDetail] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [dbCatalogPackages, setDbCatalogPackages] = useState([]);
+
+  useEffect(() => {
+    apiRequest("/settings/catalog/public/packages/")
+      .then((res) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setDbCatalogPackages(res.data);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch public catalog packages:", err));
+  }, []);
 
   // Disable background page scrolling when detailed modal is open
   useEffect(() => {
@@ -13130,13 +13240,78 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   };
 
   const isApartmentVilla = normalizedKey === "cleaning" && ["Furnished Apartment", "Unfurnished Apartment", "Furnished Villa", "Unfurnished Villa"].includes(activeSubTab);
-  const currentOtherPlans = (OTHER_SERVICES[effectiveKey] && OTHER_SERVICES[effectiveKey][activeSubTab]) ||
+  const rawOtherPlans = (OTHER_SERVICES[effectiveKey] && OTHER_SERVICES[effectiveKey][activeSubTab]) ||
     (OTHER_SERVICES["electrical"] && OTHER_SERVICES["electrical"][activeSubTab]) ||
     (OTHER_SERVICES["refrigerator"] && OTHER_SERVICES["refrigerator"][activeSubTab]) ||
     (OTHER_SERVICES["tv_display"] && OTHER_SERVICES["tv_display"][activeSubTab]) ||
     (OTHER_SERVICES["washing_machine"] && OTHER_SERVICES["washing_machine"][activeSubTab]) ||
     (OTHER_SERVICES["hvac"] && OTHER_SERVICES["hvac"][activeSubTab]) ||
     (OTHER_SERVICES["appliance_repair"] && OTHER_SERVICES["appliance_repair"][activeSubTab]) || [];
+
+  const currentOtherPlans = useMemo(() => {
+    if (!dbCatalogPackages || dbCatalogPackages.length === 0) return rawOtherPlans;
+
+    // 1. Map existing catalog items with latest DB values (100% DB-driven)
+    const seenIds = new Set();
+    const mapped = rawOtherPlans.map(plan => {
+      const normPlanName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const dbMatch = dbCatalogPackages.find(p => {
+        if (p.slug && (p.slug === plan.slug || p.slug === plan.id)) return true;
+        if (String(p.id) === String(plan.id)) return true;
+        const normDbName = (p.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return normDbName && normPlanName && (normDbName.includes(normPlanName) || normPlanName.includes(normDbName));
+      });
+      if (!dbMatch) return plan;
+      seenIds.add(String(dbMatch.id));
+      if (dbMatch.slug) seenIds.add(dbMatch.slug);
+      return {
+        ...plan,
+        ...dbMatch,
+        id: plan.id || dbMatch.id,
+        name: dbMatch.name,
+        price: Math.round(Number(dbMatch.base_price) || plan.price),
+        duration: dbMatch.duration || plan.duration,
+        description: dbMatch.description || plan.description,
+        includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : plan.includes,
+        image: dbMatch.image || plan.image,
+        badge: dbMatch.tag || plan.badge,
+        tools: dbMatch.tools,
+        ready: dbMatch.ready,
+        reviews: dbMatch.reviews,
+        faqs: dbMatch.faqs,
+      };
+    });
+
+    // 2. Append any extra packages created in database for this service / subtab
+    const extraDbPackages = dbCatalogPackages.filter(p => {
+      if (seenIds.has(String(p.id)) || (p.slug && seenIds.has(p.slug))) return false;
+      const sSlug = (p.service_slug || (p.service && p.service.slug) || "").toLowerCase();
+      const sName = (p.service_name || (p.service && p.service.name) || "").toLowerCase();
+      const pName = (p.name || "").toLowerCase();
+      const eff = (effectiveKey || "").toLowerCase();
+      const tab = (activeSubTab || "").toLowerCase();
+      
+      const matchesService = sSlug === eff || sName.includes(eff) || eff.includes(sSlug);
+      const matchesTab = sName.includes(tab) || tab.includes(sName) || pName.includes(tab) || tab.includes(pName);
+      return matchesService || matchesTab;
+    }).map(p => ({
+      id: p.slug || p.id,
+      name: p.name,
+      price: Math.round(Number(p.base_price) || 0),
+      duration: p.duration || "30 mins",
+      description: p.description || "",
+      includes: Array.isArray(p.includes) ? p.includes : [],
+      image: p.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+      badge: p.tag || "Standard",
+      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+      tools: p.tools,
+      ready: p.ready,
+      reviews: p.reviews,
+      faqs: p.faqs,
+    }));
+
+    return [...mapped, ...extraDbPackages];
+  }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
   const isWmTab = washingMachineSubtabs.includes(activeSubTab);
@@ -14349,14 +14524,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                 <div className="space-y-2">
-                  {(selectedPackageDetail.includes && selectedPackageDetail.includes.length > 0
-                    ? selectedPackageDetail.includes
-                    : [
-                      "Professional grade safety & service tools",
-                      "Microfiber cloths & non-abrasive scrubbers",
-                      "High performance diagnostic equipment",
-                      "Safety gear & protective floor covers"
-                    ]
+                  {((Array.isArray(selectedPackageDetail.tools) && selectedPackageDetail.tools.length > 0)
+                    ? selectedPackageDetail.tools
+                    : (Array.isArray(selectedPackageDetail.includes) && selectedPackageDetail.includes.length > 0
+                      ? selectedPackageDetail.includes
+                      : [
+                        "Professional grade safety & service tools",
+                        "Microfiber cloths & non-abrasive scrubbers",
+                        "High performance diagnostic equipment",
+                        "Safety gear & protective floor covers"
+                      ]
+                    )
                   ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
@@ -14370,12 +14548,15 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               <div className="space-y-2.5 border-t border-slate-100 pt-4 text-left">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
                 <div className="space-y-2">
-                  {[
-                    "Continuous water supply",
-                    "Working power connection",
-                    "Service area accessible and cleared",
-                    "Fragile items and valuables kept safely"
-                  ].map((item, i) => (
+                  {((Array.isArray(selectedPackageDetail.ready) && selectedPackageDetail.ready.length > 0)
+                    ? selectedPackageDetail.ready
+                    : [
+                      "Continuous water supply",
+                      "Working power connection",
+                      "Service area accessible and cleared",
+                      "Fragile items and valuables kept safely"
+                    ]
+                  ).map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
                       <span className="leading-relaxed">{item}</span>
