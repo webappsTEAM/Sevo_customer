@@ -3338,8 +3338,12 @@ export function LandingPage() {
                                           decoding="async"
                                           className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                                           onError={(e) => {
-                                            e.target.onerror = null
-                                            e.target.src = "/mockups/category_food_health.png"
+                                            if (e.target.src.includes("/mockups/")) {
+                                              e.target.onerror = null
+                                              e.target.src = "/mockups/category_food_health.png"
+                                            } else {
+                                              e.target.src = getFoodItemPhoto(item.name, selectedFoodSubModule?.id === "groceries")
+                                            }
                                           }}
                                         />
                                         <div className="absolute top-2 left-2 flex items-center gap-1 bg-white px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
