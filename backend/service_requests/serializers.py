@@ -94,22 +94,26 @@ class ServiceSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class PackageSerializer(serializers.ModelSerializer):
-    service_name = serializers.CharField(source="service.name", read_only=True)
-    category_name = serializers.CharField(source="service.category.name", read_only=True)
-
-    class Meta:
-        model = Package
-        fields = '__all__'
-        read_only_fields = ['status', 'version']  # status changes via the dedicated transition endpoint only
-
-
 class AddOnSerializer(serializers.ModelSerializer):
     package_name = serializers.CharField(source="package.name", read_only=True)
 
     class Meta:
         model = AddOn
         fields = '__all__'
+
+
+class PackageSerializer(serializers.ModelSerializer):
+    service_name = serializers.CharField(source="service.name", read_only=True)
+    service_slug = serializers.CharField(source="service.slug", read_only=True)
+    service_description = serializers.CharField(source="service.description", read_only=True)
+    category_name = serializers.CharField(source="service.category.name", read_only=True)
+    category_slug = serializers.CharField(source="service.category.slug", read_only=True)
+    addons = AddOnSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Package
+        fields = '__all__'
+        read_only_fields = ['status', 'version']  # status changes via the dedicated transition endpoint only
 
 
 class CatalogChangeLogSerializer(serializers.ModelSerializer):

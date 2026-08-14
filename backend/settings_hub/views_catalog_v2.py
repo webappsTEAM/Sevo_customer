@@ -42,6 +42,9 @@ class PublicPackageListView(APIView):
         service_slug = request.GET.get("service_slug")
         if service_slug:
             qs = qs.filter(service__slug=service_slug)
+        category_slug = request.GET.get("category_slug")
+        if category_slug:
+            qs = qs.filter(service__category__slug=category_slug)
         data = PackageSerializer(qs, many=True).data
         return Response({"success": True, "data": data})
 

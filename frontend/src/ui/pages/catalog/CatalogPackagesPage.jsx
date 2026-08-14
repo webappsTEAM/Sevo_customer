@@ -2132,7 +2132,7 @@ export function CatalogPackagesPage() {
             </div>
 
             {/* ── View Details Content Section (Tools, Ready, Reviews, FAQs) ── */}
-            {Boolean(quickPriceEditing) && (() => {
+            {activePillar?.key !== "goods_transports" && (() => {
               const vd = quickPriceEditing.viewDetails || { tools: [], ready: [], reviews: [], faqs: [] }
               const setVd = (updates) => setQuickPriceEditing({ ...quickPriceEditing, viewDetails: { ...vd, ...updates } })
               return (

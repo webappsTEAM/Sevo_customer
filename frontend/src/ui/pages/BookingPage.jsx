@@ -2947,6 +2947,8 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   });
 
   const [selectedMockBooking, setSelectedMockBooking] = useState(null)
+  const [selectedBooking, setSelectedBooking] = useState(null)
+  const messageEndRef = React.useRef(null)
 
   const [realBookings, setRealBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
@@ -3204,6 +3206,45 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     }
   }, [refundBookingId, refundType])
 
+  useEffect(() => {
+    if (selectedBooking) {
+      setComplaintBookingId(selectedBooking.request_id || selectedBooking.id || '')
+      setRefundBookingId(selectedBooking.id || '')
+      setRescheduleBookingId(selectedBooking.id || '')
+    }
+  }, [selectedBooking])
+
+  useEffect(() => {
+    if (activeTab === 'My Complaints' && user) {
+      setComplaintsLoading(true)
+      apiRequest('/booking/complaints/')
+        .then(res => {
+          const list = res.data || []
+          setComplaints(list)
+          if (!showComplaintForm) {
+            if (list.length > 0) {
+              const sorted = [...list].sort((a, b) => b.id - a.id)
+              apiRequest(`/booking/complaints/${sorted[0].id}/`)
+                .then(resp => {
+                  setSelectedComplaint(resp.data)
+                })
+                .catch(console.error)
+            } else {
+              setShowComplaintForm(true)
+            }
+          }
+        })
+        .catch(() => setComplaints([]))
+        .finally(() => setComplaintsLoading(false))
+    }
+  }, [activeTab, user])
+
+  useEffect(() => {
+    if (messageEndRef.current) {
+      messageEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [selectedComplaint?.messages])
+
   const handleSubmitReschedule = async () => {
     setRescheduleError(''); setRescheduleSuccess(''); setRescheduleSubmitting(true)
     try {
@@ -3309,6 +3350,36 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
       setSelectedComplaint(res.data)
     } catch (e) { console.error(e) }
     finally { setComplaintReplying(false) }
+  }
+
+  const handleStartSupportChat = async () => {
+    if (!complaintDesc.trim()) return
+    setComplaintSubmitting(true)
+    setComplaintError('')
+    try {
+      const payload = {
+        category: complaintCategory || "OTHER",
+        description: complaintDesc,
+        booking_id: complaintBookingId || undefined
+      }
+      const res = await apiRequest('/booking/complaints/create/', {
+        method: 'POST',
+        json: payload
+      })
+      if (res?.success && res.data?.id) {
+        const detailed = await apiRequest(`/booking/complaints/${res.data.id}/`)
+        setSelectedComplaint(detailed.data)
+        setComplaintDesc('')
+        const updated = await apiRequest('/booking/complaints/')
+        setComplaints(updated.data || [])
+      } else {
+        setComplaintError(res?.message || 'Failed to start chat session.')
+      }
+    } catch (e) {
+      setComplaintError(e?.body?.message || 'Failed to start chat session. Please try again.')
+    } finally {
+      setComplaintSubmitting(false)
+    }
   }
 
 
@@ -3754,7 +3825,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 </button>
                               )
                               if (act === "reschedule") return (
-                                <button key={act} onClick={() => { setActiveTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <button key={act} onClick={() => { onChangeTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <Calendar size={14} /> Reschedule
                                 </button>
                               )
@@ -3764,12 +3835,12 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 </button>
                               )
                               if (act === "refund_status") return (
-                                <button key={act} onClick={() => { setActiveTab("My Refunds"); setSelectedBooking(b); setShowRefundForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <button key={act} onClick={() => { onChangeTab("My Refunds"); setSelectedBooking(b); setShowRefundForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <CreditCard size={14} /> Refund Status
                                 </button>
                               )
                               if (act === "report_problem") return (
-                                <button key={act} onClick={() => { setActiveTab("My Complaints"); setSelectedBooking(b); setShowComplaintForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <button key={act} onClick={() => { onChangeTab("My Complaints"); setSelectedBooking(b); setShowComplaintForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <MessageSquare size={14} /> Report Problem
                                 </button>
                               )
@@ -3898,7 +3969,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           const fullAddr = `${addr.address_line1}${addr.address_line2 ? ', ' + addr.address_line2 : ''}, ${addr.city}, ${addr.state} ${addr.pincode}`
           if (typeof setAddress === 'function') setAddress(fullAddr)
           setAddrSuccess(`Selected "${addr.label_display || addr.label}" for booking!`)
-          setActiveTab('Book Service')
+          onChangeTab('Book Service')
         }
 
         const labelIcons = {
@@ -4352,7 +4423,17 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
             <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: 24, background: 'linear-gradient(to right bottom, #f8fafc, #f1f5f9)' }}>
               <h4 style={{ margin: '0 0 12px', color: '#0f172a', fontSize: '1.1rem', fontWeight: 800 }}>Need assistance?</h4>
               <p style={{ margin: '0 0 24px', color: '#475569', fontSize: '0.9rem', lineHeight: 1.6 }}>Our dedicated support team is available 24/7 to help you with your bookings, payments, and general queries.</p>
-              <button style={{ padding: '0.85rem 1.75rem', background: '#0f172a', color: 'white', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}>Contact Support</button>
+              <button
+                onClick={() => {
+                  onChangeTab("My Complaints");
+                  setShowComplaintForm(false);
+                  setComplaintError('');
+                  setComplaintSuccess('');
+                }}
+                style={{ padding: '0.85rem 1.75rem', background: '#0f172a', color: 'white', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
+              >
+                Contact Support
+              </button>
             </div>
             <h4 style={{ margin: '32px 0 16px', color: '#0f172a', fontSize: '1.1rem', fontWeight: 800 }}>Frequently Asked Questions</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -5037,147 +5118,204 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
       case "My Complaints":
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            {selectedComplaint ? (
-              // Complaint thread view
+            {complaintsLoading && !selectedComplaint ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, color: '#94a3b8', gap: 12 }}>
+                <RefreshCw className="animate-spin" size={24} style={{ color: '#7C3AED' }} />
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Loading support session...</div>
+              </div>
+            ) : selectedComplaint ? (
+              // Customer Care Chat thread view
               <div>
-                <button onClick={() => setSelectedComplaint(null)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: '#7C3AED', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', marginBottom: 16 }}>
-                  <ChevronLeft size={18} /> Back to Complaints
-                </button>
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.5rem', background: 'white', marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: 4 }}>{selectedComplaint.category_display}</div>
-                      {selectedComplaint.booking_request_id && <div style={{ fontSize: '0.78rem', color: '#64748b', fontFamily: 'monospace' }}>{selectedComplaint.booking_request_id}</div>}
-                    </div>
-                    {(() => {
-                      const sc = { OPEN: '#F59E0B', IN_PROGRESS: '#3B82F6', RESOLVED: '#10B981', ESCALATED: '#EF4444', CLOSED: '#94a3b8' }[selectedComplaint.status] || '#64748b'
-                      return <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: sc + '18', color: sc, border: `1px solid ${sc}30` }}>{selectedComplaint.status_display}</span>
-                    })()}
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <button onClick={() => { onChangeTab("Help & Support"); setSelectedComplaint(null); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: '#6366f1', fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer' }}>
+                    <ChevronLeft size={16} /> Back to Help
+                  </button>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 900, fontSize: '1.25rem', color: '#0f172a' }}>Customer Care Chat</div>
+                    <span style={{ fontSize: '0.75rem', color: '#7c3aed', background: '#f5f3ff', padding: '3px 10px', borderRadius: 99, fontWeight: 800, border: '1px solid #ddd6fe', display: 'inline-block', marginTop: 4 }}>
+                      Ticket #{selectedComplaint.ticket_number || ('CCT-' + selectedComplaint.id)} ({selectedComplaint.status_display || selectedComplaint.status.toLowerCase()})
+                    </span>
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: '#475569', lineHeight: 1.6 }}>{selectedComplaint.description}</div>
                 </div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', marginBottom: 12 }}>Conversation Thread</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
-                  {(selectedComplaint.messages || []).length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8', fontSize: '0.85rem' }}>No responses yet. Our team will respond within 24 hours.</div>
-                  )}
-                  {(selectedComplaint.messages || []).map(resp => {
-                    const isCustomer = resp.persona === 'CUSTOMER'
-                    return (
-                      <div key={resp.id} style={{ display: 'flex', justifyContent: isCustomer ? 'flex-end' : 'flex-start' }}>
-                        <div style={{ maxWidth: '75%', padding: '10px 14px', borderRadius: isCustomer ? '14px 14px 2px 14px' : '14px 14px 14px 2px', background: isCustomer ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#f1f5f9', color: isCustomer ? 'white' : '#0f172a', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.7rem', opacity: 0.75, marginBottom: 4 }}>{isCustomer ? 'You' : resp.persona === 'ADMIN' ? 'ðŸ›¡ï¸  Support Team' : 'ðŸ‘· Employee'}</div>
-                          {resp.message}
-                          <div style={{ fontSize: '0.65rem', opacity: 0.6, marginTop: 4 }}>{new Date(resp.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</div>
+
+                {/* Messages Body */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 24, padding: 20, background: '#f8fafc', height: 380, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20, scrollBehavior: 'smooth' }}>
+                  {(() => {
+                    const messages = selectedComplaint.messages || []
+                    if (messages.length === 0) {
+                      return (
+                        <div style={{ margin: 'auto', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
+                          No responses yet. Our team will respond within 24 hours.
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    }
+                    
+                    let lastDateStr = ""
+                    return messages.map((resp, idx) => {
+                      const isCustomer = resp.persona === 'CUSTOMER'
+                      const msgDate = new Date(resp.created_at)
+                      const dateStr = msgDate.toDateString()
+                      
+                      // Check if divider should be shown
+                      const showDivider = dateStr !== lastDateStr
+                      lastDateStr = dateStr
+                      
+                      // WhatsApp-style date helper
+                      let dateLabel = ""
+                      const today = new Date()
+                      const yesterday = new Date()
+                      yesterday.setDate(today.getDate() - 1)
+                      if (msgDate.toDateString() === today.toDateString()) {
+                        dateLabel = "Today"
+                      } else if (msgDate.toDateString() === yesterday.toDateString()) {
+                        dateLabel = "Yesterday"
+                      } else {
+                        dateLabel = msgDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+                      }
+                      
+                      return (
+                        <React.Fragment key={resp.id}>
+                          {showDivider && (
+                            <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 16px', selectNone: 'none' }}>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', background: '#e2e8f0', padding: '3px 12px', borderRadius: 99 }}>
+                                {dateLabel}
+                              </span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: isCustomer ? 'flex-end' : 'flex-start' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: isCustomer ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+                              <div style={{
+                                padding: '12px 16px',
+                                borderRadius: isCustomer ? '18px 18px 2px 18px' : '18px 18px 18px 2px',
+                                background: isCustomer ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#ffffff',
+                                color: isCustomer ? 'white' : '#0f172a',
+                                border: isCustomer ? 'none' : '1px solid #e2e8f0',
+                                fontSize: '0.88rem',
+                                lineHeight: 1.5,
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+                              }}>
+                                {resp.message}
+                              </div>
+                              <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 4, padding: '0 4px', fontWeight: 600 }}>
+                                {isCustomer ? 'You' : 'Support Agent'} • {msgDate.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()}
+                              </span>
+                            </div>
+                          </div>
+                        </React.Fragment>
+                      )
+                    })
+                  })()}
+                  <div ref={messageEndRef} />
                 </div>
+
+                {/* Footer Input */}
                 {selectedComplaint.status !== 'CLOSED' && selectedComplaint.status !== 'RESOLVED' && (
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <input value={complaintReply} onChange={e => setComplaintReply(e.target.value)} placeholder="Type your reply..." onKeyDown={e => e.key === 'Enter' && handleComplaintReply(selectedComplaint.id)}
-                      style={{ flex: 1, padding: '0.8rem 1rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#0f172a' }} />
-                    <button onClick={() => handleComplaintReply(selectedComplaint.id)} disabled={complaintReplying || !complaintReply.trim()}
-                      style={{ padding: '0.8rem 1.2rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer', opacity: complaintReplying ? 0.7 : 1 }}>
-                      Send
+                    <input
+                      value={complaintReply}
+                      onChange={e => setComplaintReply(e.target.value)}
+                      placeholder="Type your reply to customer care..."
+                      onKeyDown={e => e.key === 'Enter' && handleComplaintReply(selectedComplaint.id)}
+                      style={{ flex: 1, padding: '0.85rem 1.2rem', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', outline: 'none' }}
+                    />
+                    <button
+                      onClick={() => handleComplaintReply(selectedComplaint.id)}
+                      disabled={complaintReplying || !complaintReply.trim()}
+                      style={{ padding: '0.85rem 1.5rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', opacity: (complaintReplying || !complaintReply.trim()) ? 0.7 : 1 }}
+                    >
+                      {complaintReplying ? 'Sending...' : 'Send'}
                     </button>
                   </div>
                 )}
               </div>
             ) : (
-              // Complaints list view
+              // Complaints list view & New Chat Start
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Complaints</h3>
-                  <button onClick={() => { setShowComplaintForm(true); setComplaintError(''); setComplaintSuccess(''); }}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Customer Support</h3>
+                  <button onClick={() => { setShowComplaintForm(true); setSelectedComplaint(null); setComplaintDesc(''); }}
                     style={{ padding: '8px 18px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <MessageSquare size={14} /> New Complaint
+                    <MessageSquare size={14} /> New Chat Session
                   </button>
                 </div>
 
-                {complaintSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 14px', borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, marginBottom: 16 }}>•œ… {complaintSuccess}</div>}
+                {/* Live Chat Start Window */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 20, background: 'white', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', marginBottom: 24 }}>
+                  <div style={{ background: 'linear-gradient(135deg, #7C3AED, #a855f7)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12, color: 'white' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                      🛡️
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>CalTrack Customer Support</div>
+                      <div style={{ fontSize: '0.72rem', opacity: 0.9 }}>Typically replies in a few minutes</div>
+                    </div>
+                  </div>
 
-                {showComplaintForm && (
-                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                    style={{ border: '1.5px solid #7C3AED30', borderRadius: 16, padding: '1.5rem', background: '#faf5ff', marginBottom: 20 }}>
-                    <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a', marginBottom: 16 }}>File a New Complaint</div>
-                    {complaintError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '8px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, marginBottom: 12 }}>{complaintError}</div>}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 6 }}>Category</label>
-                        <select value={complaintCategory} onChange={e => setComplaintCategory(e.target.value)}
-                          style={{ width: '100%', padding: '0.8rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', background: 'white' }}>
-                          <option value="SERVICE_QUALITY">Service Quality</option>
-                          <option value="EMPLOYEE_BEHAVIOR">Employee Behavior</option>
-                          <option value="BILLING">Billing</option>
-                          <option value="SCHEDULING">Scheduling</option>
-                          <option value="OTHER">Other</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 6 }}>Booking ID (optional)</label>
-                        <input value={complaintBookingId} onChange={e => setComplaintBookingId(e.target.value)} placeholder="Leave blank for general complaint" type="text"
-                          style={{ width: '100%', padding: '0.8rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }} />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 6 }}>Describe Your Issue</label>
-                        <textarea value={complaintDesc} onChange={e => setComplaintDesc(e.target.value)} rows={4} placeholder="Please describe your issue in detail..."
-                          style={{ width: '100%', padding: '0.8rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', resize: 'none' }} />
-                      </div>
-                      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                        <button onClick={handleSubmitComplaint} disabled={complaintSubmitting || !complaintDesc}
-                          style={{ padding: '10px 20px', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', opacity: complaintSubmitting ? 0.7 : 1 }}>
-                          {complaintSubmitting ? 'Submitting...' : 'Submit Complaint'}
-                        </button>
-                        <button onClick={() => setShowComplaintForm(false)}
-                          style={{ padding: '10px 20px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 10, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', color: '#475569' }}>
-                          Cancel
-                        </button>
+                  <div style={{ padding: 20, background: '#f8fafc', minHeight: 180, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 16 }}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <div style={{ maxWidth: '85%', padding: '12px 16px', borderRadius: '2px 14px 14px 14px', background: 'white', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: '0.85rem', lineHeight: 1.5, boxShadow: '0 2px 5px rgba(0,0,0,0.02)' }}>
+                        <div style={{ fontWeight: 800, fontSize: '0.7rem', color: '#7C3AED', marginBottom: 4 }}>Support Team</div>
+                        Hi there! Welcome to CalTrack support. How can we help you today? Please type your message below to start chatting with our agent.
                       </div>
                     </div>
-                  </motion.div>
-                )}
 
-                {complaintsLoading ? (
-                  <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading complaints...</div>
-                ) : complaints.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94a3b8' }}>
-                    <MessageSquare size={36} style={{ marginBottom: 12, opacity: 0.4 }} />
-                    <div style={{ fontWeight: 700 }}>No complaints filed yet.</div>
-                    <div style={{ fontSize: '0.85rem', marginTop: 4 }}>If you have an issue with a service, let us know!</div>
+                    {complaintError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '8px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600 }}>{complaintError}</div>}
+
+                    {/* Chat Input */}
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <input
+                        value={complaintDesc}
+                        onChange={e => setComplaintDesc(e.target.value)}
+                        placeholder="Describe your issue or type a message..."
+                        onKeyDown={e => e.key === 'Enter' && handleStartSupportChat()}
+                        style={{ flex: 1, padding: '0.85rem 1.2rem', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', outline: 'none' }}
+                      />
+                      <button
+                        onClick={handleStartSupportChat}
+                        disabled={complaintSubmitting || !complaintDesc.trim()}
+                        style={{ padding: '0.85rem 1.5rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', opacity: (complaintSubmitting || !complaintDesc.trim()) ? 0.7 : 1 }}
+                      >
+                        {complaintSubmitting ? 'Sending...' : 'Send'}
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {complaints.map(c => {
-                      const sc = { OPEN: '#F59E0B', IN_PROGRESS: '#3B82F6', RESOLVED: '#10B981', ESCALATED: '#EF4444', CLOSED: '#94a3b8' }[c.status] || '#64748b'
-                      return (
-                        <div key={c.id} onClick={async () => {
-                          const res = await apiRequest(`/booking/complaints/${c.id}/`)
-                          setSelectedComplaint(res.data)
-                        }}
-                          style={{ border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'border-color 0.2s' }}
-                          onMouseEnter={e => e.currentTarget.style.borderColor = '#7C3AED50'}
-                          onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                            <div>
-                              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', marginBottom: 2 }}>{c.category_display}</div>
-                              {c.booking_request_id && <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>{c.booking_request_id}</div>}
+                </div>
+
+                {/* Previous Support Tickets */}
+                {complaintsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading chat history...</div>
+                ) : complaints.length > 0 && (
+                  <div>
+                    <h4 style={{ margin: '24px 0 12px', color: '#0f172a', fontSize: '1rem', fontWeight: 800 }}>Previous Chat Sessions</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {complaints.map(c => {
+                        const sc = { OPEN: '#F59E0B', IN_PROGRESS: '#3B82F6', RESOLVED: '#10B981', ESCALATED: '#EF4444', CLOSED: '#94a3b8' }[c.status] || '#64748b'
+                        return (
+                          <div key={c.id} onClick={async () => {
+                            const res = await apiRequest(`/booking/complaints/${c.id}/`)
+                            setSelectedComplaint(res.data)
+                          }}
+                            style={{ border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'border-color 0.2s' }}
+                            onMouseEnter={e => e.currentTarget.style.borderColor = '#7C3AED50'}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                              <div>
+                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', marginBottom: 2 }}>{c.category_display || c.category} Support Ticket</div>
+                                {c.booking_request_id && <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>{c.booking_request_id}</div>}
+                              </div>
+                              <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, fontWeight: 800, background: sc + '18', color: sc, border: `1px solid ${sc}30` }}>{c.status_display || c.status}</span>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, fontWeight: 800, background: sc + '18', color: sc, border: `1px solid ${sc}30`, display: 'block', marginBottom: 4 }}>{c.status_display}</span>
-                              {c.attachment_count > 0 && <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>ðŸ“Ž {c.attachment_count} file{c.attachment_count > 1 ? 's' : ''}</span>}
+                            <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.description}</div>
+                            <div style={{ marginTop: 10, fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span>{new Date(c.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                              <span style={{ color: '#7C3AED', fontWeight: 700 }}>Open Chat Room →</span>
                             </div>
                           </div>
-                          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.description}</div>
-                          <div style={{ marginTop: 10, fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span>{new Date(c.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                            <span style={{ color: '#7C3AED', fontWeight: 700 }}>View Thread •†’</span>
-                          </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -8184,6 +8322,175 @@ const PAINTING_DETAILS_EXTRA = {
   }
 };
 
+const PAINTING_SERVICES = [
+  {
+    id: "paint-interior",
+    name: "Interior Painting",
+    rating: "4.8",
+    reviews: "18K",
+    image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
+    points: [
+      "Complete wall prep & putty application",
+      "Double coat premium emulsion paint",
+      "Detailed masking & post-cleanup protection",
+      "1-Year Service Warranty"
+    ],
+    benefits: ["Premium Quality", "Verified Painters", "Clean Post-Service", "1-Year Warranty"],
+    includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
+    excludes: ["Major plastering work", "Dampness treatment (available separately)", "Electrical/re-wiring work"],
+    inspectionHighlights: ["Digital Wall Measurement", "Moisture Meter Inspection", "Wall Putty/Paint Damage Assessment"],
+    steps: ["Select Areas", "Free Inspection", "Detailed Quote", "Design Approval", "Expert Painting"],
+    subOptions: [
+      { id: "int-single-wall", name: "Single Wall", price: 0 },
+      { id: "int-one-room", name: "One Room", price: 0 },
+      { id: "int-multi-room", name: "Two or More Rooms", price: 0 },
+      { id: "int-full-home", name: "Full Home", price: 0 },
+      { id: "int-ceiling", name: "Ceiling", price: 0 }
+    ]
+  },
+  {
+    id: "paint-exterior",
+    name: "Exterior Painting",
+    rating: "4.7",
+    reviews: "15K",
+    image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&fit=crop",
+    points: [
+      "Pressure washing & crack filling",
+      "Anti-fungal primer coat",
+      "Double coat weather-defense paint",
+      "Dust and dirt resistant finish"
+    ],
+    benefits: ["Weatherproof Shield", "Scaffolding Safety", "Crack Treatment", "3-Year Warranty"],
+    includes: ["High Pressure Washing", "Sanding & Crack Filling", "Anti-Algae Exterior Primer", "2 Coats Weatherproof Paint", "Grill & Pipe Protective Coating", "Post-Service Cleaning"],
+    excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)", "Structural masonry / re-plastering"],
+    inspectionHighlights: ["Façade Crack Audit", "Moisture Meter Checking", "Safety & Scaffolding Planning"],
+    steps: ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
+    subOptions: [
+      { id: "ext-wall", name: "Exterior Wall", price: 0 },
+      { id: "ext-building", name: "Building Exterior", price: 0 },
+      { id: "ext-compound", name: "Compound Wall", price: 0 },
+      { id: "ext-terrace", name: "Terrace", price: 0 }
+    ]
+  },
+  {
+    id: "paint-waterproofing",
+    name: "Waterproofing",
+    rating: "4.6",
+    reviews: "12K",
+    image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800&q=80&fit=crop",
+    points: [
+      "Expert Leakage Detection & Dampness Solutions",
+      "Terrace, Bathroom & External Wall Waterproofing",
+      "We diagnose the cause. Fix it right. Waterproofing that lasts."
+    ],
+    benefits: ["Leakage Proof", "Damp & Mold Proof", "Advanced Chemicals", "3-Year Warranty"],
+    includes: ["Thermal Moisture Inspection", "Leakage Source Detection", "Terrace Joint Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Structural Crack Filling"],
+    excludes: ["Re-tiling charges (if floor tile needs to be broken)", "Major concrete reconstruction", "Plumbing piping re-routing"],
+    inspectionHighlights: ["Moisture Meter Scan", "Leakage Trace Mapping", "Wall/Ceiling Dampness Audit"],
+    steps: ["Inspect & Scan", "Detect Leakage Source", "Seal Cracks & Grout", "Apply Waterproof Barrier", "Water Tightness Test"],
+    subOptions: [
+      { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
+      { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
+      { id: "wp-wall", name: "Wall Waterproofing", price: 0 },
+      { id: "wp-roof", name: "Roof Waterproofing", price: 0 },
+      { id: "wp-crack", name: "Crack Filling", price: 0 }
+    ]
+  },
+  {
+    id: "paint-wood-metal",
+    name: "Wood & Metal Painting",
+    rating: "4.7",
+    reviews: "9K",
+    image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=800&q=80&fit=crop",
+    points: [
+      "Rust removal & sanding treatment",
+      "Specialized wood/metal primer application",
+      "PU coating or premium enamel paint",
+      "High gloss or sophisticated matte finish"
+    ],
+    benefits: ["Anti-Rust Shield", "Premium Wood Polish", "High Gloss Spray Finish", "Durability Guarantee"],
+    includes: ["Rust Scraping & Mechanical Sanding", "Wood Sanding & Filler", "Metal Anti-Corrosion Primer", "Wood Base Primer", "2 Coats PU or Enamel Paint", "Finishing Selection (Gloss/Matte)"],
+    excludes: ["New wood carving or carpentry repairs", "Replacement of broken wood sections", "Glass frame replacements"],
+    inspectionHighlights: ["Rust Depth Measurement", "Wood Termite/Rot Inspection", "Measurement of Grills/Doors"],
+    steps: ["Select Items", "Sanding & Scraping", "Apply Protection Primer", "PU Polish / Enamel Paint", "Final Quality Polish"],
+    subOptions: [
+      { id: "wm-doors", name: "Doors", price: 0 },
+      { id: "wm-windows", name: "Windows", price: 0 },
+      { id: "wm-grills", name: "Grills", price: 0 },
+      { id: "wm-cabinets", name: "Cabinets", price: 0 },
+      { id: "wm-gates", name: "Gates", price: 0 }
+    ]
+  },
+  {
+    id: "paint-texture",
+    name: "Texture & Decorative Painting",
+    rating: "4.8",
+    reviews: "8K",
+    image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&q=80&fit=crop",
+    points: [
+      "Specialty textured finishes & stencils",
+      "Premium metallic & non-metallic glazes",
+      "Vibrant accent wall styling consultation"
+    ],
+    benefits: ["Accent Metallic Wall", "Custom Stencil Designs", "Textured Accent Finish", "Designer Showcase"],
+    includes: ["Texture / Pattern Consultation", "Accent Wall Preparation", "Premium Metallic Pattern Painting", "Custom Stencil Painting", "Post-Service Clean-up"],
+    excludes: ["Full room plain painting (available separately)", "Wallpaper scraping/removal", "Plaster board reconstruction"],
+    inspectionHighlights: ["Texture Catalog Consultation", "Accent Wall Surface Suitability Check", "Wall Size & Lighting Review"],
+    steps: ["Select Designer Theme", "Wall Surface Preparation", "Apply Base Coating", "Create Textured Finish", "Accent Highlights Finish"],
+    subOptions: [
+      { id: "td-texture", name: "Texture Finish", price: 0 },
+      { id: "td-designer", name: "Designer Finish", price: 0 },
+      { id: "td-stencil", name: "Stencil Decor", price: 0 },
+      { id: "td-accent", name: "Accent Wall Painting", price: 0 }
+    ]
+  }
+];
+
+const getSubOptionDescription = (id, serviceName) => {
+  switch (id) {
+    case "int-single-wall": return "Inspection of one focus wall, moisture checking, and measurement.";
+    case "int-one-room": return "Measurement and putty/paint assessment for a single room.";
+    case "int-multi-room": return "Comprehensive consultation for two or more rooms.";
+    case "int-full-home": return "Complete house painting assessment including all walls and ceilings.";
+    case "int-ceiling": return "Ceiling inspection, leakage check, and measurement.";
+
+    case "ext-wall": return "Exterior wall check, cracks checking, and pressure wash assessment.";
+    case "ext-building": return "Full building external paint assessment and safety review.";
+    case "ext-compound": return "Compound wall length measurement and weather-coat suggestions.";
+    case "ext-terrace": return "Terrace floor assessment and heat-resistant paint options.";
+
+    case "wp-terrace": return "Terrace leakage detection, mapping, and joint water testing.";
+    case "wp-bathroom": return "Bathroom floor and wall tile joint inspection for moisture.";
+    case "wp-wall": return "Moisture meter check of internal damp walls and leakage source detection.";
+    case "wp-roof": return "Roof slab checking, crack width testing, and protective coating assessment.";
+    case "wp-crack": return "Identification of structural/hairline cracks and sealant suggestions.";
+
+    case "wm-doors": return "Wooden/metal doors surface rust check, sanding estimation.";
+    case "wm-windows": return "Window grill and frame surface protection check.";
+    case "wm-grills": return "Balcony/staircase grills rust removal and paint planning.";
+    case "wm-cabinets": return "Kitchen or bedroom wooden cabinet wood condition review.";
+    case "wm-gates": return "Main gate rust scraping and PU/enamel coat assessment.";
+
+    case "td-texture": return "Consultation on accent wall patterns, stencils, and metallic textures.";
+    case "td-designer": return "Custom high-end designs, glazes, and pattern catalog showcase.";
+    case "td-stencil": return "Living room or bedroom stencil pattern consultation.";
+    case "td-accent": return "Single focal wall color selection and texture mockups.";
+
+    default: return `Assessment and digital measurement of your ${serviceName.toLowerCase()}.`;
+  }
+}
+
+const getFallbackService = (slug) => {
+  let norm = slug;
+  if (slug === "interior-painting") norm = "paint-interior";
+  else if (slug === "exterior-painting") norm = "paint-exterior";
+  else if (slug === "waterproofing") norm = "paint-waterproofing";
+  else if (slug === "wood-metal") norm = "paint-wood-metal";
+  else if (slug === "texture-decor") norm = "paint-texture";
+
+  return PAINTING_SERVICES.find(s => s.id === norm) || {};
+}
+
 export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate }) {
   const [showPriceList, setShowPriceList] = React.useState(false);
   const [selectedPaintType, setSelectedPaintType] = React.useState('premium-emulsion');
@@ -8194,6 +8501,102 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const [paintLocation, setPaintLocation] = useState(() => localStorage.getItem("calservice_user_location") || "Hosur, Tamil Nadu")
   const [paintSearchRotateIdx, setPaintSearchRotateIdx] = useState(0)
   const [expandedFaq, setExpandedFaq] = React.useState(null)
+  const [dbPackages, setDbPackages] = useState([])
+  const [dbLoading, setDbLoading] = useState(false)
+
+  useEffect(() => {
+    const fetchPaintingPackages = async () => {
+      setDbLoading(true)
+      try {
+        const res = await apiRequest("/settings/catalog/public/packages/?category_slug=paintings")
+        if (res?.success && Array.isArray(res.data)) {
+          setDbPackages(res.data)
+        }
+      } catch (err) {
+        console.error("Failed to fetch painting packages:", err)
+      } finally {
+        setDbLoading(false)
+      }
+    }
+    fetchPaintingPackages()
+  }, [])
+
+  const mappedServices = useMemo(() => {
+    if (dbPackages.length === 0) {
+      return PAINTING_SERVICES
+    }
+
+    // Group database packages by parent service slug
+    const grouped = {}
+    dbPackages.forEach(pkg => {
+      const sSlug = pkg.service_slug || "other-services"
+      if (!grouped[sSlug]) {
+        grouped[sSlug] = {
+          service_name: pkg.service_name || pkg.name,
+          service_slug: sSlug,
+          service_description: pkg.service_description || "",
+          packages: []
+        }
+      }
+      grouped[sSlug].packages.push(pkg)
+    })
+
+    return Object.values(grouped).map(group => {
+      const fallbackPkg = getFallbackService(group.service_slug)
+      const firstPkg = group.packages[0] || {}
+
+      const benefitList = Array.isArray(firstPkg.tools) && firstPkg.tools.length > 0
+        ? firstPkg.tools
+        : (fallbackPkg.benefits || ["Weatherproof Shield", "Crack Treatment", "3-Year Warranty"])
+      const includesList = Array.isArray(firstPkg.includes) && firstPkg.includes.length > 0
+        ? firstPkg.includes
+        : (fallbackPkg.includes || [])
+      const excludesList = Array.isArray(firstPkg.excludes) && firstPkg.excludes.length > 0
+        ? firstPkg.excludes
+        : (fallbackPkg.excludes || [])
+      const readyList = Array.isArray(firstPkg.ready) && firstPkg.ready.length > 0
+        ? firstPkg.ready
+        : (fallbackPkg.inspectionHighlights || [])
+      const pointList = includesList.slice(0, 4)
+
+      // The sub-options are the individual packages in the database under this service
+      const subOpts = group.packages.map(p => {
+        const fallbackDesc = getSubOptionDescription(p.slug, group.service_name)
+        return {
+          id: p.slug || String(p.id),
+          name: p.name,
+          price: Number(p.base_price) || 0,
+          description: p.description || fallbackDesc,
+          includes: p.includes || [],
+          excludes: p.excludes || [],
+          tools: p.tools || [],
+          ready: p.ready || [],
+          reviews: p.reviews || [],
+          faqs: p.faqs || [],
+          image: p.image
+        }
+      })
+
+      return {
+        id: group.service_slug,
+        name: group.service_name,
+        rating: fallbackPkg.rating || "4.7",
+        reviews: fallbackPkg.reviews || "15K",
+        image: firstPkg.image || fallbackPkg.image || "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
+        points: pointList.length > 0 ? pointList : (fallbackPkg.points || []),
+        benefits: benefitList,
+        includes: includesList,
+        excludes: excludesList,
+        inspectionHighlights: readyList,
+        steps: fallbackPkg.steps || ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
+        subOptions: subOpts,
+        db_id: firstPkg.id,
+        dbReviews: firstPkg.reviews || [],
+        dbFaqs: firstPkg.faqs || []
+      }
+    })
+  }, [dbPackages])
+
   const { user } = useAuth();
   const navigate = useNavigate();
   const PAINT_SEARCH_HINTS = ["Interior Painting", "Exterior Painting", "Waterproofing", "Wood Polish", "Texture Finish"];
@@ -8206,171 +8609,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     setExpandedFaq(null);
   }, [activeDetailService]);
 
-  const getSubOptionDescription = (id, serviceName) => {
-    switch (id) {
-      case "int-single-wall": return "Inspection of one focus wall, moisture checking, and measurement.";
-      case "int-one-room": return "Measurement and putty/paint assessment for a single room.";
-      case "int-multi-room": return "Comprehensive consultation for two or more rooms.";
-      case "int-full-home": return "Complete house painting assessment including all walls and ceilings.";
-      case "int-ceiling": return "Ceiling inspection, leakage check, and measurement.";
-
-      case "ext-wall": return "Exterior wall check, cracks checking, and pressure wash assessment.";
-      case "ext-building": return "Full building external paint assessment and safety review.";
-      case "ext-compound": return "Compound wall length measurement and weather-coat suggestions.";
-      case "ext-terrace": return "Terrace floor assessment and heat-resistant paint options.";
-
-      case "wp-terrace": return "Terrace leakage detection, mapping, and joint water testing.";
-      case "wp-bathroom": return "Bathroom floor and wall tile joint inspection for moisture.";
-      case "wp-wall": return "Moisture meter check of internal damp walls and leakage source detection.";
-      case "wp-roof": return "Roof slab checking, crack width testing, and protective coating assessment.";
-      case "wp-crack": return "Identification of structural/hairline cracks and sealant suggestions.";
-
-      case "wm-doors": return "Wooden/metal doors surface rust check, sanding estimation.";
-      case "wm-windows": return "Window grill and frame surface protection check.";
-      case "wm-grills": return "Balcony/staircase grills rust removal and paint planning.";
-      case "wm-cabinets": return "Kitchen or bedroom wooden cabinet wood condition review.";
-      case "wm-gates": return "Main gate rust scraping and PU/enamel coat assessment.";
-
-      case "td-texture": return "Consultation on accent wall patterns, stencils, and metallic textures.";
-      case "td-designer": return "Custom high-end designs, glazes, and pattern catalog showcase.";
-      case "td-stencil": return "Living room or bedroom stencil pattern consultation.";
-      case "td-accent": return "Single focal wall color selection and texture mockups.";
-
-      default: return `Assessment and digital measurement of your ${serviceName.toLowerCase()}.`;
-    }
-  }
-
-  const PAINTING_SERVICES = [
-    {
-      id: "paint-interior",
-      name: "Interior Painting",
-      rating: "4.8",
-      reviews: "18K",
-      image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
-      points: [
-        "Complete wall prep & putty application",
-        "Double coat premium emulsion paint",
-        "Detailed masking & post-cleanup protection",
-        "1-Year Service Warranty"
-      ],
-      benefits: ["Premium Quality", "Verified Painters", "Clean Post-Service", "1-Year Warranty"],
-      includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
-      excludes: ["Major plastering work", "Dampness treatment (available separately)", "Electrical/re-wiring work"],
-      inspectionHighlights: ["Digital Wall Measurement", "Moisture Meter Inspection", "Wall Putty/Paint Damage Assessment"],
-      steps: ["Select Areas", "Free Inspection", "Detailed Quote", "Design Approval", "Expert Painting"],
-      subOptions: [
-        { id: "int-single-wall", name: "Single Wall", price: 0 },
-        { id: "int-one-room", name: "One Room", price: 0 },
-        { id: "int-multi-room", name: "Two or More Rooms", price: 0 },
-        { id: "int-full-home", name: "Full Home", price: 0 },
-        { id: "int-ceiling", name: "Ceiling", price: 0 }
-      ]
-    },
-    {
-      id: "paint-exterior",
-      name: "Exterior Painting",
-      rating: "4.7",
-      reviews: "15K",
-      image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&fit=crop",
-      points: [
-        "Pressure washing & crack filling",
-        "Anti-fungal primer coat",
-        "Double coat weather-defense paint",
-        "Dust and dirt resistant finish"
-      ],
-      benefits: ["Weatherproof Shield", "Scaffolding Safety", "Crack Treatment", "3-Year Warranty"],
-      includes: ["High Pressure Washing", "Sanding & Crack Filling", "Anti-Algae Exterior Primer", "2 Coats Weatherproof Paint", "Grill & Pipe Protective Coating", "Post-Service Cleaning"],
-      excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)", "Structural masonry / re-plastering"],
-      inspectionHighlights: ["Façade Crack Audit", "Moisture Meter Checking", "Safety & Scaffolding Planning"],
-      steps: ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
-      subOptions: [
-        { id: "ext-wall", name: "Exterior Wall", price: 0 },
-        { id: "ext-building", name: "Building Exterior", price: 0 },
-        { id: "ext-compound", name: "Compound Wall", price: 0 },
-        { id: "ext-terrace", name: "Terrace", price: 0 }
-      ]
-    },
-    {
-      id: "paint-waterproofing",
-      name: "Waterproofing",
-      rating: "4.6",
-      reviews: "12K",
-      image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800&q=80&fit=crop",
-      points: [
-        "Expert Leakage Detection & Dampness Solutions",
-        "Terrace, Bathroom & External Wall Waterproofing",
-        "We diagnose the cause. Fix it right. Waterproofing that lasts."
-      ],
-      benefits: ["Leakage Proof", "Damp & Mold Proof", "Advanced Chemicals", "3-Year Warranty"],
-      includes: ["Thermal Moisture Inspection", "Leakage Source Detection", "Terrace Joint Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Structural Crack Filling"],
-      excludes: ["Re-tiling charges (if floor tile needs to be broken)", "Major concrete reconstruction", "Plumbing piping re-routing"],
-      inspectionHighlights: ["Moisture Meter Scan", "Leakage Trace Mapping", "Wall/Ceiling Dampness Audit"],
-      steps: ["Inspect & Scan", "Detect Leakage Source", "Seal Cracks & Grout", "Apply Waterproof Barrier", "Water Tightness Test"],
-      subOptions: [
-        { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
-        { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
-        { id: "wp-wall", name: "Wall Waterproofing", price: 0 },
-        { id: "wp-roof", name: "Roof Waterproofing", price: 0 },
-        { id: "wp-crack", name: "Crack Filling", price: 0 }
-      ]
-    },
-    {
-      id: "paint-wood-metal",
-      name: "Wood & Metal Painting",
-      rating: "4.7",
-      reviews: "9K",
-      image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=800&q=80&fit=crop",
-      points: [
-        "Rust removal & sanding treatment",
-        "Specialized wood/metal primer application",
-        "PU coating or premium enamel paint",
-        "High gloss or sophisticated matte finish"
-      ],
-      benefits: ["Anti-Rust Shield", "Premium Wood Polish", "High Gloss Spray Finish", "Durability Guarantee"],
-      includes: ["Rust Scraping & Mechanical Sanding", "Wood Sanding & Filler", "Metal Anti-Corrosion Primer", "Wood Base Primer", "2 Coats PU or Enamel Paint", "Finishing Selection (Gloss/Matte)"],
-      excludes: ["New wood carving or carpentry repairs", "Replacement of broken wood sections", "Glass frame replacements"],
-      inspectionHighlights: ["Rust Depth Measurement", "Wood Termite/Rot Inspection", "Measurement of Grills/Doors"],
-      steps: ["Select Items", "Sanding & Scraping", "Apply Protection Primer", "PU Polish / Enamel Paint", "Final Quality Polish"],
-      subOptions: [
-        { id: "wm-doors", name: "Doors", price: 0 },
-        { id: "wm-windows", name: "Windows", price: 0 },
-        { id: "wm-grills", name: "Grills", price: 0 },
-        { id: "wm-cabinets", name: "Cabinets", price: 0 },
-        { id: "wm-gates", name: "Gates", price: 0 }
-      ]
-    },
-    {
-      id: "paint-texture",
-      name: "Texture & Decorative Painting",
-      rating: "4.8",
-      reviews: "8K",
-      image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&q=80&fit=crop",
-      points: [
-        "Specialty textured finishes & stencils",
-        "Premium metallic & non-metallic glazes",
-        "Vibrant accent wall styling consultation"
-      ],
-      benefits: ["Accent Metallic Wall", "Custom Stencil Designs", "Textured Accent Finish", "Designer Showcase"],
-      includes: ["Texture / Pattern Consultation", "Accent Wall Preparation", "Premium Metallic Pattern Painting", "Custom Stencil Painting", "Post-Service Clean-up"],
-      excludes: ["Full room plain painting (available separately)", "Wallpaper scraping/removal", "Plaster board reconstruction"],
-      inspectionHighlights: ["Texture Catalog Consultation", "Accent Wall Surface Suitability Check", "Wall Size & Lighting Review"],
-      steps: ["Select Designer Theme", "Wall Surface Preparation", "Apply Base Coating", "Create Textured Finish", "Accent Highlights Finish"],
-      subOptions: [
-        { id: "td-texture", name: "Texture Finish", price: 0 },
-        { id: "td-designer", name: "Designer Finish", price: 0 },
-        { id: "td-stencil", name: "Stencil Decor", price: 0 },
-        { id: "td-accent", name: "Accent Wall Painting", price: 0 }
-      ]
-    }
-  ];
-
-  const cardRefs = {
-    "paint-interior": useRef(null),
-    "paint-exterior": useRef(null),
-    "paint-waterproofing": useRef(null),
-    "paint-wood-metal": useRef(null),
-    "paint-texture": useRef(null),
-  }
+  const cardRefs = useRef({})
 
   const contentRef = useRef(null);
 
@@ -8381,7 +8620,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   }, [searchQuery]);
 
   const scrollToCard = (id) => {
-    const card = cardRefs[id]?.current;
+    const card = cardRefs.current[id];
     if (!card) return;
     const container = contentRef.current;
     if (!container) {
@@ -8482,7 +8721,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   };
 
   const filteredServices = searchQuery
-    ? PAINTING_SERVICES.filter(s => {
+    ? mappedServices.filter(s => {
       try {
         const queryLower = searchQuery.toLowerCase().trim();
         if (!queryLower) return true;
@@ -8506,7 +8745,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
         return s.name && s.name.toLowerCase().includes(queryLower);
       }
     })
-    : PAINTING_SERVICES;
+    : mappedServices;
 
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -8647,52 +8886,18 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                 {category?.name || "Painting Services"}
               </h2>
             </div>
-            <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", margin: 0, padding: "8px 0" }}>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-interior")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"
-                  alt="Interior Painting"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Interior Painting</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-exterior")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=150&auto=format&fit=crop&q=60"
-                  alt="Exterior Painting"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Exterior Painting</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-waterproofing")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=150&auto=format&fit=crop&q=60"
-                  alt="Waterproofing"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Waterproofing</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-wood-metal")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=150&auto=format&fit=crop&q=60"
-                  alt="Wood & Metal"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Wood & Metal</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-texture")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=150&auto=format&fit=crop&q=60"
-                  alt="Texture Decor"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Texture Decor</span>
-              </button>
+            <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", margin: 0, padding: "8px 0", gap: "10px" }}>
+              {filteredServices.map(service => (
+                <button key={service.id} className="uc-paint-tab-btn" onClick={() => scrollToCard(service.id)}>
+                  <img
+                    className="uc-paint-tab-img"
+                    src={service.image}
+                    alt={service.name}
+                    onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
+                  />
+                  <span className="uc-paint-tab-label">{service.name}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -8722,7 +8927,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                       const isExpanded = !!expanded[service.id];
                       const count = getCartCount(service.id);
                       return (
-                        <div key={service.id} className="uc-paint-card" ref={cardRefs[service.id]}>
+                        <div key={service.id} className="uc-paint-card" ref={el => { cardRefs.current[service.id] = el; }}>
                           <div className="uc-paint-card-img-box">
                             <img
                               src={service.image}
@@ -9513,7 +9718,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                           </h4>
                           {activeDetailService.subOptions.map(subOpt => {
                             const isSelected = getSubOptionCartCount(subOpt.id) > 0;
-                            const description = getSubOptionDescription(subOpt.id, activeDetailService.name);
+                            const description = subOpt.description || getSubOptionDescription(subOpt.id, activeDetailService.name);
                             return (
                               <div
                                 key={subOpt.id}
@@ -9756,13 +9961,16 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
                         {/* CUSTOMER REVIEWS LIST */}
                         {(() => {
-                          const extra = PAINTING_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
-                          if (extra.reviews.length === 0) return null;
+                          const dbReviews = activeDetailService?.dbReviews || []
+                          const reviewsToRender = dbReviews.length > 0
+                            ? dbReviews.map(r => ({ name: r.name, rating: parseFloat(r.rating) || 5.0, comment: r.text || r.comment }))
+                            : (PAINTING_DETAILS_EXTRA[activeDetailService?.id]?.reviews || [])
+                          if (reviewsToRender.length === 0) return null;
                           return (
                             <div style={{ textAlign: 'left', marginTop: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                               <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Customer Reviews</h4>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                {extra.reviews.map((rev, idx) => (
+                                {reviewsToRender.map((rev, idx) => (
                                   <div key={idx} style={{ padding: '0.75rem 1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                       <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e293b' }}>{rev.name}</span>
@@ -9782,13 +9990,16 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
                         {/* FREQUENTLY ASKED QUESTIONS */}
                         {(() => {
-                          const extra = PAINTING_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
-                          if (extra.faqs.length === 0) return null;
+                          const dbFaqs = activeDetailService?.dbFaqs || []
+                          const faqsToRender = dbFaqs.length > 0
+                            ? dbFaqs.map(f => ({ q: f.q || f.question, a: f.a || f.answer }))
+                            : (PAINTING_DETAILS_EXTRA[activeDetailService?.id]?.faqs || [])
+                          if (faqsToRender.length === 0) return null;
                           return (
                             <div style={{ textAlign: 'left', marginTop: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                               <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Frequently Asked Questions</h4>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                {extra.faqs.map((faq, idx) => {
+                                {faqsToRender.map((faq, idx) => {
                                   const isExpanded = expandedFaq === idx;
                                   return (
                                     <div key={idx} style={{ border: '1.5px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
