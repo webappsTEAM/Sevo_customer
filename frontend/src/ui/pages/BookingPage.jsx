@@ -33,6 +33,7 @@ import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
+import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -2725,16 +2726,17 @@ function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTi
 function LiveTrackingPage({ successData, technician, category, cart, formData, selDate, selTime, onBookAgain }) {
   const rid = successData?.request_id || successData?.id || "BK" + Date.now().toString().slice(-6)
   const [etaMinutes, setEtaMinutes] = useState(25)
+  const [showMapModal, setShowMapModal] = useState(false)
   const totalPrice = cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
   const displayDate = selDate ? new Date(selDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : ""
   const displayTime = selTime ? TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === selTime)?.l : ""
 
   const trackSteps = [
-    { label: "Booking Confirmed", icon: "•œ…", done: true, time: "Just now" },
-    { label: "Expert Assigned", icon: "ðŸ‘¨• ðŸ”§", done: false, time: "Pending" },
-    { label: "Expert On The Way", icon: "ðŸ›µ", done: false, time: "Pending" },
-    { label: "Service In Progress", icon: "•š™ï¸ ", done: false, time: "Scheduled" },
-    { label: "Service Completed", icon: "ðŸŒŸ", done: false, time: "Pending" },
+    { label: "Booking Confirmed", icon: "✓", done: true, time: "Just now" },
+    { label: "Expert Assigned", icon: "👨‍🔧", done: true, time: "Assigned" },
+    { label: "Expert On The Way", icon: "🛵", done: true, time: "En Route" },
+    { label: "Service In Progress", icon: "⚙️", done: false, time: "Scheduled" },
+    { label: "Service Completed", icon: "⭐", done: false, time: "Pending" },
   ]
 
   useEffect(() => {
@@ -2743,7 +2745,20 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
     return () => clearInterval(t)
   }, [etaMinutes])
 
-  const tech = technician || { name: "Ravi Kumar", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face", rating: 4.9, jobs: 284, eta: "25 mins" }
+  const tech = technician || { name: "gokul K", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face", rating: 4.9, jobs: 284, eta: "15 mins" }
+
+  const trackingBookingObj = {
+    id: successData?.id,
+    request_id: rid,
+    assigned_employee: {
+      full_name: tech.name,
+      phone: tech.phone || "",
+    },
+    latitude: formData?.latitude,
+    longitude: formData?.longitude,
+    address: formData?.address,
+    status: "confirmed"
+  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 640, margin: '0 auto', padding: '1.5rem' }}>
@@ -2753,7 +2768,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
         >
           <CheckCircle2 size={44} color="white" />
         </motion.div>
-        <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.6rem', fontWeight: 900, color: '#0f172a' }}>Booking Confirmed! ðŸŽ‰</h2>
+        <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.6rem', fontWeight: 900, color: '#0f172a' }}>Booking Confirmed! 🎉</h2>
         <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.9rem' }}>Your expert is on the way</p>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '6px 16px' }}>
           <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
@@ -2766,12 +2781,12 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={{ position: 'relative' }}>
-            <img src={tech.avatar} alt={tech.name} style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '3px solid #7C3AED30' }} />
+            <img src={tech.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face"} alt={tech.name} style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '3px solid #7C3AED30' }} />
             <div style={{ position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: '50%', background: '#10B981', border: '2px solid white' }} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{tech.name}</div>
-            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>•­  {tech.rating} Â· {tech.jobs} jobs completed</div>
+            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>⭐ {tech.rating} · {tech.jobs} jobs completed</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               <span style={{ background: '#10B98112', color: '#10B981', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #10B98125' }}>Verified Pro</span>
               <span style={{ background: '#7C3AED12', color: '#7C3AED', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #7C3AED25' }}>Background Checked</span>
@@ -2783,13 +2798,13 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
           </div>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-          <button onClick={() => alert(`Calling ${tech.name}...`)}
-            style={{ flex: 1, padding: '0.7rem', background: '#7C3AED', color: 'white', fontWeight: 700, fontSize: '0.85rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <Phone size={15} /> Call Expert
+          <button onClick={() => setShowMapModal(true)}
+            style={{ flex: 1.2, padding: '0.75rem', background: 'linear-gradient(135deg, #3B82F6, #2563eb)', color: 'white', fontWeight: 800, fontSize: '0.88rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 4px 12px rgba(37,99,235,0.25)' }}>
+            <MapPin size={16} /> Track on Live Map
           </button>
-          <button onClick={() => alert("Chat feature coming soon!")}
-            style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', color: '#0f172a', fontWeight: 700, fontSize: '0.85rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <MessageSquare size={15} /> Chat
+          <button onClick={() => alert(`Calling ${tech.name}...`)}
+            style={{ flex: 1, padding: '0.75rem', background: '#f1f5f9', color: '#0f172a', fontWeight: 700, fontSize: '0.85rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Phone size={15} /> Call Pro
           </button>
         </div>
       </motion.div>
@@ -2797,7 +2812,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
         style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
       >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>ðŸ“‹ Booking Details</div>
+        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>📋 Booking Details</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', fontSize: '0.8rem' }}>
           {[
             { label: 'Service', value: category?.name },
@@ -2808,7 +2823,7 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
           ].map((r, i) => (
             <div key={i} style={{ ...(r.span ? { gridColumn: '1/-1' } : {}), background: '#f8fafc', borderRadius: 10, padding: '0.5rem 0.75rem' }}>
               <div style={{ color: '#94a3b8', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase' }}>{r.label}</div>
-              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2 }}>{r.value || '•”'}</div>
+              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2 }}>{r.value || '—'}</div>
             </div>
           ))}
         </div>
@@ -2817,7 +2832,12 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
         style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
       >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>ðŸ—ºï¸  Live Tracking</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>🗺️ Live Tracking</div>
+          <button onClick={() => setShowMapModal(true)} style={{ background: 'none', border: 'none', color: '#3B82F6', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer' }}>
+            Open Fullscreen Map →
+          </button>
+        </div>
         {trackSteps.map((s, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.5rem 0', position: 'relative' }}>
             {i < trackSteps.length - 1 && <div style={{ position: 'absolute', left: 18, top: 36, width: 2, height: 24, background: s.done ? '#10B981' : '#e2e8f0' }} />}
@@ -2836,6 +2856,15 @@ function LiveTrackingPage({ successData, technician, category, cart, formData, s
         style={{ width: '100%', padding: '1rem', background: '#f1f5f9', color: '#0f172a', fontWeight: 700, fontSize: '0.9rem', border: 'none', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
         <Home size={16} /> Book Another Service
       </button>
+
+      <AnimatePresence>
+        {showMapModal && (
+          <CustomerLiveTrackingModal
+            booking={trackingBookingObj}
+            onClose={() => setShowMapModal(false)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
@@ -2947,6 +2976,13 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
   });
 
   const [selectedMockBooking, setSelectedMockBooking] = useState(null)
+  const [trackingBooking, setTrackingBooking] = useState(() => {
+    const savedId = sessionStorage.getItem("calservice_active_tracking_id")
+    if (savedId) {
+      return { id: savedId, request_id: savedId }
+    }
+    return null
+  })
 
   const [realBookings, setRealBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
@@ -3000,9 +3036,13 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
 
   useEffect(() => {
     if (activeTab === "My Bookings" && user) {
-      setBookingsLoading(true)
+      if (!realBookings || realBookings.length === 0) {
+        setBookingsLoading(true)
+      }
       apiFetchCustomerBookings()
-        .then(res => setRealBookings(res.data || []))
+        .then(res => {
+          if (res?.data) setRealBookings(res.data)
+        })
         .catch(console.error)
         .finally(() => setBookingsLoading(false))
     }
@@ -3558,7 +3598,7 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                     You haven't placed any service bookings yet. Browse our top home services and book an expert with instant slot confirmation.
                   </p>
                   <button
-                    onClick={() => { onClose(); setStep(1); }}
+                    onClick={() => { onClose(); window.location.href = "/home"; }}
                     style={{ padding: '12px 24px', background: '#059669', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(5,150,105,0.25)' }}
                   >
                     + Book a Service Now
@@ -3749,7 +3789,10 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                 </button>
                               )
                               if (act === "track") return (
-                                <button key={act} onClick={() => { setAssignedTech(b.assigned_employee); onClose(); setStep(0); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: '#3B82F6', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <button key={act} onClick={() => {
+                                  setTrackingBooking(b)
+                                  try { sessionStorage.setItem("calservice_active_tracking_id", String(b.id || b.request_id || "")) } catch (e) { }
+                                }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: '#3B82F6', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <MapPin size={14} /> Track Professional
                                 </button>
                               )
@@ -5357,6 +5400,18 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
           </div>
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {trackingBooking && (
+          <CustomerLiveTrackingModal
+            booking={trackingBooking}
+            onClose={() => {
+              setTrackingBooking(null)
+              try { sessionStorage.removeItem("calservice_active_tracking_id") } catch (e) { }
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -7133,26 +7188,37 @@ export function BookingPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const routerLocation = useLocation()
-  const incomingCart = routerLocation.state?.cart
-  const incomingCategory = routerLocation.state?.category
-  // BookingPage is purely a checkout flow — if no cart arrives, go back to landing page (/home)
+  const trackParam = searchParams.get("track") || searchParams.get("booking_id") || sessionStorage.getItem("calservice_active_tracking_id")
+
+  // BookingPage is checkout / tracking flow — only redirect to landing if no cart, no active category, no tracking session, and not in tracking step
   useEffect(() => {
-    if (!incomingCart?.length && !incomingCategory && !routerLocation.state?.triggerLocPicker) {
+    if (
+      !incomingCart?.length &&
+      !incomingCategory &&
+      !routerLocation.state?.triggerLocPicker &&
+      !trackParam &&
+      step !== 0
+    ) {
       navigate(routes.landing, { replace: true })
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [incomingCart, incomingCategory, routerLocation.state, trackParam, step, navigate])
 
   const [step, setStep] = useState(() => {
-    if (routerLocation.state?.triggerLocPicker) {
-      return 1;
-    }
+    if (trackParam || routerLocation.state?.isTracking) return 0;
+    if (routerLocation.state?.triggerLocPicker) return 1;
     return incomingCart?.length ? 3 : 1;
   })
   const [loading, setLoading] = useState(false)
   const [showCartMenu, setShowCartMenu] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [error, setError] = useState(null)
-  const [successData, setSuccessData] = useState(null)
+  const [successData, setSuccessData] = useState(() => {
+    const saved = sessionStorage.getItem("calservice_last_booking")
+    if (saved) {
+      try { return JSON.parse(saved) } catch (e) { }
+    }
+    return null
+  })
   const [category, setCategory] = useState(() => incomingCategory || (incomingCart?.length ? resolveCategoryFromCart(null, incomingCart) : null))
   const [cart, setCart] = useState(incomingCart || [])
 
@@ -7161,15 +7227,15 @@ export function BookingPage() {
     window.scrollTo(0, 0);
   }, [step]);
 
-  // When customer removes all items (- button), automatically move back to home services selection side (/home)
+  // When customer removes all items (- button), move back to home services only during active shopping steps (not during tracking step 0)
   useEffect(() => {
-    if (Array.isArray(cart) && cart.length === 0) {
+    if (step > 0 && !trackParam && Array.isArray(cart) && cart.length === 0 && !incomingCategory) {
       const timer = setTimeout(() => {
         navigate(routes.landing, { replace: true });
-      }, 100);
+      }, 300);
       return () => clearTimeout(timer);
     }
-  }, [cart, navigate]);
+  }, [cart, step, trackParam, incomingCategory, navigate]);
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
@@ -7418,8 +7484,14 @@ export function BookingPage() {
     }
     data.append("description", finalDesc);
     data.append("address", formData.landmark ? formData.address + " | " + formData.landmark : formData.address)
-    if (formData.latitude) data.append("latitude", formData.latitude)
-    if (formData.longitude) data.append("longitude", formData.longitude)
+    if (formData.latitude) {
+      const parsedLat = parseFloat(formData.latitude);
+      data.append("latitude", !isNaN(parsedLat) ? parsedLat.toFixed(6) : formData.latitude);
+    }
+    if (formData.longitude) {
+      const parsedLon = parseFloat(formData.longitude);
+      data.append("longitude", !isNaN(parsedLon) ? parsedLon.toFixed(6) : formData.longitude);
+    }
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
     data.append("total_amount", cart.reduce((a, c) => a + (c.price * c.quantity), 0))
@@ -7448,12 +7520,17 @@ export function BookingPage() {
             console.error("Failed to verify online payment:", e)
           }
         }
-        setSuccessData({ ...res.data, paymentMethod: backendPaymentMethod })
+        const savedData = { ...res.data, paymentMethod: backendPaymentMethod }
+        setSuccessData(savedData)
+        try {
+          sessionStorage.setItem("calservice_last_booking", JSON.stringify(savedData))
+          sessionStorage.setItem("calservice_active_tracking_id", String(res.data?.id || res.data?.request_id || ""))
+        } catch (e) { }
         setShowPostFlow(true)  // Show animated post-booking flow
       } else setError(res?.message || "Something went wrong. Please try again.")
     } catch (err) {
       if (err?.body?.errors) {
-        const msgs = Object.entries(err.body.errors).map(([f, m]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`).join(" Â· ")
+        const msgs = Object.entries(err.body.errors).map(([f, m]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`).join(" · ")
         setError(msgs || err.body.message)
       } else setError(err?.body?.message || err?.body?.detail || "Connection error. Try again.")
     } finally { setLoading(false) }
@@ -7466,6 +7543,8 @@ export function BookingPage() {
     setPhotoFile(null); setPhotoPreview(null); setSuccessData(null); setError(null)
     setShowPostFlow(false); setAssignedTech(null)
     sessionStorage.removeItem(OTP_SESSION_KEY)
+    sessionStorage.removeItem("calservice_last_booking")
+    sessionStorage.removeItem("calservice_active_tracking_id")
     // Return to public home services catalog page (/home)
     navigate(routes.landing, { replace: true })
   }

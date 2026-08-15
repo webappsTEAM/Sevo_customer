@@ -82,8 +82,8 @@ export default function ImageUploadField({
       if (xhr.status === 200 || xhr.status === 201) {
         try {
           const res = JSON.parse(xhr.responseText)
-          if (res.success && (res.image_url || res.image_path)) {
-            onChange?.(res.image_url || res.image_path)
+          if (res.success && (res.image_path || res.image_url)) {
+            onChange?.(res.image_path || res.image_url)
           } else {
             setErrorMsg(res.error || "Upload failed")
           }

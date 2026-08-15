@@ -462,14 +462,23 @@ class CustomerMyBookingsView(APIView):
         if user_full_name and len(user_full_name) >= 3:
             filters |= Q(customer_name__iexact=user_full_name)
 
-        # Exclude draft bookings from My Bookings list
-        qs = (
+        # Exclude draft bookings from My Bookings list with batch preloading
+        qs = list(
             ServiceRequest.objects.filter(filters)
             .exclude(status="draft")
             .select_related('company', 'assigned_employee', 'assigned_employee__user')
+            .prefetch_related('work_extensions', 'reschedule_requests', 'refund_requests')
             .order_by("-id")
         )
-        all_bookings = ServiceRequestListSerializer(qs, many=True, context={'request': request}).data
+        
+        sr_ids = [sr.id for sr in qs]
+        from tasks.models import Task
+        tasks = Task.objects.filter(service_request_id__in=sr_ids)
+        task_map = {t.service_request_id: t for t in tasks}
+
+        all_bookings = ServiceRequestListSerializer(
+            qs, many=True, context={'request': request, 'task_map': task_map}
+        ).data
 
         return _success(data=all_bookings)
 
@@ -1083,7 +1092,7 @@ class EmployeeJobArrivedView(APIView):
 class CustomerBookingLiveLocationView(APIView):
     """
     GET /api/booking/<pk>/live-location/
-    Returns customer service destination + employee live tracking location.
+    Returns customer service destination + employee live tracking location + ETA and distance.
     """
     permission_classes = [permissions.AllowAny]
 
@@ -1095,9 +1104,66 @@ class CustomerBookingLiveLocationView(APIView):
 
         emp = sr.assigned_employee
         latest_ping = None
+        emp_lat = None
+        emp_lng = None
+        emp_updated_at = None
+
+        dest_lat = float(sr.latitude) if sr.latitude is not None else None
+        dest_lng = float(sr.longitude) if sr.longitude is not None else None
+
         if emp:
+            from datetime import timedelta
             from live_locations.models import EmployeeLocation
+            from time_tracking.models import TimeLog
+            from tasks.models import Task
+
+            # 1. Check latest live GPS ping from EmployeeLocation
             latest_ping = EmployeeLocation.objects.filter(employee=emp).order_by("-timestamp").first()
+            if latest_ping and latest_ping.lat and latest_ping.lng:
+                emp_lat = float(latest_ping.lat)
+                emp_lng = float(latest_ping.lng)
+                emp_updated_at = latest_ping.timestamp.isoformat()
+
+            # 2. Check active TimeLog clock_in coordinates
+            if not emp_lat:
+                tlog = TimeLog.objects.filter(employee=emp, clock_out__isnull=True).order_by("-clock_in").first()
+                if not tlog:
+                    tlog = TimeLog.objects.filter(employee=emp).order_by("-id").first()
+                if tlog and tlog.clock_in_lat and tlog.clock_in_lon:
+                    emp_lat = float(tlog.clock_in_lat)
+                    emp_lng = float(tlog.clock_in_lon)
+                    emp_updated_at = tlog.clock_in.isoformat() if tlog.clock_in else timezone.now().isoformat()
+
+            # 3. Check active Task location
+            if not emp_lat and emp.user:
+                task = Task.objects.filter(assigned_to=emp.user, location_lat__isnull=False).order_by("-id").first()
+                if task and task.location_lat and task.location_lon:
+                    emp_lat = float(task.location_lat)
+                    emp_lng = float(task.location_lon)
+                    emp_updated_at = timezone.now().isoformat()
+
+            # 4. Check assigned employee job site location
+            if not emp_lat and getattr(emp, "assigned_job_site", None):
+                site = emp.assigned_job_site
+                if site.latitude and site.longitude:
+                    emp_lat = float(site.latitude)
+                    emp_lng = float(site.longitude)
+                    emp_updated_at = timezone.now().isoformat()
+
+        # Calculate distance and estimated travel time
+        distance_km = None
+        eta_minutes = None
+        if emp_lat is not None and emp_lng is not None and dest_lat is not None and dest_lng is not None:
+            import math
+            # Haversine formula
+            dlat = math.radians(dest_lat - emp_lat)
+            dlon = math.radians(dest_lng - emp_lng)
+            a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(emp_lat)) * math.cos(math.radians(dest_lat)) * math.sin(dlon / 2) ** 2
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+            distance_km = round(6371 * c, 2)
+            # Average city speed 20 km/h + 3 min buffer
+            eta_minutes = max(3, int(round((distance_km / 20.0) * 60)) + 3)
+            eta_minutes = max(4, int(round((distance_km / 20.0) * 60)) + 3)
 
         data = {
             "booking_id": sr.id,
@@ -1105,20 +1171,23 @@ class CustomerBookingLiveLocationView(APIView):
             "status": sr.status,
             "status_display": sr.get_status_display(),
             "destination": {
-                "address": sr.address,
-                "latitude": float(sr.latitude) if sr.latitude else None,
-                "longitude": float(sr.longitude) if sr.longitude else None,
+                "address": sr.address or "Customer Service Address",
+                "latitude": dest_lat,
+                "longitude": dest_lng,
             },
+            "distance_km": distance_km,
+            "eta_minutes": eta_minutes or 15,
             "employee_live_location": {
                 "employee_id": emp.employee_id if emp else None,
                 "employee_name": emp.user.get_full_name() or emp.user.username if emp else None,
                 "phone": emp.phone if emp else None,
-                "latitude": float(latest_ping.lat) if latest_ping else None,
-                "longitude": float(latest_ping.lng) if latest_ping else None,
-                "updated_at": latest_ping.timestamp.isoformat() if latest_ping else None,
+                "latitude": emp_lat,
+                "longitude": emp_lng,
+                "updated_at": emp_updated_at,
             } if emp else None
         }
         return _success(data=data)
+
 
 
 class EmployeeJobStartView(APIView):

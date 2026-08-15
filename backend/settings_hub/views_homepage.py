@@ -53,6 +53,8 @@ def _resolve_image_urls(config_data):
             resolved[k] = _resolve_image_urls(v)
             if k in ("image_path", "image", "avatar", "photo", "cover") and isinstance(v, str) and v:
                 resolved[f"{k}_url"] = SupabaseStorageService.get_public_url(v)
+            if k == "collageImages" and isinstance(v, list):
+                resolved[f"{k}_url"] = [SupabaseStorageService.get_public_url(item) for item in v if isinstance(item, str)]
         return resolved
     elif isinstance(config_data, list):
         return [_resolve_image_urls(item) for item in config_data]
