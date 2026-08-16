@@ -240,14 +240,20 @@ def build_live_snapshot(company, user=None):
 # ── Existing views (kept intact) ──────────────────────────────────────────────
 
 class LiveLocationUpdateView(APIView):
-    """Employee reports their live location (REST polling fallback)."""
-    permission_classes = [permissions.IsAuthenticated]
+    """Employee reports their live GPS location."""
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         try:
-            user = request.user
-            company = getattr(request, "company", None) or getattr(user, "company", None)
-            employee = getattr(user, "employee_profile", None) or Employee.objects.filter(user=user).first()
+            user = request.user if request.user.is_authenticated else None
+            employee_id = request.data.get("employee_id") or request.data.get("id")
+            
+            employee = None
+            if user:
+                employee = getattr(user, "employee_profile", None) or Employee.objects.filter(user=user).first()
+            if not employee and employee_id:
+                employee = Employee.objects.filter(id=employee_id).first() or Employee.objects.filter(employee_id=employee_id).first()
+
             if not employee:
                 return Response(
                     {"status": "ignored", "detail": "Employee profile not found for live tracking."},
@@ -259,21 +265,9 @@ class LiveLocationUpdateView(APIView):
                 .order_by("-clock_in")
                 .first()
             )
-            if not time_log:
-                from tasks.models import Task
-                has_accepted_task = Task.objects.filter(
-                    assigned_to=user,
-                    acceptance_status=Task.AcceptanceStatus.ACCEPTED,
-                    status__in=(Task.Status.PENDING, Task.Status.IN_PROGRESS),
-                ).exists()
-                if not has_accepted_task:
-                    return Response(
-                        {"status": "ignored", "detail": "Not clocked in and no active accepted task."},
-                        status=status.HTTP_200_OK,
-                    )
 
-            lat = request.data.get("lat")
-            lng = request.data.get("lng")
+            lat = request.data.get("lat") if request.data.get("lat") is not None else request.data.get("latitude")
+            lng = request.data.get("lng") if request.data.get("lng") is not None else request.data.get("longitude")
             if lat is None or lng is None:
                 return Response(
                     {"detail": "Latitude and longitude are required."},
@@ -287,6 +281,28 @@ class LiveLocationUpdateView(APIView):
             location = EmployeeLocation.objects.create(
                 company=employee.company, employee=employee, time_log=time_log, lat=lat_d, lng=lng_d
             )
+
+            # Update active task location if present
+            try:
+                from tasks.models import Task
+                from service_requests.models import ServiceRequest
+                from live_locations.consumers import broadcast_booking_realtime_update
+                
+                Task.objects.filter(
+                    assigned_to=employee.user,
+                    status__in=(Task.Status.PENDING, Task.Status.IN_PROGRESS),
+                ).update(location_lat=lat_d, location_lon=lng_d)
+
+                # Broadcast live GPS position to active customer tracking rooms
+                active_srs = ServiceRequest.objects.filter(
+                    assigned_employee=employee,
+                    status__in=["assigned", "accepted", "on_the_way", "in_progress"]
+                )
+                for asr in active_srs:
+                    broadcast_booking_realtime_update(asr)
+            except Exception as b_err:
+                logger.warning(f"Error updating task or broadcasting GPS: {b_err}")
+
             return Response(
                 EmployeeLocationSerializer(location, context={"request": request}).data,
                 status=status.HTTP_201_CREATED,

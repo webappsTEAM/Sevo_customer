@@ -39,6 +39,8 @@ from .views import (
     EmployeeJobProofView,
     EmployeePerformanceView,
     CustomerBookingLiveLocationView,
+    CustomerBookingCancelView,
+    EmployeeGpsUpdateView,
 
     # WorkExtension Ecosystem
     EmployeeReportExtraWorkView,
@@ -135,6 +137,11 @@ urlpatterns = [
     path("booking/<int:pk>/retry-payment/",  CustomerBookingRetryPaymentView.as_view(), name="sr-retry-payment"),
     path("booking/<int:pk>/invoice/",        InvoiceDownloadView.as_view(),  name="sr-invoice"),
     path("booking/<int:pk>/live-location/",  CustomerBookingLiveLocationView.as_view(), name="sr-booking-live-location"),
+    path("booking/<str:identifier>/live-location/", CustomerBookingLiveLocationView.as_view(), name="sr-booking-live-location-identifier"),
+    path("booking/<int:pk>/cancel/",         CustomerBookingCancelView.as_view(),       name="sr-booking-cancel"),
+    path("booking/<str:identifier>/cancel/", CustomerBookingCancelView.as_view(),       name="sr-booking-cancel-identifier"),
+    path("customer/bookings/<int:pk>/cancel/", CustomerBookingCancelView.as_view(),     name="customer-booking-cancel"),
+    path("customer/bookings/<str:identifier>/cancel/", CustomerBookingCancelView.as_view(), name="customer-booking-cancel-identifier"),
     path("feedback/<uuid:token>/",           FeedbackTokenView.as_view(),    name="sr-feedback-token"),
     path("public/feedback/",                 PublicFeedbackListView.as_view(), name="sr-public-feedback"),
 
@@ -164,6 +171,7 @@ urlpatterns = [
     path("admin/feedback/metrics/",          AdminFeedbackMetricsView.as_view(),name="sr-admin-feedback-metrics"),
 
     # ── Employee ──────────────────────────────────────────────────────────────
+    path("employee/gps/update/",                    EmployeeGpsUpdateView.as_view(),   name="sr-emp-gps-update"),
     path("employee/jobs/",                          EmployeeJobListView.as_view(),     name="sr-emp-jobs"),
     path("employee/jobs/<int:pk>/",                 EmployeeJobDetailView.as_view(),   name="sr-emp-job-detail"),
     path("employee/jobs/<int:pk>/receive/",         EmployeeJobReceiveView.as_view(),  name="sr-emp-receive"),

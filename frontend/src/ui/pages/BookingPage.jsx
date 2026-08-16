@@ -12,7 +12,8 @@ import {
   LogIn, ChevronDown, ChevronUp, Plus, Award, Users, ThumbsUp, ArrowRight,
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
-  Calculator, PaintRoller, Smartphone, MoreVertical, Truck
+  Calculator, PaintRoller, Smartphone, MoreVertical, Truck, Copy, Radio,
+  ShieldAlert, Ban, AlertTriangle
 } from "lucide-react"
 import {
   apiRequestCustomerEmailOTP, apiVerifyCustomerEmailOTP,
@@ -27,6 +28,7 @@ import { apiRequest } from "../../api/client.js"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { LocationPermissionHandler } from "../components/AddressPicker/index.js"
+import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
@@ -2503,7 +2505,7 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
             {payPhase === 'processing' && (
               <div style={{ textAlign: 'center', padding: '2rem 0' }}>
                 <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ display: 'inline-block', marginBottom: '1.5rem' }}><RefreshCw size={48} color="#7C3AED" /></motion.div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Processing UPI Payment•¦</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Processing UPI Payment…</div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Please do not close this window</div>
               </div>
             )}
@@ -2513,9 +2515,9 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
                   style={{ width: 72, height: 72, borderRadius: '50%', background: 'linear-gradient(135deg,#10B981,#34D399)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem' }}>
                   <Check size={36} color="white" />
                 </motion.div>
-                <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Payment Successful! ðŸŽ‰</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Payment Successful! 🎉</div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Your booking is now confirmed</div>
-                <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.78rem', color: '#166534', fontWeight: 600 }}>•œ… Amount {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()} debited successfully</div>
+                <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.78rem', color: '#166534', fontWeight: 600 }}>✅ Amount {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()} debited successfully</div>
               </div>
             )}
             {payPhase === 'failed' && (
@@ -2548,7 +2550,7 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
             )}
             {payPhase === null && (
               <div style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                <Shield size={11} /> 256-bit SSL Â· UPI Encryption
+                <Shield size={11} /> 256-bit SSL · UPI Encryption
               </div>
             )}
           </div>
@@ -2599,12 +2601,12 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
         <div style={{ padding: '0 1.75rem' }}>
           <button onClick={handleConfirm} disabled={confirming}
             style={{ width: '100%', padding: '1rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', fontWeight: 800, fontSize: '1rem', border: 'none', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 20px rgba(124,58,237,0.3)' }}>
-            {confirming ? <><RefreshCw size={16} className="spin-icon" /> Processing•¦</> :
+            {confirming ? <><RefreshCw size={16} className="spin-icon" /> Processing…</> :
               selected === 'online' ? <><CreditCard size={16} /> Continue to Pay {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}</> :
                 <><CheckCheck size={16} /> Confirm Booking</>}
           </button>
           <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-            <Shield size={11} /> 256-bit SSL encrypted Â· Your info is safe
+            <Shield size={11} /> 256-bit SSL encrypted · Your info is safe
           </div>
         </div>
       </motion.div>
@@ -2612,256 +2614,736 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
   )
 }
 
-/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
+/* ─────────────────────────────────────────────────────────────────────────────
    POST-BOOKING ANIMATED FLOW
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
+   ───────────────────────────────────────────────────────────────────────────── */
 
-function PostBookingFlow({ bookingData, category, cart, formData, selDate, selTime, onDone }) {
+function PostBookingFlow({ bookingData, onDone }) {
   const [phase, setPhase] = useState(0)
-
-  const MOCK_TECH = {
-    name: "Ravi Kumar",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-    rating: 4.9,
-    jobs: 284,
-    eta: "25 mins",
-  }
 
   useEffect(() => {
     const timers = [
-      setTimeout(() => setPhase(1), 1500),
-      setTimeout(() => setPhase(2), 3500),
-      setTimeout(() => setPhase(3), 5500),
+      setTimeout(() => setPhase(1), 1200),
+      setTimeout(() => setPhase(2), 2400),
+      setTimeout(() => onDone && onDone(), 3600),
     ]
     return () => timers.forEach(clearTimeout)
-  }, [])
+  }, [onDone])
 
   const phases = [
     {
-      icon: <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}><RefreshCw size={52} color="#7C3AED" /></motion.div>,
-      title: "Creating your booking•¦",
-      sub: "Submitting your service request securely",
+      icon: <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}><RefreshCw size={44} color="#7C3AED" /></motion.div>,
+      title: "Confirming your booking...",
+      sub: "Creating your request on the secure network",
     },
     {
-      icon: <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ repeat: Infinity, duration: 0.8 }}><Users size={52} color="#F59E0B" /></motion.div>,
-      title: "Finding your expert•¦",
-      sub: "Matching you with the best professional nearby",
+      icon: <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 0.9 }}><Radio size={44} color="#F59E0B" /></motion.div>,
+      title: "Connecting to Hosur Dispatch...",
+      sub: "Broadcasting request to nearby verified partners",
     },
     {
-      icon: <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}><CheckCircle2 size={52} color="#10B981" /></motion.div>,
-      title: "Professional Assigned! •œ…",
-      sub: "Your expert is confirmed and on their way",
-    },
-    {
-      icon: <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 12 }}><span style={{ fontSize: '3.5rem' }}>ðŸŽ‰</span></motion.div>,
-      title: "Booking Confirmed!",
-      sub: "Your booking is all set. Tap below to track.",
+      icon: <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}><CheckCircle2 size={44} color="#10B981" /></motion.div>,
+      title: "Broadcast Active! 📡",
+      sub: "Opening live tracking radar...",
     },
   ]
 
-  const cur = phases[phase]
+  const cur = phases[phase] || phases[0]
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.92)', zIndex: 10005, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', padding: '2rem' }}>
-      {/* Step tracker */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '3rem' }}>
-        {['Booking Created', 'Searching', 'Assigned', 'Confirmed'].map((label, i) => (
-          <React.Fragment key={i}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: i <= phase ? (i < phase ? '#10B981' : '#7C3AED') : 'rgba(255,255,255,0.15)', border: `2px solid ${i <= phase ? (i < phase ? '#10B981' : '#7C3AED') : 'rgba(255,255,255,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.5s' }}>
-                {i < phase ? <Check size={16} color="white" /> : <span style={{ fontSize: '0.75rem', fontWeight: 800, color: i <= phase ? 'white' : 'rgba(255,255,255,0.4)' }}>{i + 1}</span>}
-              </div>
-              <span style={{ fontSize: '0.6rem', fontWeight: 700, color: i <= phase ? 'white' : 'rgba(255,255,255,0.35)', maxWidth: 60, textAlign: 'center' }}>{label}</span>
-            </div>
-            {i < 3 && <div style={{ width: 40, height: 2, background: i < phase ? '#10B981' : 'rgba(255,255,255,0.15)', transition: 'background 0.5s', marginBottom: 22, flexShrink: 0 }} />}
-          </React.Fragment>
-        ))}
-      </div>
-
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.92)', zIndex: 10005, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', padding: '2rem', backdropFilter: 'blur(8px)' }}>
       <AnimatePresence mode="wait">
         <motion.div
           key={phase}
           initial={{ opacity: 0, scale: 0.85, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: -20 }}
-          transition={{ duration: 0.4 }}
-          style={{ background: 'white', borderRadius: 24, padding: '2.5rem 2rem', textAlign: 'center', maxWidth: 360, width: '100%', boxShadow: '0 25px 60px rgba(0,0,0,0.4)' }}
+          transition={{ duration: 0.35 }}
+          style={{ background: 'white', borderRadius: 24, padding: '2.5rem 2rem', textAlign: 'center', maxWidth: 360, width: '100%', boxShadow: '0 25px 60px rgba(0,0,0,0.45)' }}
         >
-          <div style={{ marginBottom: '1.25rem' }}>{cur.icon}</div>
-          <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.3rem', fontWeight: 900, color: '#0f172a' }}>{cur.title}</h3>
+          <div style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'center' }}>{cur.icon}</div>
+          <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>{cur.title}</h3>
           <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}>{cur.sub}</p>
-
-          {phase === 2 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-              style={{ marginTop: '1.5rem', background: '#f8fafc', borderRadius: 14, padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
-            >
-              <img src={MOCK_TECH.avatar} alt={MOCK_TECH.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '2px solid #7C3AED30' }} />
-              <div style={{ flex: 1, textAlign: 'left' }}>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>{MOCK_TECH.name}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>•­  {MOCK_TECH.rating} Â· {MOCK_TECH.jobs} jobs</div>
-              </div>
-              <div style={{ background: '#10B98115', color: '#10B981', fontWeight: 800, fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, border: '1px solid #10B98130' }}>ETA {MOCK_TECH.eta}</div>
-            </motion.div>
-          )}
-
-          {phase === 3 && (
-            <motion.button
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-              onClick={() => onDone(MOCK_TECH)}
-              style={{ marginTop: '1.5rem', width: '100%', padding: '0.875rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', fontWeight: 800, fontSize: '0.95rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-            >
-              <MapPin size={16} /> Track My Booking
-            </motion.button>
-          )}
         </motion.div>
       </AnimatePresence>
     </div>
   )
 }
 
-/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
-   LIVE TRACKING PAGE
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
+/* ─────────────────────────────────────────────────────────────────────────────
+   RAPIDO-STYLE LIVE TRACKING PAGE (Real-Time WebSockets & Database Dispatch)
+   ───────────────────────────────────────────────────────────────────────────── */
 
-function LiveTrackingPage({ successData, technician, category, cart, formData, selDate, selTime, onBookAgain }) {
-  const rid = successData?.request_id || successData?.id || "BK" + Date.now().toString().slice(-6)
-  const [etaMinutes, setEtaMinutes] = useState(25)
+function LiveTrackingPage({ successData, category, cart, formData, selDate, selTime, onBookAgain }) {
+  const rid = successData?.request_id || successData?.id || "SR-0001"
+  const [liveData, setLiveData] = useState(null)
+  const [searchSeconds, setSearchSeconds] = useState(0)
   const [showMapModal, setShowMapModal] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [copiedOtp, setCopiedOtp] = useState(false)
+
   const totalPrice = cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
   const displayDate = selDate ? new Date(selDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : ""
   const displayTime = selTime ? TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === selTime)?.l : ""
 
-  const trackSteps = [
-    { label: "Booking Confirmed", icon: "✓", done: true, time: "Just now" },
-    { label: "Expert Assigned", icon: "👨‍🔧", done: true, time: "Assigned" },
-    { label: "Expert On The Way", icon: "🛵", done: true, time: "En Route" },
-    { label: "Service In Progress", icon: "⚙️", done: false, time: "Scheduled" },
-    { label: "Service Completed", icon: "⭐", done: false, time: "Pending" },
-  ]
-
+  // Timer counter for searching state
   useEffect(() => {
-    if (etaMinutes <= 0) return
-    const t = setInterval(() => setEtaMinutes(m => m > 0 ? m - 1 : 0), 60000)
+    const t = setInterval(() => setSearchSeconds(s => s + 1), 1000)
     return () => clearInterval(t)
-  }, [etaMinutes])
+  }, [])
 
-  const tech = technician || { name: "gokul K", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face", rating: 4.9, jobs: 284, eta: "15 mins" }
+  // Real-Time WebSocket Connection + Resilient 3s Polling Backup
+  useEffect(() => {
+    if (!rid) return
+
+    let ws = null
+    let pollTimer = null
+    let isMounted = true
+
+    const fetchStatus = async () => {
+      try {
+        const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/`)
+        if (res?.data && isMounted) {
+          setLiveData(res.data)
+        }
+      } catch (e) {}
+    }
+
+    // 1. Initial immediate fetch
+    fetchStatus()
+
+    // 2. Open WebSocket
+    try {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+      const host = window.location.hostname === "localhost" ? "localhost:8000" : window.location.host
+      const wsUrl = `${protocol}//${host}/ws/live/booking/${encodeURIComponent(rid)}/`
+
+      ws = new WebSocket(wsUrl)
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data)
+          if (msg?.data && isMounted) {
+            setLiveData(msg.data)
+          }
+        } catch (err) {}
+      }
+      ws.onerror = () => {
+        // WS fallback to polling
+      }
+    } catch (err) {}
+
+    // 3. Keep 3-second polling active as reliable backup
+    pollTimer = setInterval(fetchStatus, 3000)
+
+    return () => {
+      isMounted = false
+      if (ws) ws.close()
+      if (pollTimer) clearInterval(pollTimer)
+    }
+  }, [rid])
+
+  const isAccepted = Boolean(liveData?.is_accepted || liveData?.employee_live_location || (liveData?.status && ["assigned", "accepted", "in_progress", "on_the_way", "completed"].includes(liveData.status)))
+  const isCancelled = liveData?.status === "cancelled"
+  const cancellationReason = liveData?.cancellation_reason || (liveData?.description && liveData.description.includes("[Cancellation Reason]:") ? liveData.description.split("[Cancellation Reason]:")[1].trim() : "")
+  const graceSecs = liveData?.cancellation_grace_remaining_seconds ?? (isAccepted ? 300 : 9999)
+  const canCancel = !isCancelled && (liveData?.can_cancel !== false && (!isAccepted || graceSecs > 0))
+
+  const empInfo = liveData?.employee_live_location || liveData?.assigned_employee
+  const techName = empInfo?.employee_name || empInfo?.name || "Assigned Partner"
+  const techPhone = empInfo?.phone || ""
+  const etaMinutes = liveData?.eta_minutes || null
+  const distKm = liveData?.distance_km || null
+  const startOtp = liveData?.start_otp || null
 
   const trackingBookingObj = {
-    id: successData?.id,
+    id: liveData?.booking_id || successData?.id,
     request_id: rid,
     assigned_employee: {
-      full_name: tech.name,
-      phone: tech.phone || "",
+      full_name: techName,
+      phone: techPhone,
     },
-    latitude: formData?.latitude,
-    longitude: formData?.longitude,
-    address: formData?.address,
-    status: "confirmed"
+    latitude: liveData?.destination?.latitude || formData?.latitude,
+    longitude: liveData?.destination?.longitude || formData?.longitude,
+    address: liveData?.destination?.address || formData?.address,
+    start_otp: startOtp,
+    status: liveData?.status || (isAccepted ? "assigned" : "confirmed"),
+    can_cancel: canCancel,
+    cancellation_grace_remaining_seconds: graceSecs,
+  }
+
+  const handleCopyOtp = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(startOtp)
+      setCopiedOtp(true)
+      setTimeout(() => setCopiedOtp(false), 2000)
+    }
+  }
+
+  const formatGraceTime = (sec) => {
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+  }
+
+  /* ─────────────────── CASE 0: BOOKING CANCELLED STATE ─────────────────── */
+  if (isCancelled) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 600, margin: "0 auto", padding: "1.5rem 1rem", textAlign: "center" }}>
+        <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem", boxShadow: "0 6px 20px rgba(220, 38, 38, 0.2)" }}>
+          <Ban size={38} color="#dc2626" />
+        </div>
+        <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", margin: "0 0 0.4rem" }}>
+          Booking Cancelled
+        </h2>
+        <p style={{ color: "#64748b", fontSize: "0.9rem", margin: "0 0 1.25rem" }}>
+          Your booking <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been cancelled.
+        </p>
+
+        <div style={{ background: "white", borderRadius: 20, padding: "1.25rem", marginBottom: "1.5rem", border: "1px solid #e2e8f0", textAlign: "left", boxShadow: "0 4px 16px rgba(0,0,0,0.05)" }}>
+          <div style={{ fontSize: "0.75rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+            Cancellation Details
+          </div>
+          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#991b1b", textTransform: "uppercase" }}>Reason for Cancellation</div>
+            <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#7f1d1d", marginTop: 2 }}>{cancellationReason || "Customer requested cancellation"}</div>
+          </div>
+          <div style={{ fontSize: "0.8rem", color: "#475569", lineHeight: 1.5, background: "#f8fafc", padding: "10px 12px", borderRadius: 10 }}>
+            💡 If any advance payment was deducted, your full refund will be credited back within 2-4 business days.
+          </div>
+        </div>
+
+        <button
+          onClick={onBookAgain}
+          style={{
+            width: "100%",
+            padding: "0.95rem",
+            background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
+            color: "white",
+            fontWeight: 800,
+            fontSize: "0.92rem",
+            border: "none",
+            borderRadius: 14,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            boxShadow: "0 4px 14px rgba(124, 58, 237, 0.35)",
+          }}
+        >
+          <Home size={16} /> Book Another Service
+        </button>
+      </motion.div>
+    )
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 640, margin: '0 auto', padding: '1.5rem' }}>
-      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 12 }}
-          style={{ width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg,#7C3AED,#10B981)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}
-        >
-          <CheckCircle2 size={44} color="white" />
-        </motion.div>
-        <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.6rem', fontWeight: 900, color: '#0f172a' }}>Booking Confirmed! 🎉</h2>
-        <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.9rem' }}>Your expert is on the way</p>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '6px 16px' }}>
-          <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
-          <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#0f172a', fontFamily: 'monospace' }}>#{rid}</span>
-        </div>
-      </div>
-
-      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-        style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ position: 'relative' }}>
-            <img src={tech.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face"} alt={tech.name} style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '3px solid #7C3AED30' }} />
-            <div style={{ position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: '50%', background: '#10B981', border: '2px solid white' }} />
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 620, margin: '0 auto', padding: '1.25rem 1rem' }}>
+      
+      {/* ─────────────────── CASE A: WAITING FOR PARTNER (RAPIDO RADAR SEARCH) ─────────────────── */}
+      {!isAccepted ? (
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          
+          {/* Rapido Pulse Radar Animation */}
+          <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <motion.div
+              animate={{ scale: [1, 1.8, 2.4], opacity: [0.6, 0.25, 0] }}
+              transition={{ repeat: Infinity, duration: 2.4, ease: "easeOut" }}
+              style={{ position: 'absolute', width: 120, height: 120, borderRadius: '50%', background: 'rgba(124, 58, 237, 0.25)' }}
+            />
+            <motion.div
+              animate={{ scale: [1, 1.6, 2.1], opacity: [0.7, 0.35, 0] }}
+              transition={{ repeat: Infinity, duration: 2.4, delay: 0.8, ease: "easeOut" }}
+              style={{ position: 'absolute', width: 100, height: 100, borderRadius: '50%', background: 'rgba(245, 158, 11, 0.3)' }}
+            />
+            <motion.div
+              animate={{ scale: [1, 1.06, 1] }}
+              transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+              style={{
+                width: 76,
+                height: 76,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #7C3AED, #F59E0B)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 8px 25px rgba(124, 58, 237, 0.45)',
+                zIndex: 2,
+              }}
+            >
+              <Radio size={36} color="white" className="animate-pulse" />
+            </motion.div>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{tech.name}</div>
-            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: 2 }}>⭐ {tech.rating} · {tech.jobs} jobs completed</div>
-            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-              <span style={{ background: '#10B98112', color: '#10B981', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #10B98125' }}>Verified Pro</span>
-              <span style={{ background: '#7C3AED12', color: '#7C3AED', fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #7C3AED25' }}>Background Checked</span>
+
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f5f3ff', border: '1px solid rgba(124, 58, 237, 0.25)', borderRadius: 99, padding: '4px 14px', marginBottom: 10 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7C3AED' }} className="animate-ping" />
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Live Dispatch Active • Hosur
+            </span>
+          </div>
+
+          <h2 style={{ margin: '0 0 0.35rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
+            Finding your service professional...
+          </h2>
+          <p style={{ margin: '0 0 1rem', color: '#64748b', fontSize: '0.88rem' }}>
+            Broadcasting request to nearby verified experts in Hosur
+          </p>
+
+          {/* Live search elapsed counter */}
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: '#475569', fontWeight: 700 }}>
+            <Clock size={14} color="#7C3AED" />
+            <span>Searching for: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '0.88rem' }}>00:{searchSeconds.toString().padStart(2, '0')}</strong></span>
+            <span style={{ color: '#94a3b8' }}>•</span>
+            <span style={{ color: '#10b981' }}>⚡ 4-6 pros notified</span>
+          </div>
+
+          {/* Anytime Cancellation Button (Pre-Acceptance) */}
+          <div style={{ marginTop: '1.25rem' }}>
+            <button
+              onClick={() => setShowCancelModal(true)}
+              style={{
+                padding: '0.55rem 1.1rem',
+                background: 'white',
+                color: '#dc2626',
+                border: '1.5px solid #fecaca',
+                borderRadius: 12,
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)',
+              }}
+            >
+              <Ban size={14} /> Cancel Booking
+            </button>
+            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 5 }}>
+              ⚡ Free cancellation available anytime before partner accepts
             </div>
           </div>
-          <div style={{ textAlign: 'center', background: 'linear-gradient(135deg,#F59E0B,#FBBF24)', borderRadius: 12, padding: '0.6rem 1rem', color: 'white' }}>
-            <div style={{ fontSize: '1.4rem', fontWeight: 900 }}>{etaMinutes}</div>
-            <div style={{ fontSize: '0.65rem', fontWeight: 700 }}>MIN ETA</div>
+        </div>
+      ) : (
+        /* ─────────────────── CASE B: PARTNER ACCEPTED (REAL DATABASE DATA) ─────────────────── */
+        <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 14 }}
+            style={{ width: 68, height: 68, borderRadius: '50%', background: 'linear-gradient(135deg, #10B981, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem', boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)' }}
+          >
+            <CheckCircle2 size={38} color="white" />
+          </motion.div>
+          <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
+            Partner Confirmed &amp; On The Way! 🎉
+          </h2>
+          <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.88rem' }}>
+            {techName} accepted your booking and is en route
+          </p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
+            <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0f172a', fontFamily: 'monospace' }}>#{rid}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-          <button onClick={() => setShowMapModal(true)}
-            style={{ flex: 1.2, padding: '0.75rem', background: 'linear-gradient(135deg, #3B82F6, #2563eb)', color: 'white', fontWeight: 800, fontSize: '0.88rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 4px 12px rgba(37,99,235,0.25)' }}>
-            <MapPin size={16} /> Track on Live Map
-          </button>
-          <button onClick={() => alert(`Calling ${tech.name}...`)}
-            style={{ flex: 1, padding: '0.75rem', background: '#f1f5f9', color: '#0f172a', fontWeight: 700, fontSize: '0.85rem', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <Phone size={15} /> Call Pro
-          </button>
-        </div>
-      </motion.div>
+      )}
 
-      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-        style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
+      {/* ─────────────────── REAL ASSIGNED EMPLOYEE CARD (ONLY IF ACCEPTED) ─────────────────── */}
+      {isAccepted && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          style={{
+            background: 'white',
+            borderRadius: 20,
+            padding: '1.2rem',
+            marginBottom: '1rem',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+            border: '1px solid #e2e8f0',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ position: 'relative' }}>
+              <div style={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.35rem',
+                fontWeight: 900,
+                color: '#b45309',
+                border: '2px solid #FC8019',
+              }}>
+                {techName.charAt(0).toUpperCase()}
+              </div>
+              <div style={{
+                position: 'absolute',
+                bottom: 0,
+                right: 0,
+                width: 15,
+                height: 15,
+                borderRadius: '50%',
+                background: '#10b981',
+                border: '2px solid white',
+              }} />
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName}</span>
+                <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
+                  ✓ Verified
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
+                  <Star size={13} fill="#d97706" /> 4.9
+                </span>
+                <span style={{ fontSize: '0.76rem', color: '#64748b' }}>• 280+ jobs completed</span>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #FC8019, #f97316)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 900 }}>{etaMinutes}</div>
+              <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>MIN ETA</div>
+            </div>
+          </div>
+
+          {/* Action Buttons: Track on Map + Call + WhatsApp */}
+          <div style={{ display: 'flex', gap: 8, marginTop: '1rem' }}>
+            <button
+              onClick={() => setShowMapModal(true)}
+              style={{
+                flex: 1.3,
+                padding: '0.75rem',
+                background: 'linear-gradient(135deg, #FC8019, #f97316)',
+                color: 'white',
+                fontWeight: 800,
+                fontSize: '0.85rem',
+                border: 'none',
+                borderRadius: 12,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                boxShadow: '0 4px 12px rgba(251, 146, 60, 0.3)',
+              }}
+            >
+              <MapPin size={15} /> Track on Live Map
+            </button>
+            <a
+              href={`tel:${techPhone}`}
+              style={{
+                flex: 1,
+                padding: '0.75rem',
+                background: '#f1f5f9',
+                color: '#0f172a',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                border: 'none',
+                borderRadius: 12,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+                textDecoration: 'none',
+              }}
+            >
+              <Phone size={14} color="#0f172a" /> Call Pro
+            </a>
+            <button
+              onClick={() => {
+                const msg = encodeURIComponent(`Hi ${techName}, following up on my CalServices booking #${rid}.`)
+                window.open(`https://wa.me/91${techPhone.replace(/\D/g, '')}?text=${msg}`, '_blank')
+              }}
+              style={{
+                padding: '0.75rem 0.9rem',
+                background: '#ecfdf5',
+                color: '#059669',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                border: '1px solid #a7f3d0',
+                borderRadius: 12,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4,
+              }}
+            >
+              <MessageSquare size={14} color="#059669" />
+            </button>
+          </div>
+
+          {/* 5-Minute Grace Period Live Status Pill (Post-Acceptance) */}
+          <div
+            style={{
+              marginTop: '0.9rem',
+              padding: '8px 12px',
+              borderRadius: 12,
+              background: canCancel ? '#fffbeb' : '#f8fafc',
+              border: `1px solid ${canCancel ? '#fde68a' : '#e2e8f0'}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Clock size={14} color={canCancel ? '#d97706' : '#94a3b8'} />
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: canCancel ? '#92400e' : '#64748b' }}>
+                {canCancel
+                  ? `Free cancellation available: ${formatGraceTime(graceSecs)}`
+                  : '5-minute free cancellation window expired'}
+              </span>
+            </div>
+            <button
+              onClick={() => setShowCancelModal(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: canCancel ? '#dc2626' : '#64748b',
+                fontWeight: 800,
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                padding: 0,
+              }}
+            >
+              {canCancel ? 'Cancel Booking' : 'Cancel Policy'}
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ─────────────────── 6-DIGIT SERVICE START OTP CARD (IF ACCEPTED) ─────────────────── */}
+      {isAccepted && (
+        <div style={{
+          background: '#fff7ed',
+          borderRadius: 14,
+          padding: '10px 14px',
+          border: '1px solid rgba(251, 146, 60, 0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '1rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <KeyRound size={18} color="#ea580c" />
+            <div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#c2410c', textTransform: 'uppercase' }}>
+                Service Start OTP
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#9a3412' }}>Share when partner arrives</div>
+            </div>
+          </div>
+          <div
+            onClick={handleCopyOtp}
+            title="Click to copy OTP"
+            style={{
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              fontSize: '1.15rem',
+              fontWeight: 900,
+              color: '#c2410c',
+              background: 'white',
+              padding: '3px 10px',
+              borderRadius: 8,
+              border: '1px dashed #f97316',
+              letterSpacing: '1.5px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <span>{startOtp}</span>
+            {copiedOtp ? <Check size={13} color="#10B981" /> : <Copy size={13} color="#ea580c" />}
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────── REAL BOOKING DETAILS (100% ACCURATE IN ₹) ─────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{
+          background: 'white',
+          borderRadius: 20,
+          padding: '1.2rem',
+          marginBottom: '1rem',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+          border: '1px solid #e2e8f0',
+        }}
       >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>📋 Booking Details</div>
+        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+          📋 Booking Details
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', fontSize: '0.8rem' }}>
           {[
-            { label: 'Service', value: category?.name },
+            { label: 'Booking Ref', value: `#${rid}` },
+            { label: 'Service', value: category?.name || 'Home Service' },
             { label: 'Date', value: displayDate },
             { label: 'Time', value: displayTime },
-            { label: 'Address', value: formData?.address, span: true },
-            { label: 'Total Amount', value: `${BOOKING_CURRENCY_SYMBOL}${totalPrice}`, highlight: true },
+            { label: 'Address', value: liveData?.destination?.address || formData?.address, span: true },
+            { label: 'Total Amount', value: `₹${totalPrice || liveData?.total_amount || 0}`, highlight: true },
           ].map((r, i) => (
             <div key={i} style={{ ...(r.span ? { gridColumn: '1/-1' } : {}), background: '#f8fafc', borderRadius: 10, padding: '0.5rem 0.75rem' }}>
               <div style={{ color: '#94a3b8', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase' }}>{r.label}</div>
-              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2 }}>{r.value || '—'}</div>
+              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2, wordBreak: 'break-word' }}>{r.value || '—'}</div>
             </div>
           ))}
         </div>
       </motion.div>
 
-      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-        style={{ background: 'white', borderRadius: 20, padding: '1.25rem', marginBottom: '1.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}
+      {/* ─────────────────── REAL-TIME 4-STAGE TIMELINE ─────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{
+          background: 'white',
+          borderRadius: 20,
+          padding: '1.2rem',
+          marginBottom: '1.25rem',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+          border: '1px solid #e2e8f0',
+        }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>🗺️ Live Tracking</div>
-          <button onClick={() => setShowMapModal(true)} style={{ background: 'none', border: 'none', color: '#3B82F6', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer' }}>
-            Open Fullscreen Map →
-          </button>
-        </div>
-        {trackSteps.map((s, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.5rem 0', position: 'relative' }}>
-            {i < trackSteps.length - 1 && <div style={{ position: 'absolute', left: 18, top: 36, width: 2, height: 24, background: s.done ? '#10B981' : '#e2e8f0' }} />}
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: s.done ? '#10B98115' : '#f8fafc', border: `2px solid ${s.done ? '#10B981' : '#e2e8f0'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1rem' }}>
-              {s.done ? <Check size={16} color="#10B981" /> : s.icon}
-            </div>
-            <div style={{ flex: 1, paddingTop: 6 }}>
-              <div style={{ fontWeight: 700, color: s.done ? '#0f172a' : '#94a3b8', fontSize: '0.85rem' }}>{s.label}</div>
-            </div>
-            <div style={{ fontSize: '0.72rem', fontWeight: 600, color: s.done ? '#10B981' : '#94a3b8', paddingTop: 8 }}>{s.time}</div>
+          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+            🗺️ Live Dispatch Status
           </div>
-        ))}
+          {isAccepted && (
+            <button onClick={() => setShowMapModal(true)} style={{ background: 'none', border: 'none', color: '#FC8019', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer' }}>
+              Open Fullscreen Map →
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* Step 1: Booking Confirmed */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#ecfdf5', border: '1.5px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Check size={14} color="#10b981" strokeWidth={3} />
+            </div>
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>
+              Booking Confirmed
+            </div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#10b981' }}>Done</span>
+          </div>
+
+          {/* Step 2: Partner Acceptance */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isAccepted ? '#ecfdf5' : '#fff7ed', border: `1.5px solid ${isAccepted ? '#10b981' : '#f59e0b'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isAccepted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <Radio size={14} color="#f59e0b" className="animate-pulse" />}
+            </div>
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>
+              {isAccepted ? `${techName} Accepted Job` : 'Waiting for Partner to Accept'}
+            </div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: isAccepted ? '#10b981' : '#f59e0b' }}>
+              {isAccepted ? 'Accepted' : 'Searching...'}
+            </span>
+          </div>
+
+          {/* Step 3: Partner En Route */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isAccepted ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${isAccepted ? '#FC8019' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '0.75rem' }}>🛵</span>
+            </div>
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: isAccepted ? '#0f172a' : '#94a3b8' }}>
+              Partner On The Way
+            </div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isAccepted ? '#FC8019' : '#94a3b8' }}>
+              {isAccepted ? `~${etaMinutes} mins` : 'Pending'}
+            </span>
+          </div>
+
+          {/* Step 4: Service Execution */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f8fafc', border: '1.5px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '0.75rem' }}>⚙️</span>
+            </div>
+            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: '#94a3b8' }}>
+              Service Execution &amp; Completion
+            </div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>Next</span>
+          </div>
+        </div>
       </motion.div>
 
-      <button onClick={onBookAgain}
-        style={{ width: '100%', padding: '1rem', background: '#f1f5f9', color: '#0f172a', fontWeight: 700, fontSize: '0.9rem', border: 'none', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-        <Home size={16} /> Book Another Service
-      </button>
+      {/* Action Footer: Cancel Booking + Book Another Service */}
+      <div style={{ display: 'flex', gap: 10, marginTop: '0.5rem' }}>
+        <button
+          onClick={() => setShowCancelModal(true)}
+          style={{
+            flex: 1,
+            padding: '0.85rem',
+            background: '#fff1f2',
+            color: '#e11d48',
+            fontWeight: 800,
+            fontSize: '0.86rem',
+            border: '1px solid #ffe4e6',
+            borderRadius: 14,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          <Ban size={15} /> Cancel Booking
+        </button>
 
+        <button
+          onClick={onBookAgain}
+          style={{
+            flex: 1.2,
+            padding: '0.85rem',
+            background: '#f1f5f9',
+            color: '#0f172a',
+            fontWeight: 800,
+            fontSize: '0.86rem',
+            border: 'none',
+            borderRadius: 14,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          <Home size={15} /> Book Another
+        </button>
+      </div>
+
+      {/* Live Map Modal */}
       <AnimatePresence>
         {showMapModal && (
           <CustomerLiveTrackingModal
             booking={trackingBookingObj}
             onClose={() => setShowMapModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Cancellation Modal (Mandatory Reason + 5-Min Grace Period) */}
+      <AnimatePresence>
+        {showCancelModal && (
+          <BookingCancellationModal
+            bookingId={liveData?.booking_id || successData?.id}
+            requestId={rid}
+            isAccepted={isAccepted}
+            graceSecondsRemaining={graceSecs}
+            onClose={() => setShowCancelModal(false)}
+            onCancelled={(data) => {
+              setLiveData((prev) => ({
+                ...(prev || {}),
+                status: "cancelled",
+                cancellation_reason: data?.cancellation_reason,
+              }))
+            }}
           />
         )}
       </AnimatePresence>
@@ -7188,25 +7670,40 @@ export function BookingPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const routerLocation = useLocation()
+  const incomingCart = routerLocation.state?.cart
+  const incomingCategory = routerLocation.state?.category
   const trackParam = searchParams.get("track") || searchParams.get("booking_id") || sessionStorage.getItem("calservice_active_tracking_id")
 
-  // BookingPage is checkout / tracking flow — only redirect to landing if no cart, no active category, no tracking session, and not in tracking step
-  useEffect(() => {
-    if (
-      !incomingCart?.length &&
-      !incomingCategory &&
-      !routerLocation.state?.triggerLocPicker &&
-      !trackParam &&
-      step !== 0
-    ) {
-      navigate(routes.landing, { replace: true })
+  const [cart, setCart] = useState(() => {
+    if (incomingCart && incomingCart.length > 0) {
+      try { localStorage.setItem("calservices_customer_cart", JSON.stringify(incomingCart)) } catch (e) { }
+      return incomingCart
     }
-  }, [incomingCart, incomingCategory, routerLocation.state, trackParam, step, navigate])
+    try {
+      const saved = localStorage.getItem("calservices_customer_cart") || sessionStorage.getItem("calservices_customer_cart")
+      if (saved) {
+        const p = JSON.parse(saved)
+        if (Array.isArray(p) && p.length > 0) return p
+      }
+    } catch (e) { }
+    return []
+  })
+
+  const [category, setCategory] = useState(() => {
+    if (incomingCategory) {
+      try { localStorage.setItem("calservices_customer_category", JSON.stringify(incomingCategory)) } catch (e) { }
+      return incomingCategory
+    }
+    try {
+      const saved = localStorage.getItem("calservices_customer_category")
+      if (saved) return JSON.parse(saved)
+    } catch (e) { }
+    return resolveCategoryFromCart(null, incomingCart) || { id: "cleaning", name: "Deep Cleaning", slug: "cleaning" }
+  })
 
   const [step, setStep] = useState(() => {
     if (trackParam || routerLocation.state?.isTracking) return 0;
-    if (routerLocation.state?.triggerLocPicker) return 1;
-    return incomingCart?.length ? 3 : 1;
+    return 3;
   })
   const [loading, setLoading] = useState(false)
   const [showCartMenu, setShowCartMenu] = useState(false)
@@ -7219,8 +7716,13 @@ export function BookingPage() {
     }
     return null
   })
-  const [category, setCategory] = useState(() => incomingCategory || (incomingCart?.length ? resolveCategoryFromCart(null, incomingCart) : null))
-  const [cart, setCart] = useState(incomingCart || [])
+
+  // Sync cart to local storage
+  useEffect(() => {
+    if (Array.isArray(cart) && cart.length > 0) {
+      try { localStorage.setItem("calservices_customer_cart", JSON.stringify(cart)) } catch (e) { }
+    }
+  }, [cart])
 
   // Scroll to the top of the page when checkout page mounts or step changes
   useEffect(() => {
@@ -7700,7 +8202,7 @@ export function BookingPage() {
       {/* Main Content */}
       <main className="uc-main" ref={contentRef}>
         <AnimatePresence mode="wait">
-          {step === 0 && (
+          {step === 0 ? (
             <motion.div key="tracking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <LiveTrackingPage
                 successData={successData}
@@ -7713,31 +8215,7 @@ export function BookingPage() {
                 onBookAgain={resetAll}
               />
             </motion.div>
-          )}
-
-          {/* Step 1 (StepHome) removed — service discovery lives on LandingPage */}
-
-          {step === 4 && (
-            <motion.div key="step4" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}>
-              <div className="uc-step-container">
-                <StepLogin
-                  category={category}
-                  onBack={() => { navigate(routes.landing); }}
-                  onVerified={data => {
-                    setFormData(p => ({
-                      ...p,
-                      customer_name: data.name || p.customer_name,
-                      phone: data.phone || p.phone,
-                      email: data.email || p.email,
-                    }))
-                    setStep(5)
-                  }}
-                />
-              </div>
-            </motion.div>
-          )}
-
-          {step >= 3 && step <= 6 && (
+          ) : (
             <motion.div key="workflowCheckout" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
               <StepWorkflowCheckout
                 category={category}

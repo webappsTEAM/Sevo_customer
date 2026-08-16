@@ -31,13 +31,10 @@ class IsEmployeeRole(BasePermission):
 
 
 class IsCustomer(BasePermission):
-    """Allows access for authenticated customer users (case-insensitive) as well as admins/managers."""
+    """Allows access for any authenticated user (customer, employee, admin, manager) to manage addresses."""
     def has_permission(self, request, view):
         user = getattr(request, "user", None)
-        if not user or not user.is_authenticated:
-            return False
-        role = str(getattr(user, "role", "")).lower()
-        return role in {"customer", "admin", "manager", ""} or user.is_superuser or user.is_staff
+        return bool(user and user.is_authenticated)
 
 
 def RequireModuleAccess(module_name: str, required_action: str):

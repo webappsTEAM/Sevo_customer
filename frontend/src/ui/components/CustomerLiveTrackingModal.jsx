@@ -32,9 +32,13 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
-  Check
+  Check,
+  Ban,
+  AlertTriangle,
+  Wrench
 } from "lucide-react"
 import { API_BASE_URL } from "../../api/client.js"
+import { BookingCancellationModal } from "./BookingCancellationModal.jsx"
 
 // Swiggy/Uber-style Custom HTML DivIcons
 const createCustomerHomeIcon = () => {
@@ -116,50 +120,97 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
   const [recenterTrigger, setRecenterTrigger] = useState(0)
   const [copiedOtp, setCopiedOtp] = useState(false)
   const [tileLayerType, setTileLayerType] = useState("streets") // 'streets' | 'osm'
+  const [showCancelModal, setShowCancelModal] = useState(false)
 
   const bookingId = booking?.id
 
-  // Fetch backend status
-  const fetchLiveLocation = async () => {
-    if (!bookingId) return
-    try {
-      const res = await fetch(`${API_BASE_URL}/booking/${bookingId}/live-location/`, {
-        credentials: "include"
-      })
-      if (res.ok) {
-        const json = await res.json()
-        if (json.data) {
-          setLiveData(json.data)
-          setLastRefreshed(new Date())
-        }
-      }
-    } catch (err) {
-      console.warn("Live location fetch failed:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // Real-Time WebSocket Connection + Resilient 4-second Polling Backup
   useEffect(() => {
-    fetchLiveLocation()
-    const interval = setInterval(fetchLiveLocation, 4000)
-    return () => clearInterval(interval)
-  }, [bookingId])
+    if (!bookingId) return
 
-  // Resolve Coordinates strictly from live backend data
+    let ws = null
+    let pollTimer = null
+    let isMounted = true
+
+    const fetchLiveLocation = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/booking/${bookingId}/live-location/`, {
+          credentials: "include"
+        })
+        if (res.ok) {
+          const json = await res.json()
+          if (json?.data && isMounted) {
+            setLiveData(json.data)
+            setLastRefreshed(new Date())
+          }
+        }
+      } catch (err) {
+        console.warn("Live location fetch failed:", err)
+      } finally {
+        if (isMounted) setLoading(false)
+      }
+    }
+
+    // 1. Immediate fetch
+    fetchLiveLocation()
+
+    // 2. Open WebSocket channel
+    try {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+      const host = window.location.hostname === "localhost" ? "localhost:8000" : window.location.host
+      const rid = booking?.request_id || bookingId
+      const wsUrl = `${protocol}//${host}/ws/live/booking/${encodeURIComponent(rid)}/`
+
+      ws = new WebSocket(wsUrl)
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data)
+          if (msg?.data && isMounted) {
+            setLiveData(msg.data)
+            setLastRefreshed(new Date())
+          }
+        } catch (err) {}
+      }
+    } catch (err) {}
+
+    // 3. Keep 4-second background polling active as reliable backup
+    pollTimer = setInterval(fetchLiveLocation, 4000)
+
+    return () => {
+      isMounted = false
+      if (ws) ws.close()
+      if (pollTimer) clearInterval(pollTimer)
+    }
+  }, [bookingId, booking?.request_id])
+
+  // Resolve Coordinates strictly from live backend data (No synthetic offsets)
   const destLat = liveData?.destination?.latitude != null ? parseFloat(liveData.destination.latitude) : (booking?.latitude ? parseFloat(booking.latitude) : null)
   const destLng = liveData?.destination?.longitude != null ? parseFloat(liveData.destination.longitude) : (booking?.longitude ? parseFloat(booking.longitude) : null)
 
+  const currentStatus = (liveData?.status || booking?.status || "confirmed").toLowerCase()
+  const isArrived = currentStatus === "arrived"
+  const isInProgress = currentStatus === "in_progress"
+  const isCompleted = currentStatus === "completed" || currentStatus === "closed"
+  const isCancelled = currentStatus === "cancelled"
+  const isOnTheWay = currentStatus === "on_the_way" || currentStatus === "accepted" || currentStatus === "assigned"
+
   const empLocation = liveData?.employee_live_location
-  const empLat = empLocation?.latitude != null ? parseFloat(empLocation.latitude) : null
-  const empLng = empLocation?.longitude != null ? parseFloat(empLocation.longitude) : null
+  const isAccepted = Boolean(liveData?.is_accepted || empLocation || booking?.assigned_employee || ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed"].includes(currentStatus))
+
+  const empLat = empLocation?.latitude != null && !isNaN(parseFloat(empLocation.latitude))
+    ? parseFloat(empLocation.latitude)
+    : null
+
+  const empLng = empLocation?.longitude != null && !isNaN(parseFloat(empLocation.longitude))
+    ? parseFloat(empLocation.longitude)
+    : null
 
   const hasCustomerCoords = destLat != null && !isNaN(destLat) && destLng != null && !isNaN(destLng)
   const hasEmpCoords = empLat != null && !isNaN(empLat) && empLng != null && !isNaN(empLng)
 
   const techName = empLocation?.employee_name || booking?.assigned_employee?.full_name || booking?.assigned_employee?.user?.first_name || "Assigned Partner"
   const techPhone = empLocation?.phone || booking?.assigned_employee?.phone || ""
-  const startOtp = booking?.start_otp || booking?.otp || ""
+  const startOtp = liveData?.start_otp || booking?.start_otp || booking?.otp || ""
 
   // Fetch real road navigation geometry via public OSRM routing engine
   useEffect(() => {
@@ -190,8 +241,9 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
     fetchRoadGeometry()
   }, [empLat, empLng, destLat, destLng, hasCustomerCoords, hasEmpCoords])
 
-  const finalDistance = roadDistanceKm || liveData?.distance_km || "0.4"
-  const finalEta = roadEtaMins || liveData?.eta_minutes || "4"
+  const finalDistance = roadDistanceKm || liveData?.distance_km || null
+  const finalEta = roadEtaMins || liveData?.eta_minutes || null
+  const waitingForGps = isAccepted && !hasEmpCoords && !isArrived && !isInProgress && !isCompleted
 
   const mapCenter = hasEmpCoords && hasCustomerCoords
     ? [(destLat + empLat) / 2, (destLng + empLng) / 2]
@@ -461,18 +513,30 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
               )}
             </MapContainer>
 
-            {/* Top-Left Floating Swiggy ETA Banner */}
+            {/* Top-Left Floating ETA & Arrival Banner */}
             <div style={{
               position: "absolute",
               top: 18,
               left: 18,
               zIndex: 1000,
-              background: "rgba(255, 255, 255, 0.98)",
+              background: isArrived || isCompleted
+                ? "rgba(236, 253, 245, 0.98)"
+                : isInProgress
+                ? "rgba(239, 246, 255, 0.98)"
+                : waitingForGps
+                ? "rgba(245, 243, 255, 0.98)"
+                : "rgba(255, 255, 255, 0.98)",
               backdropFilter: "blur(14px)",
               padding: "12px 18px",
               borderRadius: 18,
               boxShadow: "0 12px 32px rgba(0,0,0,0.16)",
-              border: "1px solid rgba(226, 232, 240, 0.95)",
+              border: isArrived || isCompleted
+                ? "1px solid rgba(16, 185, 129, 0.4)"
+                : isInProgress
+                ? "1px solid rgba(59, 130, 246, 0.4)"
+                : waitingForGps
+                ? "1px solid rgba(124, 58, 237, 0.3)"
+                : "1px solid rgba(226, 232, 240, 0.95)",
               display: "flex",
               alignItems: "center",
               gap: 14,
@@ -481,23 +545,95 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                 width: 46,
                 height: 46,
                 borderRadius: 14,
-                background: "linear-gradient(135deg, #10B981, #059669)",
+                background: isArrived || isCompleted
+                  ? "linear-gradient(135deg, #10B981, #059669)"
+                  : isInProgress
+                  ? "linear-gradient(135deg, #3B82F6, #1D4ED8)"
+                  : waitingForGps
+                  ? "linear-gradient(135deg, #7C3AED, #6D28D9)"
+                  : "linear-gradient(135deg, #FC8019, #EA580C)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: "white",
-                boxShadow: "0 4px 14px rgba(16,185,129,0.4)",
+                boxShadow: isArrived || isCompleted
+                  ? "0 4px 14px rgba(16,185,129,0.4)"
+                  : isInProgress
+                  ? "0 4px 14px rgba(59,130,246,0.4)"
+                  : waitingForGps
+                  ? "0 4px 14px rgba(124,58,237,0.4)"
+                  : "0 4px 14px rgba(252,128,25,0.4)",
               }}>
-                <Clock size={24} />
+                {isArrived || isCompleted ? (
+                  <CheckCircle2 size={24} />
+                ) : isInProgress ? (
+                  <Wrench size={22} className="animate-spin" />
+                ) : (
+                  <Clock size={24} />
+                )}
               </div>
               <div>
-                <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                  Estimated Arrival Time
-                </div>
-                <div style={{ fontSize: "1.35rem", fontWeight: 900, color: "#0f172a", display: "flex", alignItems: "baseline", gap: 6 }}>
-                  <span>{finalEta} mins</span>
-                  <span style={{ fontSize: "0.88rem", color: "#64748b", fontWeight: 700 }}>({finalDistance} km away)</span>
-                </div>
+                {isArrived ? (
+                  <>
+                    <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#047857", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981", display: "inline-block" }} className="animate-ping" />
+                      Partner At Site
+                    </div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#0f172a" }}>
+                      Partner Arrived at Location
+                    </div>
+                    <div style={{ fontSize: "0.78rem", color: "#059669", fontWeight: 700, marginTop: 2 }}>
+                      Share Service Start OTP <span style={{ fontFamily: "monospace", letterSpacing: 1, background: "#ecfdf5", padding: "1px 6px", borderRadius: 4, border: "1px solid #a7f3d0" }}>{startOtp}</span> with partner
+                    </div>
+                  </>
+                ) : isInProgress ? (
+                  <>
+                    <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#1d4ed8", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Service In Progress
+                    </div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#0f172a" }}>
+                      Work is underway
+                    </div>
+                    <div style={{ fontSize: "0.78rem", color: "#2563eb", fontWeight: 600, marginTop: 2 }}>
+                      Partner {techName} is servicing your request
+                    </div>
+                  </>
+                ) : isCompleted ? (
+                  <>
+                    <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#047857", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Service Completed
+                    </div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#0f172a" }}>
+                      Work Finished Successfully
+                    </div>
+                    <div style={{ fontSize: "0.78rem", color: "#059669", fontWeight: 600, marginTop: 2 }}>
+                      Thank you for choosing CalServices!
+                    </div>
+                  </>
+                ) : waitingForGps ? (
+                  <>
+                    <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#7C3AED", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Partner Accepted • Live GPS
+                    </div>
+                    <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "#0f172a", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7C3AED", display: "inline-block", animation: "pulse 1.5s infinite" }} />
+                      Locating partner...
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#6D28D9", fontWeight: 600, marginTop: 2 }}>
+                      Waiting for live GPS signal
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Estimated Arrival Time
+                    </div>
+                    <div style={{ fontSize: "1.35rem", fontWeight: 900, color: "#0f172a", display: "flex", alignItems: "baseline", gap: 6 }}>
+                      <span>{finalEta || 2} mins</span>
+                      <span style={{ fontSize: "0.88rem", color: "#64748b", fontWeight: 700 }}>({finalDistance || 0.5} km away)</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -720,54 +856,159 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                 Live Service Status
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {/* Step 1: Confirmed */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: "50%",
-                    background: "#10B981", color: "white",
-                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
-                  }}>
-                    <CheckCircle2 size={15} />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{
+                      width: 26, height: 26, borderRadius: "50%",
+                      background: "#10B981", color: "white",
+                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+                    }}>
+                      <CheckCircle2 size={16} />
+                    </div>
+                    <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#0f172a" }}>
+                      Booking Confirmed
+                    </div>
                   </div>
-                  <div style={{ flex: 1, fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
-                    Booking Confirmed
-                  </div>
-                  <span style={{ fontSize: "0.7rem", color: "#059669", fontWeight: 700 }}>Done</span>
-                </div>
-
-                {/* Step 2: On The Way (Active) */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: "50%",
-                    background: "#FC8019", color: "white",
-                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                    boxShadow: "0 0 0 4px rgba(252, 128, 25, 0.2)"
-                  }}>
-                    <Bike size={14} />
-                  </div>
-                  <div style={{ flex: 1, fontSize: "0.82rem", fontWeight: 800, color: "#FC8019" }}>
-                    Partner On The Way
-                  </div>
-                  <span style={{ fontSize: "0.7rem", color: "#FC8019", fontWeight: 800, background: "#fff7ed", padding: "2px 6px", borderRadius: 6 }}>
-                    ~{finalEta} mins
+                  <span style={{ fontSize: "0.72rem", color: "#059669", fontWeight: 700, background: "#ecfdf5", padding: "2px 8px", borderRadius: 6 }}>
+                    Done
                   </span>
                 </div>
 
-                {/* Step 3: Service Completion */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: "50%",
-                    background: booking?.status === "in_progress" || booking?.status === "completed" ? "#10B981" : "#f1f5f9",
-                    color: booking?.status === "in_progress" || booking?.status === "completed" ? "white" : "#94a3b8",
-                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+                {/* Step 2: Partner On The Way / Arrived */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {isArrived ? (
+                      <div style={{
+                        width: 26, height: 26, borderRadius: "50%",
+                        background: "#10B981", color: "white",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        boxShadow: "0 0 0 4px rgba(16, 185, 129, 0.2)"
+                      }}>
+                        <CheckCircle2 size={16} />
+                      </div>
+                    ) : (isInProgress || isCompleted) ? (
+                      <div style={{
+                        width: 26, height: 26, borderRadius: "50%",
+                        background: "#10B981", color: "white",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+                      }}>
+                        <CheckCircle2 size={16} />
+                      </div>
+                    ) : (
+                      <div style={{
+                        width: 26, height: 26, borderRadius: "50%",
+                        background: "#FC8019", color: "white",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        boxShadow: "0 0 0 4px rgba(252, 128, 25, 0.2)"
+                      }}>
+                        <Bike size={15} />
+                      </div>
+                    )}
+                    <div style={{
+                      fontSize: "0.84rem",
+                      fontWeight: isArrived || (!isInProgress && !isCompleted) ? 800 : 600,
+                      color: isArrived ? "#047857" : (!isInProgress && !isCompleted) ? "#ea580c" : "#0f172a"
+                    }}>
+                      {isArrived
+                        ? "Partner Arrived at Location"
+                        : (isInProgress || isCompleted)
+                        ? "Partner Arrived"
+                        : "Partner On The Way"}
+                    </div>
+                  </div>
+
+                  <span style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                    padding: "2px 8px",
+                    borderRadius: 6,
+                    background: isArrived
+                      ? "#ecfdf5"
+                      : (isInProgress || isCompleted)
+                      ? "#ecfdf5"
+                      : "#fff7ed",
+                    color: isArrived
+                      ? "#047857"
+                      : (isInProgress || isCompleted)
+                      ? "#059669"
+                      : "#ea580c",
+                    border: isArrived ? "1px solid #a7f3d0" : "none"
                   }}>
-                    <ShieldCheck size={14} />
+                    {isArrived
+                      ? "At Site"
+                      : (isInProgress || isCompleted)
+                      ? "Done"
+                      : `~${finalEta || 2} mins`}
+                  </span>
+                </div>
+
+                {/* Step 3: Service Execution & Completion */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {isCompleted ? (
+                      <div style={{
+                        width: 26, height: 26, borderRadius: "50%",
+                        background: "#10B981", color: "white",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+                      }}>
+                        <CheckCircle2 size={16} />
+                      </div>
+                    ) : isInProgress ? (
+                      <div style={{
+                        width: 26, height: 26, borderRadius: "50%",
+                        background: "#3B82F6", color: "white",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        boxShadow: "0 0 0 4px rgba(59, 130, 246, 0.2)"
+                      }}>
+                        <Wrench size={14} className="animate-spin" />
+                      </div>
+                    ) : (
+                      <div style={{
+                        width: 26, height: 26, borderRadius: "50%",
+                        background: "#f1f5f9", color: "#94a3b8",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+                      }}>
+                        <ShieldCheck size={16} />
+                      </div>
+                    )}
+                    <div style={{
+                      fontSize: "0.84rem",
+                      fontWeight: isInProgress ? 800 : isCompleted ? 700 : 600,
+                      color: isInProgress ? "#1e40af" : isCompleted ? "#0f172a" : "#94a3b8"
+                    }}>
+                      {isInProgress
+                        ? "Service In Progress"
+                        : isCompleted
+                        ? "Service Completed"
+                        : "Service Execution & Completion"}
+                    </div>
                   </div>
-                  <div style={{ flex: 1, fontSize: "0.82rem", fontWeight: 600, color: booking?.status === "in_progress" ? "#0f172a" : "#94a3b8" }}>
-                    Service Execution & Completion
-                  </div>
-                  <span style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Next</span>
+
+                  <span style={{
+                    fontSize: "0.72rem",
+                    fontWeight: isInProgress || isCompleted ? 800 : 600,
+                    padding: "2px 8px",
+                    borderRadius: 6,
+                    background: isCompleted
+                      ? "#ecfdf5"
+                      : isInProgress
+                      ? "#eff6ff"
+                      : "#f8fafc",
+                    color: isCompleted
+                      ? "#059669"
+                      : isInProgress
+                      ? "#1d4ed8"
+                      : "#94a3b8",
+                    border: isInProgress ? "1px solid #bfdbfe" : "none"
+                  }}>
+                    {isCompleted
+                      ? "Done"
+                      : isInProgress
+                      ? "In Progress"
+                      : "Next"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -784,12 +1025,53 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                 <MapPin size={13} color="#10B981" /> Delivery Location
               </div>
               <div style={{ color: "#334155", fontWeight: 600, lineHeight: 1.4 }}>
-                {liveData?.destination?.address || booking?.address || "QR4G+9V5, Balaji Nagar, Anand Nagar, Hosur"}
+                {liveData?.destination?.address || booking?.address || "Customer Service Address"}
               </div>
+            </div>
+
+            {/* 5. Cancel Booking Action */}
+            <div style={{ marginTop: 4 }}>
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(true)}
+                style={{
+                  width: "100%",
+                  padding: "0.65rem",
+                  background: "#fff1f2",
+                  color: "#e11d48",
+                  fontWeight: 800,
+                  fontSize: "0.8rem",
+                  border: "1px solid #ffe4e6",
+                  borderRadius: 12,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <Ban size={14} /> Cancel Booking
+              </button>
             </div>
           </div>
         </div>
       </motion.div>
+
+      {/* Cancellation Modal (Mandatory Reason + 5-Min Grace Period) */}
+      <AnimatePresence>
+        {showCancelModal && (
+          <BookingCancellationModal
+            bookingId={bookingId}
+            requestId={booking?.request_id || bookingId}
+            isAccepted={Boolean(liveData?.is_accepted || empLocation)}
+            graceSecondsRemaining={liveData?.cancellation_grace_remaining_seconds ?? 300}
+            onClose={() => setShowCancelModal(false)}
+            onCancelled={() => {
+              if (onClose) onClose()
+            }}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

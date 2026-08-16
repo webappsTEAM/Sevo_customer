@@ -74,6 +74,13 @@ def _broadcast_travel_status(task, actor, travel_event):
             f"live_admin_{task.company_id}",
             payload,
         )
+
+        if getattr(task, "service_request", None):
+            try:
+                from live_locations.consumers import broadcast_booking_realtime_update
+                broadcast_booking_realtime_update(task.service_request)
+            except Exception:
+                pass
     except Exception as exc:
         print(f"[_broadcast_travel_status] WS push failed: {exc}")
 
@@ -206,7 +213,7 @@ def sync_task_lifecycle_to_service_request(task, actor=None):
                     job.status = EmployeeJob.Status.SUSPENDED
                     job.save(update_fields=["status"])
 
-            # 5. ACCEPTED task
+            # 6. ACCEPTED task
             elif task.acceptance_status == Task.AcceptanceStatus.ACCEPTED:
                 if sr.status == ServiceRequest.Status.ASSIGNED:
                     apply_transition(sr, ServiceRequest.Status.ACCEPTED)
@@ -218,6 +225,13 @@ def sync_task_lifecycle_to_service_request(task, actor=None):
                     if not job.accepted_date:
                         job.accepted_date = timezone.now()
                     job.save(update_fields=["status", "accepted_date"])
+
+            # Broadcast real-time booking update to Customer Live Tracking room
+            try:
+                from live_locations.consumers import broadcast_booking_realtime_update
+                broadcast_booking_realtime_update(sr)
+            except Exception:
+                pass
 
     except Exception as e:
         import logging

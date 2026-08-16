@@ -343,15 +343,37 @@ function WorkOrderModal({ job, onClose }) {
   const custLng = sr.address_obj?.longitude || sr.longitude || null
   const hasCustCoords = custLat !== null && custLng !== null
 
-  // Start live tracking if accepted or in_progress
-  const isTracking = ["accepted", "in_progress"].includes(job.status)
+  // Start live tracking if accepted or in_progress — push real GPS to backend
+  const isTracking = ["accepted", "in_progress", "on_the_way"].includes(job.status)
 
   useEffect(() => {
     if (!isTracking) return
+    if (!navigator.geolocation) return
+
+    let lastLat = null, lastLng = null
+
+    const handlePosition = async (pos) => {
+      const lat = pos.coords.latitude
+      const lng = pos.coords.longitude
+      setEmpPos([lat, lng])
+
+      // Push to backend if moved > 5m
+      if (lastLat !== null && Math.abs(lat - lastLat) < 0.00005 && Math.abs(lng - lastLng) < 0.00005) return
+      lastLat = lat
+      lastLng = lng
+      try {
+        const { apiRequest: api } = await import("../../api/client.js")
+        await api("/employee/gps/update/", { method: "POST", json: { lat, lng } })
+      } catch (e) { /* silent */ }
+    }
+
+    // Get immediate position
+    navigator.geolocation.getCurrentPosition(handlePosition, null, { enableHighAccuracy: true, timeout: 8000 })
+
     const watchId = navigator.geolocation.watchPosition(
-      (pos) => setEmpPos([pos.coords.latitude, pos.coords.longitude]),
+      handlePosition,
       (err) => console.log("GPS error", err),
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, maximumAge: 8000, timeout: 15000 }
     )
     return () => navigator.geolocation.clearWatch(watchId)
   }, [isTracking])
@@ -784,6 +806,49 @@ export function EmployeeJobsPage() {
   }
 
   useEffect(() => { loadJobs() }, [])
+
+  /* ── Live GPS Push to Backend (for customer tracking) ── */
+  useEffect(() => {
+    const activeStatuses = ["accepted", "on_the_way", "in_progress", "assigned"]
+    const hasActiveJob = jobs.some(j => activeStatuses.includes(j.status))
+    if (!hasActiveJob) return
+    if (!navigator.geolocation) return
+
+    let lastLat = null, lastLng = null, watchId = null
+
+    const pushGps = async (lat, lng) => {
+      // Only push if moved more than ~5m
+      if (lastLat !== null && Math.abs(lat - lastLat) < 0.00005 && Math.abs(lng - lastLng) < 0.00005) return
+      lastLat = lat
+      lastLng = lng
+      try {
+        await apiRequest("/employee/gps/update/", {
+          method: "POST",
+          json: { lat, lng },
+        })
+      } catch (e) {
+        console.debug("[GPS] push failed:", e)
+      }
+    }
+
+    // Initial immediate position fetch
+    navigator.geolocation.getCurrentPosition(
+      pos => pushGps(pos.coords.latitude, pos.coords.longitude),
+      err => console.debug("[GPS] initial fetch error:", err),
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+
+    // Watch continuously every ~10s (GPS accuracy filter handled inside)
+    watchId = navigator.geolocation.watchPosition(
+      pos => pushGps(pos.coords.latitude, pos.coords.longitude),
+      err => console.debug("[GPS] watch error:", err),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    )
+
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId)
+    }
+  }, [jobs])
 
   /* ── Job Actions ── */
   const handleAction = (jobId, action) => {
