@@ -10,6 +10,7 @@ import {
 import { apiRequest } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
 import { useToast, ToastBanner } from "./useToast.jsx"
+import { SOFA_DETAIL_DATA } from "./sofaDetailData.js"
 
 const DEFAULT_SUITABLE_PRESETS = {
   "2-wheeler-electric-express": [
@@ -378,7 +379,510 @@ const DEFAULT_SUITABLE_PRESETS = {
     "Stove / hob surface cleaning",
     "Burner & knob cleaning",
     "Grease & food stain removal"
+  ],
+  "occ-basic": [
+    "Kitchen tiles, floor & slab cleaning + Mopping",
+    "Gas stove / hob cleaning",
+    "Sink & under-sink cleaning",
+    "Exhaust fan cleaning",
+    "Windows & switchboards cleaning",
+    "Cabinet exterior cleaning",
+    "Dining table cleaning",
+    "Utensil removal / rearrangement not included"
+  ],
+  "occ-deep": [
+    "Includes everything in Basic, plus:",
+    "Cabinet interior & exterior cleaning",
+    "Exhaust fan deep cleaning",
+    "Utensil removal & rearrangement"
+  ],
+  "empty-kitchen": [
+    "Thorough degreasing of wall tiles, countertops, and exhaust fans",
+    "Detailed cleaning of kitchen floors, windows, switchboards, and cabinets (exterior)",
+    "Deep sanitization of sink and under-sink area (utensils removal not included)"
+  ],
+  "kitchen-tiles-slabs": [
+    "Tile and slab cleaning: Remove oil and grease stains",
+    "Degreases tiles & slabs and deep cleans grout for a fresh kitchen"
+  ],
+  "cabinet-trolley-clean": [
+    "Interior & exterior cabinet wet-wiping & degreasing",
+    "Removal of food residue, spills & accumulated oil layers",
+    "Trolley tracks vacuuming, wiping & structural sanitization"
   ]
+}
+
+const STATIC_SERVICE_DETAIL_DATA = {
+  "empty-kitchen": {
+    tools: ["Specialized degreasing agents", "High-pressure floor scrubbers", "Microfiber detailing cloths", "Glass cleaning kits"],
+    ready: ["Ensure the kitchen is completely empty of utensils and items", "Provide access to continuous water and power supply"],
+    reviews: [{ name: "Meera R.", rating: "4.9", text: '"Perfect cleaning before we moved into our new apartment. Every corner was spotless."' }],
+    faqs: [{ q: "Is utensil washing included?", a: "No, this service is specifically for empty kitchens and does not include utensil cleaning." }]
+  },
+  "kitchen-tiles-slabs": {
+    tools: ["Heavy duty degreasers", "Grout scrubbing brushes", "Microfiber cleaning cloths", "High-pressure sprayers"],
+    ready: ["Clear items from the kitchen counters", "Ensure access to water and power outlets"],
+    reviews: [{ name: "Priya M.", rating: "5.0", text: '"Removed the stubborn oil stains from the tiles. Looks brand new!"' }],
+    faqs: [{ q: "Will this remove old stains?", a: "Yes, our specialized degreasers are designed to lift and clean tough oil and grease stains from slabs and tiles." }]
+  },
+  "cabinet-trolley-clean": {
+    tools: ["Wood-safe cleaner & polish", "Stainless steel degreaser for rails", "Soft detailing brushes", "Lint-free microfibers"],
+    ready: ["Empty all utensils and stored items from cabinets", "Ensure access to a water connection"],
+    reviews: [{ name: "Suresh V.", rating: "4.9", text: '"They cleaned every trolley track and got rid of the sticky grease inside the cabinets."' }],
+    faqs: [{ q: "Do I need to empty the cabinets?", a: "Yes, please empty all cabinets and drawers before the team arrives." }]
+  },
+  "occ-basic": {
+    tools: ["Kitchen-safe degreasers", "Microfiber cloths", "Non-abrasive scrubbers", "Detail cleaning brushes", "Floor and surface cleaning tools"],
+    ready: ["Continuous water supply", "Working power connection", "Kitchen area accessible for cleaning", "Fragile items and valuables kept safely"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The kitchen was cleaned very neatly. The stove, sink and tiles looked fresh after the service."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service for regular kitchen cleaning. The team was quick and professional."' }
+    ],
+    faqs: [
+      { q: "Will you move utensils from the cabinets?", a: "No. Utensil removal and rearrangement are not included in the Basic package." },
+      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring all the required environment-friendly cleaning tools and products." },
+      { q: "Is chimney cleaning included in the Basic package?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add appliance cleaning to this package?", a: "Yes. You can add individual appliance cleaning as an additional service." },
+      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean the exhaust fan in basic cleaning?", a: "No, exhaust fan cleaning is part of our deep cleaning package or can be booked separately as a quick service." },
+      { q: "Will you clean tiles and grout?", a: "Yes, we wipe tiles and slabs to remove superficial oil stains, but deep scrubbing grout lines is part of the deep cleaning package." },
+      { q: "Is garbage disposal included?", a: "We collect all waste generated during the cleaning and hand it over to your society bin, but we do not discard pre-existing bulk trash." }
+    ]
+  },
+  "occ-deep": {
+    tools: ["Steam cleaning equipment", "Kitchen-safe degreasers", "Microfiber cloths", "Non-abrasive scrubbers", "Detail brushes for corners and cabinets"],
+    ready: ["Continuous water supply", "Working power connection", "Kitchen area accessible for cleaning", "Fragile items and valuables kept safely"],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"Excellent deep cleaning. The grease on the stove and tiles was removed, and the cabinets were cleaned properly."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Very thorough service. They cleaned areas that are usually difficult to reach."' }
+    ],
+    faqs: [
+      { q: "Does Deep Clean include everything in Basic?", a: "Yes. Deep Clean includes all services covered in the Basic package, along with additional deep-cleaning services." },
+      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed, cabinets cleaned internally, and utensils rearranged as part of the Deep Clean service." },
+      { q: "Does Deep Clean include chimney cleaning?", a: "No. Chimney cleaning is available separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add refrigerator or microwave cleaning?", a: "Yes. Individual appliance cleaning can be added separately to your booking." },
+      { q: "Does steam cleaning remove tough grease?", a: "Yes. Steam cleaning helps loosen and remove stubborn grease, oil buildup and stains from suitable kitchen surfaces." },
+      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean internal cabinet walls?", a: "Yes, we deep clean both the interiors and exteriors of all kitchen cabinets and drawers." },
+      { q: "Are window panes and grills cleaned in this package?", a: "Yes, deep cleaning includes cleaning of kitchen window panes, frames, exhaust fans, and mesh surfaces." },
+      { q: "Do you offer stain guarantee for old granite or tiles?", a: "While we use professional-grade degreasers and steam machines that remove 99% of grease, extremely old chemical etchings or stone discoloration may not disappear completely." }
+    ]
+  },
+  "fridge-clean": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-parent": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-single": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-double": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-triple": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "stove-parent": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-2b": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-3b": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-4b": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "kitchen-microwave-clean": {
+    tools: ["Appliance-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food and containers", "Keep the microwave accessible", "Ensure the appliance is switched off"],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The inside of my microwave was cleaned really well."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Quick and neat service. The food stains were removed properly."' }
+    ],
+    faqs: [
+      { q: "Will you clean the inside of the microwave?", a: "Yes, the inside, glass door and rotating plate will be cleaned." },
+      { q: "Do I need to remove everything before cleaning?", a: "Yes, please remove food and containers before the service." },
+      { q: "Can you remove burnt food stains?", a: "We will clean removable food and grease stains." }
+    ]
+  },
+  "chimney-clean": {
+    tools: ["Grease-removing cleaning products", "Microfiber cloths", "Soft scrubbers", "Cleaning brushes"],
+    ready: ["Keep the chimney area accessible", "Clear items around the stove", "Ensure a power connection is available"],
+    reviews: [
+      { name: "Karthik M.", rating: "5.0", text: '"The grease on my chimney filter was cleaned properly."' },
+      { name: "Ananya S.", rating: "4.8", text: '"Good cleaning service. The chimney looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the chimney filter?", a: "Yes, the chimney filter will be cleaned." },
+      { q: "Will you remove grease and oil?", a: "Yes, visible grease and oil buildup will be cleaned." },
+      { q: "Do you repair the chimney?", a: "No, repair and replacement work are not included." }
+    ]
+  },
+  "dishwasher-clean": {
+    tools: ["Dishwasher-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove all dishes before cleaning", "Keep the dishwasher accessible", "Keep water and power connections available"],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The dishwasher was cleaned very neatly, especially the racks and filter."' },
+      { name: "Karthik M.", rating: "4.8", text: '"Good service and the inside looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the filter?", a: "Yes, the accessible filter will be cleaned." },
+      { q: "Do I need to remove the dishes?", a: "Yes, please empty the dishwasher before cleaning." },
+      { q: "Will you remove food waste and dirt?", a: "Yes, visible food waste and dirt will be cleaned." }
+    ]
+  },
+  "air-fryer-clean": {
+    tools: ["Food-safe interior sanitizers", "Microfiber cloths", "Detail cleaning brushes"],
+    ready: ["Keep the air fryer accessible and unplugged", "Ensure power outlet is nearby for testing"],
+    reviews: [{ name: "Meera V.", rating: "5.0", text: '"Very neat cleaning. The tray oil and food residues were completely washed."' }],
+    faqs: [{ q: "Is the cleaner safe for non-stick coating?", a: "Yes, we use non-abrasive soft sponges and mild, food-safe cleaners that protect the non-stick coating." }]
+  },
+  "otg-clean": {
+    tools: ["OTG safe degreasers", "Microfiber cleaning cloths", "Crevice cleaning brushes"],
+    ready: ["Unplug the OTG and keep it accessible", "Empty any trays or racks inside"],
+    reviews: [{ name: "Siddharth N.", rating: "4.9", text: '"Removed all grease stains from the glass door and walls. Excellent OTG service!"' }],
+    faqs: [{ q: "Will this clean the heating elements?", a: "We clean around heating elements carefully to avoid damage, removing grease from the oven interior walls, glass door, and trays." }]
+  },
+  "sandwich-clean": {
+    tools: ["Food-safe surface wipes", "Detangled cleaning brushes"],
+    ready: ["Keep the sandwich maker/griller accessible and unplugged"],
+    reviews: [{ name: "Deepa K.", rating: "4.8", text: '"Quick and efficient. Removed the dark stuck food particles from the grill plates."' }],
+    faqs: [{ q: "Will this clean stuck cheese?", a: "Yes, we use safe scrapers and warm chemical wipes to dissolve and remove cheese and char residues." }]
+  },
+  "quick-sink-under-sink": {
+    tools: ["Scrubbing brushes", "Disinfectant sanitizers", "Odour removal sprays"],
+    ready: ["Clear any vessels from the sink before the professional arrives"],
+    reviews: [
+      { name: "Kunal T.", rating: "4.9", text: '"The sink shines like new, and the under-sink smell is totally gone."' },
+      { name: "Ritu G.", rating: "4.8", text: '"Great scrubbing work on the hard water stains in the sink."' }
+    ],
+    faqs: [{ q: "Do you clean the drain pipe?", a: "We clean the external sink drain area and visible parts. We do not do plumbing repairs or unclogging." }]
+  },
+  "quick-kitchen-window": {
+    tools: ["Glass squeegee", "Grease-cutting window spray", "Track cleaning brush"],
+    ready: ["Clear the window sill and counter space below the window"],
+    reviews: [{ name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' }],
+    faqs: [{ q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." }]
+  },
+  "quick-dining-table": {
+    tools: ["Food-safe table cleaner", "Polishing cloth"],
+    ready: ["Clear dishes and table mats before service"],
+    reviews: [{ name: "Arjun V.", rating: "5.0", text: '"Got rid of sticky grease stains on the glass tabletop. Super clean!"' }],
+    faqs: [{ q: "Will you polish wooden tables?", a: "We do standard cleaning and gentle wiping. Specialized wood polishing is not included." }]
+  },
+  "quick-fan-clean": {
+    tools: ["Microfiber cloths", "All-purpose cleaning spray", "Sturdy step ladder"],
+    ready: ["Keep the space below the fan clear", "Ensure the fan switch is turned off"],
+    reviews: [
+      { name: "Amit S.", rating: "4.9", text: '"The fan was covered in sticky kitchen grease, but they got it completely clean."' },
+      { name: "Neha P.", rating: "4.8", text: '"Fast and efficient fan cleaning service."' }
+    ],
+    faqs: [
+      { q: "Does this include repair?", a: "No, this is only a cleaning service. No repairs are done." },
+      { q: "Will my floor get dirty?", a: "Our professionals use dust-drop cloths to protect your floor." }
+    ]
+  },
+  "quick-exhaust-fan-clean": {
+    tools: ["Microfiber cloths", "Soft cleaning brushes", "Grease-removing cleaning solution", "Long-reach dusting tools"],
+    ready: ["Switch off the exhaust fan before cleaning", "Keep the area around the fan clear", "Provide safe access to the fan"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The exhaust fan had a lot of dust and grease. It was cleaned very neatly."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Quick service and the fan looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the fan blades?", a: "Yes, the accessible fan blades will be cleaned properly." },
+      { q: "Will you clean the cover / grill?", a: "Yes, the fan cover and visible grill will also be cleaned." },
+      { q: "Will you remove grease from the fan?", a: "Yes, normal dust, grease and dirt buildup will be cleaned." },
+      { q: "Will you remove the exhaust fan from the wall?", a: "No, the fan will be cleaned while it remains installed." },
+      { q: "Do you repair exhaust fans?", a: "No, electrical, motor and wiring repairs are not included." }
+    ]
+  },
+  "quick-balcony-upto-4ft": {
+    tools: ["Heavy duty floor brush", "High-pressure water source if available", "Balcony cleaning detergent"],
+    ready: ["Clear planters or light furniture from the balcony floor", "Provide access to a water tap"],
+    reviews: [{ name: "Sneha L.", rating: "5.0", text: '"Balcony floor is sparkling clean. They washed off all the pigeon droppings."' }],
+    faqs: [{ q: "Do you clean the balcony roof?", a: "No, roof or ceiling cleaning is not included in this quick package." }]
+  },
+  "quick-balcony-above-4ft": {
+    tools: ["Scrubbing brushes & wipers", "Balcony floor wash detergent", "Cobweb removal brush"],
+    ready: ["Clear all furniture and items from the balcony"],
+    reviews: [{ name: "Manish P.", rating: "4.9", text: '"Very thorough washing. Highly recommend for large balconies."' }],
+    faqs: [{ q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." }]
+  },
+  "fabric-sofa-clean": {
+    tools: [
+      "Fabric-safe cleaning shampoo",
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Wet & dry vacuum"
+    ],
+    ready: [
+      "Keep the sofa area accessible",
+      "Remove personal items from the sofa",
+      "Keep nearby furniture and valuables safely away",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The sofa looks much cleaner and fresh. The team did a neat job."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good cleaning service. They removed most of the dust and stains."' }
+    ],
+    faqs: [
+      { q: "Will you clean the sofa cushions?", a: "Normal sofa seats and back cushions are covered. Separate loose/removable cushions are not included." },
+      { q: "Will you remove stains?", a: "We treat common food, dust and everyday stains. Very old or permanent stains may not be completely removable." },
+      { q: "Will the sofa be completely dry immediately?", a: "The team removes excess moisture, but some drying time may still be required." },
+      { q: "Do I need to provide cleaning products?", a: "No. Our team brings the required cleaning products and equipment." }
+    ]
+  },
+  "fabric-sofa-cushion-clean": {
+    tools: [
+      "Fabric-safe cleaning shampoo",
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Wet & dry vacuum"
+    ],
+    ready: [
+      "Keep the sofa and cushions accessible",
+      "Remove personal items from the sofa",
+      "Keep nearby furniture and valuables safely away",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The sofa and cushions were cleaned really well. Everything looks fresh now."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Very good service. They cleaned the sofa and cushions carefully."' }
+    ],
+    faqs: [
+      { q: "Are loose cushions included?", a: "Yes. Loose/removable cushions belonging to the sofa are included." },
+      { q: "How many cushions are included?", a: "The cushions that belong to the selected sofa are included. Extra cushions can be added separately if available." },
+      { q: "Will you remove all stains?", a: "Common stains will be treated, but very old or permanent stains may not completely disappear." },
+      { q: "Can the sofa be used immediately?", a: "Some drying time may be required after cleaning." }
+    ]
+  },
+  "leather-sofa-clean": {
+    tools: [
+      "Leather-safe cleaning solution",
+      "Leather conditioner",
+      "Soft microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Keep the sofa area accessible",
+      "Remove personal items from the sofa",
+      "Keep valuables safely away",
+      "Provide a well-ventilated area"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The leather sofa looks clean and fresh again. Very neat work."' },
+      { name: "Rahul K.", rating: "4.8", text: '"The team handled the leather sofa carefully and professionally."' }
+    ],
+    faqs: [
+      { q: "Will you use shampoo on the leather sofa?", a: "No. We use products specifically suitable for leather surfaces." },
+      { q: "Will you remove scratches from the leather?", a: "No. Cleaning cannot repair deep scratches, cuts or damaged leather." },
+      { q: "Will you polish the leather sofa?", a: "The sofa receives a leather-safe conditioning and finishing treatment." },
+      { q: "Can you clean all types of leather?", a: "We clean commonly used finished leather surfaces. Special or delicate leather may require an additional assessment." }
+    ]
+  },
+  "leather-sofa-cushion-clean": {
+    tools: [
+      "Leather-safe cleaning solution",
+      "Leather conditioner",
+      "Soft microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Keep the sofa and cushions accessible",
+      "Remove personal items from the sofa",
+      "Keep valuables safely away",
+      "Provide a well-ventilated area"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The sofa and cushions were cleaned very carefully. They look much better now."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Good service and the leather was handled properly."' }
+    ],
+    faqs: [
+      { q: "Are removable leather cushions included?", a: "Yes. Loose/removable cushions belonging to the sofa are included." },
+      { q: "Will you repair damaged leather?", a: "No. Cuts, cracks, peeling and other leather damage are not repairable through this cleaning service." },
+      { q: "Will you use water on the leather?", a: "Only suitable amounts are used with leather-safe cleaning products." },
+      { q: "Will the leather become shiny after cleaning?", a: "The conditioning and finishing treatment gives the leather a clean and well-maintained appearance." }
+    ]
+  },
+  "mattress-deep": {
+    tools: [
+      "Fabric-safe mattress shampoo",
+      "Wet & dry vacuum",
+      "Microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Keep the mattress accessible",
+      "Remove bedsheets, pillows and blankets",
+      "Keep nearby items safely away",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The mattress had a lot of dust and stains. It looks much cleaner now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the mattress was cleaned properly."' }
+    ],
+    faqs: [
+      { q: "Will you clean the entire mattress?", a: "Yes, all accessible sides and surfaces included in the selected service will be cleaned." },
+      { q: "Will you remove all stains?", a: "Common stains will be treated, but very old or permanent stains may not completely disappear." },
+      { q: "Can I use the mattress immediately after cleaning?", a: "Some drying time is required before using the mattress." },
+      { q: "Do I need to remove the bedsheets?", a: "Yes, please remove bedsheets, blankets and other items before the service." }
+    ]
+  },
+  "mattress-pillow-refresh": {
+    tools: [
+      "Fabric-safe cleaning products",
+      "Wet & dry vacuum",
+      "Microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Remove bedsheets and covers",
+      "Keep mattress and pillows accessible",
+      "Clear the surrounding area",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The mattress and pillows were cleaned very neatly. Good service."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Everything was handled carefully and the mattress feels much fresher."' }
+    ],
+    faqs: [
+      { q: "Are pillows included?", a: "Yes, pillows are included in this package." },
+      { q: "How many pillows are included?", a: "Up to 2 standard pillows are included." },
+      { q: "Will you remove difficult stains?", a: "We treat common stains, but permanent stains may not be completely removable." },
+      { q: "How long does the mattress take to dry?", a: "Drying time depends on room ventilation, usually takes a few hours." }
+    ]
+  },
+  "carpet-deep": {
+    tools: [
+      "Carpet shampoo",
+      "Wet & dry vacuum",
+      "Microfiber cloths",
+      "Sponge scrubbers"
+    ],
+    ready: [
+      "Keep the carpet area accessible",
+      "Clear any furniture on top of the carpet",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The carpet looks extremely clean and the dirt was extracted nicely."' },
+      { name: "Karthik M.", rating: "4.8", text: '"Good shampoo cleaning and quick drying. Professional team."' }
+    ],
+    faqs: [
+      { q: "Will you remove all stains from the carpet?", a: "We treat common food and dirt stains. Very old or permanent stains may not be completely removable." },
+      { q: "How long will the carpet take to dry?", a: "Drying time depends on the carpet thickness and room ventilation, usually takes a few hours." },
+      { q: "Do I need to clear furniture before cleaning?", a: "Yes, please remove tables, chairs, and other items from the carpet before the service." }
+    ]
+  },
+  "quick-door-clean": {
+    tools: [
+      "Wiping cloths",
+      "Door polish / disinfectant spray"
+    ],
+    ready: [
+      "Keep doors clear and accessible for wiping"
+    ],
+    reviews: [
+      { name: "Deepak S.", rating: "4.8", text: '"Good dusting and fingerprint removal from the doors."' }
+    ],
+    faqs: [
+      { q: "Do you clean the door frames?", a: "Yes, we clean both panels and frames." }
+    ]
+  }
 }
 
 const EMPTY_PACKAGE = {
@@ -524,6 +1028,8 @@ export function CatalogPackagesPage() {
   const [serviceEditing, setServiceEditing] = useState(null)
   const [expandedPackages, setExpandedPackages] = useState(new Set())
   const [toast, showToast] = useToast()
+  const [serviceCustomizing, setServiceCustomizing] = useState(null)
+  const [customizerTab, setCustomizerTab] = useState("general")
 
   const loadData = async () => {
     setLoading(true)
@@ -662,12 +1168,25 @@ export function CatalogPackagesPage() {
           {
             subSlug: "packages",
             displayName: "Full Kitchen Packages",
-            filterFn: (p) => p.slug.startsWith("occ-") || p.slug.startsWith("empty-"),
+            filterFn: (p) => 
+              p.slug.startsWith("occ-") || 
+              p.slug.startsWith("empty-") ||
+              p.slug.startsWith("package-") ||
+              // Fallback: if it doesn't match any other group prefix, put it in full kitchen packages
+              (!p.slug.startsWith("appliance-") && !p.slug.startsWith("app-") &&
+               !p.slug.includes("fridge") && !p.slug.includes("microwave") && !p.slug.includes("chimney") &&
+               !p.slug.includes("stove") && !p.slug.includes("dishwasher") && !p.slug.includes("air-fryer") &&
+               !p.slug.includes("otg") && !p.slug.includes("sandwich") &&
+               !p.slug.startsWith("kitchen-") && !p.slug.startsWith("cabinet-") && !p.slug.startsWith("tile-") && !p.slug.startsWith("care-") &&
+               !p.slug.startsWith("quick-") && !p.slug.startsWith("sink-") && !p.slug.startsWith("dining-") &&
+               !p.slug.startsWith("fan-") && !p.slug.startsWith("balcony-") && !p.slug.startsWith("door-") && !p.slug.startsWith("addon-"))
           },
           {
             subSlug: "appliance",
             displayName: "single appliance cleaning",
             filterFn: (p) =>
+              p.slug.startsWith("appliance-") ||
+              p.slug.startsWith("app-") ||
               p.slug.includes("fridge") ||
               p.slug.includes("microwave") ||
               p.slug.includes("chimney") ||
@@ -685,27 +1204,27 @@ export function CatalogPackagesPage() {
 
               if (fridgeSub.length > 0) {
                 finalPkgs.push({
-                  id: "fridge-parent",
-                  name: "Fridge cleaning",
-                  slug: "fridge-parent",
-                  description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
-                  base_price: Math.min(...fridgeSub.map(p => Number(p.base_price) || 0)),
-                  duration: fridgeSub[0]?.duration || "1.5 hrs",
-                  status: fridgeSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
-                  subOptions: fridgeSub,
+                   id: "fridge-parent",
+                   name: "Fridge cleaning",
+                   slug: "fridge-parent",
+                   description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
+                   base_price: Math.min(...fridgeSub.map(p => Number(p.base_price) || 0)),
+                   duration: fridgeSub[0]?.duration || "1.5 hrs",
+                   status: fridgeSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                   subOptions: fridgeSub,
                 });
               }
 
               if (stoveSub.length > 0) {
                 finalPkgs.push({
-                  id: "stove-parent",
-                  name: "Gas stove cleaning",
-                  slug: "stove-parent",
-                  description: "Surface cleaning of gas stove burners and knobs to remove grease.",
-                  base_price: Math.min(...stoveSub.map(p => Number(p.base_price) || 0)),
-                  duration: stoveSub[0]?.duration || "45 mins",
-                  status: stoveSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
-                  subOptions: stoveSub,
+                   id: "stove-parent",
+                   name: "Gas stove cleaning",
+                   slug: "stove-parent",
+                   description: "Surface cleaning of gas stove burners and knobs to remove grease.",
+                   base_price: Math.min(...stoveSub.map(p => Number(p.base_price) || 0)),
+                   duration: stoveSub[0]?.duration || "45 mins",
+                   status: stoveSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                   subOptions: stoveSub,
                 });
               }
 
@@ -726,7 +1245,11 @@ export function CatalogPackagesPage() {
           {
             subSlug: "cabinet_tile",
             displayName: "Cabinet & Tile Care",
-            filterFn: (p) => p.slug.startsWith("kitchen-") || p.slug.startsWith("cabinet-"),
+            filterFn: (p) =>
+              p.slug.startsWith("kitchen-") ||
+              p.slug.startsWith("cabinet-") ||
+              p.slug.startsWith("tile-") ||
+              p.slug.startsWith("care-"),
           },
           {
             subSlug: "addons",
@@ -736,7 +1259,9 @@ export function CatalogPackagesPage() {
               p.slug.startsWith("sink-") ||
               p.slug.startsWith("dining-") ||
               p.slug.startsWith("fan-") ||
-              p.slug.startsWith("balcony-"),
+              p.slug.startsWith("balcony-") ||
+              p.slug.startsWith("door-") ||
+              p.slug.startsWith("addon-"),
           },
         ]
 
@@ -748,7 +1273,7 @@ export function CatalogPackagesPage() {
           "fridge-single",
           "fridge-double",
           "fridge-triple",
-          "microwave-clean",
+          "kitchen-microwave-clean",
           "chimney-clean",
           "chimney-stove-clean",
           "stove-parent",
@@ -969,8 +1494,26 @@ export function CatalogPackagesPage() {
   const handleSave = async (e) => {
     e.preventDefault()
     try {
+      let finalSlug = editing.slug || ""
+      if (editing.virtualSlug && !editing.id) {
+        const prefixMap = {
+          appliance: "appliance-",
+          cabinet_tile: "cabinet-",
+          addons: "quick-",
+          packages: "package-",
+          sofa: "sofa-",
+          mattress: "mattress-",
+          carpet: "carpet-"
+        }
+        const prefix = prefixMap[editing.virtualSlug]
+        if (prefix && !finalSlug.startsWith(prefix)) {
+          finalSlug = prefix + finalSlug
+        }
+      }
+
       const payload = {
         ...editing,
+        slug: finalSlug,
         includes:
           typeof editing.includes === "string"
             ? editing.includes.split(",").map((s) => s.trim()).filter(Boolean)
@@ -1016,7 +1559,29 @@ export function CatalogPackagesPage() {
     const items = []
     const seen = new Set()
 
-    // 1. First add existing included items (checked = true)
+    // Normalize existingIncludes into lowercase set for quick lookup
+    const existingIncludesLower = new Set(
+      existingIncludes.map(inc => {
+        const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
+        return text.toLowerCase()
+      }).filter(Boolean)
+    )
+
+    // 1. Process preset items first, maintaining their original order
+    presets.forEach((preset, idx) => {
+      const text = preset.trim()
+      if (text && !seen.has(text.toLowerCase())) {
+        seen.add(text.toLowerCase())
+        const isIncluded = existingIncludesLower.has(text.toLowerCase())
+        items.push({
+          id: `preset-${idx}-${Date.now()}`,
+          text,
+          checked: existingIncludes.length === 0 ? true : isIncluded,
+        })
+      }
+    })
+
+    // 2. Add any custom items from existingIncludes that are not in presets
     existingIncludes.forEach((inc, idx) => {
       const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
       if (text && !seen.has(text.toLowerCase())) {
@@ -1029,18 +1594,8 @@ export function CatalogPackagesPage() {
       }
     })
 
-    // 2. Add preset items if not already present
-    presets.forEach((preset, idx) => {
-      const text = preset.trim()
-      if (!seen.has(text.toLowerCase())) {
-        seen.add(text.toLowerCase())
-        items.push({
-          id: `preset-${idx}-${Date.now()}`,
-          text,
-          checked: existingIncludes.length === 0, // default ticked if package had no prior includes
-        })
-      }
-    })
+    // Load fallback defaults from SOFA_DETAIL_DATA or STATIC_SERVICE_DETAIL_DATA
+    const staticData = SOFA_DETAIL_DATA[slug] || SOFA_DETAIL_DATA[pkg.id] || STATIC_SERVICE_DETAIL_DATA[slug] || STATIC_SERVICE_DETAIL_DATA[pkg.id] || {}
 
     setQuickPriceEditing({
       ...pkg,
@@ -1048,13 +1603,16 @@ export function CatalogPackagesPage() {
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
       checklist: items,
       image: pkg.image || "",
+      sort_order: pkg.sort_order || 0,
+      button_text: pkg.button_text || "Add",
+      icon: pkg.icon || "",
       editingItemId: null,
       _vdOpen: true,
       viewDetails: {
-        tools: Array.isArray(pkg.tools) ? pkg.tools : [],
-        ready: Array.isArray(pkg.ready) ? pkg.ready : [],
-        reviews: Array.isArray(pkg.reviews) ? pkg.reviews : [],
-        faqs: Array.isArray(pkg.faqs) ? pkg.faqs : [],
+        tools: Array.isArray(pkg.tools) && pkg.tools.length > 0 ? pkg.tools : (staticData.tools || []),
+        ready: Array.isArray(pkg.ready) && pkg.ready.length > 0 ? pkg.ready : (staticData.ready || []),
+        reviews: (Array.isArray(pkg.reviews) && pkg.reviews.length > 0 && pkg.reviews.length >= (staticData.reviews || []).length) ? pkg.reviews : (staticData.reviews || pkg.reviews || []),
+        faqs: (Array.isArray(pkg.faqs) && pkg.faqs.length > 0 && pkg.faqs.length >= (staticData.faqs || []).length) ? pkg.faqs : (staticData.faqs || pkg.faqs || []),
       },
     })
     setNewItemText("")
@@ -1095,6 +1653,9 @@ export function CatalogPackagesPage() {
         ready: Array.isArray(vd.ready) ? vd.ready.filter(Boolean) : [],
         reviews: Array.isArray(vd.reviews) ? vd.reviews.filter(r => r.name || r.text) : [],
         faqs: Array.isArray(vd.faqs) ? vd.faqs.filter(f => f.q || f.a) : [],
+        sort_order: parseInt(quickPriceEditing.sort_order) || 0,
+        button_text: quickPriceEditing.button_text || "Add",
+        icon: quickPriceEditing.icon || "",
       }
 
       // Handle virtual parent rows (fridge-parent, stove-parent) — save includes to each sub-option
@@ -1159,6 +1720,86 @@ export function CatalogPackagesPage() {
       }
     } catch {
       showToast("Service update failed", "error")
+    }
+  }
+
+  const openServiceCustomizer = (service) => {
+    const cust = service.customization || {}
+    setServiceCustomizing({
+      ...service,
+      customization: {
+        rating: cust.rating || "4.8",
+        reviews: cust.reviews || "15K",
+        points: Array.isArray(cust.points) ? cust.points : [],
+        benefits: Array.isArray(cust.benefits) ? cust.benefits : [],
+        includes_heading: cust.includes_heading || "WHAT'S INCLUDED",
+        includes: Array.isArray(cust.includes) ? cust.includes : [],
+        free_inspection_heading: cust.free_inspection_heading || "FREE SITE INSPECTION INCLUDED",
+        free_inspection_enabled: cust.free_inspection_enabled !== false,
+        inspection_highlights: Array.isArray(cust.inspection_highlights) ? cust.inspection_highlights : [],
+        excludes_heading: cust.excludes_heading || "WHAT'S NOT INCLUDED",
+        excludes_enabled: !cust.excludes_enabled !== false,
+        excludes: Array.isArray(cust.excludes) ? cust.excludes : [],
+        steps_heading: cust.steps_heading || "HOW PAINTING WORKS",
+        steps: Array.isArray(cust.steps) ? cust.steps : [],
+        faqs: Array.isArray(cust.faqs) ? cust.faqs : [],
+        starting_fare: cust.starting_fare || "",
+        button_text: cust.button_text || "View details",
+        estimate_cta: cust.estimate_cta || "Get Estimate",
+        suboptions_heading: cust.suboptions_heading || "",
+        faqs_heading: cust.faqs_heading || "",
+        reviews_heading: cust.reviews_heading || "",
+      }
+    })
+    setCustomizerTab("general")
+  }
+
+  const handleServiceCustomizerSave = async (e) => {
+    e.preventDefault()
+    if (!serviceCustomizing) return
+    try {
+      const payload = {
+        name: serviceCustomizing.name,
+        description: serviceCustomizing.description || "",
+        image: serviceCustomizing.image || "",
+        is_active: serviceCustomizing.is_active,
+        sort_order: parseInt(serviceCustomizing.sort_order) || 0,
+        customization: {
+          ...serviceCustomizing.customization,
+        }
+      }
+      const res = await apiRequest(`/settings/catalog/v2/services/${serviceCustomizing.id}/`, {
+        method: "PUT",
+        json: payload,
+      })
+      if (res.success) {
+        showToast(`Service "${serviceCustomizing.name}" customized successfully!`)
+        setServiceCustomizing(null)
+        loadData()
+      } else {
+        showToast(res.message || "Customization failed", "error")
+      }
+    } catch (err) {
+      showToast("Customization failed", "error")
+    }
+  }
+
+  const handleDeletePackage = async (pkg) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${pkg.name}"? This will delete it from database and applications.`)) {
+      return
+    }
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${pkg.id}/`, {
+        method: "DELETE",
+      })
+      if (res.success) {
+        showToast("Package deleted successfully")
+        loadData()
+      } else {
+        showToast(res.message || "Delete failed", "error")
+      }
+    } catch {
+      showToast("Delete failed", "error")
     }
   }
 
@@ -1304,6 +1945,7 @@ export function CatalogPackagesPage() {
                 setEditing({
                   ...EMPTY_PACKAGE,
                   service: firstSvc?.id ? String(firstSvc.id) : "",
+                  virtualSlug: firstSvc?.virtualSlug || "",
                 })
               }}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
@@ -1461,14 +2103,26 @@ export function CatalogPackagesPage() {
                         <span className="text-xs font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-full">
                           {pkgList.length} {pkgList.length === 1 ? "option" : "options"}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setServiceEditing({ ...svcItem.service })}
-                          title="Edit Sub-Service Heading & Description"
-                          className="p-1 rounded-lg text-slate-400 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                        {activeCategoryKey === "paintings" || activeCategoryKey === "mason" ? (
+                          <button
+                            type="button"
+                            onClick={() => openServiceCustomizer(svcItem.service)}
+                            title="Customise Booking Card & Detail Page Content"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            <span>Customise Page</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setServiceEditing({ ...svcItem.service })}
+                            title="Edit Sub-Service Heading & Description"
+                            className="p-1 rounded-lg text-slate-400 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                       {svcItem.service.description && (
                         <p className="text-[11px] text-slate-400 truncate max-w-lg sm:max-w-2xl lg:max-w-4xl">
@@ -1484,6 +2138,7 @@ export function CatalogPackagesPage() {
                       setEditing({
                         ...EMPTY_PACKAGE,
                         service: String(svcItem.service.realServiceId || svcItem.service.id),
+                        virtualSlug: svcItem.service.virtualSlug || "",
                       })
                     }}
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100/80 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-indigo-200/60"
@@ -1636,6 +2291,14 @@ export function CatalogPackagesPage() {
                                     </button>
                                     <button
                                       type="button"
+                                      onClick={() => handleDeletePackage(pkg)}
+                                      title="Delete Package"
+                                      className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
                                       onClick={() => openEdit(pkg)}
                                       title="Edit Package Details"
                                       className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
@@ -1685,6 +2348,14 @@ export function CatalogPackagesPage() {
                                       >
                                         <Edit2 className="w-3 h-3" />
                                         <span>Customise</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeletePackage(sub)}
+                                        title="Delete Variant"
+                                        className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
                                       </button>
                                       <button
                                         type="button"
@@ -1769,6 +2440,763 @@ export function CatalogPackagesPage() {
         </Modal>
       )}
 
+      {/* ── Sub-Service Customise Modal (Heading, Description, Points, Badges, etc.) ── */}
+      {serviceCustomizing && (
+        <Modal
+          maxWidth="max-w-3xl sm:max-w-4xl"
+          title={`Customise Painting Service Page: ${serviceCustomizing.name}`}
+          onClose={() => setServiceCustomizing(null)}
+        >
+          <form onSubmit={handleServiceCustomizerSave} className="flex flex-col gap-5 font-sans text-left">
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50/70 rounded-2xl border border-indigo-100 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Category Pillar</span>
+                <div className="text-sm sm:text-base font-extrabold text-indigo-955 mt-0.5">{activePillar.name}</div>
+              </div>
+              <span className="px-3 py-1 bg-white text-indigo-700 text-xs font-bold rounded-full border border-indigo-200/80 shadow-2xs">
+                Painting Customizer
+              </span>
+            </div>
+
+            {/* Tabs Header */}
+            <div className="flex border-b border-slate-200">
+              {[
+                { id: "general", label: "Card & General Settings" },
+                { id: "content", label: "Includes & Excludes" },
+                { id: "details", label: "Badges, Steps & FAQs" },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setCustomizerTab(t.id)}
+                  className={`px-4 py-2 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
+                    customizerTab === t.id
+                      ? "border-indigo-600 text-indigo-600"
+                      : "border-transparent text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab 1: General & Card settings */}
+            {customizerTab === "general" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Sub-Service Name"
+                    required
+                    value={serviceCustomizing.name || ""}
+                    onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, name: e.target.value })}
+                  />
+                  <Input
+                    label="Display Order (sort_order)"
+                    type="number"
+                    value={serviceCustomizing.sort_order || 0}
+                    onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, sort_order: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+
+                <TextArea
+                  label="Description"
+                  value={serviceCustomizing.description || ""}
+                  onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, description: e.target.value })}
+                />
+
+                {/* Service Image Customizer Section */}
+                <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+                  <div>
+                    <span className="text-xs font-bold text-slate-800">Service Banner Image</span>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Upload a custom service banner image or paste an image URL.</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    {serviceCustomizing.image ? (
+                      <div className="relative w-24 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                        <img src={serviceCustomizing.image} alt="Preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setServiceCustomizing((prev) => ({ ...prev, image: "" }))}
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-24 h-16 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                        No Image
+                      </div>
+                    )}
+                    <div className="flex-1 w-full space-y-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            const formData = new FormData()
+                            formData.append("image", file)
+                            try {
+                              const res = await apiRequest("/settings/catalog/upload-image/", {
+                                method: "POST",
+                                body: formData,
+                              })
+                              if (res.success && res.url) {
+                                setServiceCustomizing((prev) => ({ ...prev, image: res.url }))
+                                showToast("Image uploaded successfully!")
+                              } else {
+                                showToast(res.message || "Upload failed", "error")
+                              }
+                            } catch (err) {
+                              showToast("Upload failed", "error")
+                            }
+                          }
+                        }}
+                        className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                      />
+                      <Input
+                        label="Or Image URL"
+                        placeholder="https://images.unsplash.com/..."
+                        value={serviceCustomizing.image || ""}
+                        onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, image: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Input
+                    label="Marketing Rating"
+                    value={serviceCustomizing.customization.rating || "4.8"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, rating: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <Input
+                    label="Marketing Rating Count"
+                    placeholder="e.g. 15K Ratings, 2.5 Lakhs"
+                    value={serviceCustomizing.customization.reviews || "15K"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, reviews: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <Input
+                    label="Ratings & Reviews Section Heading"
+                    value={serviceCustomizing.customization.reviews_heading || "Ratings & Reviews"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, reviews_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Input
+                    label="View Details Button Text"
+                    value={serviceCustomizing.customization.button_text || "View details"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, button_text: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <Input
+                    label="Get Estimate Button CTA"
+                    value={serviceCustomizing.customization.estimate_cta || "Get Estimate"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, estimate_cta: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <Input
+                    label="Override Starting Fare"
+                    type="number"
+                    value={serviceCustomizing.customization.starting_fare || ""}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, starting_fare: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!serviceCustomizing.is_active}
+                      onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, is_active: e.target.checked })}
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                    />
+                    <span>Active in Customer Booking</span>
+                  </label>
+                </div>
+
+                {/* Card Points repeatable list */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Card Points (Short highlights on the service card)</label>
+                  <div className="space-y-2 mb-2 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50">
+                    {serviceCustomizing.customization.points.map((pt, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={pt}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.points];
+                            updated[idx] = e.target.value;
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, points: updated }
+                            });
+                          }}
+                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.points.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, points: updated }
+                            });
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.points.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No points configured. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          points: [...serviceCustomizing.customization.points, ""]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    + Add Card Point
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 2: Includes & Excludes */}
+            {customizerTab === "content" && (
+              <div className="space-y-5">
+                {/* SUB-OPTIONS SECTION */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <span className="text-xs font-bold text-slate-800">Sub-Options List Heading (e.g. What would you like to inspect?)</span>
+                  <Input
+                    label="Section Heading"
+                    value={serviceCustomizing.customization.suboptions_heading || ""}
+                    placeholder="What Would You Like to Inspect?"
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, suboptions_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                </div>
+
+                {/* WHAT'S INCLUDED */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-800">What's Included Section</span>
+                  </div>
+                  <Input
+                    label="Section Heading"
+                    value={serviceCustomizing.customization.includes_heading || "WHAT'S INCLUDED"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, includes_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.includes.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={item}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.includes];
+                            updated[idx] = e.target.value;
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, includes: updated }
+                            });
+                          }}
+                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.includes.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, includes: updated }
+                            });
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.includes.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No included items. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          includes: [...serviceCustomizing.customization.includes, ""]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    + Add Included Item
+                  </button>
+                </div>
+
+                {/* WHAT'S NOT INCLUDED */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-800">What's Not Included Section</span>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!serviceCustomizing.customization.excludes_enabled}
+                        onChange={(e) => {
+                          const updatedCust = { ...serviceCustomizing.customization, excludes_enabled: e.target.checked };
+                          setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                        }}
+                        className="w-3.5 h-3.5 text-indigo-600 rounded"
+                      />
+                      <span>Enable Section</span>
+                    </label>
+                  </div>
+                  <Input
+                    label="Section Heading"
+                    disabled={!serviceCustomizing.customization.excludes_enabled}
+                    value={serviceCustomizing.customization.excludes_heading || "WHAT'S NOT INCLUDED"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, excludes_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.excludes.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          disabled={!serviceCustomizing.customization.excludes_enabled}
+                          value={item}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.excludes];
+                            updated[idx] = e.target.value;
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, excludes: updated }
+                            });
+                          }}
+                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                        <button
+                          type="button"
+                          disabled={!serviceCustomizing.customization.excludes_enabled}
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.excludes.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, excludes: updated }
+                            });
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.excludes.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No excluded items. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!serviceCustomizing.customization.excludes_enabled}
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          excludes: [...serviceCustomizing.customization.excludes, ""]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer disabled:opacity-50"
+                  >
+                    + Add Excluded Item
+                  </button>
+                </div>
+
+                {/* FREE SITE INSPECTION */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-800">Free Site Inspection Banner Section</span>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!serviceCustomizing.customization.free_inspection_enabled}
+                        onChange={(e) => {
+                          const updatedCust = { ...serviceCustomizing.customization, free_inspection_enabled: e.target.checked };
+                          setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                        }}
+                        className="w-3.5 h-3.5 text-indigo-600 rounded"
+                      />
+                      <span>Enable Section</span>
+                    </label>
+                  </div>
+                  <Input
+                    label="Section Heading"
+                    disabled={!serviceCustomizing.customization.free_inspection_enabled}
+                    value={serviceCustomizing.customization.free_inspection_heading || "FREE SITE INSPECTION INCLUDED"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, free_inspection_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.inspection_highlights.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          disabled={!serviceCustomizing.customization.free_inspection_enabled}
+                          value={item}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.inspection_highlights];
+                            updated[idx] = e.target.value;
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, inspection_highlights: updated }
+                            });
+                          }}
+                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                        <button
+                          type="button"
+                          disabled={!serviceCustomizing.customization.free_inspection_enabled}
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.inspection_highlights.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, inspection_highlights: updated }
+                            });
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.inspection_highlights.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No tags configured. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!serviceCustomizing.customization.free_inspection_enabled}
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          inspection_highlights: [...serviceCustomizing.customization.inspection_highlights, ""]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer disabled:opacity-50"
+                  >
+                    + Add Highlight Tag
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: Badges, Steps & FAQs */}
+            {customizerTab === "details" && (
+              <div className="space-y-5">
+                {/* FEATURE BADGES */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <span className="text-xs font-bold text-slate-800 block">Feature Badges (Switch Board popup badges)</span>
+                  <div className="space-y-3 max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.benefits.map((badge, idx) => {
+                      const bTitle = typeof badge === 'string' ? badge : (badge.title || "");
+                      const bIcon = typeof badge === 'string' ? "award" : (badge.icon || "award");
+                      return (
+                        <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
+                          <div className="grid grid-cols-2 gap-3">
+                            <Input
+                              label="Badge Title"
+                              value={bTitle}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.benefits];
+                                updated[idx] = { title: e.target.value, icon: bIcon };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, benefits: updated }
+                                });
+                              }}
+                            />
+                            <Input
+                              label="Badge Icon (e.g. star, shield, award, cpu)"
+                              value={bIcon}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.benefits];
+                                updated[idx] = { title: bTitle, icon: e.target.value };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, benefits: updated }
+                                });
+                              }}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = serviceCustomizing.customization.benefits.filter((_, i) => i !== idx);
+                              setServiceCustomizing({
+                               ...serviceCustomizing,
+                               customization: { ...serviceCustomizing.customization, benefits: updated }
+                              });
+                            }}
+                            className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {serviceCustomizing.customization.benefits.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No badges configured. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          benefits: [...serviceCustomizing.customization.benefits, { title: "", icon: "award" }]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    + Add Feature Badge
+                  </button>
+                </div>
+
+                {/* HOW IT WORKS */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <span className="text-xs font-bold text-slate-800 block">How it Works Section</span>
+                  <Input
+                    label="Section Heading"
+                    value={serviceCustomizing.customization.steps_heading || "HOW PAINTING WORKS"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, steps_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <div className="space-y-3 max-h-56 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.steps.map((step, idx) => (
+                      <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
+                        <div className="grid grid-cols-2 gap-3">
+                          <Input
+                            label="Step Title"
+                            value={step.title || ""}
+                            onChange={(e) => {
+                              const updated = [...serviceCustomizing.customization.steps];
+                              updated[idx] = { ...step, title: e.target.value };
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, steps: updated }
+                              });
+                            }}
+                          />
+                          <Input
+                            label="Step Icon (e.g. calendar, cpu, paint-roller, check-circle)"
+                            value={step.icon || ""}
+                            onChange={(e) => {
+                              const updated = [...serviceCustomizing.customization.steps];
+                              updated[idx] = { ...step, icon: e.target.value };
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, steps: updated }
+                              });
+                            }}
+                          />
+                        </div>
+                        <TextArea
+                          label="Step Description"
+                          rows={2}
+                          value={step.desc || ""}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.steps];
+                            updated[idx] = { ...step, desc: e.target.value };
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, steps: updated }
+                            });
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.steps.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, steps: updated }
+                            });
+                          }}
+                          className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.steps.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No steps configured. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          steps: [...serviceCustomizing.customization.steps, { title: "", desc: "", icon: "paint-roller" }]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    + Add Step
+                  </button>
+                </div>
+
+                {/* FAQ */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <span className="text-xs font-bold text-slate-800 block">Frequently Asked Questions (FAQ)</span>
+                  <Input
+                    label="FAQ Section Heading"
+                    value={serviceCustomizing.customization.faqs_heading || ""}
+                    placeholder="Frequently Asked Questions"
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, faqs_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <div className="space-y-3 max-h-56 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.faqs.map((faq, idx) => (
+                      <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
+                        <Input
+                          label="Question"
+                          value={faq.q || faq.question || ""}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.faqs];
+                            updated[idx] = { ...faq, q: e.target.value, question: e.target.value };
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, faqs: updated }
+                            });
+                          }}
+                        />
+                        <TextArea
+                          label="Answer"
+                          rows={2}
+                          value={faq.a || faq.answer || ""}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.faqs];
+                            updated[idx] = { ...faq, a: e.target.value, answer: e.target.value };
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, faqs: updated }
+                            });
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.faqs.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, faqs: updated }
+                            });
+                          }}
+                          className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.faqs.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No FAQs configured. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          faqs: [...serviceCustomizing.customization.faqs, { q: "", a: "", active: true }]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    + Add FAQ Question
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setServiceCustomizing(null)}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-sm font-extrabold shadow-md shadow-indigo-600/20 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <span>Save &amp; Publish Live</span>
+                <Check className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       {/* ── Customise Package Modal (Heading, Description, Price, Tag, Duration) ── */}
       {quickPriceEditing && (
         <Modal
@@ -1819,6 +3247,36 @@ export function CatalogPackagesPage() {
                 }
               />
             </div>
+
+            {(activeCategoryKey === "paintings" || activeCategoryKey === "mason") && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Input
+                  label="Display Order (sort_order)"
+                  type="number"
+                  placeholder="e.g. 1"
+                  value={quickPriceEditing.sort_order || 0}
+                  onChange={(e) =>
+                    setQuickPriceEditing({ ...quickPriceEditing, sort_order: parseInt(e.target.value) || 0 })
+                  }
+                />
+                <Input
+                  label="Button Text"
+                  placeholder="e.g. Add"
+                  value={quickPriceEditing.button_text || "Add"}
+                  onChange={(e) =>
+                    setQuickPriceEditing({ ...quickPriceEditing, button_text: e.target.value })
+                  }
+                />
+                <Input
+                  label="Icon (e.g. paint-roller, check-circle)"
+                  placeholder="e.g. paint-roller"
+                  value={quickPriceEditing.icon || ""}
+                  onChange={(e) =>
+                    setQuickPriceEditing({ ...quickPriceEditing, icon: e.target.value })
+                  }
+                />
+              </div>
+            )}
 
             {/* ── Suitable for / Know More Checklist Section (Blue Shade Theme) ── */}
             <div className="bg-gradient-to-b from-blue-50/50 to-slate-50/70 rounded-2xl p-4 sm:p-5 border border-blue-100/90 space-y-3.5">
@@ -2131,8 +3589,8 @@ export function CatalogPackagesPage() {
               </div>
             </div>
 
-            {/* ── View Details Content Section (Tools, Ready, Reviews, FAQs) ── */}
-            {Boolean(quickPriceEditing) && (() => {
+            {/* ── View Details Content Section (only for non goods transport) ── */}
+            {activePillar?.key !== "goods_transports" && (() => {
               const vd = quickPriceEditing.viewDetails || { tools: [], ready: [], reviews: [], faqs: [] }
               const setVd = (updates) => setQuickPriceEditing({ ...quickPriceEditing, viewDetails: { ...vd, ...updates } })
               return (
@@ -2154,67 +3612,134 @@ export function CatalogPackagesPage() {
 
                       {/* Tools & Products We Use */}
                       <div className="pt-4">
-                        <div className="text-xs font-bold text-slate-700 mb-2">🔧 Tools &amp; Products We Use</div>
+                        <div className="text-xs font-bold text-slate-700 mb-2">🔧 Tools & Products We Use</div>
                         <div className="space-y-1.5 mb-2">
-                          {(vd.tools || []).map((t, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <input type="text" value={t} onChange={(e) => { const a = [...(vd.tools || [])]; a[i] = e.target.value; setVd({ tools: a }) }} className="flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 outline-none" />
-                              <button type="button" onClick={() => { const a = [...(vd.tools || [])]; a.splice(i, 1); setVd({ tools: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </div>
-                          ))}
+                          {(vd.tools || []).map((t, i) => {
+                            const text = typeof t === 'string' ? t : (t.text || '');
+                            const enabled = typeof t === 'string' ? true : (t.enabled !== false);
+                            return (
+                              <div key={i} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  onChange={(e) => {
+                                    const a = [...(vd.tools || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, enabled: e.target.checked };
+                                    setVd({ tools: a });
+                                  }}
+                                  className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                />
+                                <input
+                                  type="text"
+                                  value={text}
+                                  onChange={(e) => {
+                                    const a = [...(vd.tools || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, text: e.target.value };
+                                    setVd({ tools: a });
+                                  }}
+                                  className={`flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 outline-none ${!enabled ? 'text-slate-400 line-through bg-slate-50' : 'text-slate-800'}`}
+                                />
+                                <button type="button" onClick={() => { const a = [...(vd.tools || [])]; a.splice(i, 1); setVd({ tools: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ tools: [...(vd.tools || []), ""] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add tool / product</button>
+                        <button type="button" onClick={() => setVd({ tools: [...(vd.tools || []), { text: '', enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add tool / product</button>
                       </div>
 
                       {/* What You Need to Keep Ready */}
                       <div className="pt-2 border-t border-slate-100">
                         <div className="text-xs font-bold text-slate-700 mb-2">✅ What You Need to Keep Ready</div>
                         <div className="space-y-1.5 mb-2">
-                          {(vd.ready || []).map((r, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <input type="text" value={r} onChange={(e) => { const a = [...(vd.ready || [])]; a[i] = e.target.value; setVd({ ready: a }) }} className="flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 outline-none" />
-                              <button type="button" onClick={() => { const a = [...(vd.ready || [])]; a.splice(i, 1); setVd({ ready: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </div>
-                          ))}
+                          {(vd.ready || []).map((r, i) => {
+                            const text = typeof r === 'string' ? r : (r.text || '');
+                            const enabled = typeof r === 'string' ? true : (r.enabled !== false);
+                            return (
+                              <div key={i} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  onChange={(e) => {
+                                    const a = [...(vd.ready || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, enabled: e.target.checked };
+                                    setVd({ ready: a });
+                                  }}
+                                  className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                />
+                                <input
+                                  type="text"
+                                  value={text}
+                                  onChange={(e) => {
+                                    const a = [...(vd.ready || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, text: e.target.value };
+                                    setVd({ ready: a });
+                                  }}
+                                  className={`flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 outline-none ${!enabled ? 'text-slate-400 line-through bg-slate-50' : 'text-slate-800'}`}
+                                />
+                                <button type="button" onClick={() => { const a = [...(vd.ready || [])]; a.splice(i, 1); setVd({ ready: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ ready: [...(vd.ready || []), ""] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add item</button>
+                        <button type="button" onClick={() => setVd({ ready: [...(vd.ready || []), { text: '', enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add item</button>
                       </div>
 
                       {/* Customer Reviews */}
                       <div className="pt-2 border-t border-slate-100">
                         <div className="text-xs font-bold text-slate-700 mb-2">⭐ Customer Reviews</div>
                         <div className="space-y-2.5 mb-2">
-                          {(vd.reviews || []).map((rev, i) => (
-                            <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
-                              <div className="flex gap-2">
-                                <input type="text" placeholder="Name" value={rev.name || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], name: e.target.value }; setVd({ reviews: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
-                                <input type="text" placeholder="Rating (e.g. 4.9)" value={rev.rating || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], rating: e.target.value }; setVd({ reviews: a }) }} className="w-24 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
-                                <button type="button" onClick={() => { const a = [...(vd.reviews || [])]; a.splice(i, 1); setVd({ reviews: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                          {(vd.reviews || []).map((rev, i) => {
+                            const enabled = rev.enabled !== false;
+                            return (
+                              <div key={i} className={`bg-white border rounded-xl p-3 space-y-2 ${!enabled ? 'border-slate-100 opacity-60' : 'border-slate-200'}`}>
+                                <div className="flex gap-2 items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={enabled}
+                                    onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], enabled: e.target.checked }; setVd({ reviews: a }); }}
+                                    className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                  />
+                                  <input type="text" placeholder="Name" value={rev.name || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], name: e.target.value }; setVd({ reviews: a }); }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-indigo-400 outline-none" />
+                                  <input type="text" placeholder="Rating (e.g. 4.9)" value={rev.rating || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], rating: e.target.value }; setVd({ reviews: a }); }} className="w-24 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-indigo-400 outline-none" />
+                                  <button type="button" onClick={() => { const a = [...(vd.reviews || [])]; a.splice(i, 1); setVd({ reviews: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                                <textarea placeholder="Review text..." value={rev.text || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], text: e.target.value }; setVd({ reviews: a }); }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-indigo-400 outline-none resize-none" />
                               </div>
-                              <textarea placeholder="Review text..." value={rev.text || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], text: e.target.value }; setVd({ reviews: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ reviews: [...(vd.reviews || []), { name: "", rating: "5.0", text: "" }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add review</button>
+                        <button type="button" onClick={() => setVd({ reviews: [...(vd.reviews || []), { name: "", rating: "5.0", text: "", enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add review</button>
                       </div>
 
                       {/* FAQs */}
                       <div className="pt-2 border-t border-slate-100">
                         <div className="text-xs font-bold text-slate-700 mb-2">❓ Frequently Asked Questions</div>
                         <div className="space-y-2.5 mb-2">
-                          {(vd.faqs || []).map((faq, i) => (
-                            <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
-                              <div className="flex gap-2">
-                                <input type="text" placeholder="Question" value={faq.q || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], q: e.target.value }; setVd({ faqs: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
-                                <button type="button" onClick={() => { const a = [...(vd.faqs || [])]; a.splice(i, 1); setVd({ faqs: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                          {(vd.faqs || []).map((faq, i) => {
+                            const enabled = faq.enabled !== false;
+                            return (
+                              <div key={i} className={`bg-white border rounded-xl p-3 space-y-2 ${!enabled ? 'border-slate-100 opacity-60' : 'border-slate-200'}`}>
+                                <div className="flex gap-2 items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={enabled}
+                                    onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], enabled: e.target.checked }; setVd({ faqs: a }); }}
+                                    className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                  />
+                                  <input type="text" placeholder="Question" value={faq.q || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], q: e.target.value }; setVd({ faqs: a }); }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-indigo-400 outline-none" />
+                                  <button type="button" onClick={() => { const a = [...(vd.faqs || [])]; a.splice(i, 1); setVd({ faqs: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                                <textarea placeholder="Answer..." value={faq.a || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], a: e.target.value }; setVd({ faqs: a }); }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-indigo-400 outline-none resize-none" />
                               </div>
-                              <textarea placeholder="Answer text..." value={faq.a || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], a: e.target.value }; setVd({ faqs: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ faqs: [...(vd.faqs || []), { q: "", a: "" }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add FAQ</button>
+                        <button type="button" onClick={() => setVd({ faqs: [...(vd.faqs || []), { q: "", a: "", enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add FAQ</button>
                       </div>
-
                     </div>
                   )}
                 </div>
@@ -2323,7 +3848,11 @@ export function CatalogPackagesPage() {
                 label: `${s.category_name ? s.category_name + " / " : ""}${s.name}`,
               }))}
               value={String(editing.service?.id || editing.service || "")}
-              onChange={(e) => setEditing({ ...editing, service: e.target.value })}
+              onChange={(e) => {
+                const sId = e.target.value
+                const matchSvc = services.find(s => String(s.id) === sId)
+                setEditing({ ...editing, service: sId, virtualSlug: matchSvc?.virtualSlug || "" })
+              }}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

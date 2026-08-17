@@ -292,8 +292,8 @@ const SERVICE_DETAILS_CONTENT = {
   }
 };
 
-export function CockroachControlModal({ category, cart, setCart, onClose, onCheckout }) {
-  const [activeTab, setActiveTab] = useState("cockroach");
+export function CockroachControlModal({ category, cart, setCart, onClose, onCheckout, initialTab }) {
+  const [activeTab, setActiveTab] = useState(initialTab || "cockroach");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
@@ -369,11 +369,12 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : item.includes;
-            item.tools = dbMatch.tools;
-            item.ready = dbMatch.ready;
-            item.reviews = dbMatch.reviews;
-            item.faqs = dbMatch.faqs;
+            // Only use DB includes if it's a non-empty array of strings
+            if (Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 && typeof dbMatch.includes[0] === "string") {
+              item.includes = dbMatch.includes;
+            }
+            // Do NOT overwrite item.reviews (a display string like "164K reviews")
+            // with dbMatch.reviews which is an array of objects {name, text, rating}
             item.image = dbMatch.image || item.image;
             item.badge = dbMatch.tag || item.badge;
           }
@@ -418,7 +419,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
     if (!searchQuery) return list;
     return list.filter(item => 
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.includes.some(inc => inc.toLowerCase().includes(searchQuery.toLowerCase()))
+      (Array.isArray(item.includes) && item.includes.some(inc => typeof inc === "string" && inc.toLowerCase().includes(searchQuery.toLowerCase())))
     );
   };
 
@@ -495,6 +496,13 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
           
           {activeTab === "cockroach" && (
             <>
+              <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-100">
+                <img
+                  src="/mockups/pest_control_header.jpg"
+                  alt="Cockroach Control Services"
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
               {/* 1. Kitchen/Bathroom Section */}
               {filteredKB.length > 0 && (
                 <div className="space-y-4">
@@ -645,6 +653,13 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
           {activeTab === "termite" && (
             <>
+              <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-100">
+                <img
+                  src="/mockups/pest_control_header.jpg"
+                  alt="Termite Control Services"
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
               {/* 1. Termite Kitchen/Bathroom Section */}
               {filteredTermiteKB.length > 0 && (
                 <div className="space-y-4">

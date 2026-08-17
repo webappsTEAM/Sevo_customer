@@ -2706,7 +2706,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         if (res?.data && isMounted) {
           setLiveData(res.data)
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // 1. Initial immediate fetch
@@ -2725,12 +2725,12 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           if (msg?.data && isMounted) {
             setLiveData(msg.data)
           }
-        } catch (err) {}
+        } catch (err) { }
       }
       ws.onerror = () => {
         // WS fallback to polling
       }
-    } catch (err) {}
+    } catch (err) { }
 
     // 3. Keep 3-second polling active as reliable backup
     pollTimer = setInterval(fetchStatus, 3000)
@@ -2839,11 +2839,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 620, margin: '0 auto', padding: '1.25rem 1rem' }}>
-      
+
       {/* ─────────────────── CASE A: WAITING FOR PARTNER (RAPIDO RADAR SEARCH) ─────────────────── */}
       {!isAccepted ? (
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          
+
           {/* Rapido Pulse Radar Animation */}
           <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <motion.div
@@ -4921,8 +4921,10 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
             </div>
 
             {rescheduleSuccess && (
-              <div style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
- padding: '12px 16px', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
+                padding: '12px 16px', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8
+              }}>
                 ✓ {rescheduleSuccess}
               </div>
             )}
@@ -7559,8 +7561,8 @@ function StepWorkflowCheckout({
                     <div
                       key={cpn.id || cpn.code}
                       className={`p-4 rounded-2xl border transition-all ${isApplied
-                          ? "border-emerald-500 bg-emerald-50/40 shadow-xs"
-                          : "border-slate-200/80 bg-white hover:border-slate-300"
+                        ? "border-emerald-500 bg-emerald-50/40 shadow-xs"
+                        : "border-slate-200/80 bg-white hover:border-slate-300"
                         }`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -13621,7 +13623,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       const pName = (p.name || "").toLowerCase();
       const eff = (effectiveKey || "").toLowerCase();
       const tab = (activeSubTab || "").toLowerCase();
-      
+
       const matchesService = sSlug === eff || sName.includes(eff) || eff.includes(sSlug);
       const matchesTab = sName.includes(tab) || tab.includes(sName) || pName.includes(tab) || tab.includes(pName);
       return matchesService || matchesTab;
@@ -20096,7 +20098,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                           <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 mb-2 flex items-center justify-center">
                             <img src={sub.image} alt={sub.name} className="w-full h-full object-cover" />
                           </div>
-                            <div className="flex-1 flex flex-col justify-between w-full">
+                          <div className="flex-1 flex flex-col justify-between w-full">
                             <div>
                               <h5 className="text-[11px] font-extrabold text-slate-900 leading-tight mb-1.5">{sub.name}</h5>
                             </div>
