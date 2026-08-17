@@ -41,6 +41,7 @@ _RESCHEDULE_TRANSITIONS = {
         RescheduleStatus.SLOT_SUGGESTED,
         RescheduleStatus.REJECTED,
         RescheduleStatus.CANCELLED,
+        RescheduleStatus.RESCHEDULED,
     },
     RescheduleStatus.PENDING_ADMIN_REVIEW: {
         RescheduleStatus.ADMIN_REVIEW,
@@ -52,6 +53,7 @@ _RESCHEDULE_TRANSITIONS = {
         RescheduleStatus.SLOT_SUGGESTED,
         RescheduleStatus.REJECTED,
         RescheduleStatus.CANCELLED,
+        RescheduleStatus.RESCHEDULED,
     },
     RescheduleStatus.ADMIN_REVIEW: {
         RescheduleStatus.ADMIN_APPROVED,

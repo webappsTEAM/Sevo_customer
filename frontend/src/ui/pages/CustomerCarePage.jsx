@@ -51,12 +51,22 @@ function Toast({ message, type = "success", onDismiss }) {
 
 /* ─── Map Dictionaries for UI badging ───────────────────────────────────── */
 const CATEGORY_MAP = {
+  booking_issue: { label: "Booking Issue", emoji: "📅", color: "bg-blue-50 text-blue-700 border-blue-150 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800" },
+  service_quality: { label: "Service Quality", emoji: "⭐", color: "bg-emerald-50 text-emerald-700 border-emerald-150 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
+  technician_issue: { label: "Technician Issue", emoji: "🔧", color: "bg-purple-50 text-purple-700 border-purple-150 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800" },
+  payment_issue: { label: "Payment Issue", emoji: "💳", color: "bg-indigo-50 text-indigo-700 border-indigo-150 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800" },
+  refund: { label: "Refund", emoji: "💵", color: "bg-teal-50 text-teal-700 border-teal-150 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800" },
+  cancellation: { label: "Cancellation", emoji: "❌", color: "bg-rose-50 text-rose-700 border-rose-150 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" },
+  reschedule: { label: "Reschedule", emoji: "⏰", color: "bg-amber-50 text-amber-700 border-amber-150 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
+  pricing_issue: { label: "Pricing Issue", emoji: "🏷️", color: "bg-orange-50 text-orange-700 border-orange-150 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800" },
+  missing_damaged: { label: "Missing / Damaged Item", emoji: "📦", color: "bg-amber-100 text-amber-900 border-amber-250 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-750" },
+  safety_issue: { label: "Safety Issue", emoji: "🛡️", color: "bg-red-50 text-red-700 border-red-150 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800" },
+  other: { label: "Other", emoji: "❓", color: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" },
   general: { label: "General Support", emoji: "📌", color: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" },
   billing: { label: "Billing & Payments", emoji: "💳", color: "bg-indigo-50 text-indigo-700 border-indigo-150 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800" },
   technical: { label: "Technical Issue", emoji: "⚙️", color: "bg-rose-50 text-rose-700 border-rose-150 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" },
   scheduling: { label: "Scheduling & Dispatch", emoji: "⏰", color: "bg-amber-50 text-amber-700 border-amber-150 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
-  feedback: { label: "Customer Feedback", emoji: "💬", color: "bg-emerald-50 text-emerald-700 border-emerald-150 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
-  other: { label: "Other", emoji: "❓", color: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" }
+  feedback: { label: "Customer Feedback", emoji: "💬", color: "bg-emerald-50 text-emerald-700 border-emerald-150 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" }
 }
 
 const PRIORITY_MAP = {
@@ -90,12 +100,22 @@ const REFUND_STATUS_MAP = {
 }
 
 const CATEGORY_PRIORITY_MAP = {
+  booking_issue: "medium",
+  service_quality: "medium",
+  technician_issue: "high",
+  payment_issue: "medium",
+  refund: "high",
+  cancellation: "medium",
+  reschedule: "medium",
+  pricing_issue: "low",
+  missing_damaged: "high",
+  safety_issue: "critical",
+  other: "low",
   general: "low",
   billing: "medium",
   technical: "critical",
   scheduling: "high",
-  feedback: "low",
-  other: "low"
+  feedback: "low"
 }
 
 export default function CustomerCarePage() {
@@ -881,63 +901,128 @@ export default function CustomerCarePage() {
       {activeTab === "tickets" && (
         <div className="space-y-6">
           {/* Quick Metrics Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
             <div 
-              onClick={() => { setFilterStatus(""); setFilterSlaBreached(false) }}
-              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/5 dark:hover:bg-indigo-500/5 transition-all ${
-                !filterStatus && !filterSlaBreached
-                  ? "border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/20" 
+              onClick={() => {
+                setFilterStatus(filterStatus === "open_all" ? "" : "open_all");
+                setFilterPriority("");
+                setFilterAgent("");
+                setFilterSlaBreached(false);
+              }}
+              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-blue-400 hover:bg-blue-50/5 transition-all ${
+                filterStatus === "open_all"
+                  ? "border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20" 
                   : "border-slate-200 dark:border-slate-800"
               }`}
             >
-              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Total Tickets</span>
-              <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">{analytics?.total_tickets || 0}</h2>
-            </div>
-            <div 
-              onClick={() => { setFilterStatus("new"); setFilterSlaBreached(false) }}
-              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-sky-400 hover:bg-sky-50/5 dark:hover:bg-sky-500/5 transition-all ${
-                filterStatus === "new" 
-                  ? "border-sky-500 dark:border-sky-500 ring-2 ring-sky-500/20" 
-                  : "border-slate-200 dark:border-slate-800"
-              }`}
-            >
-              <span className="text-[9px] font-black uppercase text-sky-500 tracking-wider">New & Open</span>
-              <h2 className="text-xl font-black text-sky-600 dark:text-sky-400 mt-1">
-                {(analytics?.status_counts?.new || 0) + (analytics?.status_counts?.assigned || 0)}
+              <span className="text-[9px] font-black uppercase text-blue-500 tracking-wider">Open Tickets</span>
+              <h2 className="text-xl font-black text-blue-650 dark:text-blue-400 mt-1">
+                {analytics ? (analytics.total_tickets - (analytics.status_counts?.resolved || 0) - (analytics.status_counts?.closed || 0)) : 0}
               </h2>
             </div>
+
             <div 
-              onClick={() => { setFilterStatus("escalated"); setFilterSlaBreached(false) }}
-              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-red-400 hover:bg-red-50/5 dark:hover:bg-red-500/5 transition-all ${
-                filterStatus === "escalated" 
+              onClick={() => {
+                setFilterPriority(filterPriority === "high_all" ? "" : "high_all");
+                setFilterStatus("");
+                setFilterAgent("");
+                setFilterSlaBreached(false);
+              }}
+              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-red-400 hover:bg-red-50/5 transition-all ${
+                filterPriority === "high_all"
                   ? "border-red-500 dark:border-red-500 ring-2 ring-red-500/20" 
                   : "border-slate-200 dark:border-slate-800"
               }`}
             >
-              <span className="text-[9px] font-black uppercase text-red-500 tracking-wider">Escalated</span>
-              <h2 className="text-xl font-black text-red-600 dark:text-red-400 mt-1">{analytics?.status_counts?.escalated || 0}</h2>
+              <span className="text-[9px] font-black uppercase text-red-500 tracking-wider">High Priority</span>
+              <h2 className="text-xl font-black text-red-650 dark:text-red-400 mt-1">
+                {analytics ? ((analytics.priority_counts?.high || 0) + (analytics.priority_counts?.critical || 0)) : 0}
+              </h2>
             </div>
-            <div
-              onClick={() => { setFilterSlaBreached(f => !f); setFilterStatus("") }}
-              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-rose-400 hover:bg-rose-50/5 dark:hover:bg-rose-500/5 transition-all ${
-                filterSlaBreached
-                  ? "border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20"
+
+            <div 
+              onClick={() => {
+                setFilterAgent(filterAgent === "unassigned" ? "" : "unassigned");
+                setFilterStatus("");
+                setFilterPriority("");
+                setFilterSlaBreached(false);
+              }}
+              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/5 transition-all ${
+                filterAgent === "unassigned"
+                  ? "border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/20" 
                   : "border-slate-200 dark:border-slate-800"
               }`}
             >
-              <span className="text-[9px] font-black uppercase text-rose-500 tracking-wider">SLA Breached</span>
-              <h2 className="text-xl font-black text-rose-600 dark:text-rose-400 mt-1">{analytics?.sla_breached_count || 0}</h2>
+              <span className="text-[9px] font-black uppercase text-indigo-500 tracking-wider">Unassigned</span>
+              <h2 className="text-xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
+                {analytics?.status_counts?.new || 0}
+              </h2>
             </div>
+
             <div 
-              onClick={() => { setFilterStatus("resolved"); setFilterSlaBreached(false) }}
-              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm col-span-2 md:col-span-1 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/5 dark:hover:bg-emerald-500/5 transition-all ${
-                filterStatus === "resolved" 
+              onClick={() => {
+                setFilterStatus(filterStatus === "waiting_on_customer" ? "" : "waiting_on_customer");
+                setFilterPriority("");
+                setFilterAgent("");
+                setFilterSlaBreached(false);
+              }}
+              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-purple-400 hover:bg-purple-50/5 transition-all ${
+                filterStatus === "waiting_on_customer"
+                  ? "border-purple-500 dark:border-purple-500 ring-2 ring-purple-500/20" 
+                  : "border-slate-200 dark:border-slate-800"
+              }`}
+            >
+              <span className="text-[9px] font-black uppercase text-purple-500 tracking-wider">Waiting Customer</span>
+              <h2 className="text-xl font-black text-purple-600 dark:text-purple-400 mt-1">
+                {analytics?.status_counts?.waiting_on_customer || 0}
+              </h2>
+            </div>
+
+            <div 
+              onClick={() => {
+                setFilterStatus(filterStatus === "waiting_on_internal" ? "" : "waiting_on_internal");
+                setFilterPriority("");
+                setFilterAgent("");
+                setFilterSlaBreached(false);
+              }}
+              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-cyan-400 hover:bg-cyan-50/5 transition-all ${
+                filterStatus === "waiting_on_internal"
+                  ? "border-cyan-500 dark:border-cyan-500 ring-2 ring-cyan-500/20" 
+                  : "border-slate-200 dark:border-slate-800"
+              }`}
+            >
+              <span className="text-[9px] font-black uppercase text-cyan-500 tracking-wider">Waiting Internal</span>
+              <h2 className="text-xl font-black text-cyan-600 dark:text-cyan-400 mt-1">
+                {analytics?.status_counts?.waiting_on_internal || 0}
+              </h2>
+            </div>
+
+            <div 
+              onClick={() => {
+                setFilterStatus(filterStatus === "resolved" ? "" : "resolved");
+                setFilterPriority("");
+                setFilterAgent("");
+                setFilterSlaBreached(false);
+              }}
+              className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/5 transition-all ${
+                filterStatus === "resolved"
                   ? "border-emerald-500 dark:border-emerald-500 ring-2 ring-emerald-500/20" 
                   : "border-slate-200 dark:border-slate-800"
               }`}
             >
               <span className="text-[9px] font-black uppercase text-emerald-500 tracking-wider">Resolved Today</span>
-              <h2 className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{analytics?.status_counts?.resolved || 0}</h2>
+              <h2 className="text-xl font-black text-emerald-650 dark:text-emerald-400 mt-1">
+                {analytics?.status_counts?.resolved || 0}
+              </h2>
+            </div>
+
+            <div 
+              className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm"
+            >
+              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Avg Resolve Time</span>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                {analytics?.avg_resolution_hours ? (analytics.avg_resolution_hours < 2 ? Math.round(analytics.avg_resolution_hours * 60) + "m" : analytics.avg_resolution_hours + "h") : "0m"}
+              </h2>
             </div>
           </div>
 
@@ -970,12 +1055,9 @@ export default function CustomerCarePage() {
                 className="px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:outline-none"
               >
                 <option value="">All Categories</option>
-                <option value="general">General Support</option>
-                <option value="billing">Billing & Payments</option>
-                <option value="technical">Technical Issue</option>
-                <option value="scheduling">Scheduling & Dispatch</option>
-                <option value="feedback">Customer Feedback</option>
-                <option value="other">Other</option>
+                {Object.entries(CATEGORY_MAP).map(([key, info]) => (
+                  <option key={key} value={key}>{info.label}</option>
+                ))}
               </select>
 
               <select
@@ -1324,14 +1406,10 @@ export default function CustomerCarePage() {
                     label="Category"
                     value={newCategory}
                     onChange={e => handleCategoryChange(e.target.value)}
-                    options={[
-                      { value: "general", label: "General Support" },
-                      { value: "billing", label: "Billing & Charges" },
-                      { value: "technical", label: "Technical Issues" },
-                      { value: "scheduling", label: "Scheduling & Shift" },
-                      { value: "feedback", label: "Customer Feedback" },
-                      { value: "other", label: "Other" }
-                    ]}
+                    options={Object.entries(CATEGORY_MAP).map(([key, info]) => ({
+                      value: key,
+                      label: info.label
+                    }))}
                   />
                   <Select
                     label="Priority"
@@ -1695,6 +1773,12 @@ export default function CustomerCarePage() {
                       Messages
                     </button>
                     <button
+                      onClick={() => setDetailTab("booking_context")}
+                      className={`py-2.5 px-2.5 border-b-2 transition-all ${detailTab === "booking_context" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
+                    >
+                      Booking Context
+                    </button>
+                    <button
                       onClick={() => setDetailTab("reschedule")}
                       className={`py-2.5 px-2.5 border-b-2 transition-all ${detailTab === "reschedule" ? "border-indigo-600 text-indigo-600 dark:border-indigo-400" : "border-transparent text-slate-500"}`}
                     >
@@ -1856,6 +1940,181 @@ export default function CustomerCarePage() {
                             </button>
                           </div>
                         </form>
+                      </div>
+                    )}
+
+                    {detailTab === "booking_context" && (
+                      <div className="space-y-6">
+                        {contextLoading ? (
+                          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                            <RefreshCw size={24} className="animate-spin mb-2" />
+                            Loading booking context...
+                          </div>
+                        ) : !ticketContext?.booking ? (
+                          <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-center">
+                            <HelpCircle size={32} className="mb-2 text-slate-350" />
+                            No booking is linked to this ticket.
+                            <p className="text-[10px] text-slate-400 mt-1 max-w-xs leading-normal">
+                              Use the "Link Booking" input in the left panel to associate a legacy service request.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-xs leading-relaxed">
+                            {/* Col 1: Customer & Booking Core Info */}
+                            <div className="space-y-4 lg:col-span-2">
+                              {/* Customer section */}
+                              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                                <h4 className="font-black text-[10px] uppercase text-slate-400 tracking-wider pb-1.5 border-b border-slate-100 dark:border-slate-800">
+                                  Customer Profile
+                                </h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                  <div>
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Full Name</span>
+                                    <span className="font-extrabold text-slate-800 dark:text-slate-205">{ticketContext.customer?.name || selectedTicket.customer_name}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Phone Number</span>
+                                    <span className="font-extrabold text-slate-800 dark:text-slate-205">{ticketContext.customer?.phone || selectedTicket.phone || "-"}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Email Address</span>
+                                    <span className="font-extrabold text-slate-800 dark:text-slate-205 truncate block">{ticketContext.customer?.email || selectedTicket.email || "-"}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Service Address</span>
+                                    <span className="font-extrabold text-slate-800 dark:text-slate-205 block mt-0.5">{ticketContext.booking.address || "-"}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Booking section */}
+                              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                                <h4 className="font-black text-[10px] uppercase text-slate-400 tracking-wider pb-1.5 border-b border-slate-100 dark:border-slate-800">
+                                  Booking Details
+                                </h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                  <div>
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Booking ID</span>
+                                    <span className="font-extrabold text-indigo-600 dark:text-indigo-400 font-mono text-[10px] block mt-0.5">{ticketContext.booking.request_id}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Service Category</span>
+                                    <span className="font-extrabold block mt-0.5 capitalize">{ticketContext.booking.service_category}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Issue / Title</span>
+                                    <span className="font-extrabold block mt-0.5">{ticketContext.booking.issue_title}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Preferred Date / Time</span>
+                                    <span className="font-extrabold block mt-0.5">{ticketContext.booking.preferred_date} @ {ticketContext.booking.preferred_time || "-"}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Order Amount</span>
+                                    <span className="font-extrabold block mt-0.5">₹{ticketContext.booking.final_amount || ticketContext.booking.total_amount}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Payment / Booking Status</span>
+                                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                      <span className="font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                        {ticketContext.booking.payment_status}
+                                      </span>
+                                      <span className="font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase bg-indigo-55 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900">
+                                        {ticketContext.booking.status}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                {ticketContext.booking.description && (
+                                  <div className="pt-2 border-t border-slate-100 dark:border-slate-850 mt-1">
+                                    <span className="text-slate-400 block font-semibold text-[10px] uppercase">Description / Complaint</span>
+                                    <p className="text-slate-600 dark:text-slate-400 mt-0.5 font-medium">{ticketContext.booking.description}</p>
+                                  </div>
+                                )}
+                                {ticketContext.booking.technician && (
+                                  <div className="pt-2.5 border-t border-slate-100 dark:border-slate-850 mt-1 bg-slate-50/50 dark:bg-slate-950/10 p-2.5 rounded-xl space-y-1.5">
+                                    <span className="text-slate-400 block font-bold text-[9px] uppercase">Assigned Technician</span>
+                                    <span className="font-extrabold block text-slate-850 dark:text-slate-150">
+                                      {ticketContext.booking.technician.name} (📞 {ticketContext.booking.technician.phone || "No phone"})
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Service Packages Section */}
+                              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                                <h4 className="font-black text-[10px] uppercase text-slate-400 tracking-wider pb-1.5 border-b border-slate-100 dark:border-slate-800">
+                                  Service Inclusions & Exclusions
+                                </h4>
+                                {ticketContext.booking.cart_data && ticketContext.booking.cart_data.length > 0 ? (
+                                  <div className="space-y-4">
+                                    {ticketContext.booking.cart_data.map((item, idx) => (
+                                      <div key={idx} className="space-y-2 border-b border-slate-100 dark:border-slate-850 pb-3 last:border-0 last:pb-0">
+                                        <div className="flex justify-between items-center">
+                                          <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{item.name || item.title || "Package Selection"}</span>
+                                          {item.price && <span className="font-black text-indigo-600 dark:text-indigo-400 font-mono">₹{item.price}</span>}
+                                        </div>
+                                        {item.description && <p className="text-[11px] text-slate-400 leading-normal">{item.description}</p>}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                          {item.includes && item.includes.length > 0 && (
+                                            <div>
+                                              <span className="text-emerald-600 dark:text-emerald-450 font-bold text-[9px] uppercase tracking-wider block mb-1">✔️ Includes</span>
+                                              <ul className="list-disc pl-3 text-[10px] text-slate-500 space-y-0.5">
+                                                {item.includes.map((inc, i) => <li key={i}>{inc}</li>)}
+                                              </ul>
+                                            </div>
+                                          )}
+                                          {item.excludes && item.excludes.length > 0 && (
+                                            <div>
+                                              <span className="text-rose-600 dark:text-rose-450 font-bold text-[9px] uppercase tracking-wider block mb-1">❌ Excludes</span>
+                                              <ul className="list-disc pl-3 text-[10px] text-slate-500 space-y-0.5">
+                                                {item.excludes.map((exc, i) => <li key={i}>{exc}</li>)}
+                                              </ul>
+                                            </div>
+                                          )}
+                                        </div>
+                                        {item.warranty && (
+                                          <div className="text-[10px] bg-sky-500/5 border border-sky-500/10 p-1.5 rounded-lg text-sky-600 dark:text-sky-400 font-bold inline-block">
+                                            🛡️ Warranty: {item.warranty}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-slate-400 italic text-[11px]">No package-level details in cart_data.</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Col 2: Job Lifecycle Timeline */}
+                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-4">
+                              <h4 className="font-black text-[10px] uppercase text-slate-400 tracking-wider pb-1.5 border-b border-slate-100 dark:border-slate-800">
+                                Job Lifecycle Timeline
+                              </h4>
+                              {ticketContext.timeline && ticketContext.timeline.length > 0 ? (
+                                <div className="relative pl-4 border-l-2 border-indigo-100 dark:border-indigo-950 space-y-5 ml-1">
+                                  {ticketContext.timeline.map((evt, i) => (
+                                    <div key={i} className="relative text-xs">
+                                      <div className="absolute -left-[21px] top-0.5 w-2.5 h-2.5 bg-indigo-500 rounded-full border-2 border-white dark:border-slate-900" />
+                                      <span className="font-extrabold text-slate-850 dark:text-slate-150 block">{evt.label}</span>
+                                      <span className="text-[10px] text-slate-400 font-semibold">{new Date(evt.timestamp).toLocaleString("en-IN")}</span>
+                                    </div>
+                                  ))}
+                                  {selectedTicket.linked_complaint_id && (
+                                    <div className="relative text-xs">
+                                      <div className="absolute -left-[21px] top-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900" />
+                                      <span className="font-extrabold text-rose-600 dark:text-rose-400 block">Complaint Raised</span>
+                                      <span className="text-[10px] text-slate-400 font-semibold">Associated from portal</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-slate-400 italic text-[11px]">No timeline entries recorded.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
