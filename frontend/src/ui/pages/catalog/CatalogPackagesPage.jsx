@@ -524,6 +524,8 @@ export function CatalogPackagesPage() {
   const [serviceEditing, setServiceEditing] = useState(null)
   const [expandedPackages, setExpandedPackages] = useState(new Set())
   const [toast, showToast] = useToast()
+  const [serviceCustomizing, setServiceCustomizing] = useState(null)
+  const [customizerTab, setCustomizerTab] = useState("general")
 
   const loadData = async () => {
     setLoading(true)
@@ -1048,6 +1050,9 @@ export function CatalogPackagesPage() {
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
       checklist: items,
       image: pkg.image || "",
+      sort_order: pkg.sort_order || 0,
+      button_text: pkg.button_text || "Add",
+      icon: pkg.icon || "",
       editingItemId: null,
       _vdOpen: true,
       viewDetails: {
@@ -1095,6 +1100,9 @@ export function CatalogPackagesPage() {
         ready: Array.isArray(vd.ready) ? vd.ready.filter(Boolean) : [],
         reviews: Array.isArray(vd.reviews) ? vd.reviews.filter(r => r.name || r.text) : [],
         faqs: Array.isArray(vd.faqs) ? vd.faqs.filter(f => f.q || f.a) : [],
+        sort_order: parseInt(quickPriceEditing.sort_order) || 0,
+        button_text: quickPriceEditing.button_text || "Add",
+        icon: quickPriceEditing.icon || "",
       }
 
       // Handle virtual parent rows (fridge-parent, stove-parent) — save includes to each sub-option
@@ -1159,6 +1167,67 @@ export function CatalogPackagesPage() {
       }
     } catch {
       showToast("Service update failed", "error")
+    }
+  }
+
+  const openServiceCustomizer = (service) => {
+    const cust = service.customization || {}
+    setServiceCustomizing({
+      ...service,
+      customization: {
+        rating: cust.rating || "4.8",
+        reviews: cust.reviews || "15K",
+        points: Array.isArray(cust.points) ? cust.points : [],
+        benefits: Array.isArray(cust.benefits) ? cust.benefits : [],
+        includes_heading: cust.includes_heading || "WHAT'S INCLUDED",
+        includes: Array.isArray(cust.includes) ? cust.includes : [],
+        free_inspection_heading: cust.free_inspection_heading || "FREE SITE INSPECTION INCLUDED",
+        free_inspection_enabled: cust.free_inspection_enabled !== false,
+        inspection_highlights: Array.isArray(cust.inspection_highlights) ? cust.inspection_highlights : [],
+        excludes_heading: cust.excludes_heading || "WHAT'S NOT INCLUDED",
+        excludes_enabled: !cust.excludes_enabled !== false,
+        excludes: Array.isArray(cust.excludes) ? cust.excludes : [],
+        steps_heading: cust.steps_heading || "HOW PAINTING WORKS",
+        steps: Array.isArray(cust.steps) ? cust.steps : [],
+        faqs: Array.isArray(cust.faqs) ? cust.faqs : [],
+        starting_fare: cust.starting_fare || "",
+        button_text: cust.button_text || "View details",
+        estimate_cta: cust.estimate_cta || "Get Estimate",
+        suboptions_heading: cust.suboptions_heading || "",
+        faqs_heading: cust.faqs_heading || "",
+        reviews_heading: cust.reviews_heading || "",
+      }
+    })
+    setCustomizerTab("general")
+  }
+
+  const handleServiceCustomizerSave = async (e) => {
+    e.preventDefault()
+    if (!serviceCustomizing) return
+    try {
+      const payload = {
+        name: serviceCustomizing.name,
+        description: serviceCustomizing.description || "",
+        image: serviceCustomizing.image || "",
+        is_active: serviceCustomizing.is_active,
+        sort_order: parseInt(serviceCustomizing.sort_order) || 0,
+        customization: {
+          ...serviceCustomizing.customization,
+        }
+      }
+      const res = await apiRequest(`/settings/catalog/v2/services/${serviceCustomizing.id}/`, {
+        method: "PUT",
+        json: payload,
+      })
+      if (res.success) {
+        showToast(`Service "${serviceCustomizing.name}" customized successfully!`)
+        setServiceCustomizing(null)
+        loadData()
+      } else {
+        showToast(res.message || "Customization failed", "error")
+      }
+    } catch (err) {
+      showToast("Customization failed", "error")
     }
   }
 
@@ -1461,14 +1530,26 @@ export function CatalogPackagesPage() {
                         <span className="text-xs font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-full">
                           {pkgList.length} {pkgList.length === 1 ? "option" : "options"}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setServiceEditing({ ...svcItem.service })}
-                          title="Edit Sub-Service Heading & Description"
-                          className="p-1 rounded-lg text-slate-400 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                        {activeCategoryKey === "paintings" || activeCategoryKey === "mason" ? (
+                          <button
+                            type="button"
+                            onClick={() => openServiceCustomizer(svcItem.service)}
+                            title="Customise Booking Card & Detail Page Content"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            <span>Customise Page</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setServiceEditing({ ...svcItem.service })}
+                            title="Edit Sub-Service Heading & Description"
+                            className="p-1 rounded-lg text-slate-400 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                       {svcItem.service.description && (
                         <p className="text-[11px] text-slate-400 truncate max-w-lg sm:max-w-2xl lg:max-w-4xl">
@@ -1769,6 +1850,763 @@ export function CatalogPackagesPage() {
         </Modal>
       )}
 
+      {/* ── Sub-Service Customise Modal (Heading, Description, Points, Badges, etc.) ── */}
+      {serviceCustomizing && (
+        <Modal
+          maxWidth="max-w-3xl sm:max-w-4xl"
+          title={`Customise Painting Service Page: ${serviceCustomizing.name}`}
+          onClose={() => setServiceCustomizing(null)}
+        >
+          <form onSubmit={handleServiceCustomizerSave} className="flex flex-col gap-5 font-sans text-left">
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50/70 rounded-2xl border border-indigo-100 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Category Pillar</span>
+                <div className="text-sm sm:text-base font-extrabold text-indigo-955 mt-0.5">{activePillar.name}</div>
+              </div>
+              <span className="px-3 py-1 bg-white text-indigo-700 text-xs font-bold rounded-full border border-indigo-200/80 shadow-2xs">
+                Painting Customizer
+              </span>
+            </div>
+
+            {/* Tabs Header */}
+            <div className="flex border-b border-slate-200">
+              {[
+                { id: "general", label: "Card & General Settings" },
+                { id: "content", label: "Includes & Excludes" },
+                { id: "details", label: "Badges, Steps & FAQs" },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setCustomizerTab(t.id)}
+                  className={`px-4 py-2 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
+                    customizerTab === t.id
+                      ? "border-indigo-600 text-indigo-600"
+                      : "border-transparent text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab 1: General & Card settings */}
+            {customizerTab === "general" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Sub-Service Name"
+                    required
+                    value={serviceCustomizing.name || ""}
+                    onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, name: e.target.value })}
+                  />
+                  <Input
+                    label="Display Order (sort_order)"
+                    type="number"
+                    value={serviceCustomizing.sort_order || 0}
+                    onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, sort_order: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+
+                <TextArea
+                  label="Description"
+                  value={serviceCustomizing.description || ""}
+                  onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, description: e.target.value })}
+                />
+
+                {/* Service Image Customizer Section */}
+                <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+                  <div>
+                    <span className="text-xs font-bold text-slate-800">Service Banner Image</span>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Upload a custom service banner image or paste an image URL.</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    {serviceCustomizing.image ? (
+                      <div className="relative w-24 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                        <img src={serviceCustomizing.image} alt="Preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setServiceCustomizing((prev) => ({ ...prev, image: "" }))}
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-24 h-16 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                        No Image
+                      </div>
+                    )}
+                    <div className="flex-1 w-full space-y-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            const formData = new FormData()
+                            formData.append("image", file)
+                            try {
+                              const res = await apiRequest("/settings/catalog/upload-image/", {
+                                method: "POST",
+                                body: formData,
+                              })
+                              if (res.success && res.url) {
+                                setServiceCustomizing((prev) => ({ ...prev, image: res.url }))
+                                showToast("Image uploaded successfully!")
+                              } else {
+                                showToast(res.message || "Upload failed", "error")
+                              }
+                            } catch (err) {
+                              showToast("Upload failed", "error")
+                            }
+                          }
+                        }}
+                        className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                      />
+                      <Input
+                        label="Or Image URL"
+                        placeholder="https://images.unsplash.com/..."
+                        value={serviceCustomizing.image || ""}
+                        onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, image: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Input
+                    label="Marketing Rating"
+                    value={serviceCustomizing.customization.rating || "4.8"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, rating: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <Input
+                    label="Marketing Rating Count"
+                    placeholder="e.g. 15K Ratings, 2.5 Lakhs"
+                    value={serviceCustomizing.customization.reviews || "15K"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, reviews: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <Input
+                    label="Ratings & Reviews Section Heading"
+                    value={serviceCustomizing.customization.reviews_heading || "Ratings & Reviews"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, reviews_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Input
+                    label="View Details Button Text"
+                    value={serviceCustomizing.customization.button_text || "View details"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, button_text: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <Input
+                    label="Get Estimate Button CTA"
+                    value={serviceCustomizing.customization.estimate_cta || "Get Estimate"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, estimate_cta: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <Input
+                    label="Override Starting Fare"
+                    type="number"
+                    value={serviceCustomizing.customization.starting_fare || ""}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, starting_fare: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!serviceCustomizing.is_active}
+                      onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, is_active: e.target.checked })}
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                    />
+                    <span>Active in Customer Booking</span>
+                  </label>
+                </div>
+
+                {/* Card Points repeatable list */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Card Points (Short highlights on the service card)</label>
+                  <div className="space-y-2 mb-2 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50">
+                    {serviceCustomizing.customization.points.map((pt, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={pt}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.points];
+                            updated[idx] = e.target.value;
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, points: updated }
+                            });
+                          }}
+                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.points.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, points: updated }
+                            });
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.points.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No points configured. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          points: [...serviceCustomizing.customization.points, ""]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    + Add Card Point
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 2: Includes & Excludes */}
+            {customizerTab === "content" && (
+              <div className="space-y-5">
+                {/* SUB-OPTIONS SECTION */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <span className="text-xs font-bold text-slate-800">Sub-Options List Heading (e.g. What would you like to inspect?)</span>
+                  <Input
+                    label="Section Heading"
+                    value={serviceCustomizing.customization.suboptions_heading || ""}
+                    placeholder="What Would You Like to Inspect?"
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, suboptions_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                </div>
+
+                {/* WHAT'S INCLUDED */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-800">What's Included Section</span>
+                  </div>
+                  <Input
+                    label="Section Heading"
+                    value={serviceCustomizing.customization.includes_heading || "WHAT'S INCLUDED"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, includes_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.includes.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={item}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.includes];
+                            updated[idx] = e.target.value;
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, includes: updated }
+                            });
+                          }}
+                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.includes.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, includes: updated }
+                            });
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.includes.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No included items. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          includes: [...serviceCustomizing.customization.includes, ""]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    + Add Included Item
+                  </button>
+                </div>
+
+                {/* WHAT'S NOT INCLUDED */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-800">What's Not Included Section</span>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!serviceCustomizing.customization.excludes_enabled}
+                        onChange={(e) => {
+                          const updatedCust = { ...serviceCustomizing.customization, excludes_enabled: e.target.checked };
+                          setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                        }}
+                        className="w-3.5 h-3.5 text-indigo-600 rounded"
+                      />
+                      <span>Enable Section</span>
+                    </label>
+                  </div>
+                  <Input
+                    label="Section Heading"
+                    disabled={!serviceCustomizing.customization.excludes_enabled}
+                    value={serviceCustomizing.customization.excludes_heading || "WHAT'S NOT INCLUDED"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, excludes_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.excludes.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          disabled={!serviceCustomizing.customization.excludes_enabled}
+                          value={item}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.excludes];
+                            updated[idx] = e.target.value;
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, excludes: updated }
+                            });
+                          }}
+                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                        <button
+                          type="button"
+                          disabled={!serviceCustomizing.customization.excludes_enabled}
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.excludes.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, excludes: updated }
+                            });
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.excludes.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No excluded items. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!serviceCustomizing.customization.excludes_enabled}
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          excludes: [...serviceCustomizing.customization.excludes, ""]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer disabled:opacity-50"
+                  >
+                    + Add Excluded Item
+                  </button>
+                </div>
+
+                {/* FREE SITE INSPECTION */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-800">Free Site Inspection Banner Section</span>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!serviceCustomizing.customization.free_inspection_enabled}
+                        onChange={(e) => {
+                          const updatedCust = { ...serviceCustomizing.customization, free_inspection_enabled: e.target.checked };
+                          setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                        }}
+                        className="w-3.5 h-3.5 text-indigo-600 rounded"
+                      />
+                      <span>Enable Section</span>
+                    </label>
+                  </div>
+                  <Input
+                    label="Section Heading"
+                    disabled={!serviceCustomizing.customization.free_inspection_enabled}
+                    value={serviceCustomizing.customization.free_inspection_heading || "FREE SITE INSPECTION INCLUDED"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, free_inspection_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.inspection_highlights.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          disabled={!serviceCustomizing.customization.free_inspection_enabled}
+                          value={item}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.inspection_highlights];
+                            updated[idx] = e.target.value;
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, inspection_highlights: updated }
+                            });
+                          }}
+                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                        <button
+                          type="button"
+                          disabled={!serviceCustomizing.customization.free_inspection_enabled}
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.inspection_highlights.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, inspection_highlights: updated }
+                            });
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.inspection_highlights.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No tags configured. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!serviceCustomizing.customization.free_inspection_enabled}
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          inspection_highlights: [...serviceCustomizing.customization.inspection_highlights, ""]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer disabled:opacity-50"
+                  >
+                    + Add Highlight Tag
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: Badges, Steps & FAQs */}
+            {customizerTab === "details" && (
+              <div className="space-y-5">
+                {/* FEATURE BADGES */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <span className="text-xs font-bold text-slate-800 block">Feature Badges (Switch Board popup badges)</span>
+                  <div className="space-y-3 max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.benefits.map((badge, idx) => {
+                      const bTitle = typeof badge === 'string' ? badge : (badge.title || "");
+                      const bIcon = typeof badge === 'string' ? "award" : (badge.icon || "award");
+                      return (
+                        <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
+                          <div className="grid grid-cols-2 gap-3">
+                            <Input
+                              label="Badge Title"
+                              value={bTitle}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.benefits];
+                                updated[idx] = { title: e.target.value, icon: bIcon };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, benefits: updated }
+                                });
+                              }}
+                            />
+                            <Input
+                              label="Badge Icon (e.g. star, shield, award, cpu)"
+                              value={bIcon}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.benefits];
+                                updated[idx] = { title: bTitle, icon: e.target.value };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, benefits: updated }
+                                });
+                              }}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = serviceCustomizing.customization.benefits.filter((_, i) => i !== idx);
+                              setServiceCustomizing({
+                               ...serviceCustomizing,
+                               customization: { ...serviceCustomizing.customization, benefits: updated }
+                              });
+                            }}
+                            className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {serviceCustomizing.customization.benefits.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No badges configured. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          benefits: [...serviceCustomizing.customization.benefits, { title: "", icon: "award" }]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    + Add Feature Badge
+                  </button>
+                </div>
+
+                {/* HOW IT WORKS */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <span className="text-xs font-bold text-slate-800 block">How it Works Section</span>
+                  <Input
+                    label="Section Heading"
+                    value={serviceCustomizing.customization.steps_heading || "HOW PAINTING WORKS"}
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, steps_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <div className="space-y-3 max-h-56 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.steps.map((step, idx) => (
+                      <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
+                        <div className="grid grid-cols-2 gap-3">
+                          <Input
+                            label="Step Title"
+                            value={step.title || ""}
+                            onChange={(e) => {
+                              const updated = [...serviceCustomizing.customization.steps];
+                              updated[idx] = { ...step, title: e.target.value };
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, steps: updated }
+                              });
+                            }}
+                          />
+                          <Input
+                            label="Step Icon (e.g. calendar, cpu, paint-roller, check-circle)"
+                            value={step.icon || ""}
+                            onChange={(e) => {
+                              const updated = [...serviceCustomizing.customization.steps];
+                              updated[idx] = { ...step, icon: e.target.value };
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, steps: updated }
+                              });
+                            }}
+                          />
+                        </div>
+                        <TextArea
+                          label="Step Description"
+                          rows={2}
+                          value={step.desc || ""}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.steps];
+                            updated[idx] = { ...step, desc: e.target.value };
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, steps: updated }
+                            });
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.steps.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, steps: updated }
+                            });
+                          }}
+                          className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.steps.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No steps configured. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          steps: [...serviceCustomizing.customization.steps, { title: "", desc: "", icon: "paint-roller" }]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    + Add Step
+                  </button>
+                </div>
+
+                {/* FAQ */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <span className="text-xs font-bold text-slate-800 block">Frequently Asked Questions (FAQ)</span>
+                  <Input
+                    label="FAQ Section Heading"
+                    value={serviceCustomizing.customization.faqs_heading || ""}
+                    placeholder="Frequently Asked Questions"
+                    onChange={(e) => {
+                      const updatedCust = { ...serviceCustomizing.customization, faqs_heading: e.target.value };
+                      setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
+                    }}
+                  />
+                  <div className="space-y-3 max-h-56 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                    {serviceCustomizing.customization.faqs.map((faq, idx) => (
+                      <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
+                        <Input
+                          label="Question"
+                          value={faq.q || faq.question || ""}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.faqs];
+                            updated[idx] = { ...faq, q: e.target.value, question: e.target.value };
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, faqs: updated }
+                            });
+                          }}
+                        />
+                        <TextArea
+                          label="Answer"
+                          rows={2}
+                          value={faq.a || faq.answer || ""}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.faqs];
+                            updated[idx] = { ...faq, a: e.target.value, answer: e.target.value };
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, faqs: updated }
+                            });
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = serviceCustomizing.customization.faqs.filter((_, i) => i !== idx);
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, faqs: updated }
+                            });
+                          }}
+                          className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {serviceCustomizing.customization.faqs.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">No FAQs configured. Default fallbacks will be used.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setServiceCustomizing({
+                        ...serviceCustomizing,
+                        customization: {
+                          ...serviceCustomizing.customization,
+                          faqs: [...serviceCustomizing.customization.faqs, { q: "", a: "", active: true }]
+                        }
+                      });
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    + Add FAQ Question
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setServiceCustomizing(null)}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-sm font-extrabold shadow-md shadow-indigo-600/20 transition-all cursor-pointer flex items-center gap-2"
+              >
+                <span>Save &amp; Publish Live</span>
+                <Check className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       {/* ── Customise Package Modal (Heading, Description, Price, Tag, Duration) ── */}
       {quickPriceEditing && (
         <Modal
@@ -1819,6 +2657,36 @@ export function CatalogPackagesPage() {
                 }
               />
             </div>
+
+            {(activeCategoryKey === "paintings" || activeCategoryKey === "mason") && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Input
+                  label="Display Order (sort_order)"
+                  type="number"
+                  placeholder="e.g. 1"
+                  value={quickPriceEditing.sort_order || 0}
+                  onChange={(e) =>
+                    setQuickPriceEditing({ ...quickPriceEditing, sort_order: parseInt(e.target.value) || 0 })
+                  }
+                />
+                <Input
+                  label="Button Text"
+                  placeholder="e.g. Add"
+                  value={quickPriceEditing.button_text || "Add"}
+                  onChange={(e) =>
+                    setQuickPriceEditing({ ...quickPriceEditing, button_text: e.target.value })
+                  }
+                />
+                <Input
+                  label="Icon (e.g. paint-roller, check-circle)"
+                  placeholder="e.g. paint-roller"
+                  value={quickPriceEditing.icon || ""}
+                  onChange={(e) =>
+                    setQuickPriceEditing({ ...quickPriceEditing, icon: e.target.value })
+                  }
+                />
+              </div>
+            )}
 
             {/* ── Suitable for / Know More Checklist Section (Blue Shade Theme) ── */}
             <div className="bg-gradient-to-b from-blue-50/50 to-slate-50/70 rounded-2xl p-4 sm:p-5 border border-blue-100/90 space-y-3.5">
