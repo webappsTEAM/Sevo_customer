@@ -103,33 +103,35 @@ export function useReverseGeocode(coords) {
         } catch (e) { }
       }
 
-      // 3. Direct Google Maps Geocoding API fallback (retry with full parsing)
-      if (!resolvedData && !signal.aborted && googleApiKey) {
+      // 3. Direct Nominatim OpenStreetMap client-side fallback
+      if (!resolvedData && !signal.aborted) {
         try {
-          const gRes = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${googleApiKey}`,
-            { signal }
-          )
-          const gData = await gRes.json()
-          if (gData.status === "OK" && gData.results && gData.results.length > 0) {
-            const first = gData.results[0]
-            const comps = first.address_components || []
-            let city = "", state = "", pincode = "", sublocality = ""
-            for (const c of comps) {
-              const types = c.types || []
-              if (types.includes("sublocality") || types.includes("sublocality_level_1")) sublocality = c.long_name
-              if (types.includes("locality")) city = c.long_name
-              if (types.includes("administrative_area_level_1")) state = c.long_name
-              if (types.includes("postal_code")) pincode = c.long_name
-            }
-            resolvedData = {
-              formatted_address: first.formatted_address,
-              locality: sublocality || first.formatted_address.split(",")[0] || "Current Location",
-              city: city || "",
-              state: state || "",
-              pincode: pincode || "",
-              latitude: lat,
-              longitude: lng,
+          const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
+          const nomRes = await fetch(nomUrl, {
+            headers: { "Accept-Language": "en" },
+            signal
+          })
+          if (nomRes.ok) {
+            const nomData = await nomRes.json()
+            if (nomData && nomData.address) {
+              const a = nomData.address
+              const sublocality = a.suburb || a.neighbourhood || a.residential || a.subdistrict || a.quarter || ""
+              const road = a.road || a.pedestrian || a.street || ""
+              const city = a.city || a.town || a.village || a.county || "Hosur"
+              const state = a.state || "Tamil Nadu"
+              const pincode = a.postcode || ""
+              const cleanLoc = [road, sublocality].filter(Boolean).join(", ") || sublocality || road || "Current Location"
+
+              resolvedData = {
+                formatted_address: nomData.display_name,
+                locality: cleanLoc,
+                city,
+                state,
+                pincode,
+                country: a.country || "India",
+                latitude: lat,
+                longitude: lng,
+              }
             }
           }
         } catch (e) { }
@@ -143,8 +145,8 @@ export function useReverseGeocode(coords) {
         setAddress({
           formatted_address: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
           locality: `Current GPS Location`,
-          city: "",
-          state: "",
+          city: "Hosur",
+          state: "Tamil Nadu",
           pincode: "",
           latitude: lat,
           longitude: lng,
@@ -155,8 +157,8 @@ export function useReverseGeocode(coords) {
       setAddress({
         formatted_address: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
         locality: "Current GPS Location",
-        city: "",
-        state: "",
+        city: "Hosur",
+        state: "Tamil Nadu",
         pincode: "",
         latitude: lat,
         longitude: lng,

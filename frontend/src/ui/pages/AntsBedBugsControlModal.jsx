@@ -203,8 +203,8 @@ const SERVICE_DETAILS_CONTENT = {
   }
 };
 
-export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCheckout }) {
-  const [activeTab, setActiveTab] = useState("bedbugs");
+export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCheckout, initialTab }) {
+  const [activeTab, setActiveTab] = useState(initialTab || "bedbugs");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedServiceDetails, setSelectedServiceDetails] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
@@ -274,11 +274,12 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : item.includes;
-            item.tools = dbMatch.tools;
-            item.ready = dbMatch.ready;
-            item.reviews = dbMatch.reviews;
-            item.faqs = dbMatch.faqs;
+            // Only use DB includes if it's a non-empty array of strings
+            if (Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 && typeof dbMatch.includes[0] === "string") {
+              item.includes = dbMatch.includes;
+            }
+            // Do NOT overwrite item.reviews (a display string like "75K reviews")
+            // with dbMatch.reviews which is an array of objects {name, text, rating}
             item.image = dbMatch.image || item.image;
             item.badge = dbMatch.tag || item.badge;
           }
@@ -323,7 +324,7 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
     if (!searchQuery) return list;
     return list.filter(item => 
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.includes.some(inc => inc.toLowerCase().includes(searchQuery.toLowerCase()))
+      (Array.isArray(item.includes) && item.includes.some(inc => typeof inc === "string" && inc.toLowerCase().includes(searchQuery.toLowerCase())))
     );
   };
 

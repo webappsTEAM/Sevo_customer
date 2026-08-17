@@ -288,7 +288,11 @@ def is_booking_reschedule_eligible(booking):
         RescheduleStatus.CANCELLED,
         RescheduleStatus.CANCELLED_SUGGESTION,
     ]
-    active_req = RescheduleRequest.objects.filter(booking=booking).exclude(status__in=terminal_reschedule_statuses).exists()
+    if hasattr(booking, "reschedule_requests"):
+        all_rrs = [r for r in booking.reschedule_requests.all()]
+        active_req = any(r.status not in terminal_reschedule_statuses for r in all_rrs)
+    else:
+        active_req = RescheduleRequest.objects.filter(booking=booking).exclude(status__in=terminal_reschedule_statuses).exists()
     if active_req:
         return False, "A reschedule request is already in progress for this booking."
 
@@ -306,10 +310,14 @@ def is_booking_refund_eligible(booking):
         return False, "Booking is not paid."
 
     from service_requests.models import RefundRequest, RefundStatus
-    active_refunds = RefundRequest.objects.filter(booking=booking).exclude(
-        status__in=[RefundStatus.REJECTED]
-    )
-    if active_refunds.exists():
+    if hasattr(booking, "refund_requests"):
+        all_refs = [r for r in booking.refund_requests.all()]
+        active_refunds = any(r.status != RefundStatus.REJECTED for r in all_refs)
+    else:
+        active_refunds = RefundRequest.objects.filter(booking=booking).exclude(
+            status__in=[RefundStatus.REJECTED]
+        ).exists()
+    if active_refunds:
         return False, "A refund request is already active or processed for this booking."
 
     return True, "Eligible for refund"

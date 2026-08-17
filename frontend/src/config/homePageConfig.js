@@ -266,6 +266,14 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
 const STORAGE_KEY = "calservices_homepage_config_v1"
 
 export function getHomePageConfig() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      return mergeWithDefaultConfig(JSON.parse(saved))
+    }
+  } catch (err) {
+    console.warn("Failed to parse local homepage config", err)
+  }
   return DEFAULT_HOME_PAGE_CONFIG
 }
 
@@ -289,13 +297,15 @@ export async function fetchPublishedHomePageConfig() {
     if (res.ok) {
       const data = await res.json()
       if (data.success && data.config) {
-        return mergeWithDefaultConfig(data.config)
+        const merged = mergeWithDefaultConfig(data.config)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+        return merged
       }
     }
   } catch (err) {
     console.warn("API fetch error for homepage config:", err)
   }
-  return DEFAULT_HOME_PAGE_CONFIG
+  return getHomePageConfig()
 }
 
 export async function publishHomePageConfig(newConfig) {
@@ -314,6 +324,7 @@ export async function publishHomePageConfig(newConfig) {
       const data = await res.json()
       if (data.success && data.config) {
         const merged = mergeWithDefaultConfig(data.config)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
         window.dispatchEvent(new CustomEvent("calservices:homepage_updated", { detail: merged }))
         return { success: true, config: merged }
       }
@@ -335,6 +346,7 @@ export function saveHomePageConfig(newConfig) {
 }
 
 export function resetHomePageConfig() {
+  localStorage.removeItem(STORAGE_KEY)
   window.dispatchEvent(new CustomEvent("calservices:homepage_updated", { detail: DEFAULT_HOME_PAGE_CONFIG }))
   publishHomePageConfig(DEFAULT_HOME_PAGE_CONFIG)
   return DEFAULT_HOME_PAGE_CONFIG

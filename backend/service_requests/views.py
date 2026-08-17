@@ -462,14 +462,23 @@ class CustomerMyBookingsView(APIView):
         if user_full_name and len(user_full_name) >= 3:
             filters |= Q(customer_name__iexact=user_full_name)
 
-        # Exclude draft bookings from My Bookings list
-        qs = (
+        # Exclude draft bookings from My Bookings list with batch preloading
+        qs = list(
             ServiceRequest.objects.filter(filters)
             .exclude(status="draft")
             .select_related('company', 'assigned_employee', 'assigned_employee__user')
+            .prefetch_related('work_extensions', 'reschedule_requests', 'refund_requests')
             .order_by("-id")
         )
-        all_bookings = ServiceRequestListSerializer(qs, many=True, context={'request': request}).data
+        
+        sr_ids = [sr.id for sr in qs]
+        from tasks.models import Task
+        tasks = Task.objects.filter(service_request_id__in=sr_ids)
+        task_map = {t.service_request_id: t for t in tasks}
+
+        all_bookings = ServiceRequestListSerializer(
+            qs, many=True, context={'request': request, 'task_map': task_map}
+        ).data
 
         return _success(data=all_bookings)
 
@@ -1083,7 +1092,7 @@ class EmployeeJobArrivedView(APIView):
 class CustomerBookingLiveLocationView(APIView):
     """
     GET /api/booking/<pk>/live-location/
-    Returns customer service destination + employee live tracking location.
+    Returns customer service destination + employee live tracking location + ETA and distance.
     """
     permission_classes = [permissions.AllowAny]
 
@@ -1095,30 +1104,339 @@ class CustomerBookingLiveLocationView(APIView):
 
         emp = sr.assigned_employee
         latest_ping = None
+        emp_lat = None
+        emp_lng = None
+        emp_updated_at = None
+
+        dest_lat = float(sr.latitude) if sr.latitude is not None else None
+        dest_lng = float(sr.longitude) if sr.longitude is not None else None
+
         if emp:
+            from datetime import timedelta
             from live_locations.models import EmployeeLocation
+            from time_tracking.models import TimeLog
+            from tasks.models import Task
+
+            # 1. Check latest live GPS ping from EmployeeLocation
             latest_ping = EmployeeLocation.objects.filter(employee=emp).order_by("-timestamp").first()
+            if latest_ping and latest_ping.lat and latest_ping.lng:
+                emp_lat = float(latest_ping.lat)
+                emp_lng = float(latest_ping.lng)
+                emp_updated_at = latest_ping.timestamp.isoformat()
+
+            # 2. Check active TimeLog clock_in coordinates
+            if not emp_lat:
+                tlog = TimeLog.objects.filter(employee=emp, clock_out__isnull=True).order_by("-clock_in").first()
+                if not tlog:
+                    tlog = TimeLog.objects.filter(employee=emp).order_by("-id").first()
+                if tlog and tlog.clock_in_lat and tlog.clock_in_lon:
+                    emp_lat = float(tlog.clock_in_lat)
+                    emp_lng = float(tlog.clock_in_lon)
+                    emp_updated_at = tlog.clock_in.isoformat() if tlog.clock_in else timezone.now().isoformat()
+
+            # 3. Check active Task location
+            if not emp_lat and emp.user:
+                task = Task.objects.filter(assigned_to=emp.user, location_lat__isnull=False).order_by("-id").first()
+                if task and task.location_lat and task.location_lon:
+                    emp_lat = float(task.location_lat)
+                    emp_lng = float(task.location_lon)
+                    emp_updated_at = timezone.now().isoformat()
+
+            # 4. Check assigned employee job site location
+            if not emp_lat and getattr(emp, "assigned_job_site", None):
+                site = emp.assigned_job_site
+                if site.latitude and site.longitude:
+                    emp_lat = float(site.latitude)
+                    emp_lng = float(site.longitude)
+                    emp_updated_at = timezone.now().isoformat()
+
+        # Calculate distance and estimated travel time
+        distance_km = None
+        eta_minutes = None
+        if emp_lat is not None and emp_lng is not None and dest_lat is not None and dest_lng is not None:
+            import math
+            # Haversine formula
+            dlat = math.radians(dest_lat - emp_lat)
+            dlon = math.radians(dest_lng - emp_lng)
+            a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(emp_lat)) * math.cos(math.radians(dest_lat)) * math.sin(dlon / 2) ** 2
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+            distance_km = max(0.5, round(6371 * c, 2))
+            eta_minutes = max(3, int(round((distance_km / 20.0) * 60)) + 3)
+        # Resolve permanent 6-digit start OTP
+        from tasks.models import Task
+        task = Task.objects.filter(service_request=sr).first()
+        if not task and sr.request_id:
+            task = Task.objects.filter(title__icontains=sr.request_id).first()
+
+        start_otp = ""
+        if task and task.start_otp and len(str(task.start_otp)) == 6:
+            start_otp = str(task.start_otp)
+
+        if not start_otp:
+            import hashlib
+            h = hashlib.sha256(f"calservices_booking_otp_{sr.id}_{sr.request_id}".encode()).hexdigest()
+            start_otp = str((int(h[:8], 16) % 900000) + 100000)
+            if task and not getattr(task, "is_otp_verified", False):
+                task.start_otp = start_otp
+                task.save(update_fields=["start_otp"])
+
+        task_status = getattr(task, "status", sr.status)
+        ACTIVE_STATUSES = ["assigned", "accepted", "in_progress", "on_the_way", "arrived", "completed"]
+        is_accepted = False
+        if task:
+            is_accepted = (task.acceptance_status == Task.AcceptanceStatus.ACCEPTED) or (task_status in ACTIVE_STATUSES)
+        elif emp and sr.status in ACTIVE_STATUSES:
+            is_accepted = True
+
+        # Cancellation grace period (5 minutes = 300 seconds after acceptance)
+        cancellation_grace_remaining_seconds = 300
+        can_cancel = True
+        if is_accepted:
+            accepted_at = getattr(task, "accepted_at", None) or getattr(task, "updated_at", None) or sr.updated_at
+            if accepted_at:
+                elapsed = (timezone.now() - accepted_at).total_seconds()
+                cancellation_grace_remaining_seconds = max(0, int(300 - elapsed))
+                can_cancel = (cancellation_grace_remaining_seconds > 0)
+            else:
+                cancellation_grace_remaining_seconds = 300
+                can_cancel = True
+        elif sr.status in ["completed", "closed", "cancelled", "feedback_pending", "feedback_received"]:
+            can_cancel = False
+            cancellation_grace_remaining_seconds = 0
 
         data = {
             "booking_id": sr.id,
             "request_id": sr.request_id,
             "status": sr.status,
             "status_display": sr.get_status_display(),
+            "task_status": task_status,
+            "is_accepted": is_accepted,
+            "acceptance_status": getattr(task, "acceptance_status", "accepted" if is_accepted else "pending"),
+            "can_cancel": can_cancel,
+            "cancellation_grace_remaining_seconds": cancellation_grace_remaining_seconds,
+            "start_otp": start_otp,
+            "total_amount": float(sr.total_amount or getattr(sr, "estimated_cost", 0) or 0),
             "destination": {
-                "address": sr.address,
-                "latitude": float(sr.latitude) if sr.latitude else None,
-                "longitude": float(sr.longitude) if sr.longitude else None,
+                "address": sr.address or "Customer Service Address",
+                "latitude": dest_lat,
+                "longitude": dest_lng,
             },
+            "distance_km": distance_km,
+            "eta_minutes": eta_minutes or 15,
             "employee_live_location": {
                 "employee_id": emp.employee_id if emp else None,
                 "employee_name": emp.user.get_full_name() or emp.user.username if emp else None,
                 "phone": emp.phone if emp else None,
-                "latitude": float(latest_ping.lat) if latest_ping else None,
-                "longitude": float(latest_ping.lng) if latest_ping else None,
-                "updated_at": latest_ping.timestamp.isoformat() if latest_ping else None,
-            } if emp else None
+                "latitude": emp_lat,
+                "longitude": emp_lng,
+                "updated_at": emp_updated_at,
+            } if (emp and (is_accepted or sr.status in ["assigned", "accepted", "in_progress", "on_the_way", "arrived", "completed"])) else None
         }
         return _success(data=data)
+
+
+class CustomerBookingCancelView(APIView):
+    """
+    POST /api/customer/bookings/<id_or_rid>/cancel/
+    POST /api/booking/<id_or_rid>/cancel/
+
+    Cancellation Rules:
+    1. Reason is MANDATORY for all cancellations.
+    2. Before Job Accepted (Unassigned / Pending Acceptance / New Request / Confirmed):
+       -> Customer can cancel ANY TIME.
+    3. After Employee Accepted the Job (Assigned / Accepted / On The Way):
+       -> Grace period of 5 MINUTES (300 seconds) from acceptance time.
+       -> Within 5 minutes: cancellation allowed.
+       -> Beyond 5 minutes: cancellation rejected with:
+          "Cancellation grace period of 5 minutes has expired. Please contact support."
+    4. Upon cancellation:
+       -> ServiceRequest status = "cancelled"
+       -> Task status = "cancelled"
+       -> EmployeeJob status = "rejected"
+       -> Broadcasts live update over Channels WebSocket
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, pk=None, identifier=None):
+        lookup_val = identifier or pk or request.data.get("booking_id") or request.data.get("request_id")
+        if not lookup_val:
+            return _error("Booking identifier is required.", 400)
+
+        reason = (request.data.get("reason") or request.data.get("cancel_reason") or "").strip()
+        if not reason:
+            return _error("Cancellation reason is mandatory. Please select or provide a reason.", 400)
+
+        from service_requests.models import ServiceRequest, EmployeeJob
+        from tasks.models import Task
+        from django.db.models import Q
+        from django.utils import timezone
+
+        sr = None
+        if str(lookup_val).isdigit():
+            sr = ServiceRequest.objects.filter(Q(id=int(lookup_val)) | Q(request_id__iexact=str(lookup_val))).first()
+        else:
+            sr = ServiceRequest.objects.filter(request_id__iexact=str(lookup_val)).first()
+
+        if not sr:
+            return _error("Booking not found.", 404)
+
+        if sr.status in [ServiceRequest.Status.COMPLETED, ServiceRequest.Status.FEEDBACK_PENDING, ServiceRequest.Status.FEEDBACK_RECEIVED, ServiceRequest.Status.CLOSED]:
+            return _error("Cannot cancel a completed service.", 400)
+
+        if sr.status == ServiceRequest.Status.CANCELLED:
+            return _error("This booking is already cancelled.", 400)
+
+        task = Task.objects.filter(service_request=sr).first()
+        if not task and sr.request_id:
+            task = Task.objects.filter(title__icontains=sr.request_id).first()
+
+        is_accepted = False
+        accepted_at = None
+
+        if task and task.acceptance_status == Task.AcceptanceStatus.ACCEPTED:
+            is_accepted = True
+            accepted_at = task.accepted_at or task.updated_at
+        elif sr.assigned_employee and sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress"]:
+            is_accepted = True
+            accepted_at = sr.updated_at
+
+        # Grace period check (5 minutes = 300 seconds)
+        if is_accepted:
+            if not accepted_at:
+                accepted_at = sr.updated_at or timezone.now()
+
+            elapsed_seconds = (timezone.now() - accepted_at).total_seconds()
+            GRACE_PERIOD_SECONDS = 300  # 5 minutes
+
+            if elapsed_seconds > GRACE_PERIOD_SECONDS:
+                return _error(
+                    "Cancellation grace period of 5 minutes has expired. Please contact support.",
+                    status_code=400,
+                    extra={"code": "GRACE_PERIOD_EXPIRED"}
+                )
+
+        # Apply cancellation atomically
+        with transaction.atomic():
+            sr.status = ServiceRequest.Status.CANCELLED
+            sr.description = f"{sr.description}\n[Cancellation Reason]: {reason}".strip()
+            sr.save(update_fields=["status", "description", "updated_at"])
+
+            if task:
+                task.status = Task.Status.CANCELLED
+                task.decline_reason = reason
+                task.save(update_fields=["status", "decline_reason", "updated_at"])
+
+            for job in sr.employee_jobs.all():
+                job.status = EmployeeJob.Status.REJECTED
+                job.save(update_fields=["status"])
+
+            try:
+                from tasks.views.task_views import _write_task_audit
+                if task:
+                    _write_task_audit(request.user if request.user.is_authenticated else None, f"booking_cancelled: {reason}", task)
+            except Exception:
+                pass
+
+        # Broadcast real-time update to live tracking room
+        try:
+            from live_locations.consumers import broadcast_booking_realtime_update
+            broadcast_booking_realtime_update(sr)
+        except Exception:
+            pass
+
+        return _success(
+            data={
+                "booking_id": sr.id,
+                "request_id": sr.request_id,
+                "status": "cancelled",
+                "status_display": "Cancelled",
+                "cancellation_reason": reason,
+            },
+            message="Booking has been cancelled successfully.",
+        )
+
+
+
+class EmployeeGpsUpdateView(APIView):
+    """
+    POST /api/employee/gps/update/
+
+    Public endpoint for the employee (vendor app or mobile app) to push live GPS coordinates.
+    Accepts employee_id (or authenticates via session) + lat/lng.
+    Saves to EmployeeLocation and broadcasts immediately to all active customer booking WebSocket rooms.
+
+    Body: { "employee_id": "ORG--0028", "lat": 12.764, "lng": 77.821 }
+    OR authenticated: { "lat": 12.764, "lng": 77.821 }
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from decimal import Decimal
+        from live_locations.models import EmployeeLocation
+        from live_locations.consumers import broadcast_booking_realtime_update
+        from employees.models import Employee
+
+        # Resolve employee
+        employee = None
+        if request.user.is_authenticated:
+            employee = getattr(request.user, "employee_profile", None) or Employee.objects.filter(user=request.user).first()
+
+        if not employee:
+            emp_id = request.data.get("employee_id") or request.data.get("id")
+            if emp_id:
+                employee = Employee.objects.filter(employee_id=emp_id).first() or Employee.objects.filter(id=emp_id).first()
+
+        if not employee:
+            return _error("Employee not found. Provide employee_id or authenticate.", 404)
+
+        # Resolve coordinates
+        lat = request.data.get("lat") or request.data.get("latitude")
+        lng = request.data.get("lng") or request.data.get("longitude")
+        if lat is None or lng is None:
+            return _error("lat and lng are required.", 400)
+
+        try:
+            lat_d = round(Decimal(str(lat)), 6)
+            lng_d = round(Decimal(str(lng)), 6)
+        except Exception:
+            return _error("Invalid lat/lng values.", 400)
+
+        # Save to EmployeeLocation
+        from time_tracking.models import TimeLog
+        time_log = TimeLog.objects.filter(employee=employee, clock_out__isnull=True).order_by("-clock_in").first()
+        loc = EmployeeLocation.objects.create(
+            company=employee.company,
+            employee=employee,
+            time_log=time_log,
+            lat=lat_d,
+            lng=lng_d,
+        )
+
+        # Broadcast to all active booking tracking rooms for this employee
+        active_srs = ServiceRequest.objects.filter(
+            assigned_employee=employee,
+            status__in=["assigned", "accepted", "on_the_way", "in_progress"]
+        )
+        broadcast_count = 0
+        for asr in active_srs:
+            try:
+                broadcast_booking_realtime_update(asr)
+                broadcast_count += 1
+            except Exception as be:
+                logger.warning(f"GPS broadcast error for SR {asr.request_id}: {be}")
+
+        return _success(
+            data={
+                "employee_id": employee.employee_id,
+                "employee_name": employee.user.get_full_name(),
+                "lat": float(lat_d),
+                "lng": float(lng_d),
+                "timestamp": loc.timestamp.isoformat(),
+                "active_bookings_notified": broadcast_count,
+            },
+            message="GPS location saved and broadcast to active bookings.",
+        )
+
 
 
 class EmployeeJobStartView(APIView):
@@ -3161,9 +3479,9 @@ class CustomerReverseGeocodeView(APIView):
     Results are cached server-side for 1 hour keyed by coords rounded to 4 d.p.
     (~11 m precision) to cut down repeated calls for small drags.
 
-    Auth: authenticated customers only.
+    Auth: AllowAny (available for both guest & logged in customers).
     """
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+    permission_classes = [permissions.AllowAny]
     parser_classes     = [JSONParser]
 
     def post(self, request):
