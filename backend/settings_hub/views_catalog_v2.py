@@ -38,7 +38,7 @@ class PublicPackageListView(APIView):
     authentication_classes = []  # bypass auth middleware entirely for speed
 
     def get(self, request):
-        qs = Package.objects.select_related("service", "service__category").all()
+        qs = Package.objects.select_related("service", "service__category").prefetch_related("addons").all()
         service_slug = request.GET.get("service_slug")
         if service_slug:
             qs = qs.filter(service__slug=service_slug)
@@ -148,7 +148,7 @@ class AdminPackageListView(APIView):
     permission_classes = [IsAdminRole]
 
     def get(self, request):
-        qs = Package.objects.select_related("service", "service__category").all()
+        qs = Package.objects.select_related("service", "service__category").prefetch_related("addons").all()
         service_id = request.GET.get("service_id")
         status_filter = request.GET.get("status")
         if service_id:
