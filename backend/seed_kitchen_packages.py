@@ -116,7 +116,7 @@ KITCHEN_PACKAGES_DATA = [
         ]
     },
     {
-        "slug": "microwave-clean",
+        "slug": "kitchen-microwave-clean",
         "name": "Microwave cleaning",
         "price": 199,
         "duration": "15 mins",
@@ -272,7 +272,7 @@ KITCHEN_PACKAGES_DATA = [
         "slug": "quick-fan-clean",
         "name": "Ceiling Fan Cleaning",
         "price": 89,
-        "duration": "30 mins",
+        "duration": "15 mins",
         "description": "Detailed ceiling fan dusting and blade wipe down.",
         "includes": [
             "Fan blade cleaning",

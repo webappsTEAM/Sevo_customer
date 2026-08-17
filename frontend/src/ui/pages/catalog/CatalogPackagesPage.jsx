@@ -10,6 +10,7 @@ import {
 import { apiRequest } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
 import { useToast, ToastBanner } from "./useToast.jsx"
+import { SOFA_DETAIL_DATA } from "./sofaDetailData.js"
 
 const DEFAULT_SUITABLE_PRESETS = {
   "2-wheeler-electric-express": [
@@ -378,7 +379,510 @@ const DEFAULT_SUITABLE_PRESETS = {
     "Stove / hob surface cleaning",
     "Burner & knob cleaning",
     "Grease & food stain removal"
+  ],
+  "occ-basic": [
+    "Kitchen tiles, floor & slab cleaning + Mopping",
+    "Gas stove / hob cleaning",
+    "Sink & under-sink cleaning",
+    "Exhaust fan cleaning",
+    "Windows & switchboards cleaning",
+    "Cabinet exterior cleaning",
+    "Dining table cleaning",
+    "Utensil removal / rearrangement not included"
+  ],
+  "occ-deep": [
+    "Includes everything in Basic, plus:",
+    "Cabinet interior & exterior cleaning",
+    "Exhaust fan deep cleaning",
+    "Utensil removal & rearrangement"
+  ],
+  "empty-kitchen": [
+    "Thorough degreasing of wall tiles, countertops, and exhaust fans",
+    "Detailed cleaning of kitchen floors, windows, switchboards, and cabinets (exterior)",
+    "Deep sanitization of sink and under-sink area (utensils removal not included)"
+  ],
+  "kitchen-tiles-slabs": [
+    "Tile and slab cleaning: Remove oil and grease stains",
+    "Degreases tiles & slabs and deep cleans grout for a fresh kitchen"
+  ],
+  "cabinet-trolley-clean": [
+    "Interior & exterior cabinet wet-wiping & degreasing",
+    "Removal of food residue, spills & accumulated oil layers",
+    "Trolley tracks vacuuming, wiping & structural sanitization"
   ]
+}
+
+const STATIC_SERVICE_DETAIL_DATA = {
+  "empty-kitchen": {
+    tools: ["Specialized degreasing agents", "High-pressure floor scrubbers", "Microfiber detailing cloths", "Glass cleaning kits"],
+    ready: ["Ensure the kitchen is completely empty of utensils and items", "Provide access to continuous water and power supply"],
+    reviews: [{ name: "Meera R.", rating: "4.9", text: '"Perfect cleaning before we moved into our new apartment. Every corner was spotless."' }],
+    faqs: [{ q: "Is utensil washing included?", a: "No, this service is specifically for empty kitchens and does not include utensil cleaning." }]
+  },
+  "kitchen-tiles-slabs": {
+    tools: ["Heavy duty degreasers", "Grout scrubbing brushes", "Microfiber cleaning cloths", "High-pressure sprayers"],
+    ready: ["Clear items from the kitchen counters", "Ensure access to water and power outlets"],
+    reviews: [{ name: "Priya M.", rating: "5.0", text: '"Removed the stubborn oil stains from the tiles. Looks brand new!"' }],
+    faqs: [{ q: "Will this remove old stains?", a: "Yes, our specialized degreasers are designed to lift and clean tough oil and grease stains from slabs and tiles." }]
+  },
+  "cabinet-trolley-clean": {
+    tools: ["Wood-safe cleaner & polish", "Stainless steel degreaser for rails", "Soft detailing brushes", "Lint-free microfibers"],
+    ready: ["Empty all utensils and stored items from cabinets", "Ensure access to a water connection"],
+    reviews: [{ name: "Suresh V.", rating: "4.9", text: '"They cleaned every trolley track and got rid of the sticky grease inside the cabinets."' }],
+    faqs: [{ q: "Do I need to empty the cabinets?", a: "Yes, please empty all cabinets and drawers before the team arrives." }]
+  },
+  "occ-basic": {
+    tools: ["Kitchen-safe degreasers", "Microfiber cloths", "Non-abrasive scrubbers", "Detail cleaning brushes", "Floor and surface cleaning tools"],
+    ready: ["Continuous water supply", "Working power connection", "Kitchen area accessible for cleaning", "Fragile items and valuables kept safely"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The kitchen was cleaned very neatly. The stove, sink and tiles looked fresh after the service."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service for regular kitchen cleaning. The team was quick and professional."' }
+    ],
+    faqs: [
+      { q: "Will you move utensils from the cabinets?", a: "No. Utensil removal and rearrangement are not included in the Basic package." },
+      { q: "Do I need to provide cleaning products?", a: "No. Our professionals bring all the required environment-friendly cleaning tools and products." },
+      { q: "Is chimney cleaning included in the Basic package?", a: "No. Chimney cleaning can be booked separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add appliance cleaning to this package?", a: "Yes. You can add individual appliance cleaning as an additional service." },
+      { q: "How long does the service take?", a: "The Basic package takes approximately 2 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean the exhaust fan in basic cleaning?", a: "No, exhaust fan cleaning is part of our deep cleaning package or can be booked separately as a quick service." },
+      { q: "Will you clean tiles and grout?", a: "Yes, we wipe tiles and slabs to remove superficial oil stains, but deep scrubbing grout lines is part of the deep cleaning package." },
+      { q: "Is garbage disposal included?", a: "We collect all waste generated during the cleaning and hand it over to your society bin, but we do not discard pre-existing bulk trash." }
+    ]
+  },
+  "occ-deep": {
+    tools: ["Steam cleaning equipment", "Kitchen-safe degreasers", "Microfiber cloths", "Non-abrasive scrubbers", "Detail brushes for corners and cabinets"],
+    ready: ["Continuous water supply", "Working power connection", "Kitchen area accessible for cleaning", "Fragile items and valuables kept safely"],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"Excellent deep cleaning. The grease on the stove and tiles was removed, and the cabinets were cleaned properly."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Very thorough service. They cleaned areas that are usually difficult to reach."' }
+    ],
+    faqs: [
+      { q: "Does Deep Clean include everything in Basic?", a: "Yes. Deep Clean includes all services covered in the Basic package, along with additional deep-cleaning services." },
+      { q: "Will you remove and rearrange utensils?", a: "Yes. Utensils can be removed, cabinets cleaned internally, and utensils rearranged as part of the Deep Clean service." },
+      { q: "Does Deep Clean include chimney cleaning?", a: "No. Chimney cleaning is available separately under Single Appliance & Specific Area Cleaning." },
+      { q: "Can I add refrigerator or microwave cleaning?", a: "Yes. Individual appliance cleaning can be added separately to your booking." },
+      { q: "Does steam cleaning remove tough grease?", a: "Yes. Steam cleaning helps loosen and remove stubborn grease, oil buildup and stains from suitable kitchen surfaces." },
+      { q: "How long does the service take?", a: "The Deep Clean package takes approximately 3 hours, depending on the kitchen size and condition." },
+      { q: "Do you clean internal cabinet walls?", a: "Yes, we deep clean both the interiors and exteriors of all kitchen cabinets and drawers." },
+      { q: "Are window panes and grills cleaned in this package?", a: "Yes, deep cleaning includes cleaning of kitchen window panes, frames, exhaust fans, and mesh surfaces." },
+      { q: "Do you offer stain guarantee for old granite or tiles?", a: "While we use professional-grade degreasers and steam machines that remove 99% of grease, extremely old chemical etchings or stone discoloration may not disappear completely." }
+    ]
+  },
+  "fridge-clean": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-parent": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-single": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-double": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "fridge-triple": {
+    tools: ["Food-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food items before cleaning", "Keep the refrigerator accessible", "Keep a power connection available"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"Very neat cleaning. The shelves and inside of the fridge look fresh now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the team handled everything carefully."' }
+    ],
+    faqs: [
+      { q: "Do I need to remove the food?", a: "Yes, please remove all food items before cleaning." },
+      { q: "Will you clean the freezer?", a: "Yes, accessible freezer areas will be cleaned." },
+      { q: "Will you remove bad smell?", a: "We clean food stains and dirt that may cause unpleasant smells." }
+    ]
+  },
+  "stove-parent": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-2b": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-3b": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "stove-4b": {
+    tools: ["Stove-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Switch off the stove before cleaning", "Remove vessels and cookware", "Keep the stove area accessible"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The stove looks much cleaner and the grease was removed nicely."' },
+      { name: "Rahul K.", rating: "4.9", text: '"Very good cleaning and the team was careful with the hob."' }
+    ],
+    faqs: [
+      { q: "Will you clean the burners?", a: "Yes, the accessible burner areas will be cleaned." },
+      { q: "Will you remove grease?", a: "Yes, oil, grease and food stains will be cleaned." },
+      { q: "Do you repair gas stoves or hobs?", a: "No, repair work is not included." }
+    ]
+  },
+  "kitchen-microwave-clean": {
+    tools: ["Appliance-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove food and containers", "Keep the microwave accessible", "Ensure the appliance is switched off"],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The inside of my microwave was cleaned really well."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Quick and neat service. The food stains were removed properly."' }
+    ],
+    faqs: [
+      { q: "Will you clean the inside of the microwave?", a: "Yes, the inside, glass door and rotating plate will be cleaned." },
+      { q: "Do I need to remove everything before cleaning?", a: "Yes, please remove food and containers before the service." },
+      { q: "Can you remove burnt food stains?", a: "We will clean removable food and grease stains." }
+    ]
+  },
+  "chimney-clean": {
+    tools: ["Grease-removing cleaning products", "Microfiber cloths", "Soft scrubbers", "Cleaning brushes"],
+    ready: ["Keep the chimney area accessible", "Clear items around the stove", "Ensure a power connection is available"],
+    reviews: [
+      { name: "Karthik M.", rating: "5.0", text: '"The grease on my chimney filter was cleaned properly."' },
+      { name: "Ananya S.", rating: "4.8", text: '"Good cleaning service. The chimney looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the chimney filter?", a: "Yes, the chimney filter will be cleaned." },
+      { q: "Will you remove grease and oil?", a: "Yes, visible grease and oil buildup will be cleaned." },
+      { q: "Do you repair the chimney?", a: "No, repair and replacement work are not included." }
+    ]
+  },
+  "dishwasher-clean": {
+    tools: ["Dishwasher-safe cleaning products", "Microfiber cloths", "Soft scrubbers", "Small cleaning brushes"],
+    ready: ["Remove all dishes before cleaning", "Keep the dishwasher accessible", "Keep water and power connections available"],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The dishwasher was cleaned very neatly, especially the racks and filter."' },
+      { name: "Karthik M.", rating: "4.8", text: '"Good service and the inside looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the filter?", a: "Yes, the accessible filter will be cleaned." },
+      { q: "Do I need to remove the dishes?", a: "Yes, please empty the dishwasher before cleaning." },
+      { q: "Will you remove food waste and dirt?", a: "Yes, visible food waste and dirt will be cleaned." }
+    ]
+  },
+  "air-fryer-clean": {
+    tools: ["Food-safe interior sanitizers", "Microfiber cloths", "Detail cleaning brushes"],
+    ready: ["Keep the air fryer accessible and unplugged", "Ensure power outlet is nearby for testing"],
+    reviews: [{ name: "Meera V.", rating: "5.0", text: '"Very neat cleaning. The tray oil and food residues were completely washed."' }],
+    faqs: [{ q: "Is the cleaner safe for non-stick coating?", a: "Yes, we use non-abrasive soft sponges and mild, food-safe cleaners that protect the non-stick coating." }]
+  },
+  "otg-clean": {
+    tools: ["OTG safe degreasers", "Microfiber cleaning cloths", "Crevice cleaning brushes"],
+    ready: ["Unplug the OTG and keep it accessible", "Empty any trays or racks inside"],
+    reviews: [{ name: "Siddharth N.", rating: "4.9", text: '"Removed all grease stains from the glass door and walls. Excellent OTG service!"' }],
+    faqs: [{ q: "Will this clean the heating elements?", a: "We clean around heating elements carefully to avoid damage, removing grease from the oven interior walls, glass door, and trays." }]
+  },
+  "sandwich-clean": {
+    tools: ["Food-safe surface wipes", "Detangled cleaning brushes"],
+    ready: ["Keep the sandwich maker/griller accessible and unplugged"],
+    reviews: [{ name: "Deepa K.", rating: "4.8", text: '"Quick and efficient. Removed the dark stuck food particles from the grill plates."' }],
+    faqs: [{ q: "Will this clean stuck cheese?", a: "Yes, we use safe scrapers and warm chemical wipes to dissolve and remove cheese and char residues." }]
+  },
+  "quick-sink-under-sink": {
+    tools: ["Scrubbing brushes", "Disinfectant sanitizers", "Odour removal sprays"],
+    ready: ["Clear any vessels from the sink before the professional arrives"],
+    reviews: [
+      { name: "Kunal T.", rating: "4.9", text: '"The sink shines like new, and the under-sink smell is totally gone."' },
+      { name: "Ritu G.", rating: "4.8", text: '"Great scrubbing work on the hard water stains in the sink."' }
+    ],
+    faqs: [{ q: "Do you clean the drain pipe?", a: "We clean the external sink drain area and visible parts. We do not do plumbing repairs or unclogging." }]
+  },
+  "quick-kitchen-window": {
+    tools: ["Glass squeegee", "Grease-cutting window spray", "Track cleaning brush"],
+    ready: ["Clear the window sill and counter space below the window"],
+    reviews: [{ name: "Vikram J.", rating: "4.8", text: '"Amazing job removing sticky cooking oil residue from the window glass."' }],
+    faqs: [{ q: "Will you clean the window mesh?", a: "Yes, we brush and wipe the window mesh to remove dust." }]
+  },
+  "quick-dining-table": {
+    tools: ["Food-safe table cleaner", "Polishing cloth"],
+    ready: ["Clear dishes and table mats before service"],
+    reviews: [{ name: "Arjun V.", rating: "5.0", text: '"Got rid of sticky grease stains on the glass tabletop. Super clean!"' }],
+    faqs: [{ q: "Will you polish wooden tables?", a: "We do standard cleaning and gentle wiping. Specialized wood polishing is not included." }]
+  },
+  "quick-fan-clean": {
+    tools: ["Microfiber cloths", "All-purpose cleaning spray", "Sturdy step ladder"],
+    ready: ["Keep the space below the fan clear", "Ensure the fan switch is turned off"],
+    reviews: [
+      { name: "Amit S.", rating: "4.9", text: '"The fan was covered in sticky kitchen grease, but they got it completely clean."' },
+      { name: "Neha P.", rating: "4.8", text: '"Fast and efficient fan cleaning service."' }
+    ],
+    faqs: [
+      { q: "Does this include repair?", a: "No, this is only a cleaning service. No repairs are done." },
+      { q: "Will my floor get dirty?", a: "Our professionals use dust-drop cloths to protect your floor." }
+    ]
+  },
+  "quick-exhaust-fan-clean": {
+    tools: ["Microfiber cloths", "Soft cleaning brushes", "Grease-removing cleaning solution", "Long-reach dusting tools"],
+    ready: ["Switch off the exhaust fan before cleaning", "Keep the area around the fan clear", "Provide safe access to the fan"],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The exhaust fan had a lot of dust and grease. It was cleaned very neatly."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Quick service and the fan looks much cleaner now."' }
+    ],
+    faqs: [
+      { q: "Will you clean the fan blades?", a: "Yes, the accessible fan blades will be cleaned properly." },
+      { q: "Will you clean the cover / grill?", a: "Yes, the fan cover and visible grill will also be cleaned." },
+      { q: "Will you remove grease from the fan?", a: "Yes, normal dust, grease and dirt buildup will be cleaned." },
+      { q: "Will you remove the exhaust fan from the wall?", a: "No, the fan will be cleaned while it remains installed." },
+      { q: "Do you repair exhaust fans?", a: "No, electrical, motor and wiring repairs are not included." }
+    ]
+  },
+  "quick-balcony-upto-4ft": {
+    tools: ["Heavy duty floor brush", "High-pressure water source if available", "Balcony cleaning detergent"],
+    ready: ["Clear planters or light furniture from the balcony floor", "Provide access to a water tap"],
+    reviews: [{ name: "Sneha L.", rating: "5.0", text: '"Balcony floor is sparkling clean. They washed off all the pigeon droppings."' }],
+    faqs: [{ q: "Do you clean the balcony roof?", a: "No, roof or ceiling cleaning is not included in this quick package." }]
+  },
+  "quick-balcony-above-4ft": {
+    tools: ["Scrubbing brushes & wipers", "Balcony floor wash detergent", "Cobweb removal brush"],
+    ready: ["Clear all furniture and items from the balcony"],
+    reviews: [{ name: "Manish P.", rating: "4.9", text: '"Very thorough washing. Highly recommend for large balconies."' }],
+    faqs: [{ q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." }]
+  },
+  "fabric-sofa-clean": {
+    tools: [
+      "Fabric-safe cleaning shampoo",
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Wet & dry vacuum"
+    ],
+    ready: [
+      "Keep the sofa area accessible",
+      "Remove personal items from the sofa",
+      "Keep nearby furniture and valuables safely away",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The sofa looks much cleaner and fresh. The team did a neat job."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good cleaning service. They removed most of the dust and stains."' }
+    ],
+    faqs: [
+      { q: "Will you clean the sofa cushions?", a: "Normal sofa seats and back cushions are covered. Separate loose/removable cushions are not included." },
+      { q: "Will you remove stains?", a: "We treat common food, dust and everyday stains. Very old or permanent stains may not be completely removable." },
+      { q: "Will the sofa be completely dry immediately?", a: "The team removes excess moisture, but some drying time may still be required." },
+      { q: "Do I need to provide cleaning products?", a: "No. Our team brings the required cleaning products and equipment." }
+    ]
+  },
+  "fabric-sofa-cushion-clean": {
+    tools: [
+      "Fabric-safe cleaning shampoo",
+      "Microfiber cloths",
+      "Soft cleaning brushes",
+      "Wet & dry vacuum"
+    ],
+    ready: [
+      "Keep the sofa and cushions accessible",
+      "Remove personal items from the sofa",
+      "Keep nearby furniture and valuables safely away",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The sofa and cushions were cleaned really well. Everything looks fresh now."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Very good service. They cleaned the sofa and cushions carefully."' }
+    ],
+    faqs: [
+      { q: "Are loose cushions included?", a: "Yes. Loose/removable cushions belonging to the sofa are included." },
+      { q: "How many cushions are included?", a: "The cushions that belong to the selected sofa are included. Extra cushions can be added separately if available." },
+      { q: "Will you remove all stains?", a: "Common stains will be treated, but very old or permanent stains may not completely disappear." },
+      { q: "Can the sofa be used immediately?", a: "Some drying time may be required after cleaning." }
+    ]
+  },
+  "leather-sofa-clean": {
+    tools: [
+      "Leather-safe cleaning solution",
+      "Leather conditioner",
+      "Soft microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Keep the sofa area accessible",
+      "Remove personal items from the sofa",
+      "Keep valuables safely away",
+      "Provide a well-ventilated area"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The leather sofa looks clean and fresh again. Very neat work."' },
+      { name: "Rahul K.", rating: "4.8", text: '"The team handled the leather sofa carefully and professionally."' }
+    ],
+    faqs: [
+      { q: "Will you use shampoo on the leather sofa?", a: "No. We use products specifically suitable for leather surfaces." },
+      { q: "Will you remove scratches from the leather?", a: "No. Cleaning cannot repair deep scratches, cuts or damaged leather." },
+      { q: "Will you polish the leather sofa?", a: "The sofa receives a leather-safe conditioning and finishing treatment." },
+      { q: "Can you clean all types of leather?", a: "We clean commonly used finished leather surfaces. Special or delicate leather may require an additional assessment." }
+    ]
+  },
+  "leather-sofa-cushion-clean": {
+    tools: [
+      "Leather-safe cleaning solution",
+      "Leather conditioner",
+      "Soft microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Keep the sofa and cushions accessible",
+      "Remove personal items from the sofa",
+      "Keep valuables safely away",
+      "Provide a well-ventilated area"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The sofa and cushions were cleaned very carefully. They look much better now."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Good service and the leather was handled properly."' }
+    ],
+    faqs: [
+      { q: "Are removable leather cushions included?", a: "Yes. Loose/removable cushions belonging to the sofa are included." },
+      { q: "Will you repair damaged leather?", a: "No. Cuts, cracks, peeling and other leather damage are not repairable through this cleaning service." },
+      { q: "Will you use water on the leather?", a: "Only suitable amounts are used with leather-safe cleaning products." },
+      { q: "Will the leather become shiny after cleaning?", a: "The conditioning and finishing treatment gives the leather a clean and well-maintained appearance." }
+    ]
+  },
+  "mattress-deep": {
+    tools: [
+      "Fabric-safe mattress shampoo",
+      "Wet & dry vacuum",
+      "Microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Keep the mattress accessible",
+      "Remove bedsheets, pillows and blankets",
+      "Keep nearby items safely away",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: "5.0", text: '"The mattress had a lot of dust and stains. It looks much cleaner now."' },
+      { name: "Rahul K.", rating: "4.8", text: '"Good service and the mattress was cleaned properly."' }
+    ],
+    faqs: [
+      { q: "Will you clean the entire mattress?", a: "Yes, all accessible sides and surfaces included in the selected service will be cleaned." },
+      { q: "Will you remove all stains?", a: "Common stains will be treated, but very old or permanent stains may not completely disappear." },
+      { q: "Can I use the mattress immediately after cleaning?", a: "Some drying time is required before using the mattress." },
+      { q: "Do I need to remove the bedsheets?", a: "Yes, please remove bedsheets, blankets and other items before the service." }
+    ]
+  },
+  "mattress-pillow-refresh": {
+    tools: [
+      "Fabric-safe cleaning products",
+      "Wet & dry vacuum",
+      "Microfiber cloths",
+      "Soft cleaning brushes"
+    ],
+    ready: [
+      "Remove bedsheets and covers",
+      "Keep mattress and pillows accessible",
+      "Clear the surrounding area",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The mattress and pillows were cleaned very neatly. Good service."' },
+      { name: "Karthik M.", rating: "4.9", text: '"Everything was handled carefully and the mattress feels much fresher."' }
+    ],
+    faqs: [
+      { q: "Are pillows included?", a: "Yes, pillows are included in this package." },
+      { q: "How many pillows are included?", a: "Up to 2 standard pillows are included." },
+      { q: "Will you remove difficult stains?", a: "We treat common stains, but permanent stains may not be completely removable." },
+      { q: "How long does the mattress take to dry?", a: "Drying time depends on room ventilation, usually takes a few hours." }
+    ]
+  },
+  "carpet-deep": {
+    tools: [
+      "Carpet shampoo",
+      "Wet & dry vacuum",
+      "Microfiber cloths",
+      "Sponge scrubbers"
+    ],
+    ready: [
+      "Keep the carpet area accessible",
+      "Clear any furniture on top of the carpet",
+      "Provide a power connection"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: "5.0", text: '"The carpet looks extremely clean and the dirt was extracted nicely."' },
+      { name: "Karthik M.", rating: "4.8", text: '"Good shampoo cleaning and quick drying. Professional team."' }
+    ],
+    faqs: [
+      { q: "Will you remove all stains from the carpet?", a: "We treat common food and dirt stains. Very old or permanent stains may not be completely removable." },
+      { q: "How long will the carpet take to dry?", a: "Drying time depends on the carpet thickness and room ventilation, usually takes a few hours." },
+      { q: "Do I need to clear furniture before cleaning?", a: "Yes, please remove tables, chairs, and other items from the carpet before the service." }
+    ]
+  },
+  "quick-door-clean": {
+    tools: [
+      "Wiping cloths",
+      "Door polish / disinfectant spray"
+    ],
+    ready: [
+      "Keep doors clear and accessible for wiping"
+    ],
+    reviews: [
+      { name: "Deepak S.", rating: "4.8", text: '"Good dusting and fingerprint removal from the doors."' }
+    ],
+    faqs: [
+      { q: "Do you clean the door frames?", a: "Yes, we clean both panels and frames." }
+    ]
+  }
 }
 
 const EMPTY_PACKAGE = {
@@ -664,12 +1168,25 @@ export function CatalogPackagesPage() {
           {
             subSlug: "packages",
             displayName: "Full Kitchen Packages",
-            filterFn: (p) => p.slug.startsWith("occ-") || p.slug.startsWith("empty-"),
+            filterFn: (p) => 
+              p.slug.startsWith("occ-") || 
+              p.slug.startsWith("empty-") ||
+              p.slug.startsWith("package-") ||
+              // Fallback: if it doesn't match any other group prefix, put it in full kitchen packages
+              (!p.slug.startsWith("appliance-") && !p.slug.startsWith("app-") &&
+               !p.slug.includes("fridge") && !p.slug.includes("microwave") && !p.slug.includes("chimney") &&
+               !p.slug.includes("stove") && !p.slug.includes("dishwasher") && !p.slug.includes("air-fryer") &&
+               !p.slug.includes("otg") && !p.slug.includes("sandwich") &&
+               !p.slug.startsWith("kitchen-") && !p.slug.startsWith("cabinet-") && !p.slug.startsWith("tile-") && !p.slug.startsWith("care-") &&
+               !p.slug.startsWith("quick-") && !p.slug.startsWith("sink-") && !p.slug.startsWith("dining-") &&
+               !p.slug.startsWith("fan-") && !p.slug.startsWith("balcony-") && !p.slug.startsWith("door-") && !p.slug.startsWith("addon-"))
           },
           {
             subSlug: "appliance",
             displayName: "single appliance cleaning",
             filterFn: (p) =>
+              p.slug.startsWith("appliance-") ||
+              p.slug.startsWith("app-") ||
               p.slug.includes("fridge") ||
               p.slug.includes("microwave") ||
               p.slug.includes("chimney") ||
@@ -687,27 +1204,27 @@ export function CatalogPackagesPage() {
 
               if (fridgeSub.length > 0) {
                 finalPkgs.push({
-                  id: "fridge-parent",
-                  name: "Fridge cleaning",
-                  slug: "fridge-parent",
-                  description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
-                  base_price: Math.min(...fridgeSub.map(p => Number(p.base_price) || 0)),
-                  duration: fridgeSub[0]?.duration || "1.5 hrs",
-                  status: fridgeSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
-                  subOptions: fridgeSub,
+                   id: "fridge-parent",
+                   name: "Fridge cleaning",
+                   slug: "fridge-parent",
+                   description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
+                   base_price: Math.min(...fridgeSub.map(p => Number(p.base_price) || 0)),
+                   duration: fridgeSub[0]?.duration || "1.5 hrs",
+                   status: fridgeSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                   subOptions: fridgeSub,
                 });
               }
 
               if (stoveSub.length > 0) {
                 finalPkgs.push({
-                  id: "stove-parent",
-                  name: "Gas stove cleaning",
-                  slug: "stove-parent",
-                  description: "Surface cleaning of gas stove burners and knobs to remove grease.",
-                  base_price: Math.min(...stoveSub.map(p => Number(p.base_price) || 0)),
-                  duration: stoveSub[0]?.duration || "45 mins",
-                  status: stoveSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
-                  subOptions: stoveSub,
+                   id: "stove-parent",
+                   name: "Gas stove cleaning",
+                   slug: "stove-parent",
+                   description: "Surface cleaning of gas stove burners and knobs to remove grease.",
+                   base_price: Math.min(...stoveSub.map(p => Number(p.base_price) || 0)),
+                   duration: stoveSub[0]?.duration || "45 mins",
+                   status: stoveSub.some(p => p.status === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+                   subOptions: stoveSub,
                 });
               }
 
@@ -728,7 +1245,11 @@ export function CatalogPackagesPage() {
           {
             subSlug: "cabinet_tile",
             displayName: "Cabinet & Tile Care",
-            filterFn: (p) => p.slug.startsWith("kitchen-") || p.slug.startsWith("cabinet-"),
+            filterFn: (p) =>
+              p.slug.startsWith("kitchen-") ||
+              p.slug.startsWith("cabinet-") ||
+              p.slug.startsWith("tile-") ||
+              p.slug.startsWith("care-"),
           },
           {
             subSlug: "addons",
@@ -738,7 +1259,9 @@ export function CatalogPackagesPage() {
               p.slug.startsWith("sink-") ||
               p.slug.startsWith("dining-") ||
               p.slug.startsWith("fan-") ||
-              p.slug.startsWith("balcony-"),
+              p.slug.startsWith("balcony-") ||
+              p.slug.startsWith("door-") ||
+              p.slug.startsWith("addon-"),
           },
         ]
 
@@ -750,7 +1273,7 @@ export function CatalogPackagesPage() {
           "fridge-single",
           "fridge-double",
           "fridge-triple",
-          "microwave-clean",
+          "kitchen-microwave-clean",
           "chimney-clean",
           "chimney-stove-clean",
           "stove-parent",
@@ -971,8 +1494,26 @@ export function CatalogPackagesPage() {
   const handleSave = async (e) => {
     e.preventDefault()
     try {
+      let finalSlug = editing.slug || ""
+      if (editing.virtualSlug && !editing.id) {
+        const prefixMap = {
+          appliance: "appliance-",
+          cabinet_tile: "cabinet-",
+          addons: "quick-",
+          packages: "package-",
+          sofa: "sofa-",
+          mattress: "mattress-",
+          carpet: "carpet-"
+        }
+        const prefix = prefixMap[editing.virtualSlug]
+        if (prefix && !finalSlug.startsWith(prefix)) {
+          finalSlug = prefix + finalSlug
+        }
+      }
+
       const payload = {
         ...editing,
+        slug: finalSlug,
         includes:
           typeof editing.includes === "string"
             ? editing.includes.split(",").map((s) => s.trim()).filter(Boolean)
@@ -1018,7 +1559,29 @@ export function CatalogPackagesPage() {
     const items = []
     const seen = new Set()
 
-    // 1. First add existing included items (checked = true)
+    // Normalize existingIncludes into lowercase set for quick lookup
+    const existingIncludesLower = new Set(
+      existingIncludes.map(inc => {
+        const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
+        return text.toLowerCase()
+      }).filter(Boolean)
+    )
+
+    // 1. Process preset items first, maintaining their original order
+    presets.forEach((preset, idx) => {
+      const text = preset.trim()
+      if (text && !seen.has(text.toLowerCase())) {
+        seen.add(text.toLowerCase())
+        const isIncluded = existingIncludesLower.has(text.toLowerCase())
+        items.push({
+          id: `preset-${idx}-${Date.now()}`,
+          text,
+          checked: existingIncludes.length === 0 ? true : isIncluded,
+        })
+      }
+    })
+
+    // 2. Add any custom items from existingIncludes that are not in presets
     existingIncludes.forEach((inc, idx) => {
       const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
       if (text && !seen.has(text.toLowerCase())) {
@@ -1031,18 +1594,8 @@ export function CatalogPackagesPage() {
       }
     })
 
-    // 2. Add preset items if not already present
-    presets.forEach((preset, idx) => {
-      const text = preset.trim()
-      if (!seen.has(text.toLowerCase())) {
-        seen.add(text.toLowerCase())
-        items.push({
-          id: `preset-${idx}-${Date.now()}`,
-          text,
-          checked: existingIncludes.length === 0, // default ticked if package had no prior includes
-        })
-      }
-    })
+    // Load fallback defaults from SOFA_DETAIL_DATA or STATIC_SERVICE_DETAIL_DATA
+    const staticData = SOFA_DETAIL_DATA[slug] || SOFA_DETAIL_DATA[pkg.id] || STATIC_SERVICE_DETAIL_DATA[slug] || STATIC_SERVICE_DETAIL_DATA[pkg.id] || {}
 
     setQuickPriceEditing({
       ...pkg,
@@ -1056,11 +1609,12 @@ export function CatalogPackagesPage() {
       editingItemId: null,
       _vdOpen: true,
       viewDetails: {
-        tools: Array.isArray(pkg.tools) ? pkg.tools : [],
-        ready: Array.isArray(pkg.ready) ? pkg.ready : [],
-        reviews: Array.isArray(pkg.reviews) ? pkg.reviews : [],
-        faqs: Array.isArray(pkg.faqs) ? pkg.faqs : [],
+        tools: Array.isArray(pkg.tools) && pkg.tools.length > 0 ? pkg.tools : (staticData.tools || []),
+        ready: Array.isArray(pkg.ready) && pkg.ready.length > 0 ? pkg.ready : (staticData.ready || []),
+        reviews: (Array.isArray(pkg.reviews) && pkg.reviews.length > 0 && pkg.reviews.length >= (staticData.reviews || []).length) ? pkg.reviews : (staticData.reviews || pkg.reviews || []),
+        faqs: (Array.isArray(pkg.faqs) && pkg.faqs.length > 0 && pkg.faqs.length >= (staticData.faqs || []).length) ? pkg.faqs : (staticData.faqs || pkg.faqs || []),
       },
+      image: pkg.image || "",
     })
     setNewItemText("")
   }
@@ -1231,6 +1785,25 @@ export function CatalogPackagesPage() {
     }
   }
 
+  const handleDeletePackage = async (pkg) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${pkg.name}"? This will delete it from database and applications.`)) {
+      return
+    }
+    try {
+      const res = await apiRequest(`/settings/catalog/v2/packages/${pkg.id}/`, {
+        method: "DELETE",
+      })
+      if (res.success) {
+        showToast("Package deleted successfully")
+        loadData()
+      } else {
+        showToast(res.message || "Delete failed", "error")
+      }
+    } catch {
+      showToast("Delete failed", "error")
+    }
+  }
+
   const openEdit = (pkg) => {
     setEditing({
       ...pkg,
@@ -1373,6 +1946,7 @@ export function CatalogPackagesPage() {
                 setEditing({
                   ...EMPTY_PACKAGE,
                   service: firstSvc?.id ? String(firstSvc.id) : "",
+                  virtualSlug: firstSvc?.virtualSlug || "",
                 })
               }}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
@@ -1565,6 +2139,7 @@ export function CatalogPackagesPage() {
                       setEditing({
                         ...EMPTY_PACKAGE,
                         service: String(svcItem.service.realServiceId || svcItem.service.id),
+                        virtualSlug: svcItem.service.virtualSlug || "",
                       })
                     }}
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100/80 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-indigo-200/60"
@@ -1717,6 +2292,14 @@ export function CatalogPackagesPage() {
                                     </button>
                                     <button
                                       type="button"
+                                      onClick={() => handleDeletePackage(pkg)}
+                                      title="Delete Package"
+                                      className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
                                       onClick={() => openEdit(pkg)}
                                       title="Edit Package Details"
                                       className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
@@ -1766,6 +2349,14 @@ export function CatalogPackagesPage() {
                                       >
                                         <Edit2 className="w-3 h-3" />
                                         <span>Customise</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeletePackage(sub)}
+                                        title="Delete Variant"
+                                        className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
                                       </button>
                                       <button
                                         type="button"
@@ -2999,7 +3590,7 @@ export function CatalogPackagesPage() {
               </div>
             </div>
 
-            {/* ── View Details Content Section (Tools, Ready, Reviews, FAQs) ── */}
+            {/* ── View Details Content Section (only for non goods transport) ── */}
             {activePillar?.key !== "goods_transports" && (() => {
               const vd = quickPriceEditing.viewDetails || { tools: [], ready: [], reviews: [], faqs: [] }
               const setVd = (updates) => setQuickPriceEditing({ ...quickPriceEditing, viewDetails: { ...vd, ...updates } })
@@ -3022,67 +3613,134 @@ export function CatalogPackagesPage() {
 
                       {/* Tools & Products We Use */}
                       <div className="pt-4">
-                        <div className="text-xs font-bold text-slate-700 mb-2">🔧 Tools &amp; Products We Use</div>
+                        <div className="text-xs font-bold text-slate-700 mb-2">🔧 Tools & Products We Use</div>
                         <div className="space-y-1.5 mb-2">
-                          {(vd.tools || []).map((t, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <input type="text" value={t} onChange={(e) => { const a = [...(vd.tools || [])]; a[i] = e.target.value; setVd({ tools: a }) }} className="flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 outline-none" />
-                              <button type="button" onClick={() => { const a = [...(vd.tools || [])]; a.splice(i, 1); setVd({ tools: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </div>
-                          ))}
+                          {(vd.tools || []).map((t, i) => {
+                            const text = typeof t === 'string' ? t : (t.text || '');
+                            const enabled = typeof t === 'string' ? true : (t.enabled !== false);
+                            return (
+                              <div key={i} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  onChange={(e) => {
+                                    const a = [...(vd.tools || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, enabled: e.target.checked };
+                                    setVd({ tools: a });
+                                  }}
+                                  className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                />
+                                <input
+                                  type="text"
+                                  value={text}
+                                  onChange={(e) => {
+                                    const a = [...(vd.tools || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, text: e.target.value };
+                                    setVd({ tools: a });
+                                  }}
+                                  className={`flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 outline-none ${!enabled ? 'text-slate-400 line-through bg-slate-50' : 'text-slate-800'}`}
+                                />
+                                <button type="button" onClick={() => { const a = [...(vd.tools || [])]; a.splice(i, 1); setVd({ tools: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ tools: [...(vd.tools || []), ""] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add tool / product</button>
+                        <button type="button" onClick={() => setVd({ tools: [...(vd.tools || []), { text: '', enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add tool / product</button>
                       </div>
 
                       {/* What You Need to Keep Ready */}
                       <div className="pt-2 border-t border-slate-100">
                         <div className="text-xs font-bold text-slate-700 mb-2">✅ What You Need to Keep Ready</div>
                         <div className="space-y-1.5 mb-2">
-                          {(vd.ready || []).map((r, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <input type="text" value={r} onChange={(e) => { const a = [...(vd.ready || [])]; a[i] = e.target.value; setVd({ ready: a }) }} className="flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/20 outline-none" />
-                              <button type="button" onClick={() => { const a = [...(vd.ready || [])]; a.splice(i, 1); setVd({ ready: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </div>
-                          ))}
+                          {(vd.ready || []).map((r, i) => {
+                            const text = typeof r === 'string' ? r : (r.text || '');
+                            const enabled = typeof r === 'string' ? true : (r.enabled !== false);
+                            return (
+                              <div key={i} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  onChange={(e) => {
+                                    const a = [...(vd.ready || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, enabled: e.target.checked };
+                                    setVd({ ready: a });
+                                  }}
+                                  className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                />
+                                <input
+                                  type="text"
+                                  value={text}
+                                  onChange={(e) => {
+                                    const a = [...(vd.ready || [])];
+                                    const cur = typeof a[i] === 'string' ? { text: a[i], enabled: true } : { ...a[i] };
+                                    a[i] = { ...cur, text: e.target.value };
+                                    setVd({ ready: a });
+                                  }}
+                                  className={`flex-1 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 outline-none ${!enabled ? 'text-slate-400 line-through bg-slate-50' : 'text-slate-800'}`}
+                                />
+                                <button type="button" onClick={() => { const a = [...(vd.ready || [])]; a.splice(i, 1); setVd({ ready: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ ready: [...(vd.ready || []), ""] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add item</button>
+                        <button type="button" onClick={() => setVd({ ready: [...(vd.ready || []), { text: '', enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add item</button>
                       </div>
 
                       {/* Customer Reviews */}
                       <div className="pt-2 border-t border-slate-100">
                         <div className="text-xs font-bold text-slate-700 mb-2">⭐ Customer Reviews</div>
                         <div className="space-y-2.5 mb-2">
-                          {(vd.reviews || []).map((rev, i) => (
-                            <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
-                              <div className="flex gap-2">
-                                <input type="text" placeholder="Name" value={rev.name || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], name: e.target.value }; setVd({ reviews: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
-                                <input type="text" placeholder="Rating (e.g. 4.9)" value={rev.rating || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], rating: e.target.value }; setVd({ reviews: a }) }} className="w-24 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
-                                <button type="button" onClick={() => { const a = [...(vd.reviews || [])]; a.splice(i, 1); setVd({ reviews: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                          {(vd.reviews || []).map((rev, i) => {
+                            const enabled = rev.enabled !== false;
+                            return (
+                              <div key={i} className={`bg-white border rounded-xl p-3 space-y-2 ${!enabled ? 'border-slate-100 opacity-60' : 'border-slate-200'}`}>
+                                <div className="flex gap-2 items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={enabled}
+                                    onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], enabled: e.target.checked }; setVd({ reviews: a }); }}
+                                    className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                  />
+                                  <input type="text" placeholder="Name" value={rev.name || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], name: e.target.value }; setVd({ reviews: a }); }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-indigo-400 outline-none" />
+                                  <input type="text" placeholder="Rating (e.g. 4.9)" value={rev.rating || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], rating: e.target.value }; setVd({ reviews: a }); }} className="w-24 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-indigo-400 outline-none" />
+                                  <button type="button" onClick={() => { const a = [...(vd.reviews || [])]; a.splice(i, 1); setVd({ reviews: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                                <textarea placeholder="Review text..." value={rev.text || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], text: e.target.value }; setVd({ reviews: a }); }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-indigo-400 outline-none resize-none" />
                               </div>
-                              <textarea placeholder="Review text..." value={rev.text || ""} onChange={(e) => { const a = [...(vd.reviews || [])]; a[i] = { ...a[i], text: e.target.value }; setVd({ reviews: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ reviews: [...(vd.reviews || []), { name: "", rating: "5.0", text: "" }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add review</button>
+                        <button type="button" onClick={() => setVd({ reviews: [...(vd.reviews || []), { name: "", rating: "5.0", text: "", enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add review</button>
                       </div>
 
                       {/* FAQs */}
                       <div className="pt-2 border-t border-slate-100">
                         <div className="text-xs font-bold text-slate-700 mb-2">❓ Frequently Asked Questions</div>
                         <div className="space-y-2.5 mb-2">
-                          {(vd.faqs || []).map((faq, i) => (
-                            <div key={i} className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
-                              <div className="flex gap-2">
-                                <input type="text" placeholder="Question" value={faq.q || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], q: e.target.value }; setVd({ faqs: a }) }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-emerald-400 outline-none" />
-                                <button type="button" onClick={() => { const a = [...(vd.faqs || [])]; a.splice(i, 1); setVd({ faqs: a }) }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                          {(vd.faqs || []).map((faq, i) => {
+                            const enabled = faq.enabled !== false;
+                            return (
+                              <div key={i} className={`bg-white border rounded-xl p-3 space-y-2 ${!enabled ? 'border-slate-100 opacity-60' : 'border-slate-200'}`}>
+                                <div className="flex gap-2 items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={enabled}
+                                    onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], enabled: e.target.checked }; setVd({ faqs: a }); }}
+                                    className="w-4 h-4 rounded accent-indigo-600 cursor-pointer shrink-0"
+                                  />
+                                  <input type="text" placeholder="Question" value={faq.q || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], q: e.target.value }; setVd({ faqs: a }); }} className="flex-1 h-8 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 focus:border-indigo-400 outline-none" />
+                                  <button type="button" onClick={() => { const a = [...(vd.faqs || [])]; a.splice(i, 1); setVd({ faqs: a }); }} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                                <textarea placeholder="Answer..." value={faq.a || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], a: e.target.value }; setVd({ faqs: a }); }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-indigo-400 outline-none resize-none" />
                               </div>
-                              <textarea placeholder="Answer text..." value={faq.a || ""} onChange={(e) => { const a = [...(vd.faqs || [])]; a[i] = { ...a[i], a: e.target.value }; setVd({ faqs: a }) }} rows={2} className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 focus:border-emerald-400 outline-none resize-none" />
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
-                        <button type="button" onClick={() => setVd({ faqs: [...(vd.faqs || []), { q: "", a: "" }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add FAQ</button>
+                        <button type="button" onClick={() => setVd({ faqs: [...(vd.faqs || []), { q: "", a: "", enabled: true }] })} className="text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer">+ Add FAQ</button>
                       </div>
-
                     </div>
                   )}
                 </div>
@@ -3191,7 +3849,11 @@ export function CatalogPackagesPage() {
                 label: `${s.category_name ? s.category_name + " / " : ""}${s.name}`,
               }))}
               value={String(editing.service?.id || editing.service || "")}
-              onChange={(e) => setEditing({ ...editing, service: e.target.value })}
+              onChange={(e) => {
+                const sId = e.target.value
+                const matchSvc = services.find(s => String(s.id) === sId)
+                setEditing({ ...editing, service: sId, virtualSlug: matchSvc?.virtualSlug || "" })
+              }}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

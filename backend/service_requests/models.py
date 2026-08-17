@@ -694,7 +694,7 @@ class Package(models.Model):
         ordering = ["service__category__sort_order", "service__name", "sort_order", "name"]
 
     def __str__(self):
-        return f"{self.service.category.name} / {self.service.name} / {self.name}"
+        return self.name
 
 
 class AddOn(models.Model):

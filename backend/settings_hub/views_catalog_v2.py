@@ -195,6 +195,14 @@ class AdminPackageDetailView(APIView):
         package = catalog_service.update_package(package, serializer.validated_data, request.user, reason=reason)
         return Response({"success": True, "data": PackageSerializer(package).data})
 
+    def delete(self, request, pk):
+        package = get_object_or_404(Package, pk=pk)
+        try:
+            catalog_service.delete_package(package)
+        except DjangoValidationError as exc:
+            return _validation_error_response(exc)
+        return Response({"success": True, "message": "Package deleted"})
+
 
 class AdminPackageTransitionView(APIView):
     permission_classes = [IsAdminRole]
