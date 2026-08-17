@@ -1614,7 +1614,6 @@ export function CatalogPackagesPage() {
         reviews: (Array.isArray(pkg.reviews) && pkg.reviews.length > 0 && pkg.reviews.length >= (staticData.reviews || []).length) ? pkg.reviews : (staticData.reviews || pkg.reviews || []),
         faqs: (Array.isArray(pkg.faqs) && pkg.faqs.length > 0 && pkg.faqs.length >= (staticData.faqs || []).length) ? pkg.faqs : (staticData.faqs || pkg.faqs || []),
       },
-      image: pkg.image || "",
     })
     setNewItemText("")
   }

@@ -13634,11 +13634,13 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     const effectiveSubTab = (activeSubTab === "Full House Cleaning" || activeSubTab === "Full House Deep Cleaning" || activeSubTab === "Full house cleaning" || activeSubTab === "Home Cleaning" || activeSubTab === "cleaning") ? "Occupied Apartment" : activeSubTab;
     return <FullHouseCleaningModal activeSubTab={effectiveSubTab} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
   }
-  if (activeSubTab === "Cockroach & Termite Control") {
-    return <CockroachControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  if (activeSubTab === "Cockroach & Termite Control" || activeSubTab === "Cockroach Control" || activeSubTab === "Termite Control") {
+    const initialTab = activeSubTab === "Termite Control" ? "termite" : "cockroach";
+    return <CockroachControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} initialTab={initialTab} />;
   }
-  if (activeSubTab === "Ants & Bed Bugs Control") {
-    return <AntsBedBugsControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} />;
+  if (activeSubTab === "Ants & Bed Bugs Control" || activeSubTab === "Ants Control" || activeSubTab === "Bedbugs Control" || activeSubTab === "Ants and bed bugs control" || activeSubTab === "Ants and Bed Bugs Control") {
+    const initialTab = activeSubTab === "Ants Control" ? "ants" : "bedbugs";
+    return <AntsBedBugsControlModal category={{ id: "pest_control", name: "Pest Control" }} cart={cart} setCart={setCart} onClose={onClose} onCheckout={onCheckout} initialTab={initialTab} />;
   }
 
   const contentMarkup = (
