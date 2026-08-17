@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Syne:wght@500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700&family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -131,9 +131,9 @@
   --radius-lg: 16px;
   --radius-xl: 20px;
 
-  /* Typography */
-  --font: "Inter", "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Inter", "Manrope", sans-serif;
+  /* Typography - Clean, crisp, professional font stack */
+  --font: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   /* Sidebar width */
   --sidebar-width: 280px;
@@ -188,6 +188,9 @@ body {
   color: var(--fg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  letter-spacing: -0.011em;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -202,6 +205,7 @@ input,
 select,
 textarea {
   font-family: var(--font);
+  letter-spacing: -0.01em;
 }
 
 h1,
@@ -211,6 +215,8 @@ h4,
 h5,
 h6 {
   font-family: var(--font-display) !important;
+  letter-spacing: -0.022em;
+  font-weight: 700;
 }
 
 /* ─── Semantic Utilities ─── */

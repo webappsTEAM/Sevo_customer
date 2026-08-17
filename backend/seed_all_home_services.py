@@ -163,8 +163,8 @@ SERVICES_DATA = {
             {
                 "slug": "bath-ceiling-fan",
                 "name": "Ceiling fan cleaning",
-                "price": 99,
-                "duration": "10 mins",
+                "price": 89,
+                "duration": "15 mins",
                 "description": "Not covered in standard bathroom services.",
                 "includes": [
                     "Ceiling fan dusting and blade wipe"
@@ -328,29 +328,7 @@ SERVICES_DATA = {
                     "High-pressure wash of stairs, patio floors and outer facade walls"
                 ]
             },
-            {
-                "slug": "balcony-clean-under-4",
-                "name": "Balcony Cleaning: Upto 4 ft Width",
-                "price": 399,
-                "duration": "30 mins",
-                "description": "Thorough floor scrubbing, railing wipe and drainage cleaning for smaller balconies.",
-                "includes": [
-                    "Complete balcony floor scrubbing & wet mopping",
-                    "Dusting and wet wiping of balcony railings & grilles"
-                ]
-            },
-            {
-                "slug": "balcony-clean-above-4",
-                "name": "Balcony Cleaning: Above 4 ft Width",
-                "price": 549,
-                "duration": "45 mins",
-                "description": "Intensive floor scrubbing, glass partition wipe and railing cleaning for spacious balconies.",
-                "includes": [
-                    "Heavy scrubbing of tiled/concrete balcony floor surfaces",
-                    "Polishing of glass balustrades & frame borders"
-                ]
-            },
-            {
+             {
                 "slug": "window-clean-under-4",
                 "name": "Window Cleaning (Upto 4 Ft X 4 Ft)",
                 "price": 399,
@@ -370,28 +348,6 @@ SERVICES_DATA = {
                 "includes": [
                     "Thorough cleaning of wide glass windows and frames",
                     "Removal of sticky dust from grilles & meshes"
-                ]
-            },
-            {
-                "slug": "dining-table-clean",
-                "name": "Dining Table Cleaning",
-                "price": 449,
-                "duration": "30 mins",
-                "description": "Intensive sanitization of table surfaces, legs wiping and matching dining chairs cleaning.",
-                "includes": [
-                    "Polishing and sanitizing of wooden/glass tabletop",
-                    "Wiping and dust clearance of up to 6 dining chairs"
-                ]
-            },
-            {
-                "slug": "microwave-clean",
-                "name": "Microwave Cleaning",
-                "price": 199,
-                "duration": "15 mins",
-                "description": "Deep food-grease removal, interior stain scrubbing and exterior sanitization.",
-                "includes": [
-                    "Internal cavity degreasing and splash stain removal",
-                    "Glass door cleaning and control panel sanitization"
                 ]
             }
         ]

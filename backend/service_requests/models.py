@@ -639,6 +639,7 @@ class Service(models.Model):
     image       = models.CharField(max_length=500, blank=True)
     is_active   = models.BooleanField(default=True)
     sort_order  = models.PositiveIntegerField(default=0)
+    customization = models.JSONField(default=dict, blank=True)
     created_at  = models.DateTimeField(auto_now_add=True)
     updated_at  = models.DateTimeField(auto_now=True)
 
@@ -683,14 +684,17 @@ class Package(models.Model):
     payment_policy = models.CharField(max_length=20, choices=PaymentPolicy.choices, default=PaymentPolicy.BOTH)
     status         = models.CharField(max_length=20, choices=PackageStatus.choices, default=PackageStatus.DRAFT)
     version        = models.PositiveIntegerField(default=1)
+    sort_order     = models.PositiveIntegerField(default=0)
+    button_text    = models.CharField(max_length=50, blank=True, default="Add")
+    icon           = models.CharField(max_length=100, blank=True, default="")
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["service__category__sort_order", "service__name", "name"]
+        ordering = ["service__category__sort_order", "service__name", "sort_order", "name"]
 
     def __str__(self):
-        return f"{self.service.category.name} / {self.service.name} / {self.name}"
+        return self.name
 
 
 class AddOn(models.Model):

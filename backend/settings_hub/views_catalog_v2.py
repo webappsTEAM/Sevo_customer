@@ -38,10 +38,13 @@ class PublicPackageListView(APIView):
     authentication_classes = []  # bypass auth middleware entirely for speed
 
     def get(self, request):
-        qs = Package.objects.select_related("service", "service__category").all()
+        qs = Package.objects.select_related("service", "service__category").prefetch_related("addons").all()
         service_slug = request.GET.get("service_slug")
         if service_slug:
             qs = qs.filter(service__slug=service_slug)
+        category_slug = request.GET.get("category_slug")
+        if category_slug:
+            qs = qs.filter(service__category__slug=category_slug)
         data = PackageSerializer(qs, many=True).data
         return Response({"success": True, "data": data})
 
@@ -145,7 +148,7 @@ class AdminPackageListView(APIView):
     permission_classes = [IsAdminRole]
 
     def get(self, request):
-        qs = Package.objects.select_related("service", "service__category").all()
+        qs = Package.objects.select_related("service", "service__category").prefetch_related("addons").all()
         service_id = request.GET.get("service_id")
         status_filter = request.GET.get("status")
         if service_id:
@@ -191,6 +194,14 @@ class AdminPackageDetailView(APIView):
         reason = request.data.get("reason")
         package = catalog_service.update_package(package, serializer.validated_data, request.user, reason=reason)
         return Response({"success": True, "data": PackageSerializer(package).data})
+
+    def delete(self, request, pk):
+        package = get_object_or_404(Package, pk=pk)
+        try:
+            catalog_service.delete_package(package)
+        except DjangoValidationError as exc:
+            return _validation_error_response(exc)
+        return Response({"success": True, "message": "Package deleted"})
 
 
 class AdminPackageTransitionView(APIView):
