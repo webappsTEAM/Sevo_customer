@@ -667,12 +667,17 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
                       {service.includes && service.includes.length > 0 && (
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
-                          {service.includes.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2">
-                              <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                              <span>{item}</span>
-                            </li>
-                          ))}
+                          {service.includes.map((item, i) => {
+                            const labelText = typeof item === "string" ? item : (item?.text || "");
+                            const isEnabled = typeof item === "string" ? true : (item?.checked !== false && item?.enabled !== false);
+                            if (!labelText || !isEnabled) return null;
+                            return (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                <span>{labelText}</span>
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
 
@@ -801,23 +806,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 <p className="text-xs text-slate-500 font-bold">Starts at ₹{selectedServiceDetails.price} • {selectedServiceDetails.duration}</p>
               </div>
 
-              {/* Inclusions Box */}
-              {selectedServiceDetails.includes && selectedServiceDetails.includes.length > 0 && (
-                <div className="bg-emerald-50/40 border border-emerald-100/80 rounded-2xl p-4 text-left">
-                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    What&apos;s included
-                  </h4>
-                  <ul className="space-y-1 text-xs text-slate-600 font-medium">
-                    {selectedServiceDetails.includes.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-1.5">
-                        <span className="text-emerald-500 font-bold">✓</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+
 
               {/* Requirements selection section */}
               {(() => {
@@ -967,41 +956,28 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 );
               })()}
 
-              {/* What is Covered */}
-              {(() => {
-                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const covered = details.covered || [];
-                if (covered.length === 0) return null;
-                return (
-                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
-                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What Is Covered</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {covered.map((item, i) => (
-                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                          <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
-                          <span>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
+
 
               {/* Tools & Products We Use */}
               {(() => {
                 const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const tools = details.tools || [];
-                if (tools.length === 0) return null;
+                const tools = selectedServiceDetails.tools || details.tools || [];
+                const activeTools = tools.filter(t => typeof t === "string" ? true : (t?.checked !== false && t?.enabled !== false));
+                if (activeTools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                     <div className="space-y-2">
-                      {tools.map((item, i) => (
-                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
-                          <span className="leading-relaxed">{item}</span>
-                        </div>
-                      ))}
+                      {activeTools.map((item, i) => {
+                        const labelText = typeof item === "string" ? item : (item?.text || "");
+                        if (!labelText) return null;
+                        return (
+                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                            <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                            <span className="leading-relaxed">{labelText}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -1010,16 +986,47 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               {/* What You Need to Keep Ready */}
               {(() => {
                 const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const ready = details.ready || [];
-                if (ready.length === 0) return null;
+                const ready = selectedServiceDetails.ready || details.ready || [];
+                const activeReady = ready.filter(r => typeof r === "string" ? true : (r?.checked !== false && r?.enabled !== false));
+                if (activeReady.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
                     <div className="space-y-2">
-                      {ready.map((item, i) => (
-                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
-                          <span className="leading-relaxed">{item}</span>
+                      {activeReady.map((item, i) => {
+                        const labelText = typeof item === "string" ? item : (item?.text || "");
+                        if (!labelText) return null;
+                        return (
+                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                            <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                            <span className="leading-relaxed">{labelText}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Customer Reviews Section */}
+              {(() => {
+                const reviews = selectedServiceDetails.reviews_list || [];
+                const activeReviews = reviews.filter(r => r?.checked !== false && r?.enabled !== false);
+                if (activeReviews.length === 0) return null;
+                return (
+                  <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                    <div className="space-y-3">
+                      {activeReviews.map((rev, i) => (
+                        <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <div className="text-[11px] font-bold text-slate-700">{rev.name || rev.author}</div>
+                            <div className="text-[11px] text-violet-600 font-extrabold flex items-center gap-1">
+                              <Star size={12} className="fill-violet-600 text-violet-600" />
+                              <span>{rev.rating || "4.8"}</span>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">{rev.text || rev.comment}</p>
                         </div>
                       ))}
                     </div>
@@ -1029,8 +1036,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
               {/* Frequently Asked Questions */}
               {(() => {
-                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const faqs = details.faqs || [];
+                const rawFaqs = (Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0)
+                  ? selectedServiceDetails.faqs
+                  : (SERVICE_DETAILS_CONTENT[selectedServiceDetails.id]?.faqs || []);
+                const faqs = rawFaqs.filter(f => f?.checked !== false && f?.enabled !== false);
                 if (faqs.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
