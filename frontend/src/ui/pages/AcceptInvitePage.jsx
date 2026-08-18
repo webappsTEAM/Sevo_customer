@@ -143,7 +143,7 @@ export function AcceptInvitePage() {
 
           <div className="text-center mb-8">
             <h1 className="text-[32px] font-black text-[#0F172A] leading-tight tracking-tight">Join Your Team</h1>
-            <p className="text-[#64748B] font-medium mt-3">Setup your account to start tracking time</p>
+            <p className="text-[#64748B] font-medium mt-3">Setup your account to access your company workspace</p>
           </div>
 
           {inviteData?.region && (
@@ -151,7 +151,7 @@ export function AcceptInvitePage() {
               background: "var(--surface)", marginBottom: 24 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)",
                 textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
-                Your Operating Region
+                Company Operating Region
               </div>
               <div style={{ fontSize: 24, marginBottom: 6 }}>
                 {inviteData.region === "UK" ? "🇬🇧" : inviteData.region === "IN" ? "🇮🇳" : "🇺🇸"}
@@ -159,11 +159,7 @@ export function AcceptInvitePage() {
                 {inviteData.default_state && ` · ${inviteData.default_state}`}
               </div>
               <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                {inviteData.region === "UK"
-                  ? "WTR 48-hr cap · PAYE Tax · NI Contributions · 28 days statutory leave"
-                  : inviteData.region === "IN"
-                  ? "EPF + Gratuity + ESIC · 15 days statutory leave · 48-hr weekly OT rules"
-                  : "FLSA overtime rules · Minimum wage per state · No statutory leave"}
+                You will join this workspace with access to all company bookings, service catalog, and operational data.
               </div>
             </div>
           )}

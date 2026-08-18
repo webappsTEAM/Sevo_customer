@@ -12,7 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from ..models import WorkExtension, EmployeeJob, ServiceRequest
+from ..models import WorkExtension, ServiceRequest
 
 
 @transaction.atomic
@@ -74,13 +74,6 @@ def record_customer_decision(
 
     else: # DECLINE
         extension.status = WorkExtension.Status.CUSTOMER_DECLINED
-        
-        # Check if original work is impossible without declined extra work
-        job = extension.job
-        if extension.requires_specialist or "critical" in (notes or "").lower():
-            job.status = EmployeeJob.Status.UNABLE_TO_COMPLETE
-            job.uncompletion_reason = f"Customer declined necessary additional work: {notes or 'No reason provided'}"
-            job.save()
 
     extension.save()
     return extension

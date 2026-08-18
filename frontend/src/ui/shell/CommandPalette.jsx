@@ -1,20 +1,20 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { Search, Home, Clock, CheckSquare, CalendarDays, Banknote, CalendarRange, Users, BarChart3, Settings, LogOut, Command, ChevronRight, Package } from "lucide-react"
+import { Search, Home, Package, BarChart3, Settings, CalendarDays, Ticket, Globe, Headset, FolderOpen, CreditCard } from "lucide-react"
 import { routes } from "../routes.js"
 import { motion, AnimatePresence } from "framer-motion"
 
 const ACTIONS = [
-  { id: "dashboard", label: "Go to Dashboard", shortcut: ["G", "D"], icon: <Home size={18} />, to: routes.dashboard, color: "text-emerald-500" },
-  { id: "inventory", label: "Inventory Management", shortcut: ["G", "I"], icon: <Package size={18} />, to: routes.inventory, color: "text-purple-500" },
-  { id: "time", label: "Track Time", shortcut: ["G", "T"], icon: <Clock size={18} />, to: routes.time, color: "text-amber-500" },
-  { id: "tasks", label: "Manage Jobs", shortcut: ["G", "K"], icon: <CheckSquare size={18} />, to: routes.tasks, color: "text-teal-500" },
-  { id: "leaves", label: "Request Leave", shortcut: ["G", "L"], icon: <CalendarDays size={18} />, to: routes.leaves, color: "text-rose-500" },
-  { id: "payroll", label: "View Payroll", shortcut: ["G", "P"], icon: <Banknote size={18} />, to: routes.payroll, color: "text-indigo-500" },
-  { id: "scheduling", label: "Team Schedule", shortcut: ["G", "S"], icon: <CalendarRange size={18} />, to: routes.scheduling, color: "text-sky-500" },
-  { id: "employees", label: "Employee Directory", shortcut: ["G", "E"], icon: <Users size={18} />, to: routes.employees, color: "text-fuchsia-500" },
-  { id: "reports", label: "Analytics & Reports", shortcut: ["G", "R"], icon: <BarChart3 size={18} />, to: routes.reports, color: "text-yellow-500" },
-  { id: "settings", label: "Enterprise Settings", shortcut: ["G", ","], icon: <Settings size={18} />, to: routes.settings, color: "text-slate-500" },
+  { id: "dashboard", label: "Dashboard", shortcut: ["G", "D"], icon: <Home size={18} />, to: routes.dashboard, color: "text-emerald-500" },
+  { id: "bookings", label: "Customer Bookings", shortcut: ["G", "B"], icon: <CalendarDays size={18} />, to: routes.admin_service_requests, color: "text-blue-500" },
+  { id: "catalog", label: "Service Catalog", shortcut: ["G", "C"], icon: <FolderOpen size={18} />, to: routes.catalog_dashboard, color: "text-indigo-500" },
+  { id: "coupons", label: "Marketing Coupons", shortcut: ["G", "M"], icon: <Ticket size={18} />, to: routes.marketing_coupons, color: "text-purple-500" },
+  { id: "homepage", label: "Home Page Customizer", shortcut: ["G", "H"], icon: <Globe size={18} />, to: routes.homepage_customizer, color: "text-amber-500" },
+  { id: "inventory", label: "Warehouse Inventory", shortcut: ["G", "I"], icon: <Package size={18} />, to: routes.inventory, color: "text-teal-500" },
+  { id: "reports", label: "Business Analytics & Reports", shortcut: ["G", "R"], icon: <BarChart3 size={18} />, to: routes.reports, color: "text-yellow-500" },
+  { id: "support", label: "Customer Care", shortcut: ["G", "S"], icon: <Headset size={18} />, to: "/support/tickets", color: "text-sky-500" },
+  { id: "billing", label: "Billing & Invoices", shortcut: ["G", "B"], icon: <CreditCard size={18} />, to: routes.settings_billing, color: "text-rose-500" },
+  { id: "settings", label: "Settings", shortcut: ["G", ","], icon: <Settings size={18} />, to: routes.settings, color: "text-slate-500" },
 ]
 
 export function CommandPalette({ open, setOpen }) {
@@ -87,7 +87,7 @@ export function CommandPalette({ open, setOpen }) {
             className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] dark:shadow-[0_32px_64px_-12px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Search Input Area - Theme Aware */}
+            {/* Search Input Area */}
             <div className="relative flex items-center px-8 bg-white dark:bg-black border-b border-slate-200 dark:border-slate-800">
               <Search size={22} className="text-slate-400 dark:text-slate-500" />
               <input
@@ -99,77 +99,42 @@ export function CommandPalette({ open, setOpen }) {
                 onKeyDown={handleKeyDown}
                 className="flex-1 bg-transparent border-none outline-none py-7 px-5 text-lg font-black text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 tracking-tight"
               />
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] shadow-inner">
-                ESC
-              </div>
             </div>
 
-            {/* Results Area */}
-            <div className="max-h-[440px] overflow-y-auto p-4 custom-scrollbar">
+            {/* Results List */}
+            <div className="p-4 max-h-96 overflow-y-auto space-y-1">
               {filtered.length === 0 ? (
-                <div className="py-20 text-center flex flex-col items-center gap-4">
-                  <div className="p-4 rounded-3xl bg-slate-100 dark:bg-slate-800/50 text-slate-400 dark:text-slate-600">
-                    <Command size={32} />
-                  </div>
-                  <div>
-                    <p className="text-slate-600 dark:text-slate-400 font-bold tracking-tight text-lg">No results for "{query}"</p>
-                    <p className="text-slate-400 dark:text-slate-600 text-sm mt-1">Try searching for "Dashboard" or "Settings"</p>
-                  </div>
+                <div className="text-center py-8 text-sm text-slate-400">
+                  No matching actions found.
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {filtered.map((item, i) => {
-                    const active = selectedIndex === i
-                    return (
-                      <button
-                        key={item.id}
-                        onMouseEnter={() => setSelectedIndex(i)}
-                        onClick={() => handleExecute(item)}
-                        className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-200 group relative ${
-                          active 
-                            ? "bg-indigo-600 text-white shadow-xl shadow-indigo-500/20 translate-x-1" 
-                            : "text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200"
-                        }`}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={`p-2.5 rounded-xl transition-colors ${
-                            active ? "bg-white/20 text-white" : `bg-slate-100 dark:bg-slate-800/50 ${item.color}`
-                          }`}>
-                            {item.icon}
-                          </div>
-                          <span className={`text-sm font-black tracking-tight ${active ? "text-white" : "text-slate-700 dark:text-slate-300"}`}>
-                            {item.label}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center gap-6">
-                          <div className="flex gap-1.5">
-                            {item.shortcut.map((k) => (
-                              <span key={k} className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${
-                                active 
-                                  ? "bg-white/10 border-white/20 text-white" 
-                                  : "bg-white dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-600"
-                              }`}>
-                                {k}
-                              </span>
-                            ))}
-                          </div>
-                          <ChevronRight size={16} className={`transition-transform duration-300 ${active ? "translate-x-1 opacity-100" : "opacity-0 -translate-x-2"}`} />
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
+                filtered.map((action, idx) => (
+                  <button
+                    key={action.id}
+                    onClick={() => handleExecute(action)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all ${
+                      idx === selectedIndex
+                        ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={action.color}>{action.icon}</span>
+                      <span className="font-semibold text-sm">{action.label}</span>
+                    </div>
+                    <div className="flex gap-1">
+                      {action.shortcut.map((key) => (
+                        <kbd
+                          key={key}
+                          className="px-2 py-0.5 text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded font-mono"
+                        >
+                          {key}
+                        </kbd>
+                      ))}
+                    </div>
+                  </button>
+                ))
               )}
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-950/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-8">
-              <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5"><kbd className="p-1 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 leading-none">↑↓</kbd> Navigate</span>
-                <span className="flex items-center gap-1.5"><kbd className="p-1 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 leading-none">↵</kbd> Select</span>
-              </div>
-              <span>CalTrack Intelligence search</span>
             </div>
           </motion.div>
         </motion.div>

@@ -8,7 +8,6 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('employees', '0011_alter_employee_payroll_group'),
         ('service_requests', '0010_remove_complaintattachment_uploaded_at_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
@@ -47,7 +46,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='reschedulerequest',
             name='proposed_technician',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='proposed_reschedules', to='employees.employee'),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='proposed_reschedules', to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name='reschedulerequest',

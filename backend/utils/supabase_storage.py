@@ -18,8 +18,18 @@ class SupabaseStorageService:
     def get_public_url(cls, path: str) -> str:
         if not path:
             return ""
-        if path.startswith("http://") or path.startswith("https://"):
-            return path
+        if (
+            path.startswith("http://") or 
+            path.startswith("https://") or
+            path.startswith("data:") or
+            path.startswith("/mockups/") or
+            path.startswith("mockups/") or
+            path.startswith("/assets/") or
+            path.startswith("assets/") or
+            path.startswith("/media/") or
+            path.startswith("media/")
+        ):
+            return path if path.startswith("/") or path.startswith("http") or path.startswith("data:") else f"/{path}"
         
         supabase_url, _, bucket = cls._get_config()
         if not supabase_url:

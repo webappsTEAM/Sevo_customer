@@ -23,10 +23,15 @@ export default function ImageUploadField({
     if (
       path.startsWith("http://") ||
       path.startsWith("https://") ||
+      path.startsWith("data:") ||
       path.startsWith("/mockups/") ||
-      path.startsWith("/media/")
+      path.startsWith("mockups/") ||
+      path.startsWith("/assets/") ||
+      path.startsWith("assets/") ||
+      path.startsWith("/media/") ||
+      path.startsWith("media/")
     ) {
-      return path
+      return path.startsWith("/") || path.startsWith("http") || path.startsWith("data:") ? path : `/${path}`
     }
     if (path.startsWith("homepage/")) {
       return `/media/${path}`

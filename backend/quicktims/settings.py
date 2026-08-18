@@ -45,21 +45,13 @@ INSTALLED_APPS = [
     "channels",
     "django_celery_beat",
     "trial_management",
-    "employees",
-    "time_tracking",
-    "leaves",
-    "payroll",
-    "scheduling",
-    "reports",
-    "tasks",
-    "live_locations",
-    "compliance",
     "settings_hub",
     "inventory",
-    "mileage",
     "service_requests",
     "logistics",
     "customer_care",
+    "reports",
+    "workforce_integration",
 ]
 
 MIDDLEWARE = [
@@ -70,7 +62,6 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "compliance.middleware.AuditRequestMiddleware",
     "companies.middleware.CompanyMiddleware",
     "common.middleware.RequestLatencyLoggingMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -214,8 +205,10 @@ SESSION_CACHE_ALIAS = "default"
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         # Cookie-first auth — also accepts Bearer header for API clients / mobile.
+        # SessionAuthentication is intentionally excluded: it triggers CSRF enforcement
+        # on every POST, which breaks /auth/login/ and /auth/refresh/ since the SPA
+        # never sends a CSRF token. All auth is handled via httpOnly JWT cookies.
         "accounts.authentication.CookieJWTAuthentication",
-        "rest_framework.authentication.SessionAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",

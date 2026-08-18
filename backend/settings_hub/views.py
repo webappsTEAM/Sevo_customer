@@ -37,12 +37,9 @@ class InvoiceListView(APIView):
 
         try:
             from service_requests.models import ServiceRequest
-            from tasks.models import Task
 
             # Query all completed or paid ServiceRequests
-            srs = ServiceRequest.objects.all().select_related(
-                "assigned_employee", "assigned_employee__user"
-            ).order_by("-id")
+            srs = ServiceRequest.objects.all().order_by("-id")
 
             for sr in srs:
                 is_paid = str(sr.payment_status).lower() in ("paid", "collected")
@@ -57,12 +54,6 @@ class InvoiceListView(APIView):
                     if ext:
                         ext_amount = float(ext.admin_approved_amount or ext.technician_estimate or 0)
                         ext_title = ext.reason or "Approved Extension"
-
-                    if ext_amount == 0:
-                        task = Task.objects.filter(service_request=sr).first()
-                        if task and getattr(task, "additional_amount", 0):
-                            ext_amount = float(task.additional_amount)
-                            ext_title = getattr(task, "suspend_reason", "") or "Approved Extension"
 
                     base_amount = float(getattr(sr, "base_amount", 0) or 599.0)
                     total_amount = float(sr.total_amount or (base_amount + ext_amount))
@@ -307,7 +298,7 @@ class TeamMemberDetailView(APIView):
         if member.pk == request.user.pk:
             return Response({"success": False, "message": "Cannot change your own role."}, status=400)
         new_role = request.data.get("role")
-        allowed = ["admin", "manager", "employee"]
+        allowed = ["admin", "manager", "support"]
         if new_role not in allowed:
             return Response({"success": False, "message": f"Role must be one of {allowed}."}, status=400)
         member.role = new_role

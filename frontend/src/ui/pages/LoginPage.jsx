@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "../../state/auth/useAuth.js"
-import { extractAuthError, apiDeleteRegistrationDossier, API_BASE_URL } from "../../api/authService.js"
+import { extractAuthError, API_BASE_URL } from "../../api/authService.js"
 
 import { validateLoginForm } from "../../utils/validate.js"
 import { routes } from "../routes.js"
@@ -196,10 +196,14 @@ export function LoginPage() {
   const ONBOARDING_DISMISSED_KEY = "caltrack.onboarding.dismissed"
   const postLoginRoute = (usr) => {
     const role = usr?.role
+    if (role === "customer") return routes.landing
+    if (role === "support" || usr?.isCareAgent) return "/support/tickets"
     const isAdmin = role === "admin" || role === "manager"
-    if (!isAdmin) return routes.dashboard
-    const dismissed = localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true"
-    return dismissed ? routes.dashboard : routes.get_started
+    if (isAdmin) {
+      const dismissed = localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true"
+      return dismissed ? routes.dashboard : routes.get_started
+    }
+    return routes.dashboard
   }
 
   const handleQuickLogin = async (usr, pwd) => {
@@ -378,28 +382,6 @@ export function LoginPage() {
         } else {
           localStorage.removeItem("caltrack_remember_username")
         }
-        const savedDossier = localStorage.getItem("caltrack_activation_dossier")
-        if (savedDossier && u.role === "employee") {
-          try {
-            const parsed = JSON.parse(savedDossier)
-            const dossierEmail = (parsed.regForm?.email || "").trim().toLowerCase()
-            const inputEmail = (u.email || "").trim().toLowerCase()
-            const inputUsername = (u.username || "").trim().toLowerCase()
-            const isMatch = inputEmail === dossierEmail || inputUsername === dossierEmail.split("@")[0]
-            
-            if (isMatch) {
-              const status = parsed.adminClearance?.status
-              if (status === "approved" || status === "rejected") {
-                setEmployeeStatus(status)
-                setDossierInfo(parsed)
-                setLoading(false)
-                return
-              }
-            }
-          } catch (e) {
-            console.error("Dossier parse error", e)
-          }
-        }
         navigate(postLoginRoute(u), { replace: true }) 
       }
       catch (err) { 
@@ -426,13 +408,14 @@ export function LoginPage() {
     }
   }
 
-  async function onSubmit2FA(e) {
-    if (e) e.preventDefault()
-    if (!totpCode.trim()) { setTotpError("Please enter your 6-digit code."); return }
+  async function onSubmit2FA(e, forcedCode = null) {
+    if (e && e.preventDefault) e.preventDefault()
+    const code = (forcedCode || totpCode).trim()
+    if (!code || code.length < 6 || loading) return
     setTotpError("")
     setLoading(true)
     try {
-      const u = await verify2FA(totpCode.trim())
+      const u = await verify2FA(code)
       if (!u) {
         setTotpError("Invalid or expired code. Please try again.")
         setTotpCode("")
@@ -608,7 +591,14 @@ export function LoginPage() {
                       inputMode="numeric"
                       maxLength={6}
                       value={totpCode}
-                      onChange={e => { setTotpCode(e.target.value.replace(/\D/g,"")); setTotpError("") }}
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, "").slice(0, 6)
+                        setTotpCode(val)
+                        setTotpError("")
+                        if (val.length === 6) {
+                          onSubmit2FA(null, val)
+                        }
+                      }}
                       placeholder="000000"
                       className="w-full pl-9 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-mono text-center tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
                       autoFocus
@@ -616,13 +606,17 @@ export function LoginPage() {
                   </div>
                   {totpError && <p className="text-xs text-rose-500 mt-2 font-medium">{totpError}</p>}
                 </div>
-                <button
-                  type="submit"
-                  disabled={loading || totpCode.length !== 6}
-                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-bold uppercase tracking-widest rounded-2xl shadow-lg transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
-                >
-                  {loading ? <RefreshCcw size={14} className="animate-spin" /> : <><ShieldCheck size={14} /> Verify &amp; Sign In</>}
-                </button>
+                {loading ? (
+                  <div className="w-full py-4 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-2xl flex items-center justify-center gap-2">
+                    <RefreshCcw size={14} className="animate-spin" />
+                    <span>Verifying authenticator code in real time...</span>
+                  </div>
+                ) : (
+                  <div className="w-full py-2.5 bg-slate-50 border border-dashed border-slate-200 text-slate-500 text-[11px] font-semibold rounded-2xl text-center flex items-center justify-center gap-1.5">
+                    <ShieldCheck size={14} className="text-indigo-600" />
+                    <span>Instant verification — code verifies automatically upon entry</span>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => { setShow2FA(false); setTotpCode(""); setTotpError(""); setPassword("") }}
@@ -689,102 +683,6 @@ export function LoginPage() {
                 </button>
               </div>
             </div>
-          ) : employeeStatus === "approved" ? (
-            <div className="text-center py-4 space-y-6">
-              <div className="w-20 h-20 rounded-full bg-emerald-550/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-550 shadow-lg shadow-emerald-500/5">
-                <Check size={40} strokeWidth={2} />
-              </div>
-              
-              <div className="space-y-2">
-                <span className="inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-widest border bg-emerald-550/10 text-emerald-600 border-emerald-500/20">
-                  Status : APPROVED
-                </span>
-                <h1 className="text-2xl font-display font-black text-slate-900 leading-tight tracking-tight">
-                  Congratulations
-                </h1>
-                <p className="text-xs font-semibold text-slate-600 leading-relaxed max-w-sm mx-auto">
-                  Your account has been activated. <br />
-                  You can now access tasks and start working.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  setEmployeeStatus(null)
-                  localStorage.removeItem("caltrack_activation_dossier")
-                  await apiDeleteRegistrationDossier()
-                  navigate(routes.dashboard, { replace: true })
-                }}
-                className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white text-[12px] font-bold uppercase tracking-widest rounded-2xl shadow-lg shadow-indigo-600/10 transition-all active:scale-[0.98] cursor-pointer"
-              >
-                Confirm
-              </button>
-            </div>
-          ) : employeeStatus === "rejected" ? (
-            <div className="space-y-6">
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-550 mb-4 shadow-lg shadow-rose-500/5">
-                  <X size={32} strokeWidth={2.5} />
-                </div>
-                <h1 className="text-xl font-display font-black text-rose-550 tracking-wide uppercase">
-                  APPLICATION REJECTED
-                </h1>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-rose-50/20 border border-rose-100/80 space-y-4">
-                <div>
-                  <div className="text-[9px] font-mono uppercase text-slate-600 tracking-wider">Reason Category</div>
-                  <div className="text-xs font-bold text-slate-700">
-                    {dossierInfo?.adminClearance?.reasonCategory || "Document Verification Failed"}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-[9px] font-mono uppercase text-slate-600 tracking-wider">Admin Comments</div>
-                  <div className="text-xs font-semibold text-rose-600 leading-relaxed">
-                    {dossierInfo?.adminClearance?.remarks || "Please upload a clearer Aadhaar image."}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-3 text-[10px] font-mono text-slate-600">
-                  <div>
-                    <span className="block text-[8px] uppercase text-slate-400 mb-0.5">Rejected By</span>
-                    {dossierInfo?.adminClearance?.rejectedBy || "Admin Team"}
-                  </div>
-                  <div>
-                    <span className="block text-[8px] uppercase text-slate-400 mb-0.5">Rejected On</span>
-                    {dossierInfo?.adminClearance?.rejectedOn || "02 Jun 2026"}
-                  </div>
-                </div>
-              </div>
-
-              {/* Resubmission Panel */}
-              <div className="p-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 space-y-4">
-                <div className="text-[11px] font-mono uppercase text-slate-600">Required Action</div>
-                <div className="space-y-2 text-xs font-semibold text-slate-700">
-                  {(dossierInfo?.adminClearance?.requiredActions || ["Re-upload Aadhaar", "Re-upload PAN"]).map((action, aIdx) => (
-                    <div key={aIdx} className="flex items-center gap-2">
-                      <Check className="text-emerald-550 w-3.5 h-3.5 shrink-0" strokeWidth={3} />
-                      <span>{action}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    localStorage.removeItem("caltrack_activation_dossier")
-                    await apiDeleteRegistrationDossier()
-                    setEmployeeStatus(null)
-                    navigate(routes.activation_journey)
-                  }}
-                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-[0.98] cursor-pointer"
-                >
-                  Upload New Documents
-                </button>
-              </div>
-            </div>
           ) : mode === "forgot_password" ? (
             <div className="space-y-6">
               {!identityVerified ? (
@@ -801,7 +699,7 @@ export function LoginPage() {
                       </pre>
                     </div>
                     <h1 className="text-lg font-display font-black text-slate-900 leading-tight">
-                      Enter Workforce Identity
+                      Enter Account Identity
                     </h1>
                   </div>
 
@@ -812,7 +710,7 @@ export function LoginPage() {
                         <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors duration-300" size={18} />
                         <input
                           className="w-full pl-14 pr-5 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all duration-300 placeholder:text-slate-400 font-mono"
-                          placeholder="e.g. EMP1025"
+                          placeholder="e.g. admin@caltrack.com"
                           value={identityInput}
                           onChange={e => setIdentityInput(e.target.value)}
                           required
@@ -863,12 +761,12 @@ export function LoginPage() {
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-100/50 mb-3 animate-pulse">
                           ✓ IDENTITY VERIFIED
                         </span>
-                        <h2 className="text-xl font-display font-black text-slate-900 mb-4 text-center">Workforce Profile Resolved</h2>
+                        <h2 className="text-xl font-display font-black text-slate-900 mb-4 text-center">Account Profile Resolved</h2>
                       </div>
 
                       <div className="p-5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 text-left space-y-4">
                         <div>
-                          <div className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">Employee Name</div>
+                          <div className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">Account Name</div>
                           <div className="text-sm font-bold text-slate-800">{verifiedName}</div>
                         </div>
                         <div>
@@ -1065,15 +963,8 @@ export function LoginPage() {
                   Sign In
                 </button>
                 <button
-                  onClick={async () => {
-                    localStorage.removeItem("caltrack_activation_dossier")
-                    try {
-                      const { apiDeleteRegistrationDossier } = await import("../../api/authService.js")
-                      await apiDeleteRegistrationDossier()
-                    } catch (e) {}
-                    navigate(routes.activation_journey)
-                  }}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-slate-600 hover:text-slate-900"
+                  onClick={() => { setMode("register"); setError(""); setRegStep(1) }}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${mode === "register" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10" : "text-slate-600 hover:text-slate-900"}`}
                 >
                   Create Account
                 </button>

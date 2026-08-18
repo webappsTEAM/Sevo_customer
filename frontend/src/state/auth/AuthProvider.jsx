@@ -17,7 +17,6 @@ import {
   apiGoogleLogin,
   apiCustomerGoogleLogin,
   apiLogout,
-  extractAuthError,
 } from "../../api/authService.js"
 import { AuthContext } from "./AuthContext.js"
 
@@ -25,10 +24,34 @@ export function AuthProvider({ children }) {
   const [isReady, setIsReady] = useState(false)
   const [user, setUser]       = useState(null)
 
-  // ── Rehydrate user state from /auth/me/ ───────────────────────────────────
-  // The browser sends the httpOnly cookie automatically — we just need to
-  // check whether the server accepts it.
+  const formatUser = (data) => {
+    if (!data?.username || !data?.role) return null
+    return {
+      username:  data.username,
+      email:     data.email      ?? "",
+      firstName: data.first_name ?? "",
+      lastName:  data.last_name  ?? "",
+      role:      data.role,
+      companyId: data.company,
+      companyPermissions: data.company_permissions ?? null,
+      bio:       data.bio        ?? "",
+      phone:     data.phone      ?? "",
+      timezone:  data.timezone   ?? "Asia/Kolkata",
+      language:  data.language   ?? "en",
+      avatar_url:data.avatar_url ?? null,
+      two_fa_enabled: data.two_fa_enabled ?? false,
+      isCareAgent: data.is_care_agent ?? false,
+      careRole: data.care_role ?? null,
+      companyCountry: data.company_country ?? data.companyCountry ?? "IN",
+      company_country: data.company_country ?? data.companyCountry ?? "IN",
+      companyRegion: data.company_region ?? data.company_country ?? data.companyCountry ?? "IN",
+      primaryCountry: data.primaryCountry ?? data.company_country ?? data.companyCountry ?? "IN",
+      companyCurrency: data.company_currency ?? ((data.company_country || data.companyCountry || "IN") === "IN" ? "INR" : "USD"),
+      companyCurrencySymbol: data.company_currency_symbol ?? ((data.company_country || data.companyCountry || "IN") === "IN" ? "₹" : "$"),
+    }
+  }
 
+  // ── Rehydrate user state from /auth/me/ ───────────────────────────────────
   const refreshMe = useCallback(async () => {
     let me;
     try {
@@ -37,33 +60,10 @@ export function AuthProvider({ children }) {
       console.error("apiFetchMe exception:", e)
     }
 
-    if (me?.username && me?.role) {
-      const u = {
-        username:  me.username,
-        email:     me.email      ?? "",
-        firstName: me.first_name ?? "",
-        lastName:  me.last_name  ?? "",
-        role:      me.role,
-        companyId: me.company,
-        companyPermissions: me.company_permissions ?? null,
-        bio:       me.bio        ?? "",
-        phone:     me.phone      ?? "",
-        timezone:  me.timezone   ?? "UTC",
-        language:  me.language   ?? "en",
-        avatar_url:me.avatar_url ?? null,
-        two_fa_enabled: me.two_fa_enabled ?? false,
-        employee_roles: me.employee_roles ?? [],
-        isCareAgent: me.is_care_agent ?? false,
-        careRole: me.care_role ?? null,
-        companyCountry: me.company_country ?? me.companyCountry ?? "IN",
-        company_country: me.company_country ?? me.companyCountry ?? "IN",
-        companyRegion: me.company_region ?? me.company_country ?? me.companyCountry ?? "IN",
-        primaryCountry: me.primaryCountry ?? me.company_country ?? me.companyCountry ?? "IN",
-        companyCurrency: me.company_currency ?? ((me.company_country || me.companyCountry || "IN") === "IN" ? "INR" : "USD"),
-        companyCurrencySymbol: me.company_currency_symbol ?? ((me.company_country || me.companyCountry || "IN") === "IN" ? "₹" : "$"),
-      }
+    const u = formatUser(me)
+    if (u) {
       setUser(u)
-      if (me.company_name) {
+      if (me?.company_name) {
         localStorage.setItem("quicktims.orgName", me.company_name)
         window.dispatchEvent(new CustomEvent("quicktims:orgName"))
       }
@@ -72,7 +72,6 @@ export function AuthProvider({ children }) {
       if (me) {
         console.warn("apiFetchMe returned incomplete user object:", me)
       }
-      // Not authenticated (cookies missing, expired, or server rejected them)
       setUser(null)
       return null
     }
@@ -82,9 +81,21 @@ export function AuthProvider({ children }) {
   const login = useCallback(
     async (identifier, password) => {
       const res = await apiLogin(identifier, password)
-      // If 2FA is required, cookies are withheld — signal to UI to show TOTP step
       if (res?.requires_2fa) return { requires2FA: true }
-      return await refreshMe()  // fetch user from /auth/me/
+      const meUser = await refreshMe()
+      if (meUser) return meUser
+      if (res?.user) {
+        const u = formatUser(res.user)
+        if (u) {
+          setUser(u)
+          if (res.user.company_name) {
+            localStorage.setItem("quicktims.orgName", res.user.company_name)
+            window.dispatchEvent(new CustomEvent("quicktims:orgName"))
+          }
+          return u
+        }
+      }
+      return null
     },
     [refreshMe]
   )
@@ -92,8 +103,8 @@ export function AuthProvider({ children }) {
   // ── 2FA Verification ──────────────────────────────────────────────────────
   const verify2FA = useCallback(
     async (code) => {
-      await apiVerify2FA(code)  // server sets cookies on success
-      return await refreshMe()  // fetch user from /auth/me/
+      await apiVerify2FA(code)
+      return await refreshMe()
     },
     [refreshMe]
   )
@@ -101,16 +112,16 @@ export function AuthProvider({ children }) {
   // ── Register ──────────────────────────────────────────────────────────────
   const register = useCallback(
     async (payload) => {
-      await apiRegister(payload)   // server sets cookies
+      await apiRegister(payload)
       return await refreshMe()
     },
     [refreshMe]
   )
 
-  // ── Google OAuth (Employee / Staff) ───────────────────────────────────────
+  // ── Google OAuth (Staff) ──────────────────────────────────────────────────
   const loginWithGoogle = useCallback(
     async (googleAccessToken) => {
-      await apiGoogleLogin(googleAccessToken)   // server sets cookies
+      await apiGoogleLogin(googleAccessToken)
       return await refreshMe()
     },
     [refreshMe]
@@ -119,7 +130,7 @@ export function AuthProvider({ children }) {
   // ── Customer Google OAuth ─────────────────────────────────────────────────
   const loginWithCustomerGoogle = useCallback(
     async (googleAccessToken) => {
-      await apiCustomerGoogleLogin(googleAccessToken)   // server sets cookies
+      await apiCustomerGoogleLogin(googleAccessToken)
       return await refreshMe()
     },
     [refreshMe]
@@ -127,15 +138,7 @@ export function AuthProvider({ children }) {
 
   // ── Logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
-    // Mark offline before clearing cookies
-    try {
-      const { apiRequest } = await import("../../api/client.js")
-      await apiRequest("/employees/set-presence/", {
-        method: "POST",
-        json: { is_online: false },
-      })
-    } catch (_) {}
-    await apiLogout()                                   // server clears cookies
+    await apiLogout()
     localStorage.removeItem("quicktims.orgName")
     localStorage.removeItem("caltrack_activation_dossier")
     setUser(null)
@@ -143,27 +146,12 @@ export function AuthProvider({ children }) {
 
   // ── Bootstrap on mount ────────────────────────────────────────────────────
   useEffect(() => {
-    // Hard fallback: if refreshMe takes more than 6 s (e.g. Django CORS stall),
-    // force isReady=true so the app renders the login page instead of a blank screen.
     const fallbackTimer = setTimeout(() => {
       setIsReady(true)
     }, 6000)
 
     refreshMe()
-      .then((u) => {
-        console.log("DEBUG: refreshMe resolved with:", u)
-        // ── Set employee presence ONLINE as soon as we know who is logged in ──
-        if (u) {
-          import("../../api/client.js").then(({ apiRequest }) => {
-            apiRequest("/employees/set-presence/", {
-              method: "POST",
-              json: { is_online: true, availability: "available" },
-            }).catch(() => {}) // silent — non-critical
-          })
-        }
-      })
-      .catch((e) => console.error("DEBUG: refreshMe rejected with:", e))
-      .catch(() => {})
+      .catch((e) => console.error("refreshMe error:", e))
       .finally(() => {
         clearTimeout(fallbackTimer)
         setIsReady(true)
@@ -172,20 +160,7 @@ export function AuthProvider({ children }) {
     return () => clearTimeout(fallbackTimer)
   }, [refreshMe])
 
-  // ── Mark offline when the tab/browser closes ─────────────────────────────
-  useEffect(() => {
-    const handleUnload = () => {
-      if (!user) return
-      // Use sendBeacon for guaranteed delivery on page close
-      const url = "/api/employees/set-presence/"
-      const blob = new Blob([JSON.stringify({ is_online: false })], { type: "application/json" })
-      try { navigator.sendBeacon(url, blob) } catch (_) {}
-    }
-    window.addEventListener("beforeunload", handleUnload)
-    return () => window.removeEventListener("beforeunload", handleUnload)
-  }, [user])
-
-  // ── Session expiry event (fired by API client on unrecoverable 401) ───────
+  // ── Session expiry event ──────────────────────────────────────────────────
   useEffect(() => {
     const handle = async () => {
       await apiLogout()

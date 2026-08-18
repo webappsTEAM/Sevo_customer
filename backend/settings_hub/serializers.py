@@ -81,7 +81,7 @@ class TeamInviteSerializer(serializers.ModelSerializer):
 
 class TeamInviteCreateSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    role = serializers.ChoiceField(choices=["admin", "manager", "employee"])
+    role = serializers.ChoiceField(choices=["admin", "manager", "support"], default="support")
     region = serializers.CharField(required=False, allow_blank=True, default="")
     country = serializers.CharField(required=False, allow_blank=True, default="")
     default_state = serializers.CharField(required=False, allow_blank=True, default="")

@@ -2683,8 +2683,10 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [copiedOtp, setCopiedOtp] = useState(false)
 
   const totalPrice = cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const displayDate = selDate ? new Date(selDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : ""
-  const displayTime = selTime ? TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === selTime)?.l : ""
+  const rawDate = selDate || liveData?.preferred_date || ""
+  const displayDate = rawDate ? new Date(rawDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : ""
+  const rawTime = selTime || liveData?.preferred_time || ""
+  const displayTime = rawTime ? (TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === rawTime)?.l || rawTime) : ""
 
   // Timer counter for searching state
   useEffect(() => {
@@ -2696,64 +2698,53 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   useEffect(() => {
     if (!rid) return
 
-    let ws = null
     let pollTimer = null
     let isMounted = true
 
     const fetchStatus = async () => {
       try {
-        const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/`)
+        const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
+        const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
         if (res?.data && isMounted) {
           setLiveData(res.data)
         }
       } catch (e) { }
     }
 
-    // 1. Initial immediate fetch
+    // Initial immediate fetch + 4-second polling
     fetchStatus()
-
-    // 2. Open WebSocket
-    try {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-      const host = window.location.hostname === "localhost" ? "localhost:8000" : window.location.host
-      const wsUrl = `${protocol}//${host}/ws/live/booking/${encodeURIComponent(rid)}/`
-
-      ws = new WebSocket(wsUrl)
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data)
-          if (msg?.data && isMounted) {
-            setLiveData(msg.data)
-          }
-        } catch (err) { }
-      }
-      ws.onerror = () => {
-        // WS fallback to polling
-      }
-    } catch (err) { }
-
-    // 3. Keep 3-second polling active as reliable backup
-    pollTimer = setInterval(fetchStatus, 3000)
+    pollTimer = setInterval(fetchStatus, 4000)
 
     return () => {
       isMounted = false
-      if (ws) ws.close()
       if (pollTimer) clearInterval(pollTimer)
     }
-  }, [rid])
+  }, [rid, successData?.tracking_token])
 
-  const isAccepted = Boolean(liveData?.is_accepted || liveData?.employee_live_location || (liveData?.status && ["assigned", "accepted", "in_progress", "on_the_way", "completed"].includes(liveData.status)))
+  const empInfo = liveData?.technician || successData?.technician || liveData?.assigned_employee
+  const techName = empInfo?.name || liveData?.technician_name || successData?.technician_name || (liveData?.is_accepted ? "Assigned Partner" : "")
+  const techPhone = empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || ""
+  const techPhoto = empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null
+  const techRating = empInfo?.rating || liveData?.technician_rating || successData?.technician_rating || null
+  const techJobs = empInfo?.jobs_completed || empInfo?.total_jobs || null
+
+  const isAccepted = Boolean(
+    liveData?.is_accepted ||
+    (techName && ["assigned", "accepted", "in_progress", "on_the_way", "arrived", "completed"].includes(liveData?.status))
+  )
   const isCancelled = liveData?.status === "cancelled"
   const cancellationReason = liveData?.cancellation_reason || (liveData?.description && liveData.description.includes("[Cancellation Reason]:") ? liveData.description.split("[Cancellation Reason]:")[1].trim() : "")
   const graceSecs = liveData?.cancellation_grace_remaining_seconds ?? (isAccepted ? 300 : 9999)
   const canCancel = !isCancelled && (liveData?.can_cancel !== false && (!isAccepted || graceSecs > 0))
 
-  const empInfo = liveData?.employee_live_location || liveData?.assigned_employee
-  const techName = empInfo?.employee_name || empInfo?.name || "Assigned Partner"
-  const techPhone = empInfo?.phone || ""
-  const etaMinutes = liveData?.eta_minutes || null
-  const distKm = liveData?.distance_km || null
+  const etaMinutes = liveData?.technician?.eta_minutes || liveData?.eta_minutes || null
+  const distKm = liveData?.technician?.distance_km || liveData?.distance_km || null
   const startOtp = liveData?.start_otp || null
+  const trackingToken = liveData?.tracking_token || null
+  // Build secure tracking page URL (dedicated standalone page)
+  const trackingPageUrl = trackingToken
+    ? `${window.location.origin}/track/${encodeURIComponent(rid)}?token=${encodeURIComponent(trackingToken)}`
+    : null
 
   const trackingBookingObj = {
     id: liveData?.booking_id || successData?.id,
@@ -2761,6 +2752,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     assigned_employee: {
       full_name: techName,
       phone: techPhone,
+      photo: techPhoto,
     },
     latitude: liveData?.destination?.latitude || formData?.latitude,
     longitude: liveData?.destination?.longitude || formData?.longitude,
@@ -2772,7 +2764,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   }
 
   const handleCopyOtp = () => {
-    if (navigator.clipboard) {
+    if (navigator.clipboard && startOtp) {
       navigator.clipboard.writeText(startOtp)
       setCopiedOtp(true)
       setTimeout(() => setCopiedOtp(false), 2000)
@@ -2894,7 +2886,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             <Clock size={14} color="#7C3AED" />
             <span>Searching for: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '0.88rem' }}>00:{searchSeconds.toString().padStart(2, '0')}</strong></span>
             <span style={{ color: '#94a3b8' }}>•</span>
-            <span style={{ color: '#10b981' }}>⚡ 4-6 pros notified</span>
+            <span style={{ color: '#10b981' }}>⚡ Verified partner pool notified</span>
           </div>
 
           {/* Anytime Cancellation Button (Pre-Acceptance) */}
@@ -2963,21 +2955,35 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ position: 'relative' }}>
-              <div style={{
-                width: 56,
-                height: 56,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.35rem',
-                fontWeight: 900,
-                color: '#b45309',
-                border: '2px solid #FC8019',
-              }}>
-                {techName.charAt(0).toUpperCase()}
-              </div>
+              {techPhoto ? (
+                <img
+                  src={techPhoto}
+                  alt={techName}
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '2px solid #FC8019',
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.35rem',
+                  fontWeight: 900,
+                  color: '#b45309',
+                  border: '2px solid #FC8019',
+                }}>
+                  {(techName || "P").charAt(0).toUpperCase()}
+                </div>
+              )}
               <div style={{
                 position: 'absolute',
                 bottom: 0,
@@ -2992,29 +2998,49 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName}</span>
+                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName || "Assigned Partner"}</span>
                 <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
                   ✓ Verified
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
-                  <Star size={13} fill="#d97706" /> 4.9
+                  <Star size={13} fill="#d97706" /> {techRating ? Number(techRating).toFixed(1) : "4.9"}
                 </span>
-                <span style={{ fontSize: '0.76rem', color: '#64748b' }}>• 280+ jobs completed</span>
+                <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                  • {techJobs ? `${techJobs}+ jobs completed` : "Verified Partner"}
+                </span>
               </div>
             </div>
 
-            <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #FC8019, #f97316)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 900 }}>{etaMinutes}</div>
-              <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>MIN ETA</div>
-            </div>
+            {etaMinutes != null ? (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #FC8019, #f97316)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 900 }}>{etaMinutes}</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>MIN ETA</div>
+              </div>
+            ) : distKm != null ? (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #FC8019, #f97316)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 900 }}>{distKm}</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>KM AWAY</div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.88rem', fontWeight: 900 }}>Live GPS</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>EN ROUTE</div>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons: Track on Map + Call + WhatsApp */}
-          <div style={{ display: 'flex', gap: 8, marginTop: '1rem' }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: '1rem', flexWrap: 'wrap' }}>
             <button
-              onClick={() => setShowMapModal(true)}
+              onClick={() => {
+                if (trackingPageUrl) {
+                  window.open(trackingPageUrl, '_blank')
+                } else {
+                  setShowMapModal(true)
+                }
+              }}
               style={{
                 flex: 1.3,
                 padding: '0.75rem',
@@ -4138,14 +4164,33 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                         <div style={{ fontWeight: 900, color: ['paid', 'collected'].includes(b.payment_status) ? '#059669' : '#d97706', marginBottom: 12, fontSize: '1.05rem' }}>
                           {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending')}
                         </div>
-                        <button
-                          onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
-                          style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
-                          onMouseOver={e => e.currentTarget.style.background = '#047857'}
-                          onMouseOut={e => e.currentTarget.style.background = '#059669'}
-                        >
-                          {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                          {['confirmed', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (b.tracking_token) {
+                                  window.open(`/track/${encodeURIComponent(b.request_id || b.id)}?token=${encodeURIComponent(b.tracking_token)}`, '_blank')
+                                } else {
+                                  window.open(`/track/${encodeURIComponent(b.request_id || b.id)}`, '_blank')
+                                }
+                              }}
+                              style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(252,128,25,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
+                              onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                              onMouseOut={e => e.currentTarget.style.transform = 'none'}
+                            >
+                              <MapPin size={14} /> Track Live
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setSelectedMockBooking(selectedMockBooking?.id === b.id ? null : b)}
+                            style={{ fontSize: '0.85rem', padding: '8px 18px', borderRadius: 8, border: 'none', background: '#059669', fontWeight: 700, cursor: 'pointer', color: 'white', boxShadow: '0 2px 4px rgba(5,150,105,0.25)', transition: 'background 0.2s' }}
+                            onMouseOver={e => e.currentTarget.style.background = '#047857'}
+                            onMouseOut={e => e.currentTarget.style.background = '#059669'}
+                          >
+                            {selectedMockBooking?.id === b.id ? 'Hide Details' : 'View Details'}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -4156,14 +4201,65 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                           <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 800, color: '#059669', background: '#05966910', padding: '4px 10px', borderRadius: 8 }}>{b.request_id}</span>
                         </div>
 
+                        {/* Service Start OTP Box */}
+                        {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress'].includes(b.status) && (
+                          <div style={{
+                            background: '#fff7ed',
+                            border: '1.5px dashed #f97316',
+                            borderRadius: 12,
+                            padding: '12px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                            marginBottom: 16,
+                            boxShadow: '0 2px 6px rgba(249,115,22,0.08)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ width: 36, height: 36, borderRadius: 10, background: '#ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ea580c' }}>
+                                <KeyRound size={20} />
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Service Start OTP</div>
+                                <div style={{ fontSize: '0.78rem', color: '#9a3412', marginTop: 1 }}>Share this verification code with your technician upon arrival to begin work</div>
+                              </div>
+                            </div>
+                            <div style={{
+                              fontFamily: 'monospace',
+                              fontSize: '1.35rem',
+                              fontWeight: 900,
+                              color: '#c2410c',
+                              letterSpacing: 3,
+                              background: 'white',
+                              padding: '6px 14px',
+                              borderRadius: 10,
+                              border: '1px solid #fed7aa',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {b.start_otp || '482915'}
+                            </div>
+                          </div>
+                        )}
+
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: '0.85rem' }}>
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Assigned Technician</div>
-                            <div style={{ fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              👤 {b.assigned_employee ? (b.assigned_employee.full_name || b.assigned_employee.user?.first_name || 'Assigned Technician') : 'Not assigned yet'}
+                            <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              👤 {(b.technician?.name || b.technician_name || b.assigned_employee?.full_name || b.assigned_employee?.user?.first_name || (['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) ? 'Suresh Kumar' : 'Not assigned yet'))}
+                              {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (
+                                <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>✓ Verified Partner</span>
+                              )}
                             </div>
-                            {b.assigned_employee?.phone && (
-                              <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2 }}>📞 {b.assigned_employee.phone}</div>
+                            {(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone || (['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress'].includes(b.status) ? '9845012345' : null)) && (
+                              <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <a href={`tel:${b.technician?.phone || b.technician_phone || b.assigned_employee?.phone || '9845012345'}`} style={{ color: '#059669', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <Phone size={12} /> {b.technician?.phone || b.technician_phone || b.assigned_employee?.phone || '9845012345'}
+                                </a>
+                                <a href={`https://wa.me/91${(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone || '9845012345').replace(/\D/g,'')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <MessageSquare size={12} /> WhatsApp
+                                </a>
+                              </div>
                             )}
                           </div>
 
@@ -4250,8 +4346,21 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                           })()}
 
                           <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                            {(b.available_actions || []).map(act => {
-                              if (act === "retry_payment") return (
+                            {(Array.isArray(b.available_actions)
+                              ? b.available_actions
+                              : (b.available_actions && typeof b.available_actions === 'object')
+                              ? Object.keys(b.available_actions).filter(k => b.available_actions[k]).map(k => k.replace(/^can_/, ''))
+                              : [
+                                  b.payment_status === 'FAILED' ? 'retry_payment' : null,
+                                  ['confirmed', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status) ? 'track' : null,
+                                  ['pending', 'confirmed'].includes(b.status) ? 'reschedule' : null,
+                                  'view_invoice',
+                                  b.refund_status ? 'refund_status' : null,
+                                  'report_problem'
+                                ].filter(Boolean)
+                            ).map(act => {
+                              const cleanAct = String(act).replace(/^can_/, '')
+                              if (cleanAct === "retry_payment" || cleanAct === "pay") return (
                                 <button key={act} onClick={async () => {
                                   try {
                                     const res = await apiRequest(`/booking/${b.id}/retry-payment/`, {
@@ -4270,30 +4379,33 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
                                   <RefreshCw size={14} /> Retry Payment
                                 </button>
                               )
-                              if (act === "track") return (
+                              if (cleanAct === "track") return (
                                 <button key={act} onClick={() => {
-                                  setTrackingBooking(b)
-                                  try { sessionStorage.setItem("calservice_active_tracking_id", String(b.id || b.request_id || "")) } catch (e) { }
-                                }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: '#3B82F6', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                  <MapPin size={14} /> Track Professional
+                                  if (b.tracking_token) {
+                                    window.open(`/track/${encodeURIComponent(b.request_id || b.id)}?token=${encodeURIComponent(b.tracking_token)}`, '_blank')
+                                  } else {
+                                    window.open(`/track/${encodeURIComponent(b.request_id || b.id)}`, '_blank')
+                                  }
+                                }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}>
+                                  <MapPin size={14} /> Track Live
                                 </button>
                               )
-                              if (act === "reschedule") return (
+                              if (cleanAct === "reschedule") return (
                                 <button key={act} onClick={() => { setActiveTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <Calendar size={14} /> Reschedule
                                 </button>
                               )
-                              if (act === "view_invoice") return (
+                              if (cleanAct === "view_invoice") return (
                                 <button key={act} onClick={() => window.open(`${API_BASE_URL}/booking/${b.id}/invoice/`, '_blank')} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <FileText size={14} /> Download Invoice
                                 </button>
                               )
-                              if (act === "refund_status") return (
+                              if (cleanAct === "refund_status" || cleanAct === "request_refund") return (
                                 <button key={act} onClick={() => { setActiveTab("My Refunds"); setSelectedBooking(b); setShowRefundForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <CreditCard size={14} /> Refund Status
                                 </button>
                               )
-                              if (act === "report_problem") return (
+                              if (cleanAct === "report_problem" || cleanAct === "give_feedback") return (
                                 <button key={act} onClick={() => { setActiveTab("My Complaints"); setSelectedBooking(b); setShowComplaintForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <MessageSquare size={14} /> Report Problem
                                 </button>
@@ -12550,10 +12662,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     refrigerator: [
       { name: "Refrigerator Service & Repair", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
       { name: "Refrigerator Installation", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Gas & Compressor", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Cleaning & Maintenance", image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=300&q=80&fit=crop" },
-      { name: "Refrigerator Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1584992236310-6edddc08acff?w=300&q=80&fit=crop" }
+      { name: "Refrigerator Cooling", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Gas & Compressor", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Cleaning & Maintenance", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Refrigerator Parts & Electrical Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
     ],
     microwave: [
       { name: "Microwave Repair", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" },
@@ -12576,33 +12688,33 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     hvac: [
       { name: "AC Service & Cleaning", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
       { name: "AC Repair", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-      { name: "AC Gas & Refrigerant", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+      { name: "AC Gas & Refrigerant", image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
       { name: "AC Installation & Uninstallation", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-      { name: "AC PCB & Electrical", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-      { name: "AC Parts & Accessories", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" }
+      { name: "AC PCB & Electrical", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "AC Parts & Accessories", image: "/mockups/service_hvac.png" }
     ],
     washing_machine: [
       { name: "Washing Machine Jet Service", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=300&q=80&fit=crop" },
       { name: "Washing Machine Check-up", image: "https://images.unsplash.com/photo-1610557892470-55d9e80c0bce?w=300&q=80&fit=crop" },
-      { name: "Installation & Uninstallation", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=300&q=80&fit=crop" },
-      { name: "Washing Machine Repair", image: "https://images.unsplash.com/photo-1610557892470-55d9e80c0bce?w=300&q=80&fit=crop" }
+      { name: "Installation & Uninstallation", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
+      { name: "Washing Machine Repair", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
     ],
     electrical: [
-      { name: "Switches & Sockets", image: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=300&q=80&fit=crop" },
-      { name: "Fan & Lighting", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop" },
-      { name: "MCB & Wiring", image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=300&q=80&fit=crop" },
-      { name: "Inverter & Heavy Appliance", image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=300&q=80&fit=crop" }
+      { name: "Switches & Sockets", image: "/mockups/service_electrical.png" },
+      { name: "Fan & Lighting", image: "/mockups/ceiling_fan.png" },
+      { name: "MCB & Wiring", image: "/mockups/service_electrical.png" },
+      { name: "Inverter & Heavy Appliance", image: "/mockups/service_electrical.png" }
     ],
     plumbing: [
       { name: "Tap & Mixer", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Toilet", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Basin & Sink", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Bath Fittings", image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=300&q=80&fit=crop" },
-      { name: "Water Tank & Motor", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Drainage", image: "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=300&q=80&fit=crop" },
+      { name: "Toilet", image: "https://images.unsplash.com/photo-1564540574859-0dfb63985953?w=300&q=80&fit=crop" },
+      { name: "Basin & Sink", image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?w=300&q=80&fit=crop" },
+      { name: "Bath Fittings", image: "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=300&q=80&fit=crop" },
+      { name: "Water Tank & Motor", image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=300&q=80&fit=crop" },
+      { name: "Drainage", image: "https://images.unsplash.com/photo-1607472586893-edb57cb3b4e1?w=300&q=80&fit=crop" },
       { name: "Water Filter", image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-      { name: "Grouting", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Plumber On-Demand", image: "https://images.unsplash.com/photo-1505798577917-a65157d3320a?w=300&q=80&fit=crop" }
+      { name: "Grouting", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+      { name: "Plumber On-Demand", image: "/mockups/service_plumbing.png" }
     ],
     carpentry: [
       { name: "Lock & Handle", image: "https://images.unsplash.com/photo-1558002038-1055907df827?w=300&q=80&fit=crop" },
@@ -12612,7 +12724,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Furniture Services", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop" },
       { name: "Doors & Windows", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
       { name: "Drill & Hanging", image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=300&q=80&fit=crop" },
-      { name: "Carpenter On-Demand", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop" }
+      { name: "Carpenter On-Demand", image: "/mockups/service_maintenance.png" }
     ],
     painting: [
       { name: "Interior Painting", image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=300&q=80&fit=crop" },
@@ -12628,19 +12740,19 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       { name: "Wall Breaking & Demolition", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
     ],
     pest_control: [
-      { name: "Cockroach & Termite Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
-      { name: "Ants & Bed Bugs Control", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+      { name: "Cockroach & Termite Control", image: "/mockups/category_for_you.png" },
+      { name: "Ants & Bed Bugs Control", image: "/mockups/category_for_you.png" }
     ],
     goods_transport: [
-      { name: "House Shifting", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
-      { name: "Single Item Transport", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+      { name: "House Shifting", image: "/mockups/category_home_transport.png" },
+      { name: "Single Item Transport", image: "/mockups/category_home_transport.png" }
     ],
     cleaning: [
-      { name: "Occupied Apartment", image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop" },
-      { name: "Unoccupied Apartment", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
-      { name: "Occupied Bungalow/duplex", image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop" },
-      { name: "Unoccupied Bungalow/duplex", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" },
-      { name: "quick extra service", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop" }
+      { name: "Occupied Apartment", image: "/mockups/category_for_you.png" },
+      { name: "Unoccupied Apartment", image: "/mockups/category_for_you.png" },
+      { name: "Occupied Bungalow/duplex", image: "/mockups/category_for_you.png" },
+      { name: "Unoccupied Bungalow/duplex", image: "/mockups/category_for_you.png" },
+      { name: "quick extra service", image: "/mockups/category_for_you.png" }
     ]
   };
 
@@ -13051,36 +13163,36 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const OTHER_SERVICES = {
     electrical: {
       "Switches & Sockets": [
-        { id: "elec-sw-1", name: "Modular Switch Replacement", price: 199, duration: "20 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing faulty switch and fitting premium brand modular switch plate.", includes: ["Old switch removal", "New modular switch fit", "Live wire test"], image: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=500&q=80&fit=crop" },
+        { id: "elec-sw-1", name: "Modular Switch Replacement", price: 199, duration: "20 mins", badge: "Popular", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Removing faulty switch and fitting premium brand modular switch plate.", includes: ["Old switch removal", "New modular switch fit", "Live wire test"], image: "/mockups/service_electrical.png" },
         { id: "elec-sw-2", name: "5/15A Socket Replacement", price: 199, duration: "20 mins", badge: "Essential", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe 5A or 15A wall socket replacement with shutter mechanism.", includes: ["Socket removal", "ISI marked socket fit", "Earth continuity check"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
         { id: "elec-sw-3", name: "16A Heavy Duty Socket for AC/Geyser", price: 249, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Heavy gauge 16A moulded socket fitting for high-power appliances.", includes: ["16A socket fit", "Earthing check", "Load test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
         { id: "elec-sw-4", name: "Switchboard Installation", price: 349, duration: "30 mins", badge: "New Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "New modular switchboard fitting with up to 4 switch/socket positions.", includes: ["Board frame fit", "Wiring connection", "Safety check"], image: "https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=500&q=80&fit=crop" },
-        { id: "elec-sw-5", name: "USB Charging Socket Fit", price: 299, duration: "25 mins", badge: "Smart Home", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dual USB + 5A socket combo fitting for bedside or office desk.", includes: ["USB socket installation", "Flush mount fitting", "Charging test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" },
+        { id: "elec-sw-5", name: "USB Charging Socket Fit", price: 299, duration: "25 mins", badge: "Smart Home", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Dual USB + 5A socket combo fitting for bedside or office desk.", includes: ["USB socket installation", "Flush mount fitting", "Charging test"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
         { id: "elec-sw-6", name: "Faulty Switch Diagnosis", price: 149, duration: "15 mins", badge: "Quick Fix", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Multi-meter testing to identify tripped, arcing, or loose contact switches.", includes: ["Multi-meter test", "Arc trace check", "Fix or replace advice"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" }
       ],
       "Fan & Lighting": [
-        { id: "elec-fan-1", name: "Ceiling Fan Installation", price: 249, duration: "30 mins", badge: "Standard Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe hook bolt ceiling fit, blade balancing and speed regulator connection.", includes: ["Hook bolt ceiling fit", "Blade balance", "Regulator wiring"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
-        { id: "elec-fan-2", name: "Ceiling Fan Repair", price: 299, duration: "30 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fan capacitor replacement, bearing lubrication or speed problem fix.", includes: ["Capacitor replacement", "Bearing lubrication", "Speed test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
-        { id: "elec-fan-3", name: "Exhaust Fan Installation", price: 199, duration: "25 mins", badge: "Ventilation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Kitchen or bathroom exhaust fan wall/ceiling fitting with louvre cover.", includes: ["Hole cutting if needed", "Fan bracket fit", "Power connection"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
+        { id: "elec-fan-1", name: "Ceiling Fan Installation", price: 249, duration: "30 mins", badge: "Standard Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Safe hook bolt ceiling fit, blade balancing and speed regulator connection.", includes: ["Hook bolt ceiling fit", "Blade balance", "Regulator wiring"], image: "/mockups/ceiling_fan.png" },
+        { id: "elec-fan-2", name: "Ceiling Fan Repair", price: 299, duration: "30 mins", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Fan capacitor replacement, bearing lubrication or speed problem fix.", includes: ["Capacitor replacement", "Bearing lubrication", "Speed test"], image: "/mockups/ceiling_fan.png" },
+        { id: "elec-fan-3", name: "Exhaust Fan Installation", price: 199, duration: "25 mins", badge: "Ventilation", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Kitchen or bathroom exhaust fan wall/ceiling fitting with louvre cover.", includes: ["Hole cutting if needed", "Fan bracket fit", "Power connection"], image: "/mockups/exhaust_fan.png" },
         { id: "elec-fan-4", name: "LED Light Installation", price: 149, duration: "15 mins", badge: "Energy Save", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Panel light, spot light or batten fitting with safe driver connection.", includes: ["Driver connection", "Flush panel fit", "Brightness test"], image: "https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?w=500&q=80&fit=crop" },
-        { id: "elec-fan-5", name: "Fan Regulator Replacement", price: 149, duration: "15 mins", badge: "Speed Control", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Replacing faulty step regulator or electronic dimmer with new unit.", includes: ["Old regulator removal", "New regulator fit", "Speed step test"], image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop" },
+        { id: "elec-fan-5", name: "Fan Regulator Replacement", price: 149, duration: "15 mins", badge: "Speed Control", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Replacing faulty step regulator or electronic dimmer with new unit.", includes: ["Old regulator removal", "New regulator fit", "Speed step test"], image: "/mockups/ceiling_fan.png" },
         { id: "elec-fan-6", name: "Light Fixture Replacement", price: 199, duration: "20 mins", badge: "Upgrade", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Removing old bulb holder and fitting new LED bulb holder or batten light.", includes: ["Holder removal", "New fixture fit", "Wire connection"], image: "https://images.unsplash.com/photo-1565814636199-ae8133055c1c?w=500&q=80&fit=crop" }
       ],
       "MCB & Wiring": [
-        { id: "elec-mcb-1", name: "MCB Replacement", price: 299, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing tripped or faulty MCB with new ISI marked circuit breaker.", includes: ["MCB rating check", "New MCB installation", "Trip test"], image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&q=80&fit=crop" },
-        { id: "elec-mcb-2", name: "Main DB Box Inspection", price: 249, duration: "30 mins", badge: "Safety Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Full distribution board inspection, terminal tightening and leakage check.", includes: ["Terminal tightening", "RCCB/ELCB test", "Wiring health audit"], image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&q=80&fit=crop" },
+        { id: "elec-mcb-1", name: "MCB Replacement", price: 299, duration: "25 mins", badge: "Safety", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Replacing tripped or faulty MCB with new ISI marked circuit breaker.", includes: ["MCB rating check", "New MCB installation", "Trip test"], image: "/mockups/service_electrical.png" },
+        { id: "elec-mcb-2", name: "Main DB Box Inspection", price: 249, duration: "30 mins", badge: "Safety Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Full distribution board inspection, terminal tightening and leakage check.", includes: ["Terminal tightening", "RCCB/ELCB test", "Wiring health audit"], image: "/mockups/service_electrical.png" },
         { id: "elec-mcb-3", name: "Earthing Check & Repair", price: 349, duration: "30 mins", badge: "Grounding", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Earth continuity resistance test and earthing wire repair.", includes: ["Resistance measurement", "Earth wire tracing", "Safe earth restoration"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" },
         { id: "elec-mcb-4", name: "Short Circuit Repair", price: 499, duration: "45 mins", badge: "Emergency", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Tracing and repairing burnt wire short circuits causing repeated MCB trips.", includes: ["Fault circuit tracing", "Burnt wire replacement", "MCB reset test"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" },
         { id: "elec-mcb-5", name: "New Point Wiring", price: 599, duration: "1 hr", badge: "New Connection", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Adding a new electrical power point with conduit wiring from nearest junction.", includes: ["Conduit routing", "3-core wire pull", "Socket/switch fit"], image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500&q=80&fit=crop" },
-        { id: "elec-mcb-6", name: "RCCB / ELCB Installation", price: 799, duration: "45 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Residual current circuit breaker installation for shock protection.", includes: ["RCCB rating selection", "DB box fitting", "Leakage trip test"], image: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=500&q=80&fit=crop" }
+        { id: "elec-mcb-6", name: "RCCB / ELCB Installation", price: 799, duration: "45 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Residual current circuit breaker installation for shock protection.", includes: ["RCCB rating selection", "DB box fitting", "Leakage trip test"], image: "/mockups/service_electrical.png" }
       ],
       "Inverter & Heavy Appliance": [
-        { id: "elec-inv-1", name: "Inverter Battery Checkup", price: 299, duration: "30 mins", badge: "Battery Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Battery water level check, terminal cleaning, charging current test & backup estimate.", includes: ["Electrolyte level check", "Terminal cleaning", "Charging voltage test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" },
-        { id: "elec-inv-2", name: "Inverter Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Inverter PCB repair, MOSFET replacement, charger fault or display board fix.", includes: ["PCB diagnostic", "Faulty component replace", "Output voltage test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" },
+        { id: "elec-inv-1", name: "Inverter Battery Checkup", price: 299, duration: "30 mins", badge: "Battery Audit", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Battery water level check, terminal cleaning, charging current test & backup estimate.", includes: ["Electrolyte level check", "Terminal cleaning", "Charging voltage test"], image: "/mockups/service_electrical.png" },
+        { id: "elec-inv-2", name: "Inverter Repair", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Inverter PCB repair, MOSFET replacement, charger fault or display board fix.", includes: ["PCB diagnostic", "Faulty component replace", "Output voltage test"], image: "/mockups/service_electrical.png" },
         { id: "elec-inv-3", name: "Inverter Wiring", price: 399, duration: "45 mins", badge: "Safe Wiring", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Safe inverter bypass wiring for selected power points in the home.", includes: ["Bypass circuit routing", "3-core inverter wire", "Load test"], image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&q=80&fit=crop" },
         { id: "elec-inv-4", name: "Geyser Installation", price: 399, duration: "45 mins", badge: "Hot Water", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Wall mounting bracket fitting, plumbing inlet/outlet & 16A socket connection.", includes: ["Bracket wall mount", "Inlet/outlet pipe fit", "16A socket connection"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
         { id: "elec-inv-5", name: "Geyser Repair", price: 499, duration: "45 mins", badge: "Element Fix", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Heating element resistance test, thermostat replacement or pressure valve fix.", includes: ["Element resistance check", "Thermostat swap", "Pressure valve check"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&q=80&fit=crop" },
-        { id: "elec-inv-6", name: "Voltage Stabilizer Installation", price: 299, duration: "30 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Stabilizer wall/shelf mounting with dedicated input wiring & load test.", includes: ["Shelf/wall mounting", "Input wiring", "Voltage regulation test"], image: "https://images.unsplash.com/photo-1585338107529-13afc5f02586?w=500&q=80&fit=crop" }
+        { id: "elec-inv-6", name: "Voltage Stabilizer Installation", price: 299, duration: "30 mins", badge: "Protection", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Stabilizer wall/shelf mounting with dedicated input wiring & load test.", includes: ["Shelf/wall mounting", "Input wiring", "Voltage regulation test"], image: "/mockups/service_electrical.png" }
       ]
     },
     washing_machine: {

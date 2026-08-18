@@ -10,11 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("companies", "0002_company_shift_enforcement_mode"),
-        ("employees", "0006_employee_bank_details_employee_currency_and_more"),
-        ("scheduling", "0002_shift_location_and_enforcement"),
-        ("tasks", "0011_task_end_photo_task_face_match_percentage_and_more"),
-        ("time_tracking", "0006_timelog_tl_status_date_idx_timelog_tl_emp_status_idx"),
+        ("companies", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -64,7 +60,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
                         related_name="inventory_stock",
-                        to="time_tracking.location",
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
                 (
@@ -133,7 +129,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="issued_items",
-                        to="employees.employee",
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
                 (
@@ -152,7 +148,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
                         related_name="inventory_issuances",
-                        to="scheduling.shift",
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
                 (
@@ -162,7 +158,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
                         related_name="inventory_issuances",
-                        to="tasks.task",
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
                 (
@@ -216,7 +212,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
                         related_name="inventory_alerts",
-                        to="employees.employee",
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
                 (
@@ -269,7 +265,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="outgoing_transfers",
-                        to="time_tracking.location",
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
                 (
@@ -287,7 +283,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="inventory_transfers",
-                        to="tasks.task",
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
                 (
@@ -303,7 +299,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="incoming_transfers",
-                        to="time_tracking.location",
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
             ],

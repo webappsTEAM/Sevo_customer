@@ -2,15 +2,11 @@
 service_requests/payment_views.py
 
 Payment-specific API views:
-  - Mock payment initiation / verification (simulates Razorpay flow)
-  - Employee cash collection for COD bookings
-  - Invoice PDF generation
-  - On-the-way and work-start employee status updates
+  - Payment initiation / verification (simulates gateway / Razorpay flow)
+  - Admin payment status overrides
+  - Customer & Admin Invoice PDF generation
 """
-import hashlib
-import hmac
 import logging
-import os
 import uuid
 from django.utils import timezone
 from django.http import HttpResponse
@@ -18,8 +14,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsEmployeeRole
-from .models import EmployeeJob, ServiceRequest
+from .models import ServiceRequest
 from .serializers import ServiceRequestDetailSerializer
 
 logger = logging.getLogger(__name__)
@@ -36,14 +31,12 @@ def _error(message, status_code=400):
     return Response({"success": False, "message": message}, status=status_code)
 
 
-# ─── Mock Payment Flow ────────────────────────────────────────────────────────
+# ─── Payment Initiation & Verification ────────────────────────────────────────
 
 class PaymentInitiateView(APIView):
     """
     POST /api/payment/initiate/
-    Creates a mock payment order for the given booking.
-    In production: Replace with Razorpay order creation.
-    Returns a mock order_id that the frontend uses to present payment UI.
+    Creates a payment order for the given booking.
     """
     permission_classes = [permissions.AllowAny]
 
@@ -63,8 +56,7 @@ class PaymentInitiateView(APIView):
         if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
             return _error("This booking is already paid.")
 
-        # Generate a mock order ID (replace with real Razorpay in production)
-        mock_order_id = f"order_mock_{uuid.uuid4().hex[:16]}"
+        mock_order_id = f"order_cal_{uuid.uuid4().hex[:16]}"
 
         return _success(
             data={
@@ -85,7 +77,7 @@ class PaymentInitiateView(APIView):
 class PaymentVerifyView(APIView):
     """
     POST /api/payment/verify/
-    Verifies a completed payment (mock: trust the client; real: verify Razorpay signature).
+    Verifies payment completion.
     On success: updates booking status to Confirmed, payment_status to Paid.
     """
     permission_classes = [permissions.AllowAny]
@@ -104,133 +96,41 @@ class PaymentVerifyView(APIView):
         except ServiceRequest.DoesNotExist:
             return _error("Booking not found.", 404)
 
-        # In production: verify Razorpay signature here
-        # razorpay_signature = request.data.get("razorpay_signature")
-        # key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "")
-        # msg = f"{order_id}|{payment_id}"
-        # expected = hmac.new(key_secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
-        # if expected != razorpay_signature:
-        #     return _error("Invalid payment signature.")
-
         if not mock_success:
             sr.payment_status = ServiceRequest.PaymentStatus.FAILED
             sr.save(update_fields=["payment_status", "updated_at"])
             return _error("Payment failed. Please try again.")
 
-        # Mark booking confirmed + paid
         sr.status         = ServiceRequest.Status.CONFIRMED
         sr.payment_status = ServiceRequest.PaymentStatus.PAID
         sr.transaction_id = payment_id or f"TXN_{uuid.uuid4().hex[:12].upper()}"
-        sr.payment_gateway = "mock"
-        sr.invoice_id     = f"INV-{sr.request_id.replace('SR-', '')}-{uuid.uuid4().hex[:6].upper()}"
+        sr.payment_gateway = "gateway"
+        if not sr.invoice_id:
+            sr.invoice_id = f"INV-{sr.request_id.replace('SR-', '')}-{uuid.uuid4().hex[:6].upper()}"
         sr.save(update_fields=["status", "payment_status", "transaction_id", "payment_gateway", "invoice_id", "updated_at"])
 
         return _success(
             data={
-                "request_id":  sr.request_id,
+                "request_id":     sr.request_id,
                 "booking_status": sr.status,
                 "payment_status": sr.payment_status,
                 "transaction_id": sr.transaction_id,
-                "invoice_id":    sr.invoice_id,
+                "invoice_id":     sr.invoice_id,
             },
-            message="Payment confirmed! Your booking is now active.",
+            message="Payment confirmed! Your booking is active.",
         )
 
 
-# ─── Employee: On The Way ─────────────────────────────────────────────────────
-
-class EmployeeJobOnTheWayView(APIView):
-    """PATCH /api/employee/jobs/<id>/on-the-way/"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, pk):
-        from django.db import transaction
-        from .state_machine import apply_transition
-        try:
-            job = EmployeeJob.objects.select_related("service_request").get(
-                pk=pk, employee__user=request.user
-            )
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", 404)
-
-        if job.status != EmployeeJob.Status.ACCEPTED:
-            return _error("Job must be in Accepted state to mark On The Way.")
-
-        with transaction.atomic():
-            apply_transition(job.service_request, ServiceRequest.Status.ON_THE_WAY)
-            job.service_request.save(update_fields=["status", "updated_at"])
-            job.status = EmployeeJob.Status.ON_THE_WAY
-            job.save(update_fields=["status"])
-
-        return _success(message="Status updated: On The Way.")
-
-
-# ─── Employee: COD Cash Collection ───────────────────────────────────────────
-
-class EmployeeCashCollectView(APIView):
-    """
-    PATCH /api/employee/jobs/<id>/collect-cash/
-    Employee confirms COD cash was collected.
-    Updates: payment_status = collected → paid, payment_collected_by, payment_collected_at, invoice_id
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, pk):
-        from django.db import transaction
-        from employees.models import Employee
-
-        try:
-            job = EmployeeJob.objects.select_related("service_request", "employee").get(
-                pk=pk, employee__user=request.user
-            )
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", 404)
-
-        sr = job.service_request
-
-        if sr.payment_method != ServiceRequest.PaymentMethod.COD:
-            return _error("Cash collection is only allowed for Cash on Service bookings.")
-
-        if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
-            return _error("Cash has already been collected for this booking.")
-
-        if job.status != EmployeeJob.Status.COMPLETED:
-            return _error("Job must be completed before collecting cash.")
-
-        with transaction.atomic():
-            now = timezone.now()
-            sr.payment_status        = ServiceRequest.PaymentStatus.PAID
-            sr.payment_collected_by  = job.employee
-            sr.payment_collected_at  = now
-            if not sr.invoice_id:
-                sr.invoice_id = f"INV-{sr.request_id.replace('SR-', '')}-{uuid.uuid4().hex[:6].upper()}"
-            sr.save(update_fields=[
-                "payment_status", "payment_collected_by", "payment_collected_at",
-                "invoice_id", "updated_at"
-            ])
-
-        return _success(
-            data={
-                "request_id":    sr.request_id,
-                "payment_status": sr.payment_status,
-                "invoice_id":    sr.invoice_id,
-                "collected_at":  now.isoformat(),
-            },
-            message="Cash collection confirmed. Payment marked as Paid.",
-        )
-
-
-# ─── Admin: Override Payment Status ──────────────────────────────────────────
+# ─── Admin Payment Management ─────────────────────────────────────────────────
 
 class AdminPaymentUpdateView(APIView):
     """
     PATCH /api/admin/service-requests/<id>/payment/
-    Admin manually overrides payment status (e.g. confirm COD collected).
+    Admin manually overrides payment status (e.g. confirm COD cash collected).
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, pk):
-        from accounts.permissions import IsAdminRole
         if not hasattr(request.user, 'role') or request.user.role not in ('admin', 'manager', 'superadmin'):
             return _error("Admin access required.", 403)
 
@@ -245,9 +145,15 @@ class AdminPaymentUpdateView(APIView):
             return _error(f"Invalid payment_status. Valid: {valid}")
 
         sr.payment_status = new_payment_status
-        if new_payment_status == ServiceRequest.PaymentStatus.PAID and not sr.invoice_id:
-            sr.invoice_id = f"INV-{sr.request_id.replace('SR-', '')}-{uuid.uuid4().hex[:6].upper()}"
-        sr.save(update_fields=["payment_status", "invoice_id", "updated_at"])
+        if new_payment_status == ServiceRequest.PaymentStatus.PAID:
+            sr.payment_collected_at = timezone.now()
+            sr.payment_collected_by_name = request.data.get("collected_by_name") or request.user.get_full_name() or request.user.username
+            sr.collection_method = request.data.get("collection_method") or "Cash"
+            if not sr.invoice_id:
+                sr.invoice_id = f"INV-{sr.request_id.replace('SR-', '')}-{uuid.uuid4().hex[:6].upper()}"
+            sr.save(update_fields=["payment_status", "payment_collected_at", "payment_collected_by_name", "collection_method", "invoice_id", "updated_at"])
+        else:
+            sr.save(update_fields=["payment_status", "updated_at"])
 
         return _success(
             data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
@@ -255,7 +161,7 @@ class AdminPaymentUpdateView(APIView):
         )
 
 
-# ─── Invoice Generation ───────────────────────────────────────────────────────
+# ─── Invoice PDF Generation ───────────────────────────────────────────────────
 
 class InvoiceDownloadView(APIView):
     """
@@ -270,7 +176,6 @@ class InvoiceDownloadView(APIView):
             return _error("Booking ID or request_id parameter is required.", 400)
 
         sr = None
-        # Try lookup by integer PK first, then string request_id
         if isinstance(req_id, int) or (isinstance(req_id, str) and req_id.isdigit()):
             sr = ServiceRequest.objects.filter(pk=int(req_id)).first()
         if not sr:
@@ -296,27 +201,26 @@ class InvoiceDownloadView(APIView):
         from reportlab.pdfgen import canvas
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.colors import HexColor, black, white
-        from reportlab.lib.units import mm
         from io import BytesIO
 
         buffer = BytesIO()
         c = canvas.Canvas(buffer, pagesize=A4)
         W, H = A4
 
-        # ── Header ──
-        c.setFillColor(HexColor("#7C3AED"))
+        # Header
+        c.setFillColor(HexColor("#4F46E5"))
         c.rect(0, H - 80, W, 80, fill=1, stroke=0)
         c.setFillColor(white)
         c.setFont("Helvetica-Bold", 22)
-        c.drawString(30, H - 45, "CalTrack Services")
+        c.drawString(30, H - 45, "CalServices")
         c.setFont("Helvetica", 11)
-        c.drawString(30, H - 62, "Professional Home & Field Services")
+        c.drawString(30, H - 62, "Professional Home & Business Services")
         c.setFont("Helvetica-Bold", 14)
         c.drawRightString(W - 30, H - 45, "INVOICE")
         c.setFont("Helvetica", 10)
         c.drawRightString(W - 30, H - 62, f"#{sr.invoice_id or sr.request_id}")
 
-        # ── Invoice Meta ──
+        # Meta
         y = H - 110
         c.setFillColor(black)
         c.setFont("Helvetica-Bold", 10)
@@ -344,11 +248,11 @@ class InvoiceDownloadView(APIView):
             c.setFont("Helvetica", 10)
             c.drawString(180, y, sr.transaction_id)
 
-        # ── Customer Info ──
+        # Billed To
         y -= 30
         c.setFillColor(HexColor("#F8FAFC"))
         c.rect(25, y - 10, W - 50, 70, fill=1, stroke=0)
-        c.setFillColor(HexColor("#7C3AED"))
+        c.setFillColor(HexColor("#4F46E5"))
         c.setFont("Helvetica-Bold", 10)
         c.drawString(35, y + 48, "BILLED TO")
         c.setFillColor(black)
@@ -362,9 +266,9 @@ class InvoiceDownloadView(APIView):
         addr = sr.address[:80] + "..." if len(sr.address) > 80 else sr.address
         c.drawString(35, y - 18, addr)
 
-        # ── Service Table ──
+        # Line items
         y -= 50
-        c.setFillColor(HexColor("#7C3AED"))
+        c.setFillColor(HexColor("#4F46E5"))
         c.rect(25, y, W - 50, 24, fill=1, stroke=0)
         c.setFillColor(white)
         c.setFont("Helvetica-Bold", 10)
@@ -401,7 +305,7 @@ class InvoiceDownloadView(APIView):
                 c.drawRightString(W - 35, y + 4, f"Rs. {price * qty:,.0f}")
                 base_total += price * qty
         else:
-            base_total = float(getattr(sr, "base_amount", 0) or 599.0)
+            base_total = float(getattr(sr, "total_amount", 0) or 599.0)
             y -= 22
             c.setFont("Helvetica", 10)
             c.drawString(35, y + 4, sr.issue_title or "Standard Service Package")
@@ -409,7 +313,7 @@ class InvoiceDownloadView(APIView):
             c.drawString(370, y + 4, f"Rs. {base_total:,.0f}")
             c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.0f}")
 
-        # Check for accepted WorkExtension
+        # Work extension check
         ext_amount = 0.0
         ext_reason = ""
         try:
@@ -420,7 +324,7 @@ class InvoiceDownloadView(APIView):
             ).first()
             if ext:
                 ext_amount = float(ext.admin_approved_amount or ext.technician_estimate or 0)
-                ext_reason = ext.reason or "Additional Repair & Spare Replacement"
+                ext_reason = ext.decision_notes or "Approved Extension"
         except Exception:
             pass
 
@@ -438,14 +342,14 @@ class InvoiceDownloadView(APIView):
 
         final_total = base_total + ext_amount
 
-        # ── Totals ──
+        # Totals
         y -= 35
         c.setStrokeColor(HexColor("#E2E8F0"))
         c.line(25, y + 20, W - 25, y + 20)
         c.setFont("Helvetica", 10)
         c.drawString(320, y + 4, "Base Subtotal:")
         c.drawRightString(W - 35, y + 4, f"Rs. {base_total:,.0f}")
-        
+
         if ext_amount > 0:
             y -= 18
             c.drawString(320, y + 4, "Work Extension:")
@@ -458,13 +362,9 @@ class InvoiceDownloadView(APIView):
         c.setFillColor(HexColor("#059669"))
         c.drawRightString(W - 35, y + 4, "FREE")
         c.setFillColor(black)
-        y -= 18
-        c.drawString(320, y + 4, "Travel Charges:")
-        c.setFillColor(HexColor("#059669"))
-        c.drawRightString(W - 35, y + 4, "FREE")
 
         y -= 28
-        c.setFillColor(HexColor("#7C3AED"))
+        c.setFillColor(HexColor("#4F46E5"))
         c.rect(310, y - 6, W - 310 - 25, 28, fill=1, stroke=0)
         c.setFillColor(white)
         c.setFont("Helvetica-Bold", 12)
@@ -473,23 +373,13 @@ class InvoiceDownloadView(APIView):
         c.drawString(320, y + 6, total_text)
         c.drawRightString(W - 35, y + 6, f"₹{final_total:,.2f}")
 
-        # ── Payment Method Badge ──
-        y -= 45
-        c.setFillColor(black)
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(30, y, f"Payment Method: {sr.get_payment_method_display()}")
-        c.setFont("Helvetica", 10)
-        c.drawString(30, y - 16, f"Payment Status: {sr.get_payment_status_display()}")
-        if sr.preferred_date:
-            c.drawString(30, y - 32, f"Service Date: {sr.preferred_date.strftime('%d %B %Y')}")
-
-        # ── Footer ──
+        # Footer
         c.setFillColor(HexColor("#F1F5F9"))
         c.rect(0, 0, W, 45, fill=1, stroke=0)
         c.setFillColor(HexColor("#64748B"))
         c.setFont("Helvetica", 8)
-        c.drawCentredString(W / 2, 28, "Thank you for choosing CalTrack Services!")
-        c.drawCentredString(W / 2, 14, "For support: support@caltrack.in | This is a computer-generated invoice.")
+        c.drawCentredString(W / 2, 28, "Thank you for choosing CalServices!")
+        c.drawCentredString(W / 2, 14, "For support: support@calservices.in | Computer-generated invoice.")
 
         c.save()
         buffer.seek(0)

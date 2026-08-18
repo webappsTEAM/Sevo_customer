@@ -3,34 +3,26 @@ import { useLocation } from "react-router-dom"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { routes } from "../routes.js"
-import { Button } from "../components/kit.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
 import {
-  User, Shield, Palette, Bell, CreditCard, Users2, Plug,
-  Building2, Database, AlertTriangle, ShieldCheck, RefreshCcw,
-  CheckCircle2, X, Save, ChevronRight, FileText, Calendar,
-  Info, XCircle, Banknote, MapPin,
+  User, Shield, Palette, Bell, CreditCard, Users2,
+  Building2, Database, AlertTriangle, ShieldCheck,
+  CheckCircle2, X, ChevronRight, FileText,
+  Info, XCircle, MapPin,
 } from "lucide-react"
 
 /* ── Lazy section imports ─────────────────────────────────────── */
-const WorkSchedulesSettingsSection = lazy(() =>
-  import("./WorkSchedulesSettingsPage.jsx").then(m => ({ default: m.WorkSchedulesSettingsPage }))
-)
 const ProfileSection = lazy(() => import("./settings/ProfileSection.jsx"))
 const AccountSecuritySection = lazy(() => import("./settings/AccountSecuritySection.jsx"))
 const AppearanceSection = lazy(() => import("./settings/AppearanceSection.jsx"))
 const NotificationsSection = lazy(() => import("./settings/NotificationsSection.jsx"))
 const BillingSection = lazy(() => import("./settings/BillingSection.jsx"))
-const MembersSettingsSection = lazy(() =>
-  import("./PeopleSettingsPage.jsx").then(m => ({ default: m.PeopleSettingsPage }))
-)
 const TeamMembersSection = lazy(() => import("./settings/TeamMembersSection.jsx"))
 const InvoicesSection = lazy(() => import("./settings/InvoicesSection.jsx"))
 const WorkspaceSection = lazy(() => import("./settings/WorkspaceSection.jsx"))
 const PrivacyDataSection = lazy(() => import("./settings/PrivacyDataSection.jsx"))
 const DangerZoneSection = lazy(() => import("./settings/DangerZoneSection.jsx"))
 const AccessControlSection = lazy(() => import("./settings/AccessControlSection.jsx"))
-const PayrollSettingsSection = lazy(() => import("./settings/PayrollSettingsSection.jsx").then(m => ({ default: m.PayrollSettingsSection })))
 const LocationsSettingsSection = lazy(() => import("./LocationsSettingsPage.jsx").then(m => ({ default: m.LocationsSettingsPage })))
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -118,28 +110,12 @@ const TABS = [
     to: routes.settings_billing,
   },
   {
-    id: "people",
-    label: "Members",
-    subtitle: "Add members, manage roles, and view the invite/creation queue.",
-    icon: <Users2 size={15} />,
-    adminOnly: true,
-    to: routes.settings_people,
-  },
-  {
     id: "team",
     label: "Team & Members",
     subtitle: "Invite members, assign roles, and manage workspace access.",
     icon: <Users2 size={15} />,
     adminOnly: true,
     to: routes.settings_team,
-  },
-  {
-    id: "schedules",
-    label: "Work Schedules",
-    subtitle: "Manage daily shifts, flexible working hours, and weekend configurations.",
-    icon: <Calendar size={15} />,
-    adminOnly: true,
-    to: routes.settings_schedules,
   },
   {
     id: "invoices",
@@ -149,7 +125,6 @@ const TABS = [
     adminOnly: true,
     to: routes.settings_invoices,
   },
-
   {
     id: "organization",
     label: "Workspace",
@@ -174,16 +149,9 @@ const TABS = [
     to: routes.settings_rbac,
   },
   {
-    id: "payroll",
-    label: "Payroll Settings",
-    subtitle: "Configure payroll groups, employee pay rules, and region-specific compliance.",
-    icon: <Banknote size={15} />,
-    adminOnly: true,
-  },
-  {
     id: "location",
-    label: "Locations & Geofencing",
-    subtitle: "Manage work sites, office locations, GPS boundaries, and geofence radius.",
+    label: "Locations & Service Areas",
+    subtitle: "Manage service sites, warehouse hubs, GPS boundaries, and operational coverage.",
     icon: <MapPin size={15} />,
     adminOnly: true,
   },
@@ -204,8 +172,8 @@ export function SettingsPage({ section: sectionProp }) {
   const location = useLocation()
 
   const [activeSection, setActiveSection] = useState("profile")
-  const [dirty, setDirty] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [, setDirty] = useState(false)
+  const [, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
 
   const filteredTabs = useMemo(() => TABS.filter(t => !t.adminOnly || isAdmin), [isAdmin])
@@ -219,14 +187,6 @@ export function SettingsPage({ section: sectionProp }) {
     const match = filteredTabs.find(s => s.id === section)
     if (match) setActiveSection(match.id)
   }, [location.search, sectionProp, filteredTabs])
-
-  const handleSave = async () => {
-    setSaving(true)
-    await new Promise(r => setTimeout(r, 800))
-    setSaving(false)
-    setDirty(false)
-    showToast("Changes saved.")
-  }
 
   const activeSub = filteredTabs.find(s => s.id === activeSection) || filteredTabs[0]
 
@@ -291,13 +251,10 @@ export function SettingsPage({ section: sectionProp }) {
               {activeSection === "appearance" && <AppearanceSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "notifications" && <NotificationsSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "billing" && <BillingSection showToast={showToast} SectionHeader={SectionHeader} />}
-              {activeSection === "people" && <MembersSettingsSection />}
               {activeSection === "team" && <TeamMembersSection showToast={showToast} SectionHeader={SectionHeader} />}
-              {activeSection === "schedules" && <WorkSchedulesSettingsSection />}
               {activeSection === "invoices" && <InvoicesSection />}
               {activeSection === "organization" && <WorkspaceSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "data" && <PrivacyDataSection showToast={showToast} SectionHeader={SectionHeader} />}
-              {activeSection === "payroll" && <PayrollSettingsSection SectionHeader={SectionHeader} />}
               {activeSection === "location" && <LocationsSettingsSection />}
               {activeSection === "rbac" && <AccessControlSection />}
               {activeSection === "danger" && <DangerZoneSection showToast={showToast} SectionHeader={SectionHeader} />}

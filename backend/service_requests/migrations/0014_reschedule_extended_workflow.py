@@ -17,7 +17,6 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ("employees", "0001_initial"),
         ("service_requests", "0013_refund_fields_sync"),
     ]
 

@@ -157,28 +157,31 @@ class ServiceRequest(models.Model):
         default=PaymentStatus.PENDING,
         blank=True,
     )
-    transaction_id       = models.CharField(max_length=200, blank=True, null=True)
-    payment_gateway      = models.CharField(max_length=50, blank=True, null=True)
-    payment_collected_by = models.ForeignKey(
-        "employees.Employee",
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="cash_collections",
-    )
-    payment_collected_at = models.DateTimeField(null=True, blank=True)
-    invoice_id           = models.CharField(max_length=50, blank=True, null=True)
+    transaction_id            = models.CharField(max_length=200, blank=True, null=True)
+    payment_gateway           = models.CharField(max_length=50, blank=True, null=True)
+    payment_collected_by_name = models.CharField(max_length=150, blank=True, default="")
+    collection_method         = models.CharField(max_length=50, blank=True, default="")
+    collection_reference      = models.CharField(max_length=100, blank=True, default="")
+    payment_collected_at      = models.DateTimeField(null=True, blank=True)
+    invoice_id                = models.CharField(max_length=50, blank=True, null=True)
 
     # Booking status workflow
     status   = models.CharField(max_length=30, choices=Status.choices, default=Status.NEW_REQUEST)
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.NORMAL)
 
-    # Assigned employee (set when status → Assigned)
-    assigned_employee = models.ForeignKey(
-        "employees.Employee",
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="assigned_service_requests",
-    )
+    # Workforce Dispatch / Read-only Technician Snapshot
+    workforce_job_id        = models.CharField(max_length=100, blank=True, null=True, default=None, db_index=True)
+    external_assignment_id  = models.CharField(max_length=100, blank=True, null=True, default=None)
+    technician_name         = models.CharField(max_length=150, blank=True, default="")
+    technician_phone        = models.CharField(max_length=30, blank=True, default="")
+    technician_photo        = models.CharField(max_length=500, blank=True, default="")
+    technician_rating       = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    start_otp               = models.CharField(max_length=10, blank=True, default="")
+    otp_verified            = models.BooleanField(default=False)
+    # Secure tracking token — unpredictable UUID used to authorize the public
+    # customer tracking page (/track/:bookingId?token=<tracking_token>).
+    # Booking ID alone is never sufficient to authorize viewing sensitive data.
+    tracking_token          = models.UUIDField(null=True, blank=True, unique=True, db_index=True)
 
     # Coupon snapshot fields
     coupon               = models.ForeignKey("Coupon", on_delete=models.SET_NULL, null=True, blank=True, related_name="service_requests")
@@ -196,31 +199,21 @@ class ServiceRequest(models.Model):
     def save(self, *args, **kwargs):
         if not self.request_id:
             self.request_id = _generate_request_id()
+        if not self.start_otp:
+            import hashlib
+            h = hashlib.sha256(f"calservices_booking_otp_{self.request_id}_{self.phone}_{self.customer_name}".encode()).hexdigest()
+            self.start_otp = str((int(h[:8], 16) % 900000) + 100000)
+        if not self.tracking_token:
+            import uuid
+            self.tracking_token = uuid.uuid4()
         super().save(*args, **kwargs)
-
-    @property
-    def employee_job(self):
-        """Backwards-compatibility property returning the primary assigned job."""
-        return self.employee_jobs.filter(is_primary=True).first()
-
-    def get_primary_job(self):
-        return self.employee_jobs.filter(is_primary=True).first()
 
     def is_ready_to_complete(self):
         """
         Computed completion engine.
         Returns True if:
-        1. All assigned jobs are either COMPLETED or UNABLE_TO_COMPLETE.
-        2. All work extensions are RESOLVED, CUSTOMER_DECLINED, or ADMIN_REJECTED.
+        1. All work extensions are RESOLVED, CUSTOMER_DECLINED, or ADMIN_REJECTED.
         """
-        jobs = self.employee_jobs.all()
-        if not jobs.exists():
-            return False
-
-        for job in jobs:
-            if job.status not in [EmployeeJob.Status.COMPLETED, EmployeeJob.Status.UNABLE_TO_COMPLETE]:
-                return False
-
         for ext in self.work_extensions.all():
             if ext.status not in [
                 WorkExtension.Status.RESOLVED,
@@ -228,79 +221,14 @@ class ServiceRequest(models.Model):
                 WorkExtension.Status.ADMIN_REJECTED,
             ]:
                 return False
-
         return True
 
     def __str__(self):
         return f"{self.request_id} — {self.issue_title}"
 
 
-class EmployeeJob(models.Model):
-    """Created when admin assigns a ServiceRequest to an Employee (Primary or Specialist)."""
-
-    class Status(models.TextChoices):
-        ASSIGNED           = "assigned",           "Assigned"
-        RECEIVED           = "received",           "Received"
-        ACCEPTED           = "accepted",           "Accepted"
-        ON_THE_WAY         = "on_the_way",         "On The Way"
-        ARRIVED            = "arrived",            "Arrived"
-        IN_PROGRESS        = "in_progress",        "In Progress"
-        AWAITING_PARTS     = "awaiting_parts",     "Awaiting Parts"
-        COMPLETED          = "completed",          "Completed"
-        UNABLE_TO_COMPLETE = "unable_to_complete", "Unable To Complete"
-        REJECTED           = "rejected",           "Rejected"
-
-    service_request = models.ForeignKey(
-        ServiceRequest,
-        on_delete=models.CASCADE,
-        related_name="employee_jobs",
-    )
-    is_primary = models.BooleanField(default=True)
-    source_work_extension = models.ForeignKey(
-        "WorkExtension",
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="created_jobs",
-    )
-    uncompletion_reason = models.TextField(blank=True, null=True)
-
-    employee = models.ForeignKey(
-        "employees.Employee",
-        on_delete=models.CASCADE,
-        related_name="jobs",
-    )
-    assigned_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="assigned_jobs",
-    )
-
-    status        = models.CharField(max_length=30, choices=Status.choices, default=Status.ASSIGNED)
-    notes         = models.TextField(blank=True)
-
-    assigned_date  = models.DateTimeField(default=timezone.now)
-    accepted_date  = models.DateTimeField(null=True, blank=True)
-    started_date   = models.DateTimeField(null=True, blank=True)
-    completed_date = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["-assigned_date"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["service_request"],
-                condition=models.Q(is_primary=True),
-                name="unique_primary_job_per_service_request",
-            )
-        ]
-
-    def __str__(self):
-        primary_str = " (Primary)" if self.is_primary else " (Specialist)"
-        return f"Job for {self.service_request.request_id} → {self.employee}{primary_str}"
-
-
 class WorkExtension(models.Model):
-    """Reported by technician when scope expansion / additional work / specialist is required."""
+    """Reported when scope expansion / additional work / specialist is required."""
 
     class Status(models.TextChoices):
         PENDING_ADMIN_REVIEW = "pending_admin_review", "Pending Admin Review"
@@ -320,16 +248,8 @@ class WorkExtension(models.Model):
         on_delete=models.CASCADE,
         related_name="work_extensions",
     )
-    job = models.ForeignKey(
-        EmployeeJob,
-        on_delete=models.CASCADE,
-        related_name="extensions",
-    )
-    reported_by = models.ForeignKey(
-        "employees.Employee",
-        on_delete=models.CASCADE,
-        related_name="reported_extensions",
-    )
+    workforce_job_id = models.CharField(max_length=100, blank=True, default="")
+    reported_by_name = models.CharField(max_length=150, blank=True, default="")
 
     requires_specialist = models.BooleanField(default=False)
     required_skill = models.CharField(max_length=150, blank=True, null=True)
@@ -395,20 +315,8 @@ class WorkExtensionItem(models.Model):
         on_delete=models.CASCADE,
         related_name="items",
     )
-    inventory_item = models.ForeignKey(
-        "inventory.InventoryItem",
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="extension_items",
-    )
     item_name = models.CharField(max_length=255)
     quantity  = models.PositiveIntegerField(default=1)
-    location  = models.ForeignKey(
-        "time_tracking.Location",
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="extension_item_locations",
-    )
 
     fulfillment_source = models.CharField(
         max_length=30,
@@ -451,7 +359,7 @@ class WorkExtensionItem(models.Model):
 
 
 class JobReschedule(models.Model):
-    """Tracks appointment date changes due to parts delays or scheduling conflicts."""
+    """Tracks appointment date changes due to scheduling adjustments."""
 
     class Reason(models.TextChoices):
         PARTS_UNAVAILABLE      = "parts_unavailable",      "Parts Unavailable"
@@ -459,8 +367,8 @@ class JobReschedule(models.Model):
         CUSTOMER_REQUESTED     = "customer_requested",     "Customer Requested"
         OTHER                  = "other",                  "Other"
 
-    job = models.ForeignKey(
-        EmployeeJob,
+    service_request = models.ForeignKey(
+        ServiceRequest,
         on_delete=models.CASCADE,
         related_name="reschedules",
     )
@@ -488,7 +396,7 @@ class JobReschedule(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Reschedule for {self.job}: {self.old_date} -> {self.new_date}"
+        return f"Reschedule for {self.service_request}: {self.old_date} -> {self.new_date}"
 
 
 class SupplementalInvoice(models.Model):
@@ -526,22 +434,6 @@ class SupplementalInvoice(models.Model):
         return f"Supplemental Invoice {self.invoice_number} ({self.amount})"
 
 
-class JobCompletionProof(models.Model):
-    """Photos / docs uploaded by employee before or after completing work."""
-
-    job      = models.ForeignKey(EmployeeJob, on_delete=models.CASCADE, related_name="proofs")
-    photo    = models.ImageField(upload_to="service_requests/proofs/", null=True, blank=True)
-    document = models.FileField(upload_to="service_requests/docs/", null=True, blank=True)
-    note     = models.TextField(blank=True)
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-uploaded_at"]
-
-    def __str__(self):
-        return f"Proof for {self.job}"
-
-
 class ServiceFeedback(models.Model):
     """Public feedback form submitted via token link after verification."""
 
@@ -575,26 +467,6 @@ class ServiceFeedback(models.Model):
     def __str__(self):
         return f"Feedback({self.feedback_token}) for {self.service_request.request_id}"
 
-
-class EmployeePerformance(models.Model):
-    """Cached performance metrics per employee, recalculated on feedback events."""
-
-    employee = models.OneToOneField(
-        "employees.Employee",
-        on_delete=models.CASCADE,
-        related_name="performance",
-    )
-
-    jobs_completed_count = models.PositiveIntegerField(default=0)
-    average_rating       = models.DecimalField(max_digits=3, decimal_places=2, default=0)
-    feedback_count       = models.PositiveIntegerField(default=0)
-    completion_rate      = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    customer_satisfaction_score = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    
-    last_updated         = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Performance({self.employee})"
 
 
 # ── Catalog models (seeded by seed_catalog.py) ────────────────────────────────
@@ -761,21 +633,10 @@ class CatalogChangeLog(models.Model):
 # ─── Slice 2: Reschedule ──────────────────────────────────────────────────────
 
 class RescheduleStatus(models.TextChoices):
-    # ── Complete Manual Workflow Statuses ──────────────────────────────────────
     PENDING                     = "PENDING",                     "Pending Admin Review"
     PENDING_ADMIN_REVIEW        = "PENDING_ADMIN_REVIEW",        "Pending Admin Review"
     ADMIN_REVIEW                = "ADMIN_REVIEW",                "Under Admin Review"
     ADMIN_APPROVED              = "ADMIN_APPROVED",              "Admin Approved"
-    EMPLOYEE_ASSIGNMENT_IN_PROGRESS = "EMPLOYEE_ASSIGNMENT_IN_PROGRESS", "Employee Assignment in Progress"
-    EMPLOYEE_ASSIGNED           = "EMPLOYEE_ASSIGNED",           "Employee Assigned"
-    AWAITING_EMPLOYEE_RESPONSE  = "AWAITING_EMPLOYEE_RESPONSE",  "Awaiting Employee Confirmation"
-    AWAITING_EMPLOYEE_CONFIRMATION = "AWAITING_EMPLOYEE_CONFIRMATION", "Awaiting Employee Confirmation"
-    TECHNICIAN_CONFIRMATION     = "TECHNICIAN_CONFIRMATION",     "Technician Confirmation"
-    EMPLOYEE_CONFIRMED          = "EMPLOYEE_CONFIRMED",          "Employee Confirmed"
-    EMPLOYEE_ACCEPTED           = "EMPLOYEE_ACCEPTED",           "Employee Accepted"
-    EMPLOYEE_REJECTED           = "EMPLOYEE_REJECTED",           "Employee Rejected"
-    REASSIGNMENT_NEEDED         = "REASSIGNMENT_NEEDED",         "Reassignment Needed"
-    BOOKING_UPDATED             = "BOOKING_UPDATED",             "Booking Being Updated"
     APPROVED                    = "APPROVED",                    "Approved"
     CUSTOMER_NOTIFIED           = "CUSTOMER_NOTIFIED",           "Customer Notified"
     SLOT_SUGGESTED              = "SLOT_SUGGESTED",              "Slot Suggested by Admin"
@@ -787,28 +648,12 @@ class RescheduleStatus(models.TextChoices):
 
 
 class RescheduleRejectionReason(models.TextChoices):
-    EMPLOYEE_UNAVAILABLE  = "EMPLOYEE_UNAVAILABLE",  "Employee Unavailable"
+    SERVICE_UNAVAILABLE   = "SERVICE_UNAVAILABLE",   "Service Unavailable"
     OUTSIDE_WORKING_HOURS = "OUTSIDE_WORKING_HOURS", "Outside Working Hours"
     SERVICE_AREA_CLOSED   = "SERVICE_AREA_CLOSED",   "Service Area Closed"
     DUPLICATE_REQUEST     = "DUPLICATE_REQUEST",     "Duplicate Request"
     INVALID_REQUEST       = "INVALID_REQUEST",       "Invalid Request"
     POLICY_VIOLATION      = "POLICY_VIOLATION",      "Policy Violation"
-    OTHER                 = "OTHER",                 "Other"
-
-
-class EmployeeResponseChoices(models.TextChoices):
-    PENDING  = "PENDING",  "Pending"
-    ACCEPTED = "ACCEPTED", "Accepted"
-    REJECTED = "REJECTED", "Rejected"
-
-
-class EmployeeRejectionReason(models.TextChoices):
-    ALREADY_ASSIGNED      = "ALREADY_ASSIGNED",      "Already Assigned"
-    LEAVE                 = "LEAVE",                 "On Leave"
-    EMERGENCY             = "EMERGENCY",             "Personal Emergency"
-    OUTSIDE_WORKING_HOURS = "OUTSIDE_WORKING_HOURS", "Outside Working Hours"
-    DISTANCE_TOO_FAR      = "DISTANCE_TOO_FAR",      "Distance Too Far"
-    PERSONAL_CONFLICT     = "PERSONAL_CONFLICT",     "Personal Conflict"
     OTHER                 = "OTHER",                 "Other"
 
 
@@ -867,7 +712,7 @@ class RescheduleRequest(models.Model):
     class Persona(models.TextChoices):
         CUSTOMER = "CUSTOMER", "Customer"
         ADMIN    = "ADMIN",    "Admin"
-        EMPLOYEE = "EMPLOYEE", "Employee"
+        SYSTEM   = "SYSTEM",   "System"
 
     # Human-readable ID (RS-0001, RS-0002, ...)
     reschedule_id         = models.CharField(max_length=20, unique=True, blank=True, null=True)
@@ -902,15 +747,6 @@ class RescheduleRequest(models.Model):
     )
 
     status                = models.CharField(max_length=60, choices=RescheduleStatus.choices, default=RescheduleStatus.PENDING)
-
-    # Admin review & technician proposal (legacy + extended)
-    proposed_technician   = models.ForeignKey(
-        "employees.Employee",
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="proposed_reschedules",
-    )
-    technician_response_note  = models.TextField(blank=True, default="")
     alternate_slots_suggested = models.JSONField(default=list, blank=True)
 
     reviewed_by           = models.ForeignKey(
@@ -952,20 +788,6 @@ class RescheduleRequest(models.Model):
         null=True, blank=True,
         related_name="admin_reviewed_reschedules",
     )
-
-    # Employee response tracking
-    employee_response     = models.CharField(
-        max_length=20,
-        choices=EmployeeResponseChoices.choices,
-        null=True, blank=True,
-    )
-    employee_response_note = models.TextField(blank=True, default="")
-    employee_rejection_reason = models.CharField(
-        max_length=30,
-        choices=EmployeeRejectionReason.choices,
-        null=True, blank=True,
-    )
-    employee_responded_at = models.DateTimeField(null=True, blank=True)
 
     created_at            = models.DateTimeField(auto_now_add=True)
     updated_at            = models.DateTimeField(auto_now=True)
@@ -1047,13 +869,13 @@ class RefundReason(models.TextChoices):
 
 class RefundInfoTarget(models.TextChoices):
     CUSTOMER = "CUSTOMER", "Customer"
-    EMPLOYEE = "EMPLOYEE", "Employee"
+    ADMIN    = "ADMIN",    "Admin"
 
 
 class RefundRequest(models.Model):
     """
-    Customer refund request — spans Customer, Admin, and Employee personas.
-    Tracks financial snapshots, evidence, status lifecycle, internal notes, and employee investigations.
+    Customer refund request — spans Customer, Admin, and Business operations.
+    Tracks financial snapshots, evidence, status lifecycle, and internal notes.
     """
     refund_id            = models.CharField(max_length=30, blank=True, null=True, unique=True)
     booking              = models.ForeignKey(
@@ -1086,13 +908,6 @@ class RefundRequest(models.Model):
     admin_notes          = models.TextField(blank=True, default="")
     status               = models.CharField(max_length=30, choices=RefundStatus.choices, default=RefundStatus.PENDING)
     info_requested_from  = models.CharField(max_length=20, choices=RefundInfoTarget.choices, null=True, blank=True)
-    assigned_employee    = models.ForeignKey(
-        "employees.Employee",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="assigned_refund_investigations"
-    )
     gateway_reference    = models.CharField(max_length=200, blank=True, null=True)
     created_at           = models.DateTimeField(auto_now_add=True)
     updated_at           = models.DateTimeField(auto_now=True)
@@ -1132,24 +947,6 @@ class RefundEvidence(models.Model):
         return f"RefundEvidence({self.pk}) for {self.refund_request.refund_id}"
 
 
-class RefundInvestigationNote(models.Model):
-    """Technician / Employee investigation response note."""
-    refund_request             = models.ForeignKey(
-        RefundRequest,
-        on_delete=models.CASCADE,
-        related_name="investigation_notes"
-    )
-    employee                   = models.ForeignKey(
-        "employees.Employee",
-        on_delete=models.CASCADE
-    )
-    explanation                = models.TextField()
-    work_completed_confirmed   = models.BooleanField(default=False)
-    created_at                 = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"InvestigationNote({self.pk}) by {self.employee.employee_id}"
-
 
 # ─── Slice 4: Complaint ───────────────────────────────────────────────────────
 
@@ -1177,7 +974,6 @@ class Complaint(models.Model):
         ASSIGNED            = "ASSIGNED",            "Assigned"
         UNDER_INVESTIGATION = "UNDER_INVESTIGATION", "Under Investigation"
         WAITING_CUSTOMER    = "WAITING_CUSTOMER",    "Waiting on Customer"
-        WAITING_TECHNICIAN  = "WAITING_TECHNICIAN",  "Waiting on Technician"
         ADMIN_REVIEW        = "ADMIN_REVIEW",        "Admin Review"
         ESCALATED           = "ESCALATED",           "Escalated"
         RESOLVED            = "RESOLVED",            "Resolved"
@@ -1204,9 +1000,6 @@ class Complaint(models.Model):
     
     assigned_admin    = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_admin_complaints"
-    )
-    assigned_employee = models.ForeignKey(
-        "employees.Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_complaints"
     )
     risk_score        = models.IntegerField(null=True, blank=True)
     
@@ -1255,7 +1048,6 @@ class ComplaintMessage(models.Model):
     class Persona(models.TextChoices):
         CUSTOMER = "CUSTOMER", "Customer"
         ADMIN    = "ADMIN",    "Admin"
-        EMPLOYEE = "EMPLOYEE", "Employee"
 
     complaint = models.ForeignKey(Complaint, on_delete=models.CASCADE, related_name="messages")
     sender    = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sent_complaint_messages")
@@ -1265,6 +1057,7 @@ class ComplaintMessage(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
 
 
 class ComplaintStatusHistory(models.Model):

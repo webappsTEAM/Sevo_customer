@@ -18,6 +18,7 @@ import {
   apiUpdateCustomerLastLocation,
   apiDetectCustomerLocation
 } from "../../api/authService.js"
+import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { LocationPermissionHandler } from "./AddressPicker"
 
@@ -111,6 +112,18 @@ const MODAL_STYLES = `
   }
   .otp-box:focus { border-color: #6366f1; background: #ffffff; box-shadow: 0 0 0 3px rgba(99,102,241,0.18), 0 4px 12px rgba(99,102,241,0.12); transform: scale(1.04); }
   .otp-box.filled { border-color: #6366f1; background: #ede9fe; color: #4f46e5; }
+  .cef-verifying-pill {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 0.85rem 1.25rem; background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
+    border: 1.5px solid #c7d2fe; border-radius: 14px; color: #4338ca; font-size: 0.82rem; font-weight: 800;
+    margin-bottom: 0.75rem; box-shadow: 0 4px 12px rgba(99,102,241,0.1);
+  }
+  .cef-auto-verify-hint {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 0.65rem 0.85rem; background: #f8fafc; border: 1px dashed #cbd5e1;
+    border-radius: 12px; color: #64748b; font-size: 0.72rem; font-weight: 600;
+    margin-bottom: 0.75rem; text-align: center;
+  }
   .cef-divider { display: flex; align-items: center; gap: 12px; margin: 1rem 0; color: #94a3b8; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
   .cef-divider::before, .cef-divider::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
   .cef-google-btn {
@@ -143,20 +156,12 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
   const [attemptsRemaining, setAttemptsRemaining] = useState(null)
-  const [resendTimer, setResendTimer] = useState(0)
   const [devOtp, setDevOtp] = useState("")
   const [detectedLocationData, setDetectedLocationData] = useState(null)
   const otpInputRefs = useRef([])
+  const isVerifyingRef = useRef(false)
   // AddressPicker map flow (Slice 1)
   const [showMapPicker, setShowMapPicker] = useState(false)
-
-  useEffect(() => {
-    let interval = null
-    if (resendTimer > 0) {
-      interval = setInterval(() => setResendTimer(prev => prev > 0 ? prev - 1 : 0), 1000)
-    }
-    return () => clearInterval(interval)
-  }, [resendTimer])
 
   if (!isOpen) return null
 
@@ -167,13 +172,11 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
     try {
       const res = await apiRequestCustomerMobileOTP(targetMobile)
       if (res.success) {
-        setResendTimer(res.data?.resend_after_seconds || 60)
         setDevOtp(res.data?.dev_otp || "")
         setOtpDigits(["", "", "", "", "", ""])
         setStep(2)
       } else {
         const msg = res.error?.message || "Failed to request OTP."
-        if (res.error?.code === "RATE_LIMITED" && res.error?.resend_after_seconds) setResendTimer(res.error.resend_after_seconds)
         setErrorMsg(msg)
       }
     } catch (e) { setErrorMsg(e?.body?.error?.message || e?.body?.detail || e?.message || "Server error.") }
@@ -188,13 +191,21 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
       setOtpDigits(newDigits)
       const nextFocus = Math.min(index + digits.length, 5)
       otpInputRefs.current[nextFocus]?.focus()
-      if (newDigits.every(d => d) && digits.length >= (6 - index)) setTimeout(() => handleVerifyOTP(newDigits.join("")), 80)
+      if (newDigits.every(d => d && d.length === 1)) {
+        setTimeout(() => handleVerifyOTP(newDigits.join("")), 40)
+      }
       return
     }
     const clean = value.replace(/\D/g, "")
-    const newDigits = [...otpDigits]; newDigits[index] = clean; setOtpDigits(newDigits)
-    if (clean && index < 5) otpInputRefs.current[index + 1]?.focus()
-    if (newDigits.every(d => d) && clean) setTimeout(() => handleVerifyOTP(newDigits.join("")), 80)
+    const newDigits = [...otpDigits]
+    newDigits[index] = clean
+    setOtpDigits(newDigits)
+    if (clean && index < 5) {
+      otpInputRefs.current[index + 1]?.focus()
+    }
+    if (newDigits.every(d => d && d.length === 1)) {
+      setTimeout(() => handleVerifyOTP(newDigits.join("")), 40)
+    }
   }
 
   const handleOtpKeyDown = (index, e) => {
@@ -202,27 +213,51 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   }
 
   const handleVerifyOTP = async (forcedOtp = null) => {
-    const otpCode = forcedOtp || otpDigits.join("")
-    if (otpCode.length < 6) return
-    setLoading(true); setErrorMsg("")
+    const otpCode = (forcedOtp || otpDigits.join("")).trim()
+    if (otpCode.length < 6 || isVerifyingRef.current) return
+
+    isVerifyingRef.current = true
+    setLoading(true)
+    setErrorMsg("")
+
     try {
-      const res = await apiVerifyCustomerMobileOTP(mobileNumber, otpCode)
-      if (res.success) {
+      let res = null
+      try {
+        // 1. Instant WebSocket verification
+        res = await verifyOtpViaWebSocket(mobileNumber, otpCode)
+      } catch {
+        // 2. Seamless REST fallback
+        res = await apiVerifyCustomerMobileOTP(mobileNumber, otpCode)
+      }
+
+      if (res && res.success) {
         const { is_new_customer, customer_id } = res.data || {}
         setCustomerId(customer_id)
         if (typeof refreshMe === "function") await refreshMe()
-        if (is_new_customer) { setStep(3) } else { if (typeof onComplete === "function") onComplete(); onClose() }
-      } else {
-        if (res.error?.code === "MAX_ATTEMPTS_EXCEEDED") {
-          setErrorMsg("Too many failed attempts. Please request a new OTP.")
-          setOtpDigits(["", "", "", "", "", ""]); setStep(1)
+        if (is_new_customer) {
+          setStep(3)
         } else {
-          if (res.error?.attempts_remaining !== undefined) setAttemptsRemaining(res.error.attempts_remaining)
-          setErrorMsg(res.error?.message || "Invalid OTP.")
+          if (typeof onComplete === "function") onComplete()
+          onClose()
+        }
+      } else {
+        if (res?.error?.code === "MAX_ATTEMPTS_EXCEEDED") {
+          setErrorMsg("Too many failed attempts. Please enter mobile number again.")
+          setOtpDigits(["", "", "", "", "", ""])
+          setStep(1)
+        } else {
+          if (res?.error?.attempts_remaining !== undefined) setAttemptsRemaining(res.error.attempts_remaining)
+          setErrorMsg(res?.error?.message || "Invalid OTP code. Please check and re-enter.")
+          // Focus first box to allow quick correction
+          otpInputRefs.current[0]?.focus()
         }
       }
-    } catch (e) { setErrorMsg(e?.body?.error?.message || e?.body?.detail || e?.message || "Verification error.") }
-    finally { setLoading(false) }
+    } catch (e) {
+      setErrorMsg(e?.body?.error?.message || e?.body?.detail || e?.message || "Verification error.")
+    } finally {
+      setLoading(false)
+      isVerifyingRef.current = false
+    }
   }
 
   const handleCompleteProfile = async () => {
@@ -418,15 +453,17 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                       onFocus={e => e.target.select()} autoFocus={i === 0} />
                   ))}
                 </div>
-                <button className="cef-btn cef-btn-primary" disabled={loading || otpDigits.some(d => !d)} onClick={() => handleVerifyOTP()} style={{ marginBottom: "1rem" }}>
-                  {loading ? <RefreshCcw size={16} className="animate-spin" /> : <><span>Verify &amp; Continue</span><ChevronRight size={16} /></>}
-                </button>
-                <div style={{ textAlign: "center" }}>
-                  {resendTimer > 0
-                    ? <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#94a3b8" }}>Resend code in <strong style={{ color: "#6366f1" }}>{resendTimer}s</strong></span>
-                    : <button onClick={() => handleRequestOTP()} style={{ fontSize: "0.78rem", fontWeight: 800, color: "#6366f1", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Didn't receive code? Resend OTP</button>
-                  }
-                </div>
+                {loading ? (
+                  <div className="cef-verifying-pill">
+                    <RefreshCcw size={16} className="animate-spin" />
+                    <span>Verifying OTP code in real time…</span>
+                  </div>
+                ) : (
+                  <div className="cef-auto-verify-hint">
+                    <Sparkles size={14} style={{ color: "#6366f1", flexShrink: 0 }} />
+                    <span>Instant verification — code verifies automatically upon entry</span>
+                  </div>
+                )}
               </motion.div>
             )}
 

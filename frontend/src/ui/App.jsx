@@ -20,61 +20,16 @@ const LandingPage = lazy(() =>
   import("./pages/LandingPage.jsx").then(m => ({ default: m.LandingPage }))
 )
 
-const ActivationJourneyPage = lazy(() =>
-  import("./pages/ActivationJourneyPage.jsx").then(m => ({ default: m.ActivationJourneyPage }))
-)
-
-const CreatePasswordPage = lazy(() =>
-  import("./pages/CreatePasswordPage.jsx").then(m => ({ default: m.CreatePasswordPage }))
-)
-
-
 const DashboardPage = lazy(() =>
   import("./pages/DashboardPage.jsx").then(m => ({ default: m.DashboardPage }))
-)
-
-const AnalysisPage = lazy(() =>
-  import("./pages/AnalysisPage.jsx").then(m => ({ default: m.AnalysisPage }))
 )
 
 const ResetPasswordPage = lazy(() =>
   import("./pages/ResetPasswordPage.jsx").then(m => ({ default: m.ResetPasswordPage }))
 )
 
-const LocationsPage = lazy(() =>
-  import("./pages/LocationsPage.jsx").then(m => ({ default: m.LocationsPage }))
-)
-
-const EmployeesPage = lazy(() =>
-  import("./pages/EmployeesPage.jsx").then(m => ({ default: m.EmployeesPage }))
-)
-
-const LeavesPage = lazy(() =>
-  import("./pages/LeavesPage.jsx").then(m => ({ default: m.LeavesPage }))
-)
-
-const PayrollPage = lazy(() =>
-  import("./pages/PayrollPage.jsx").then(m => ({ default: m.PayrollPage }))
-)
-
 const ReportsPage = lazy(() =>
   import("./pages/ReportsPage.jsx").then(m => ({ default: m.ReportsPage }))
-)
-
-const SchedulingPage = lazy(() =>
-  import("./pages/SchedulingPage.jsx").then(m => ({ default: m.SchedulingPage }))
-)
-
-const TasksPage = lazy(() =>
-  import("./pages/TasksPage.jsx").then(m => ({ default: m.TasksPage }))
-)
-
-const TimePage = lazy(() =>
-  import("./pages/TimePage.jsx").then(m => ({ default: m.TimePage }))
-)
-
-const AuditLedgerPage = lazy(() =>
-  import("./pages/AuditLedgerPage.jsx")
 )
 
 const SettingsPage = lazy(() =>
@@ -86,180 +41,107 @@ const AdminComplaintsPage = lazy(() =>
 )
 
 const CustomerCarePage = lazy(() =>
-  import("./pages/CustomerCarePage.jsx")
+  import("./pages/CustomerCarePage.jsx").then(m => ({ default: m.CustomerCarePage || m.default }))
 )
 
 const OnboardingPage = lazy(() =>
-  import("./pages/OnboardingPage.jsx").then(m => ({ default: m.OnboardingPage }))
+  import("./pages/OnboardingPage.jsx").then(m => ({ default: m.OnboardingPage || m.default }))
 )
 
 const GetStartedPage = lazy(() =>
-  import("./pages/GetStartedPage.jsx").then(m => ({ default: m.GetStartedPage }))
+  import("./pages/GetStartedPage.jsx").then(m => ({ default: m.GetStartedPage || m.default }))
 )
 
 const HomePageCustomizerPage = lazy(() =>
-  import("./pages/HomePageCustomizerPage.jsx")
-)
-
-const LiveLocationsPage = lazy(() =>
-  import("./pages/LiveLocationsPage.jsx").then(m => ({ default: m.LiveLocationsPage }))
-)
-
-const PeopleSettingsPage = lazy(() =>
-  import("./pages/PeopleSettingsPage.jsx").then(m => ({ default: m.PeopleSettingsPage }))
-)
-
-const TimeTrackingSettingsPage = lazy(() =>
-  import("./pages/TimeTrackingSettingsPage.jsx").then(m => ({ default: m.TimeTrackingSettingsPage }))
-)
-
-const WorkSchedulesSettingsPage = lazy(() =>
-  import("./pages/WorkSchedulesSettingsPage.jsx").then(m => ({ default: m.WorkSchedulesSettingsPage }))
-)
-
-const HolidaysSettingsPage = lazy(() =>
-  import("./pages/HolidaysSettingsPage.jsx").then(m => ({ default: m.HolidaysSettingsPage }))
-)
-
-const LocationsSettingsPage = lazy(() =>
-  import("./pages/LocationsSettingsPage.jsx").then(m => ({ default: m.LocationsSettingsPage }))
-)
-
-const CompliancePage = lazy(() =>
-  import("./pages/CompliancePage.jsx").then(m => ({ default: m.CompliancePage }))
+  import("./pages/HomePageCustomizerPage.jsx").then(m => ({ default: m.HomePageCustomizerPage || m.default }))
 )
 
 const InventoryPage = lazy(() =>
-  import("./pages/InventoryPage.jsx").then(m => ({ default: m.InventoryPage }))
-)
-
-const MileagePage = lazy(() =>
-  import("./pages/MileagePage.jsx").then(m => ({ default: m.MileagePage }))
-)
-
-const ApprovalCenterPage = lazy(() =>
-  import("./pages/ApprovalCenterPage.jsx").then(m => ({ default: m.ApprovalCenterPage }))
-)
-
-const EmployeesDashboardPage = lazy(() =>
-  import("./pages/EmployeeSubPages.jsx").then(m => ({ default: m.EmployeesDashboardPage }))
-)
-const ApprovedEmployeesPage = lazy(() =>
-  import("./pages/EmployeeSubPages.jsx").then(m => ({ default: m.ApprovedEmployeesPage }))
-)
-const RejectedEmployeesPage = lazy(() =>
-  import("./pages/EmployeeSubPages.jsx").then(m => ({ default: m.RejectedEmployeesPage }))
-)
-const DocumentVaultPage = lazy(() =>
-  import("./pages/EmployeeSubPages.jsx").then(m => ({ default: m.DocumentVaultPage }))
-)
-const TrainingRecordsPage = lazy(() =>
-  import("./pages/EmployeeSubPages.jsx").then(m => ({ default: m.TrainingRecordsPage }))
+  import("./pages/InventoryPage.jsx").then(m => ({ default: m.InventoryPage || m.default }))
 )
 
 const CatalogDashboardPage = lazy(() =>
-  import("./pages/catalog/CatalogDashboardPage.jsx").then(m => ({ default: m.CatalogDashboardPage }))
+  import("./pages/catalog/CatalogDashboardPage.jsx").then(m => ({ default: m.CatalogDashboardPage || m.default }))
 )
 const CatalogCategoriesPage = lazy(() =>
-  import("./pages/catalog/CatalogCategoriesPage.jsx").then(m => ({ default: m.CatalogCategoriesPage }))
+  import("./pages/catalog/CatalogCategoriesPage.jsx").then(m => ({ default: m.CatalogCategoriesPage || m.default }))
 )
 const CatalogServicesPage = lazy(() =>
-  import("./pages/catalog/CatalogServicesPage.jsx").then(m => ({ default: m.CatalogServicesPage }))
+  import("./pages/catalog/CatalogServicesPage.jsx").then(m => ({ default: m.CatalogServicesPage || m.default }))
 )
 const CatalogPackagesPage = lazy(() =>
-  import("./pages/catalog/CatalogPackagesPage.jsx").then(m => ({ default: m.CatalogPackagesPage }))
+  import("./pages/catalog/CatalogPackagesPage.jsx").then(m => ({ default: m.CatalogPackagesPage || m.default }))
 )
 const CatalogAddOnsPage = lazy(() =>
-  import("./pages/catalog/CatalogAddOnsPage.jsx").then(m => ({ default: m.CatalogAddOnsPage }))
+  import("./pages/catalog/CatalogAddOnsPage.jsx").then(m => ({ default: m.CatalogAddOnsPage || m.default }))
 )
 const CatalogChangeLogPage = lazy(() =>
-  import("./pages/catalog/CatalogChangeLogPage.jsx").then(m => ({ default: m.CatalogChangeLogPage }))
+  import("./pages/catalog/CatalogChangeLogPage.jsx").then(m => ({ default: m.CatalogChangeLogPage || m.default }))
 )
-const CouponsPage = lazy(() => import("./pages/marketing/CouponsPage.jsx"))
-const OffersPage = lazy(() => import("./pages/marketing/OffersPage.jsx"))
-const ReferralsPage = lazy(() => import("./pages/marketing/ReferralsPage.jsx"))
+
+const CouponsPage = lazy(() =>
+  import("./pages/marketing/CouponsPage.jsx").then(m => ({ default: m.CouponsPage || m.default }))
+)
+const OffersPage = lazy(() =>
+  import("./pages/marketing/OffersPage.jsx").then(m => ({ default: m.OffersPage || m.default }))
+)
+const ReferralsPage = lazy(() =>
+  import("./pages/marketing/ReferralsPage.jsx").then(m => ({ default: m.ReferralsPage || m.default }))
+)
+
+const ServiceRequestsPage = lazy(() =>
+  import("./pages/ServiceRequestsPage.jsx").then(m => ({ default: m.ServiceRequestsPage }))
+)
+
+const FeedbackManagementPage = lazy(() =>
+  import("./pages/FeedbackManagementPage.jsx").then(m => ({ default: m.FeedbackManagementPage }))
+)
 
 const BookingPage = lazy(() =>
   import("./pages/BookingPage.jsx").then(m => ({ default: m.BookingPage }))
 )
+const MiniTruckBookingHosurPage = lazy(() =>
+  import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage }))
+)
+const TwoWheelerBookingHosurPage = lazy(() =>
+  import("./pages/TwoWheelerBookingHosurPage.jsx").then(m => ({ default: m.TwoWheelerBookingHosurPage }))
+)
+const PackersMoversBookingHosurPage = lazy(() =>
+  import("./pages/PackersMoversBookingHosurPage.jsx").then(m => ({ default: m.PackersMoversBookingHosurPage }))
+)
 const FeedbackPage = lazy(() =>
   import("./pages/FeedbackPage.jsx").then(m => ({ default: m.FeedbackPage }))
-)
-const ServiceRequestsPage = lazy(() =>
-  import("./pages/ServiceRequestsPage.jsx").then(m => ({ default: m.ServiceRequestsPage }))
-)
-const FeedbackManagementPage = lazy(() =>
-  import("./pages/FeedbackManagementPage.jsx").then(m => ({ default: m.FeedbackManagementPage }))
-)
-const EmployeeJobsPage = lazy(() =>
-  import("./pages/EmployeeJobsPage.jsx").then(m => ({ default: m.EmployeeJobsPage }))
-)
-const EmployeeFeedbackPage = lazy(() =>
-  import("./pages/EmployeeFeedbackPage.jsx").then(m => ({ default: m.EmployeeFeedbackPage }))
 )
 const CustomerDecisionPage = lazy(() =>
   import("./pages/CustomerDecisionPage.jsx").then(m => ({ default: m.CustomerDecisionPage }))
 )
-const MiniTruckBookingHosurPage = lazy(() =>
-  import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.default || m.MiniTruckBookingHosurPage }))
-)
-const TwoWheelerBookingHosurPage = lazy(() =>
-  import("./pages/TwoWheelerBookingHosurPage.jsx").then(m => ({ default: m.default || m.TwoWheelerBookingHosurPage }))
-)
-const PackersMoversBookingHosurPage = lazy(() =>
-  import("./pages/PackersMoversBookingHosurPage.jsx").then(m => ({ default: m.default || m.PackersMoversBookingHosurPage }))
+
+const LiveTrackingPage = lazy(() =>
+  import("./pages/LiveTrackingPage.jsx").then(m => ({ default: m.LiveTrackingPage }))
 )
 
-// ─── Route Guards ────────────────────────────────────────────
-
-/**
- * RequireAdmin — redirects employees away from admin-only routes.
- * Admins and managers pass through; employees go to the dashboard.
- */
 function RequireAdmin() {
+  const { user } = useAuth()
   const { isAdmin } = useRole()
+  if (!user) return <Navigate to={routes.login} replace />
   if (!isAdmin) return <Navigate to={routes.dashboard} replace />
+  return <Outlet />
+}
+
+function RequireAdminSettings() {
+  const { user } = useAuth()
+  const { isAdmin } = useRole()
+  if (!user) return <Navigate to={routes.login} replace />
+  if (!isAdmin) return <Navigate to={routes.settings_profile} replace />
   return <Outlet />
 }
 
 function RequireCareAgentOrAdmin() {
   const { user } = useAuth()
   const { isAdmin } = useRole()
-  if (user?.isCareAgent || isAdmin) {
-    return <Outlet />
-  }
-  return <Navigate to={routes.dashboard} replace />
-}
-
-/**
- * RequireAdminSettings — for settings routes that are admin-only.
- * Employees are redirected to their profile settings (the one section
- * they're allowed to see).
- */
-function RequireAdminSettings() {
-  const { isAdmin } = useRole()
-  if (!isAdmin) return <Navigate to={routes.settings_profile} replace />
-  return <Outlet />
-}
-
-/**
- * RequireModulePermission — protects routes based on company module permissions.
- * Redirects unauthorized users back to the dashboard.
- */
-function RequireModulePermission({ module, action = "view" }) {
-  const { user } = useAuth()
   if (!user) return <Navigate to={routes.login} replace />
-
-  const perms = user.companyPermissions
-  if (perms) {
-    const modulePerms = perms[module]
-    if (modulePerms) {
-      const checkRole = user.role === "manager" ? "admin" : user.role
-      const actions = modulePerms[checkRole] || []
-      if (!actions.includes(action)) {
-        return <Navigate to={routes.dashboard} replace />
-      }
-    }
+  if (!isAdmin && !user.isCareAgent) {
+    return <Navigate to={routes.dashboard} replace />
   }
   return <Outlet />
 }
@@ -268,13 +150,21 @@ const ONBOARDING_DISMISSED_KEY = "caltrack.onboarding.dismissed"
 
 export function App() {
   const { isReady, user } = useAuth()
-  const { isAdmin } = useRole()
-  console.log("DEBUG: App component rendered. isReady:", isReady, "user:", user, "isAdmin:", isAdmin);
+  const { isAdmin, isSupport, isCustomer } = useRole()
 
-  // Helper: where should an admin land after login?
   const adminDefaultRoute = () => {
     const dismissed = localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true"
     return dismissed ? routes.dashboard : routes.get_started
+  }
+
+  const getAuthenticatedDefaultRoute = (u) => {
+    if (!u) return routes.login
+    if (u.role === "customer") return routes.landing
+    if (u.role === "support" || u.isCareAgent) return "/support/tickets"
+    if (u.role === "admin" || u.role === "manager") {
+      return u.companyId ? adminDefaultRoute() : routes.onboarding
+    }
+    return u.companyId ? routes.dashboard : routes.onboarding
   }
 
   const PageLoader = () => (
@@ -315,28 +205,14 @@ export function App() {
         <Routes>
           <Route
             path={routes.login}
-            element={
-              user ? (
-                user.companyId ? (
-                  <Navigate to={isAdmin ? adminDefaultRoute() : routes.dashboard} replace />
-                ) : (
-                  <Navigate to={routes.onboarding} replace />
-                )
-              ) : (
-                <LoginPage />
-              )
-            }
+            element={<LoginPage />}
           />
 
           <Route
             path={routes.organization_signup}
             element={
               user ? (
-                user.companyId ? (
-                  <Navigate to={isAdmin ? adminDefaultRoute() : routes.dashboard} replace />
-                ) : (
-                  <Navigate to={routes.onboarding} replace />
-                )
+                <Navigate to={getAuthenticatedDefaultRoute(user)} replace />
               ) : (
                 <OrganizationSignupPage />
               )
@@ -348,8 +224,10 @@ export function App() {
             element={
               !user ? (
                 <Navigate to={routes.login} replace />
+              ) : user.role === "customer" ? (
+                <Navigate to={routes.landing} replace />
               ) : user.companyId ? (
-                <Navigate to={isAdmin ? adminDefaultRoute() : routes.dashboard} replace />
+                <Navigate to={getAuthenticatedDefaultRoute(user)} replace />
               ) : (
                 <OnboardingPage />
               )
@@ -357,19 +235,9 @@ export function App() {
           />
 
           <Route
-            path={routes.activation_journey}
-            element={<ActivationJourneyPage />}
-          />
-
-          <Route
-            path={routes.create_password}
-            element={<CreatePasswordPage />}
-          />
-
-          <Route
             path={routes.reset_password}
             element={
-              user ? <Navigate to={isAdmin ? adminDefaultRoute() : routes.dashboard} replace /> : <ResetPasswordPage />
+              user ? <Navigate to={getAuthenticatedDefaultRoute(user)} replace /> : <ResetPasswordPage />
             }
           />
 
@@ -377,14 +245,24 @@ export function App() {
             path={routes.accept_invite}
             element={
               user ? (
-                <Navigate to={isAdmin ? adminDefaultRoute() : routes.dashboard} replace />
+                <Navigate to={getAuthenticatedDefaultRoute(user)} replace />
               ) : (
                 <AcceptInvitePage />
               )
             }
           />
 
-          <Route path="/" element={user?.companyId ? <Navigate to={isAdmin ? adminDefaultRoute() : routes.dashboard} replace /> : <LandingPage />} />
+          {/* ── Public / Customer Routes ── */}
+          <Route
+            path="/"
+            element={
+              user && user.role !== "customer" && user.companyId ? (
+                <Navigate to={getAuthenticatedDefaultRoute(user)} replace />
+              ) : (
+                <LandingPage />
+              )
+            }
+          />
           <Route path={routes.landing} element={<LandingPage />} />
           <Route path="/home" element={<LandingPage />} />
           <Route path={routes.booking} element={<LandingPage />} />
@@ -406,25 +284,30 @@ export function App() {
           <Route path={routes.customer_work_extension} element={<CustomerDecisionPage />} />
           <Route path="/customer/decision/:token" element={<CustomerDecisionPage />} />
 
-          {/* ── Authenticated shell ── */}
+          {/* ── Public Customer Live Tracking — no auth, secured by tracking_token query param ── */}
+          <Route path={routes.live_tracking} element={<LiveTrackingPage />} />
+          {/* Alias: /track/<bookingId> without :bookingId pattern for deep linking */}
+
+          {/* ── Authenticated Shell ── */}
           <Route
             element={
-              user ? (
-                user.companyId ? (
-                  <AppShell />
-                ) : (
-                  <Navigate to={routes.onboarding} replace />
-                )
-              ) : (
+              !user ? (
                 <Navigate to={routes.login} replace />
+              ) : user.role === "customer" ? (
+                <Navigate to={routes.landing} replace />
+              ) : !user.companyId ? (
+                <Navigate to={routes.onboarding} replace />
+              ) : (
+                <AppShell />
               )
             }
           >
-            {/* ── Routes accessible by ALL authenticated roles ── */}
             <Route
               path={routes.dashboard}
               element={
-                user?.isCareAgent && user?.role !== "admin" && user?.role !== "manager" ? (
+                user?.role === "customer" ? (
+                  <Navigate to={routes.landing} replace />
+                ) : user?.role === "support" || (user?.isCareAgent && user?.role !== "admin" && user?.role !== "manager") ? (
                   <Navigate to="/support/tickets" replace />
                 ) : (
                   <DashboardPage />
@@ -434,22 +317,10 @@ export function App() {
             <Route element={<RequireCareAgentOrAdmin />}>
               <Route path="/support/tickets" element={<CustomerCarePage />} />
             </Route>
-            <Route
-              path={routes.analysis}
-              element={isAdmin ? <Navigate to={routes.dashboard} replace /> : <AnalysisPage />}
-            />
-            <Route element={<RequireModulePermission module="attendance" action="view" />}>
-              <Route path={routes.time} element={<TimePage />} />
-            </Route>
-            <Route path={routes.tasks} element={<TasksPage />} />
-            <Route path={routes.leaves} element={<LeavesPage />} />
             <Route path={routes.inventory} element={<InventoryPage />} />
-            <Route path={routes.mileage} element={<MileagePage />} />
-            <Route path={routes.employee_jobs} element={<EmployeeJobsPage />} />
-            <Route path={routes.employee_feedback} element={<EmployeeFeedbackPage />} />
-            <Route path={routes.payroll} element={<PayrollPage />} />
+            <Route path={routes.reports} element={<ReportsPage />} />
 
-            {/* Employee profile settings — accessible to everyone */}
+            {/* Profile settings */}
             <Route path={routes.settings} element={<SettingsPage />} />
             <Route path={routes.settings_profile} element={<SettingsPage section="profile" />} />
             <Route path={routes.settings_notifications} element={<SettingsPage section="notifications" />} />
@@ -460,26 +331,6 @@ export function App() {
             {/* ── Admin-only routes ── */}
             <Route element={<RequireAdmin />}>
               <Route path={routes.get_started} element={<GetStartedPage />} />
-              <Route element={<RequireModulePermission module="locations" action="view" />}>
-                <Route path={routes.locations} element={<LocationsPage />} />
-              </Route>
-              <Route element={<RequireModulePermission module="live_location" action="view" />}>
-                <Route path={routes.live_locations} element={<LiveLocationsPage />} />
-              </Route>
-              <Route path={routes.scheduling} element={<SchedulingPage />} />
-              <Route path={routes.employees} element={<EmployeesPage />} />
-              <Route path={routes.audit_ledger} element={<AuditLedgerPage />} />
-              <Route element={<RequireModulePermission module="reports" action="view" />}>
-                <Route path={routes.reports} element={<ReportsPage />} />
-              </Route>
-              <Route path={routes.compliance} element={<CompliancePage />} />
-              <Route path={routes.approvals} element={<ApprovalCenterPage />} />
-              <Route path={routes.employees_dashboard} element={<EmployeesDashboardPage />} />
-              <Route path={routes.employees_pending} element={<ApprovalCenterPage />} />
-              <Route path={routes.employees_approved} element={<ApprovedEmployeesPage />} />
-              <Route path={routes.employees_rejected} element={<RejectedEmployeesPage />} />
-              <Route path={routes.employees_documents} element={<DocumentVaultPage />} />
-              <Route path={routes.employees_training} element={<TrainingRecordsPage />} />
               <Route path={routes.catalog_dashboard} element={<CatalogDashboardPage />} />
               <Route path={routes.catalog_categories} element={<CatalogCategoriesPage />} />
               <Route path={routes.catalog_services} element={<CatalogServicesPage />} />
@@ -502,24 +353,13 @@ export function App() {
               <Route path="/customers/reviews" element={<FeedbackManagementPage />} />
             </Route>
 
-            {/* ── Admin-only settings (employees redirected to /settings/profile) ── */}
+            {/* ── Admin-only settings ── */}
             <Route element={<RequireAdminSettings />}>
-              <Route path={routes.settings_people} element={<SettingsPage section="people" />} />
               <Route path={routes.settings_team} element={<SettingsPage section="team" />} />
-              <Route path={routes.settings_timetracking} element={<SettingsPage section="time-tracking" />} />
-              <Route path={routes.settings_attendance} element={<SettingsPage section="attendance" />} />
-              <Route path={routes.settings_schedules} element={<SettingsPage section="schedules" />} />
-              <Route path={routes.settings_shiftplanner} element={<SettingsPage section="shift-planner" />} />
-              <Route path={routes.settings_holidays} element={<SettingsPage section="holidays" />} />
-              <Route path={routes.settings_payroll} element={<SettingsPage section="payroll" />} />
-              <Route path={routes.settings_expenses} element={<SettingsPage section="expenses" />} />
-              <Route path={routes.settings_workflows} element={<SettingsPage section="workflows" />} />
-              <Route path={routes.settings_productivity} element={<SettingsPage section="productivity" />} />
               <Route path={routes.settings_reports} element={<SettingsPage section="reports" />} />
               <Route path={routes.settings_rbac} element={<SettingsPage section="rbac" />} />
               <Route path={routes.settings_audit} element={<SettingsPage section="audit" />} />
               <Route path={routes.settings_devices} element={<SettingsPage section="devices" />} />
-              <Route path={routes.settings_location} element={<SettingsPage section="location" />} />
               <Route path={routes.settings_branding} element={<SettingsPage section="branding" />} />
               <Route path={routes.settings_organization} element={<SettingsPage section="organization" />} />
               <Route path={routes.settings_integrations} element={<SettingsPage section="integrations" />} />
@@ -529,7 +369,7 @@ export function App() {
             </Route>
           </Route>
 
-          <Route path="*" element={<Navigate to={routes.dashboard} replace />} />
+          <Route path="*" element={<Navigate to={getAuthenticatedDefaultRoute(user)} replace />} />
         </Routes>
       </Suspense>
       <SessionToast />

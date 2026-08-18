@@ -3,7 +3,7 @@ import { apiRequest } from '../api/client.js';
 
 export const fetchInventoryItems = createAsyncThunk(
   'inventory/fetchItems',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
       const data = await apiRequest('/inventory/items/');
       if (!data.success) throw new Error(data.message);
@@ -14,35 +14,9 @@ export const fetchInventoryItems = createAsyncThunk(
   }
 );
 
-export const fetchInventoryIssuances = createAsyncThunk(
-  'inventory/fetchIssuances',
-  async (_, { getState, rejectWithValue }) => {
-    try {
-      const data = await apiRequest('/inventory/issuances/');
-      if (!data.success) throw new Error(data.message);
-      return data.data;
-    } catch (err) {
-      return rejectWithValue(err.message || err);
-    }
-  }
-);
-
-export const fetchMyItems = createAsyncThunk(
-  'inventory/fetchMyItems',
-  async (_, { getState, rejectWithValue }) => {
-    try {
-      const data = await apiRequest('/inventory/my-items/');
-      if (!data.success) throw new Error(data.message);
-      return data.data;
-    } catch (err) {
-      return rejectWithValue(err.message || err);
-    }
-  }
-);
-
 export const fetchAlerts = createAsyncThunk(
   'inventory/fetchAlerts',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
       const data = await apiRequest('/inventory/alerts/');
       if (!data.success) throw new Error(data.message);
@@ -55,8 +29,6 @@ export const fetchAlerts = createAsyncThunk(
 
 const initialState = {
   items: [],
-  issuances: [],
-  myItems: [],
   alerts: [],
   loading: false,
   error: null,
@@ -68,8 +40,6 @@ const inventorySlice = createSlice({
   reducers: {
     clearInventoryState: (state) => {
       state.items = [];
-      state.issuances = [];
-      state.myItems = [];
       state.alerts = [];
       state.error = null;
     }
@@ -82,24 +52,6 @@ const inventorySlice = createSlice({
         state.items = action.payload;
       })
       .addCase(fetchInventoryItems.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(fetchInventoryIssuances.pending, (state) => { state.loading = true; })
-      .addCase(fetchInventoryIssuances.fulfilled, (state, action) => {
-        state.loading = false;
-        state.issuances = action.payload;
-      })
-      .addCase(fetchInventoryIssuances.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(fetchMyItems.pending, (state) => { state.loading = true; })
-      .addCase(fetchMyItems.fulfilled, (state, action) => {
-        state.loading = false;
-        state.myItems = action.payload;
-      })
-      .addCase(fetchMyItems.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

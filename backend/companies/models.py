@@ -3,8 +3,7 @@ from django.db import models
 
 class Region(models.Model):
     """
-    Defines region-specific compliance and payroll rules for UK and US.
-    Seeded once at startup — not user-editable.
+    Defines region-specific business and catalog defaults for IN, US, UK.
     """
 
     class Code(models.TextChoices):
@@ -16,33 +15,25 @@ class Region(models.Model):
     name = models.CharField(max_length=100)
 
     # Currency
-    currency = models.CharField(max_length=3)           # USD, GBP
-    currency_symbol = models.CharField(max_length=5)    # $, £
+    currency = models.CharField(max_length=3)           # INR, USD, GBP
+    currency_symbol = models.CharField(max_length=5)    # ₹, $, £
 
     # Date & calendar
-    date_format = models.CharField(max_length=20, default="MM/DD/YYYY")
-    week_start = models.IntegerField(default=0)         # 0=Mon (UK), 6=Sun (US)
+    date_format = models.CharField(max_length=20, default="DD/MM/YYYY")
+    week_start = models.IntegerField(default=0)         # 0=Mon, 6=Sun
 
-    # Working time
-    overtime_weekly_hours = models.PositiveIntegerField(default=40)     # FLSA=40, WTR=48
-    max_weekly_hours = models.PositiveIntegerField(default=40)          # WTR cap=48
+    # Working time / Business hours
+    overtime_weekly_hours = models.PositiveIntegerField(default=40)
+    max_weekly_hours = models.PositiveIntegerField(default=48)
 
-    # Leave
-    statutory_leave_days = models.PositiveIntegerField(default=0)       # UK=28, US=0
-
-    # Tax year
-    tax_year_start_month = models.IntegerField(default=1)   # US=Jan(1), UK=Apr(4)
-    tax_year_start_day = models.IntegerField(default=1)     # US=1,      UK=6
-
-    # Payroll
-    payroll_frequency = models.CharField(max_length=20, default="biweekly")  # biweekly | monthly
+    statutory_leave_days = models.PositiveIntegerField(default=0)
+    tax_year_start_month = models.IntegerField(default=4)
+    tax_year_start_day = models.IntegerField(default=1)
+    payroll_frequency = models.CharField(max_length=20, default="monthly")
     min_wage = models.DecimalField(max_digits=7, decimal_places=2, default=0)
 
-    # UK-specific
     national_insurance_enabled = models.BooleanField(default=False)
     paye_enabled = models.BooleanField(default=False)
-
-    # US-specific
     flsa_enabled = models.BooleanField(default=False)
     state_tax_enabled = models.BooleanField(default=False)
 
@@ -52,13 +43,13 @@ class Region(models.Model):
     def __str__(self):
         return f"{self.code} — {self.name}"
 
+
 def default_module_permissions():
     return {
-        "live_location": { "admin": ["view", "modify"], "manager": ["view", "modify"], "employee": ["view"] },
-        "locations": { "admin": ["view", "modify"], "manager": ["view", "modify"], "employee": [] },
-        "attendance": { "admin": ["view", "modify"], "manager": ["view", "modify"], "employee": ["view", "modify"] },
-        "payroll": { "admin": ["view", "modify"], "manager": ["view", "modify"], "employee": [] },
-        "reports": { "admin": ["view"], "manager": ["view"], "employee": [] },
+        "catalog": { "admin": ["view", "modify"], "manager": ["view", "modify"], "support": ["view"] },
+        "bookings": { "admin": ["view", "modify"], "manager": ["view", "modify"], "support": ["view", "modify"] },
+        "reports": { "admin": ["view"], "manager": ["view"], "support": [] },
+        "inventory": { "admin": ["view", "modify"], "manager": ["view", "modify"], "support": ["view"] },
     }
 
 
@@ -75,10 +66,9 @@ class Company(models.Model):
     primary_country = models.CharField(
         max_length=2,
         choices=PrimaryCountry.choices,
-        default=PrimaryCountry.US,
+        default=PrimaryCountry.IN,
     )
 
-    # Region FK — set automatically from primary_country on save
     region = models.ForeignKey(
         Region,
         on_delete=models.SET_NULL,
@@ -88,19 +78,12 @@ class Company(models.Model):
     )
 
     default_state = models.CharField(max_length=100, blank=True, null=True)
-    
     industry = models.CharField(max_length=100, blank=True, null=True)
     website = models.URLField(max_length=255, blank=True, null=True)
-    timezone = models.CharField(max_length=50, default="UTC")
-    data_region = models.CharField(max_length=50, default="us-east")
+    timezone = models.CharField(max_length=50, default="Asia/Kolkata")
+    data_region = models.CharField(max_length=50, default="ap-south-1")
     address = models.TextField(blank=True, null=True)
     logo = models.ImageField(upload_to="company_logos/", blank=True, null=True)
-
-    # Geofence Config
-    geofence_enabled = models.BooleanField(default=True)
-    geofence_radius_meters = models.PositiveIntegerField(default=200)
-    geofence_strict_mode = models.BooleanField(default=True)
-    geofence_admin_override = models.BooleanField(default=True)
 
     class ComplianceMode(models.TextChoices):
         STRICT = "strict", "Strict"
@@ -110,17 +93,6 @@ class Company(models.Model):
         max_length=20,
         choices=ComplianceMode.choices,
         default=ComplianceMode.STRICT,
-    )
-
-    class ShiftEnforcementMode(models.TextChoices):
-        BLOCK = "block", "Block clock-in"
-        WARN = "warn", "Allow with warning flag"
-        OFF = "off", "No shift-location enforcement"
-
-    shift_enforcement_mode = models.CharField(
-        max_length=10,
-        choices=ShiftEnforcementMode.choices,
-        default=ShiftEnforcementMode.WARN,
     )
 
     class RescheduleRejectionStrategy(models.TextChoices):
@@ -149,17 +121,15 @@ class Company(models.Model):
 
         if not self.slug:
             from django.utils.text import slugify
-            import uuid
-            base_slug = slugify(self.company_name) or f"org-{uuid.uuid4().hex[:8]}"
+            base_slug = slugify(self.company_name) or "company"
             slug = base_slug
-            i = 2
+            counter = 1
             while Company.objects.filter(slug=slug).exclude(pk=self.pk).exists():
-                slug = f"{base_slug}-{i}"
-                i += 1
+                slug = f"{base_slug}-{counter}"
+                counter += 1
             self.slug = slug
 
-        # Auto-assign region from primary_country
-        if self.primary_country and (not self.region or self.region.code != self.primary_country):
+        if self.primary_country and not self.region_id:
             try:
                 self.region = Region.objects.get(code=self.primary_country)
             except Region.DoesNotExist:
@@ -168,4 +138,4 @@ class Company(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.company_name
+        return f"{self.company_name} ({self.display_id})"

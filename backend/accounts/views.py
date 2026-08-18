@@ -17,7 +17,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 import requests
 
 from .serializers import UserSerializer
-from employees.utils import generate_next_employee_id
+
 
 
 # ── Cookie helper ─────────────────────────────────────────────────────────────
@@ -83,14 +83,8 @@ from django.conf import settings
 
 
 
-def _ensure_pretty_employee_id(employee, company):
-    if not employee or not employee.employee_id:
-        return
-    raw = str(employee.employee_id).strip()
-    if raw.upper().startswith("EMP-"):
-        next_id = generate_next_employee_id(company)
-        employee.employee_id = next_id
-        employee.save(update_fields=["employee_id", "updated_at"])
+
+
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -199,54 +193,16 @@ class LoginView(TokenObtainPairView):
             # No 2FA — proceed with cookie issuance as normal
             _set_auth_cookies(response, access, refresh)
 
-            # ── Mark employee online & broadcast live presence to Admin WebSockets ──
-            if user and getattr(user, "company", None):
-                try:
-                    from employees.models import Employee, PresenceLog
-                    from django.utils import timezone
-                    from channels.layers import get_channel_layer
-                    from asgiref.sync import async_to_sync
-
-                    company = user.company
-
-                    emp = Employee.objects.filter(user=user, company=company).first()
-                    if emp:
-                        now = timezone.now()
-                        emp.is_online = True
-                        emp.last_login_at = now
-                        emp.last_activity_at = now
-                        emp.current_availability = "available"
-                        emp.save(update_fields=["is_online", "last_login_at", "last_activity_at", "current_availability"])
-
-                        PresenceLog.objects.create(
-                            employee=emp,
-                            login_at=now,
-                            company=company
-                        )
-
-                        channel_layer = get_channel_layer()
-                        if channel_layer:
-                            async_to_sync(channel_layer.group_send)(
-                                f"live_admin_{company.id}",
-                                {
-                                    "type": "employee_presence_change",
-                                    "data": {
-                                        "employee_id": str(emp.id),
-                                        "user_id": user.id,
-                                        "username": user.username,
-                                        "full_name": user.get_full_name() or user.username,
-                                        "is_online": True,
-                                        "availability": "available",
-                                        "login_at": now.isoformat(),
-                                    }
-                                }
-                            )
-                except Exception as e:
-                    print(f"[LoginView] presence update error: {e}")
-
-            # Strip tokens from the body — they live in httpOnly cookies now
-            response.data = {"success": True, "message": "Login successful."}
+            # Provide both cookies and serialized user payload for resilient client authentication
+            response.data = {
+                "success": True,
+                "message": "Login successful.",
+                "access": str(access) if access else None,
+                "refresh": str(refresh) if refresh else None,
+                "user": UserSerializer(user, context={"request": request}).data if user else None,
+            }
         return response
+
 
 
 class RefreshView(APIView):
@@ -454,108 +410,31 @@ class GoogleLoginView(APIView):
             invite.accepted_at = timezone.now()
             invite.save()
 
-            # Create/Activate Employee profile
-            from employees.models import Employee
-            employee, created = Employee.objects.get_or_create(
-                user=user,
-                company=invite.company,
-                defaults={
-                    "employee_id": generate_next_employee_id(invite.company),
-                    "title": invite.role.title(),
-                    "hourly_rate": 0.00,
-                    "is_active": True,
-                    "invited_by": invite.invited_by
-                }
-            )
-            if not created:
-                employee.is_active = True
-                employee.invited_by = invite.invited_by
-                employee.save(update_fields=["is_active", "invited_by"])
-
         if not user:
-            return Response({"detail": "Google login is restricted to pre-approved employee email accounts. Please contact your administrator to register."}, status=status.HTTP_400_BAD_REQUEST)
+            # Create standard customer user on Google login if not existing
+            username = email_clean.split("@")[0]
+            base_username = username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}_{counter}"
+                counter += 1
+
+            user = User.objects.create_user(
+                username=username,
+                email=email_clean,
+                first_name=first_name,
+                last_name=last_name,
+                role=User.Role.CUSTOMER,
+            )
 
         if not getattr(user, 'is_active', True):
-            # Check if they are approved but pending activation in the dossier json
-            import json
-            import os
-            from django.conf import settings
-            file_path = os.path.join(settings.BASE_DIR, "caltrack_activation_dossier.json")
-            dossier_approved = False
-            dossier = None
-            if os.path.exists(file_path):
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        dossier = json.load(f)
-                    reg_form = dossier.get("regForm", {})
-                    dossier_email = reg_form.get("email", "").strip()
-                    admin_clearance = dossier.get("adminClearance", {})
-                    dossier_status = admin_clearance.get("status")
-                    if dossier_email.lower() == email_clean.lower() and dossier_status == "approved":
-                        dossier_approved = True
-                except Exception as e:
-                    print(f"Error loading dossier in GoogleLoginView: {e}")
-            
-            if dossier_approved and dossier:
-                from django.utils import timezone
-                from employees.models import Employee
-                
-                # Activate User
-                user.is_active = True
-                user.save()
-                
-                # Activate Employee
-                company = getattr(user, 'company', None)
-                if company:
-                    try:
-                        employee = Employee.objects.filter(user=user, company=company).first()
-                        if employee:
-                            employee.is_active = True
-                            employee.save()
-                    except Exception as e:
-                        print(f"Error activating employee in GoogleLoginView: {e}")
-                
-                # Update dossier status
-                admin_clearance = dossier.get("adminClearance", {})
-                admin_clearance["status"] = "activated"
-                admin_clearance["invitationStatus"] = "Activated"
-                if "auditLogs" not in admin_clearance:
-                    admin_clearance["auditLogs"] = []
-                admin_clearance["auditLogs"].append({
-                    "timestamp": timezone.now().strftime("%d %b %Y %I:%M %p"),
-                    "action": "Google Auth Activation",
-                    "details": f"Technician successfully activated account via Google Login. System access granted."
-                })
-                dossier["adminClearance"] = admin_clearance
-                
-                try:
-                    with open(file_path, "w", encoding="utf-8") as f:
-                        json.dump(dossier, f, indent=4, ensure_ascii=False)
-                except Exception as e:
-                    print(f"Error saving dossier in GoogleLoginView: {e}")
-            else:
-                return Response({"detail": "This account is deactivated."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Update employee online presence
-        company = getattr(user, 'company', None)
-        if company:
-            try:
-                from employees.models import Employee
-                emp = Employee.objects.filter(user=user, company=company).first()
-                if emp:
-                    now = timezone.now()
-                    emp.is_online = True
-                    emp.current_availability = "available"
-                    emp.last_login_at = now
-                    emp.last_activity_at = now
-                    emp.save(update_fields=["is_online", "current_availability", "last_login_at", "last_activity_at"])
-            except Exception as e:
-                print(f"[GoogleLoginView] Error setting employee online presence: {e}")
+            return Response({"detail": "This account is deactivated."}, status=status.HTTP_400_BAD_REQUEST)
 
         refresh = CustomTokenObtainPairSerializer.get_token(user)
         response = Response({"success": True, "message": "Google login successful."})
         _set_auth_cookies(response, str(refresh.access_token), str(refresh))
         return response
+
 
 
 from accounts.services import create_organization_admin_user
@@ -656,18 +535,6 @@ class RegisterView(APIView):
                 user.company = company
                 user.save()
 
-                # 3. Create Employee
-                from employees.models import Employee
-                Employee.objects.get_or_create(
-                    user=user,
-                    company=company,
-                    defaults={
-                        "employee_id": generate_next_employee_id(company),
-                        "title": "Admin",
-                        "hourly_rate": 0,
-                    }
-                )
-
         except Exception as e:
             print(f"ERROR in RegisterView: {str(e)}")
             traceback.print_exc()
@@ -709,26 +576,11 @@ class MeView(APIView):
                 except Exception as e:
                     print(f"[MeView] Error self-healing user company: {e}")
 
-            company = getattr(user, "company", None)
-            if company and user.role != "customer":
-                try:
-                    from employees.models import Employee
-                    from django.utils import timezone
-                    emp = Employee.objects.filter(user=user, company=company).first()
-                    if emp:
-                        now = timezone.now()
-                        if not emp.is_online:
-                            emp.is_online = True
-                            emp.current_availability = "available"
-                        emp.last_activity_at = now
-                        emp.save(update_fields=["is_online", "current_availability", "last_activity_at"])
-                except Exception as e:
-                    print(f"[MeView] Error updating employee presence: {e}")
-
             return Response(UserSerializer(user, context={"request": request}).data)
         except Exception as err:
             traceback.print_exc()
             return Response({"detail": f"Server error fetching user profile: {str(err)}"}, status=500)
+
 
 
 class ProfileUpdateView(APIView):
@@ -961,31 +813,10 @@ class AcceptInviteView(APIView):
                 invite.accepted_at = timezone.now()
                 invite.save()
 
-            from employees.models import Employee
-            employee, created = Employee.objects.get_or_create(
-                user=user,
-                company=invite.company,
-                defaults={
-                    "employee_id": generate_next_employee_id(invite.company),
-                    "title": invite.role.title(),
-                    "hourly_rate": 0,
-                    "invited_by": invite.invited_by,
-                    "country": invite.region or invite.company.primary_country,
-                    "state": invite.default_state or getattr(invite.company, "default_state", ""),
-                }
-            )
-            if not created:
-                employee.is_active = True
-                employee.invited_by = invite.invited_by
-                if not employee.country:
-                    employee.country = invite.region or invite.company.primary_country
-                if not getattr(employee, "state", None):
-                    employee.state = invite.default_state or getattr(invite.company, "default_state", "")
-                employee.save(update_fields=["is_active", "invited_by", "country", "state"])
-
         except Exception as e:
             traceback.print_exc()
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
         refresh = CustomTokenObtainPairSerializer.get_token(user)
         response = Response({
@@ -1021,83 +852,29 @@ class PasswordResetRequestView(APIView):
             frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
             reset_url = f"{frontend_url}/reset-password?uid={uid}&token={token}"
             
-            employee_id = "EMP1025"
-            first_name = "Surya"
-            if user.first_name:
-                first_name = user.first_name
-            elif user.username:
-                first_name = user.username
-                
-            if getattr(user, "company", None):
-                try:
-                    from employees.models import Employee
-                    emp = Employee.objects.filter(user=user, company=user.company).first()
-                    if emp:
-                        employee_id = emp.employee_id
-                except Exception as e:
-                    print(f"Error fetching employee for email reset: {e}")
-
-            subject = "CALtrack Secure Access Recovery"
+            first_name = user.first_name or user.username or "Customer"
+            subject = "CalServices Password Reset Request"
             
             body_text = (
-                "━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "CALTRACK SECURITY HUB\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "CALSERVICES SECURITY\n\n"
                 f"Hello {first_name},\n\n"
-                "A password recovery request has been detected for:\n\n"
-                f"Employee ID: {employee_id}\n\n"
-                "If this request was initiated by you,\n"
-                "activate the secure recovery gateway below.\n\n"
-                f"ACTIVATE RECOVERY LINK:\n{reset_url}\n\n"
-                "Security Token Lifetime:\n"
-                "15 Minutes\n\n"
-                "Device Activity Logged.\n\n"
-                "If you did not request this action,\n"
-                "ignore this message.\n\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "CALtrack Security Intelligence\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━"
+                f"A password reset request has been received for: {user.email or user.username}\n\n"
+                f"Reset Link: {reset_url}\n\n"
+                "This link will expire in 15 minutes.\n"
+                "If you did not request this action, you can safely ignore this email.\n"
             )
             
             html_message = f"""
-            <div style="background-color: #03050d; color: #f1f5f9; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px 20px; max-width: 600px; margin: 0 auto; border: 1px solid #1e293b; border-radius: 24px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);">
-                <div style="text-align: center; border-bottom: 2px solid #1e293b; padding-bottom: 20px; margin-bottom: 25px;">
-                    <div style="color: #6366f1; font-weight: 900; font-size: 20px; letter-spacing: 0.25em; text-transform: uppercase;">
-                        CALTRACK SECURITY HUB
-                    </div>
+            <div style="font-family: sans-serif; padding: 30px; max-width: 550px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px;">
+                <h2 style="color: #4f46e5; margin-bottom: 20px;">CalServices Password Reset</h2>
+                <p style="color: #334155; font-size: 15px;">Hello {first_name},</p>
+                <p style="color: #64748b; font-size: 14px;">A password reset was requested for your account ({user.email or user.username}).</p>
+                <div style="margin: 30px 0;">
+                    <a href="{reset_url}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                        Reset Password
+                    </a>
                 </div>
-                <div style="padding: 0 10px;">
-                    <p style="font-size: 15px; line-height: 1.6; color: #cbd5e1; margin-bottom: 20px;">
-                        Hello {first_name},
-                    </p>
-                    <p style="font-size: 14px; line-height: 1.6; color: #94a3b8; margin-bottom: 25px;">
-                        A password recovery request has been detected for:
-                    </p>
-                    
-                    <div style="background-color: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 16px; padding: 20px; margin-bottom: 30px;">
-                        <span style="font-family: monospace; font-size: 11px; text-transform: uppercase; color: #818cf8; display: block; margin-bottom: 5px;">Workforce Identity</span>
-                        <span style="font-family: monospace; font-size: 16px; font-weight: bold; color: #f1f5f9; letter-spacing: 1px;">{employee_id}</span>
-                    </div>
-                    
-                    <p style="font-size: 14px; line-height: 1.6; color: #94a3b8; margin-bottom: 25px;">
-                        If this request was initiated by you, activate the secure recovery gateway below.
-                    </p>
-                    
-                    <div style="text-align: center; margin-bottom: 35px; margin-top: 25px;">
-                        <a href="{reset_url}" style="background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 16px 36px; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.15em; border-radius: 16px; display: inline-block; box-shadow: 0 10px 25px rgba(79, 70, 229, 0.3); transition: all 0.3s ease;">
-                            ACTIVATE RECOVERY
-                        </a>
-                    </div>
-                    
-                    <div style="border-top: 1px solid #1e293b; padding-top: 20px; margin-top: 30px; font-family: monospace; font-size: 11px; color: #64748b; line-height: 1.8;">
-                        <div style="margin-bottom: 8px;"><strong style="color: #94a3b8;">Security Token Lifetime:</strong> 15 Minutes</div>
-                        <div style="margin-bottom: 8px;"><strong style="color: #94a3b8;">Status:</strong> Device Activity Logged.</div>
-                        <div>If you did not request this action, ignore this message safely.</div>
-                    </div>
-                </div>
-                <div style="text-align: center; border-top: 2px solid #1e293b; padding-top: 20px; margin-top: 35px; color: #475569; font-size: 10px; font-family: monospace; letter-spacing: 0.15em; text-transform: uppercase;">
-                    CALtrack Security Intelligence
-                </div>
+                <p style="color: #94a3b8; font-size: 12px;">This link will expire in 15 minutes. If you did not make this request, please ignore this email.</p>
             </div>
             """
 
@@ -1141,468 +918,10 @@ class PasswordResetConfirmView(APIView):
         if user is not None and PasswordResetTokenGenerator().check_token(user, token):
             user.set_password(new_password)
             user.save()
-            
-            # Resolve employee ID
-            employee_id = "EMP1025"
-            if getattr(user, "company", None):
-                try:
-                    from employees.models import Employee
-                    emp = Employee.objects.filter(user=user, company=user.company).first()
-                    if emp:
-                        employee_id = emp.employee_id
-                except Exception as e:
-                    print(f"Error fetching employee in reset confirm: {e}")
-            else:
-                if user.first_name:
-                    employee_id = user.username
-                    
             return Response({
                 "detail": "Password has been reset successfully.",
-                "employee_id": employee_id
             })
         return Response({"detail": "Invalid or expired token"}, status=400)
-
-
-import json
-import os
-
-class RegistrationDossierView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        from .models import RegistrationDossier
-        dossier_id = request.query_params.get("id")
-        status_param = request.query_params.get("status", "pending")
-        
-        if dossier_id:
-            dossiers = RegistrationDossier.objects.filter(id=dossier_id)
-        elif status_param == "all":
-            dossiers = RegistrationDossier.objects.all()
-        else:
-            dossiers = RegistrationDossier.objects.filter(status=status_param)
-        
-        data = []
-        for d in dossiers:
-            item = {
-                "id": d.id,
-                "email": d.email,
-                "status": d.status,
-                "trustScore": d.trust_score,
-                "regForm": d.reg_form_data,
-                "docForm": d.doc_form_data,
-                "academyState": d.academy_state_data,
-                "interviewState": d.interview_state_data,
-                "adminClearance": d.admin_clearance_data,
-                "created_at": d.created_at.isoformat(),
-            }
-            data.append(item)
-        return Response(data)
-
-    def post(self, request):
-        from .models import RegistrationDossier
-        dossier_id = request.data.get("id")
-        email = request.data.get("regForm", {}).get("email") or request.data.get("email")
-        if not email and not dossier_id:
-            return Response({"error": "Email or ID is required"}, status=400)
-        
-        if dossier_id:
-            d, _ = RegistrationDossier.objects.get_or_create(id=dossier_id)
-        else:
-            d, _ = RegistrationDossier.objects.get_or_create(email=email)
-            
-        d.full_name = request.data.get("regForm", {}).get("fullName", d.full_name)
-        d.phone = request.data.get("regForm", {}).get("phone", d.phone)
-        d.region = request.data.get("regForm", {}).get("region", d.region)
-        if "status" in request.data:
-            d.status = request.data["status"]
-        if "trustScore" in request.data:
-            d.trust_score = request.data["trustScore"]
-            
-        d.reg_form_data = request.data.get("regForm", d.reg_form_data)
-        d.doc_form_data = request.data.get("docForm", d.doc_form_data)
-        d.academy_state_data = request.data.get("academyState", d.academy_state_data)
-        d.interview_state_data = request.data.get("interviewState", d.interview_state_data)
-        d.admin_clearance_data = request.data.get("adminClearance", d.admin_clearance_data)
-        
-        d.save()
-        
-        return Response({"success": True, "id": d.id})
-
-    def delete(self, request):
-        from .models import RegistrationDossier
-        dossier_id = request.data.get("id") or request.query_params.get("id")
-        if dossier_id:
-            RegistrationDossier.objects.filter(id=dossier_id).delete()
-            return Response({"success": True})
-        return Response({"error": "ID is required"}, status=400)
-
-
-class RegistrationDossierApproveView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        try:
-            from django.utils import timezone
-            from django.core.mail import send_mail
-            from employees.models import Employee
-            from .models import RegistrationDossier
-
-            dossier_id = request.data.get("id")
-            if not dossier_id:
-                return Response({"error": "Dossier ID is required."}, status=status.HTTP_400_BAD_REQUEST)
-                
-            try:
-                dossier = RegistrationDossier.objects.get(id=dossier_id)
-            except RegistrationDossier.DoesNotExist:
-                return Response({"error": "No registration request dossier found."}, status=status.HTTP_400_BAD_REQUEST)
-
-            reg_form = dossier.reg_form_data
-            email = dossier.email
-            full_name = dossier.full_name
-            phone = dossier.phone
-            region = dossier.region
-
-            if not email:
-                return Response({"error": "Registrant email not found in dossier."}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Generate token and expiration
-            token = uuid.uuid4().hex
-            expires_at = timezone.now() + timezone.timedelta(hours=24)
-
-            # Update dossier status
-            admin_clearance = dossier.admin_clearance_data
-            admin_clearance["status"] = "approved"
-            admin_clearance["remarks"] = "Application reviewed and approved. Invitation email sent."
-            admin_clearance["invitationStatus"] = "Sent"
-            admin_clearance["invitationToken"] = token
-            admin_clearance["invitationSentAt"] = timezone.now().isoformat()
-            admin_clearance["invitationExpiresAt"] = expires_at.isoformat()
-            
-            # Initialize audit logs if not exists
-            if "auditLogs" not in admin_clearance:
-                admin_clearance["auditLogs"] = []
-
-            admin_clearance["auditLogs"].append({
-                "timestamp": timezone.now().strftime("%d %b %Y %I:%M %p"),
-                "action": "Application Approved",
-                "details": f"Registration request approved by {request.user.get_full_name() or request.user.username}. Secure invitation dispatched."
-            })
-
-            dossier.admin_clearance_data = admin_clearance
-            dossier.status = "approved"
-
-            # Create/Update User & Employee as inactive
-            User = get_user_model()
-            username = email.split("@")[0] if email else f"user_{uuid.uuid4().hex[:6]}"
-            user = User.objects.filter(email__iexact=email).first()
-            company = getattr(request, "company", None) or getattr(request.user, "company", None)
-            
-            if not company:
-                from companies.models import Company
-                company = Company.objects.first()
-
-            if not user:
-                user = User.objects.create_user(
-                    username=username,
-                    email=email,
-                    password=uuid.uuid4().hex,
-                    first_name=full_name.split(" ")[0] if " " in full_name else full_name,
-                    last_name=" ".join(full_name.split(" ")[1:]) if " " in full_name else "—",
-                    role=User.Role.EMPLOYEE,
-                    company=company,
-                    is_active=False
-                )
-            else:
-                user.is_active = False
-                user.company = company
-                user.save()
-
-            employee = Employee.objects.filter(user=user, company=company).first()
-            if employee:
-                # Check if this employee_id is already taken in the target company (excluding this record itself)
-                collision = Employee.objects.filter(company=company, employee_id=employee.employee_id).exclude(id=employee.id).exists()
-                if collision or employee.employee_id == "EMP-2048":
-                    employee.employee_id = generate_next_employee_id(company)
-                employee.company = company
-                employee.phone = phone
-                employee.country = region
-                employee.is_active = False
-                employee.invited_by = request.user
-                employee.save()
-            else:
-                employee = Employee.objects.create(
-                    user=user,
-                    company=company,
-                    employee_id=reg_form.get("employee_id") or generate_next_employee_id(company),
-                    phone=phone,
-                    title="Field Operations Tech (L2)",
-                    hourly_rate=0.00,
-                    country=region,
-                    is_active=False,
-                    invited_by=request.user
-                )
-
-            # Send simulated invitation email
-            frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
-            activation_link = f"{frontend_url}/create-password?token={token}"
-            subject = "Invitation to Join Caltrack - Action Required"
-            message = f"""Dear {full_name},
-
-Congratulations! Your registration request with Caltrack has been approved.
-
-To activate your account and set up your password, please click the secure link below:
-{activation_link}
-
-This activation link will expire in 24 hours.
-
-Best regards,
-The Caltrack Team
-"""
-            try:
-                send_mail(
-                    subject,
-                    message,
-                    settings.DEFAULT_FROM_EMAIL,
-                    [email],
-                    fail_silently=False
-                )
-                admin_clearance["invitationEmailStatus"] = "Delivered"
-                admin_clearance["auditLogs"].append({
-                    "timestamp": timezone.now().strftime("%d %b %Y %I:%M %p"),
-                    "action": "Email Delivered",
-                    "details": f"Invitation email successfully sent to {email}. Delivery channel: Console SMTP Simulator."
-                })
-            except Exception as e:
-                admin_clearance["invitationEmailStatus"] = "Failed"
-                admin_clearance["auditLogs"].append({
-                    "timestamp": timezone.now().strftime("%d %b %Y %I:%M %p"),
-                    "action": "Email Delivery Failed",
-                    "details": f"Failed to dispatch invitation to {email}: {str(e)}"
-                })
-
-            # Save dossier
-            dossier.save()
-
-            return Response({"success": True, "invitationStatus": "Sent"})
-        except Exception as approve_error:
-            import traceback
-            tb = traceback.format_exc()
-            try:
-                with open(os.path.join(settings.BASE_DIR, "traceback_output.txt"), "w", encoding="utf-8") as f:
-                    f.write(tb)
-            except Exception:
-                pass
-            raise approve_error
-
-
-class RegistrationDossierRejectView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        from django.utils import timezone
-        from django.core.mail import send_mail
-        from .models import RegistrationDossier
-
-        remarks = request.data.get("remarks", "Document Verification Failed")
-        reason_category = request.data.get("reasonCategory", "Other")
-
-        dossier_id = request.data.get("id")
-        if not dossier_id:
-            return Response({"error": "Dossier ID is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            dossier = RegistrationDossier.objects.get(id=dossier_id)
-        except RegistrationDossier.DoesNotExist:
-            return Response({"error": "No registration request dossier found."}, status=status.HTTP_400_BAD_REQUEST)
-
-        email = dossier.email
-        full_name = dossier.full_name
-
-        if not email:
-            return Response({"error": "Registrant email not found in dossier."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Update dossier status
-        admin_clearance = dossier.admin_clearance_data
-        admin_clearance["status"] = "rejected"
-        admin_clearance["remarks"] = remarks
-        admin_clearance["reasonCategory"] = reason_category
-        admin_clearance["rejectedBy"] = request.user.get_full_name() or request.user.username
-        admin_clearance["rejectedOn"] = timezone.now().strftime("%d %b %Y")
-        
-        if "auditLogs" not in admin_clearance:
-            admin_clearance["auditLogs"] = []
-
-        admin_clearance["auditLogs"].append({
-            "timestamp": timezone.now().strftime("%d %b %Y %I:%M %p"),
-            "action": "Application Rejected",
-            "details": f"Registration request rejected by {request.user.get_full_name() or request.user.username}. Reason: {remarks}"
-        })
-
-        dossier.admin_clearance_data = admin_clearance
-        dossier.status = "rejected"
-
-        # Send simulated rejection email
-        subject = "Caltrack Registration Update"
-        message = f"""Dear {full_name},
-
-Thank you for your interest in joining Caltrack.
-
-After reviewing your registration dossier, we regret to inform you that your application could not be approved at this time for the following reason(s):
-
-{remarks}
-
-If you believe this was in error or if you need to upload corrected documents, please re-submit your registration via the portal.
-
-Best regards,
-The Caltrack Team
-"""
-        try:
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
-                fail_silently=False
-            )
-            admin_clearance["rejectionEmailStatus"] = "Sent"
-            admin_clearance["auditLogs"].append({
-                "timestamp": timezone.now().strftime("%d %b %Y %I:%M %p"),
-                "action": "Rejection Dispatched",
-                "details": f"Rejection notice successfully sent to {email}."
-            })
-        except Exception as e:
-            admin_clearance["rejectionEmailStatus"] = "Failed"
-            admin_clearance["auditLogs"].append({
-                "timestamp": timezone.now().strftime("%d %b %Y %I:%M %p"),
-                "action": "Rejection Dispatch Failed",
-                "details": f"Failed to dispatch rejection notice to {email}: {str(e)}"
-            })
-
-        # Save dossier
-        dossier.save()
-
-        return Response({"success": True, "status": "Rejected"})
-
-
-class RegistrationDossierVerifyTokenView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        from django.utils import timezone
-        from .models import RegistrationDossier
-
-        token = request.data.get("token")
-        if not token:
-            return Response({"error": "Token is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # In PostgreSQL we can query JSONFields directly, but we'll iterate or use a basic filter
-        dossier = RegistrationDossier.objects.filter(admin_clearance_data__invitationToken=token).first()
-        
-        if not dossier:
-            return Response({"error": "Invalid or expired invitation token."}, status=status.HTTP_400_BAD_REQUEST)
-
-        admin_clearance = dossier.admin_clearance_data
-        stored_token = admin_clearance.get("invitationToken")
-        expires_at_str = admin_clearance.get("invitationExpiresAt")
-
-        if not stored_token or stored_token != token:
-            return Response({"error": "Invalid invitation token."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Check expiration
-        if expires_at_str:
-            expires_at = timezone.datetime.fromisoformat(expires_at_str)
-            if timezone.is_naive(expires_at):
-                expires_at = timezone.make_aware(expires_at)
-            if timezone.now() > expires_at:
-                return Response({"error": "Invitation token has expired."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if admin_clearance.get("status") == "activated":
-            return Response({"error": "Account has already been activated."}, status=status.HTTP_400_BAD_REQUEST)
-
-        reg_form = dossier.reg_form_data
-        return Response({
-            "valid": True,
-            "fullName": reg_form.get("fullName"),
-            "email": reg_form.get("email"),
-            "employeeId": reg_form.get("employee_id") or "EMP-2048"
-        })
-
-
-class RegistrationDossierActivateView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        from django.utils import timezone
-        from employees.models import Employee
-        from .models import RegistrationDossier
-
-        token = request.data.get("token")
-        password = request.data.get("password")
-
-        if not token or not password:
-            return Response({"error": "Token and password are required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        dossier = RegistrationDossier.objects.filter(admin_clearance_data__invitationToken=token).first()
-        
-        if not dossier:
-            return Response({"error": "Invalid or expired invitation token."}, status=status.HTTP_400_BAD_REQUEST)
-
-        admin_clearance = dossier.admin_clearance_data
-        expires_at_str = admin_clearance.get("invitationExpiresAt")
-
-        # Check expiration
-        if expires_at_str:
-            expires_at = timezone.datetime.fromisoformat(expires_at_str)
-            if timezone.is_naive(expires_at):
-                expires_at = timezone.make_aware(expires_at)
-            if timezone.now() > expires_at:
-                return Response({"error": "Invitation token has expired."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if admin_clearance.get("status") == "activated":
-            return Response({"error": "Account has already been activated."}, status=status.HTTP_400_BAD_REQUEST)
-
-        email = dossier.email
-
-        # Activate in DB
-        User = get_user_model()
-        user = User.objects.filter(email__iexact=email).first()
-        if not user:
-            return Response({"error": "User record not found in system databases."}, status=status.HTTP_404_NOT_FOUND)
-
-        user.set_password(password)
-        user.is_active = True
-        user.save()
-
-        if hasattr(user, "company") and user.company:
-            employee = Employee.objects.filter(user=user, company=user.company).first()
-            if employee:
-                employee.is_active = True
-                employee.save()
-
-        # Update dossier status
-        admin_clearance["status"] = "activated"
-        admin_clearance["invitationStatus"] = "Activated"
-        
-        if "auditLogs" not in admin_clearance:
-            admin_clearance["auditLogs"] = []
-
-        admin_clearance["auditLogs"].append({
-            "timestamp": timezone.now().strftime("%d %b %Y %I:%M %p"),
-            "action": "Credentials Created",
-            "details": f"Technician successfully set security credentials. System access granted."
-        })
-        admin_clearance["auditLogs"].append({
-            "timestamp": timezone.now().strftime("%d %b %Y %I:%M %p"),
-            "action": "Workforce Activated",
-            "details": f"Employee portal account transitioned to active state. Welcome to the Caltrack workspace!"
-        })
-
-        dossier.admin_clearance_data = admin_clearance
-
-        # Save dossier
-        dossier.save()
-
-        return Response({"success": True})
 
 
 class PasswordResetVerifyIdentityView(APIView):
@@ -1616,31 +935,7 @@ class PasswordResetVerifyIdentityView(APIView):
         identity = identity.strip()
         User = get_user_model()
         user = User.objects.filter(Q(username__iexact=identity) | Q(email__iexact=identity)).first()
-        
-        found_user = user
-        found_employee = None
-        
-        # If not found directly, search by employee_id (or employee's linked user)
-        if not found_user:
-            from employees.models import Employee
-            emp = Employee.objects.filter(
-                Q(employee_id__iexact=identity) |
-                Q(user__username__iexact=identity) |
-                Q(user__email__iexact=identity)
-            ).select_related('user').first()
-            if emp:
-                found_user = emp.user
-                found_employee = emp
 
-        # If found user via the User model, try to fetch employee details
-        if found_user and not found_employee and getattr(found_user, "company", None):
-            try:
-                from employees.models import Employee
-                found_employee = Employee.objects.filter(user=found_user, company=found_user.company).first()
-            except Exception:
-                pass
-
-        # Masking email helper
         def mask_email(email_str):
             if not email_str or "@" not in email_str:
                 return "su***@company.com"
@@ -1653,31 +948,18 @@ class PasswordResetVerifyIdentityView(APIView):
                 masked_username = username[:2] + "***"
             return f"{masked_username}@{domain}"
 
-        if found_user:
-            emp_id = found_employee.employee_id if found_employee else identity
-            name = found_user.get_full_name() or found_user.username
-            department = found_employee.department if (found_employee and found_employee.department) else "Operations"
-            email = found_user.email
-            if not email:
-                email = "suryaramya111111@gmail.com"
-        else:
-            # Local Dev Fallback: return mock details for testing any identity (like EMP1025)
-            if settings.DEBUG:
-                emp_id = identity
-                name = "Surya S"
-                department = "Operations"
-                email = "suryaramya111111@gmail.com"
-            else:
-                return Response({"detail": "No workforce identity detected in system registries."}, status=404)
+        if user:
+            name = user.get_full_name() or user.username
+            email = user.email
+            return Response({
+                "verified": True,
+                "name": name,
+                "email": email,
+                "email_masked": mask_email(email)
+            })
 
-        return Response({
-            "verified": True,
-            "employee_id": emp_id,
-            "name": name,
-            "department": department,
-            "email": email,
-            "email_masked": mask_email(email)
-        })
+        return Response({"detail": "User not found with provided identifier."}, status=404)
+
 
 def _normalize_phone(phone):
     if not phone:
@@ -1945,67 +1227,14 @@ class VerifyOTPView(APIView):
                 )
 
 
-class ApprovedEmployeesListView(APIView):
-    """
-    GET /api/auth/approved-employees/
-    Returns all employees who have been approved (and are now in the DB),
-    either inactive (invitation sent, not yet activated) or active (activated/logged in).
-    Used by the Admin Approval Center to populate the Approved Employees tab.
-    """
-    permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        from employees.models import Employee
-        from django.utils import timezone as tz
 
-        User = get_user_model()
-        company = getattr(request, "company", None) or getattr(request.user, "company", None)
-
-        # Fetch employees with role=EMPLOYEE from the DB
-        employee_qs = Employee.objects.select_related("user").filter(
-            user__role=User.Role.EMPLOYEE
-        )
-        if company:
-            employee_qs = employee_qs.filter(company=company)
-
-        result = []
-        for emp in employee_qs:
-            user = emp.user
-            # Determine activation status
-            if user.is_active:
-                activation_status = "activated"
-                status_label = "Activated"
-            else:
-                activation_status = "approved"
-                status_label = "Invitation Sent"
-
-            result.append({
-                "id": emp.id,
-                "employee_id": emp.employee_id,
-                "full_name": user.get_full_name() or user.username,
-                "email": user.email,
-                "phone": emp.phone or "—",
-                "title": emp.title or "Field Operations Tech",
-                "is_active": user.is_active,
-                "activation_status": activation_status,
-                "status_label": status_label,
-                "hourly_rate": float(emp.hourly_rate) if emp.hourly_rate is not None else 0.0,
-                "date_joined": user.date_joined.strftime("%d %b %Y") if user.date_joined else "—",
-                "country": emp.country or "—",
-                "department": emp.department or "Operations",
-            })
-
-        return Response({"success": True, "data": result})
 
 
 class DeleteAccountView(APIView):
     """
     POST /api/auth/delete-account/
-    Securely deletes an employee account using email and password verification.
-    This workflow is restricted to employee accounts only (admins/managers cannot be deleted this way).
-    Supports:
-    - Employee self-deletion (deletes logged-in user, clears cookies)
-    - Admin/Manager deletion (deletes employee user, does not clear admin cookies)
+    Securely deletes an account using email and password verification.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -2028,92 +1257,12 @@ class DeleteAccountView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check target user's role is employee
-        if target_user.role != "employee":
-            return Response(
-                {"success": False, "message": "Only employee accounts can be deleted via this workflow."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         # Check password
         if not target_user.check_password(password):
             return Response(
                 {"success": False, "message": "Incorrect password. Account deletion aborted."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        # Clean up all foreign key references to target_user to prevent database IntegrityError
-        from django.apps import apps
-
-        # 1. Clean up employees
-        if apps.is_installed("employees"):
-            from employees.models import Employee
-            Employee.objects.filter(user=target_user).delete()
-            Employee.objects.filter(invited_by=target_user).update(invited_by=None)
-
-        # 2. Clean up settings_hub
-        if apps.is_installed("settings_hub"):
-            from settings_hub.models import TeamInvite, APIKey, Webhook
-            TeamInvite.objects.filter(invited_by=target_user).update(invited_by=None)
-            APIKey.objects.filter(created_by=target_user).update(created_by=None)
-            Webhook.objects.filter(created_by=target_user).update(created_by=None)
-
-        # 3. Clean up time logs
-        if apps.is_installed("time_tracking"):
-            from time_tracking.models import TimeLog
-            TimeLog.objects.filter(approved_by=target_user).update(approved_by=None)
-
-        # 4. Clean up mileage
-        if apps.is_installed("mileage"):
-            try:
-                from mileage.models import MileageTrip
-                MileageTrip.objects.filter(approved_by=target_user).update(approved_by=None)
-            except Exception:
-                pass
-
-        # 5. Clean up payroll
-        if apps.is_installed("payroll"):
-            try:
-                from payroll.models import PayrollRecord
-                PayrollRecord.objects.filter(generated_by=target_user).update(generated_by=None)
-            except Exception:
-                pass
-
-        # 6. Clean up leaves
-        if apps.is_installed("leaves"):
-            try:
-                from leaves.models import LeaveRequest
-                LeaveRequest.objects.filter(approved_by=target_user).update(approved_by=None)
-            except Exception:
-                pass
-
-        # 7. Clean up tasks
-        if apps.is_installed("tasks"):
-            try:
-                from tasks.models import Task, TaskAttachment, TaskActivityLog
-                Task.objects.filter(assigned_by=target_user).update(assigned_by=None)
-                Task.objects.filter(assigned_to=target_user).delete()
-                TaskAttachment.objects.filter(uploaded_by=target_user).update(uploaded_by=None)
-                TaskActivityLog.objects.filter(actor=target_user).update(actor=None)
-            except Exception:
-                pass
-
-        # 8. Clean up service requests
-        if apps.is_installed("service_requests"):
-            try:
-                from service_requests.models import ServiceRequest
-                ServiceRequest.objects.filter(assigned_by=target_user).update(assigned_by=None)
-            except Exception:
-                pass
-
-        # 9. Clean up inventory
-        if apps.is_installed("inventory"):
-            try:
-                from inventory.models import InventoryIssuance, InventoryTransfer
-                InventoryIssuance.objects.filter(issued_by=target_user).update(issued_by=None)
-                InventoryTransfer.objects.filter(requested_by=target_user).delete()
-            except Exception:
-                pass
 
         target_user.delete()
 
@@ -2126,6 +1275,7 @@ class DeleteAccountView(APIView):
             return response
 
         return Response(response_data)
+
 
 
 class SendEmailOTPView(APIView):

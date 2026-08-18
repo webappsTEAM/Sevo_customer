@@ -12,8 +12,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('companies', '0004_seed_regions'),
-        ('employees', '0006_employee_bank_details_employee_currency_and_more'),
+        ('companies', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -29,7 +28,7 @@ class Migration(migrations.Migration):
                 ('started_date', models.DateTimeField(blank=True, null=True)),
                 ('completed_date', models.DateTimeField(blank=True, null=True)),
                 ('assigned_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='assigned_jobs', to=settings.AUTH_USER_MODEL)),
-                ('employee', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='jobs', to='employees.employee')),
+                ('employee', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='jobs', to=settings.AUTH_USER_MODEL)),
             ],
             options={
                 'ordering': ['-assigned_date'],
@@ -45,7 +44,7 @@ class Migration(migrations.Migration):
                 ('completion_rate', models.DecimalField(decimal_places=2, default=0, max_digits=5)),
                 ('customer_satisfaction_score', models.DecimalField(decimal_places=2, default=0, max_digits=3)),
                 ('last_updated', models.DateTimeField(auto_now=True)),
-                ('employee', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='performance', to='employees.employee')),
+                ('employee', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='performance', to=settings.AUTH_USER_MODEL)),
             ],
         ),
         migrations.CreateModel(
@@ -80,7 +79,7 @@ class Migration(migrations.Migration):
                 ('priority', models.CharField(choices=[('low', 'Low'), ('normal', 'Normal'), ('high', 'High'), ('urgent', 'Urgent')], default='normal', max_length=10)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('assigned_employee', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='assigned_service_requests', to='employees.employee')),
+                ('assigned_employee', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='assigned_service_requests', to=settings.AUTH_USER_MODEL)),
                 ('company', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='service_requests', to='companies.company')),
             ],
             options={

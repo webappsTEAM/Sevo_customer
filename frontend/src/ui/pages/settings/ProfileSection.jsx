@@ -3,7 +3,6 @@ import { Save, Camera, User, Globe, Languages, Phone, Link as LinkIcon, Loader2 
 import { apiRequest } from "../../../api/client.js"
 import { useAuth } from "../../../state/auth/useAuth.js"
 import { Input, Select, TextArea } from "../../components/kit.jsx"
-import { TECHNICIAN_ROLES } from "../../../utils/roles.js"
 
 const TIMEZONES = [
   "UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
@@ -149,12 +148,15 @@ export default function ProfileSection({ markDirty, showToast, Field, SectionHea
               {form.first_name || form.last_name ? `${form.first_name} ${form.last_name}`.trim() : user?.username}
             </div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-              {(() => {
-                if (user?.role === "employee" && Array.isArray(user?.employee_roles) && user.employee_roles.length > 0) {
-                  return user.employee_roles.map(rId => TECHNICIAN_ROLES.find(t => t.id === rId)?.label).filter(Boolean).join(" / ") || user?.role
-                }
-                return user?.role
-              })()} · {user?.email}
+              {user?.role === "admin"
+                ? "Administrator"
+                : user?.role === "manager"
+                ? "Manager"
+                : user?.role === "support" || user?.isCareAgent
+                ? "Support"
+                : user?.role === "customer"
+                ? "Customer"
+                : user?.role || "Staff"} · {user?.email}
             </div>
             <button
               onClick={() => fileRef.current?.click()}

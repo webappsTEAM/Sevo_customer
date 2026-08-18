@@ -279,10 +279,32 @@ export function getHomePageConfig() {
 
 function mergeWithDefaultConfig(parsed) {
   if (!parsed) return DEFAULT_HOME_PAGE_CONFIG
+
+  const parsedHero = parsed.hero || {}
+  const rawCollage = Array.isArray(parsedHero.collageImages) ? parsedHero.collageImages : []
+  const defaultCollage = DEFAULT_HOME_PAGE_CONFIG.hero.collageImages
+  const mergedCollage = [0, 1, 2, 3].map((i) => rawCollage[i] || defaultCollage[i])
+
+  const defaultCategoryImages = [
+    "/mockups/category_for_you.png",
+    "/mockups/category_food_health.png",
+    "/mockups/category_home_transport.png"
+  ]
+  const rawCategories = Array.isArray(parsed.categories) && parsed.categories.length > 0 ? parsed.categories : DEFAULT_HOME_PAGE_CONFIG.categories
+  const mergedCategories = rawCategories.map((cat, idx) => ({
+    ...cat,
+    image: (cat.image && cat.image.trim()) || (cat.image_url && cat.image_url.trim()) || defaultCategoryImages[idx % defaultCategoryImages.length]
+  }))
+
   return {
     ...DEFAULT_HOME_PAGE_CONFIG,
     ...parsed,
-    hero: { ...DEFAULT_HOME_PAGE_CONFIG.hero, ...(parsed.hero || {}) },
+    hero: { 
+      ...DEFAULT_HOME_PAGE_CONFIG.hero, 
+      ...parsedHero,
+      collageImages: mergedCollage
+    },
+    categories: mergedCategories,
     offers: { ...DEFAULT_HOME_PAGE_CONFIG.offers, ...(parsed.offers || {}) },
     howItWorks: { ...DEFAULT_HOME_PAGE_CONFIG.howItWorks, ...(parsed.howItWorks || {}) },
     featuredPros: { ...DEFAULT_HOME_PAGE_CONFIG.featuredPros, ...(parsed.featuredPros || {}) },

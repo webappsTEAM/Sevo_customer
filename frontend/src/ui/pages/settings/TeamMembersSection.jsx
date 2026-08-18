@@ -10,8 +10,7 @@ import { Card, Button, Input, Select, Pill } from "../../components/kit.jsx"
 const ROLE_CONFIG = {
   admin: { label: "Admin", tone: "neutral" },
   manager: { label: "Manager", tone: "neutral" },
-  employee: { label: "Employee", tone: "neutral" },
-  kiosk: { label: "Kiosk", tone: "neutral" },
+  support: { label: "Support", tone: "neutral" },
 }
 
 function RoleMenu({ value, onChange, exclude = [] }) {
@@ -56,7 +55,7 @@ export default function TeamMembersSection({ showToast, SectionHeader }) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [roleFilter, setRoleFilter] = useState("")
-  const [inviteForm, setInviteForm] = useState({ email: "", role: "employee" })
+  const [inviteForm, setInviteForm] = useState({ email: "", role: "admin" })
   const [inviting, setInviting] = useState(false)
   const [removing, setRemoving] = useState(null)
   const [changingRole, setChangingRole] = useState(null)
@@ -93,15 +92,9 @@ export default function TeamMembersSection({ showToast, SectionHeader }) {
       return
     }
 
-    const maxAdmins = 10
-    const maxEmployees = 200
-
-    if (["admin", "manager"].includes(inviteForm.role) && emailsList.length > maxAdmins) {
-      showToast(`You can invite a maximum of ${maxAdmins} administrators/managers at a time.`, "error")
-      return
-    }
-    if (inviteForm.role === "employee" && emailsList.length > maxEmployees) {
-      showToast(`You can invite a maximum of ${maxEmployees} employees at a time.`, "error")
+    const maxInvites = 20
+    if (emailsList.length > maxInvites) {
+      showToast(`You can invite a maximum of ${maxInvites} members at a time.`, "error")
       return
     }
 
@@ -130,7 +123,7 @@ export default function TeamMembersSection({ showToast, SectionHeader }) {
       showToast(`Failed to send invites: ${lastError}`, "error")
     }
 
-    setInviteForm({ email: "", role: "employee" })
+    setInviteForm({ email: "", role: "admin" })
     setShowInviteForm(false)
     setInviting(false)
   }
@@ -236,9 +229,9 @@ export default function TeamMembersSection({ showToast, SectionHeader }) {
                     onChange={e => setInviteForm(p => ({ ...p, role: e.target.value }))}
                     disabled={inviting}
                     options={[
-                      { label: "Employee (Max 200)", value: "employee" },
-                      { label: "Manager (Max 10)", value: "manager" },
-                      { label: "Admin (Max 10)", value: "admin" }
+                      { label: "Admin (Full Workspace Access)", value: "admin" },
+                      { label: "Manager (Operations Access)", value: "manager" },
+                      { label: "Support (Customer Care Access)", value: "support" }
                     ]}
                   />
                 </div>
@@ -253,7 +246,7 @@ export default function TeamMembersSection({ showToast, SectionHeader }) {
             </div>
             {user?.company_country && (
               <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 14 }}>ℹ️</span> This employee will join under your company's region: 
+                <span style={{ fontSize: 14 }}>ℹ️</span> This member will join your company workspace with access to services, bookings, and business data under region: 
                 <strong style={{ color: "var(--fg)" }}>{user.company_country === "UK" ? "🇬🇧 United Kingdom" : user.company_country === "IN" ? "🇮🇳 India" : "🇺🇸 United States"}</strong>
               </div>
             )}

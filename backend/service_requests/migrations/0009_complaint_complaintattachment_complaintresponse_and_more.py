@@ -8,7 +8,6 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('employees', '0011_alter_employee_payroll_group'),
         ('service_requests', '0008_remove_employeeperformance_issue_resolution_rate_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
@@ -25,7 +24,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('resolved_at', models.DateTimeField(blank=True, null=True)),
-                ('assigned_employee', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='assigned_complaints', to='employees.employee')),
+                ('assigned_employee', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='assigned_complaints', to=settings.AUTH_USER_MODEL)),
                 ('booking', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='complaints', to='service_requests.servicerequest')),
                 ('raised_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='complaints_raised', to=settings.AUTH_USER_MODEL)),
             ],

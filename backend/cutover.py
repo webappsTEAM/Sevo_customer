@@ -842,8 +842,8 @@ def phase_smoke_tests(tgt: dict) -> bool:
          "SELECT count(*) FROM service_requests_catalogservicevariant sv "
          "JOIN service_requests_package p ON p.id = sv.service_id;", False),
 
-        ("Employees - employees_employee readable",
-         "SELECT count(*) FROM employees_employee;", True),
+        ("Saved Addresses - accounts_savedaddress readable",
+         "SELECT count(*) FROM accounts_savedaddress;", True),
 
         ("Bookings - service_requests_servicerequest",
          "SELECT count(*) FROM service_requests_servicerequest;", True),

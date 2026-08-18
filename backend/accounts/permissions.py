@@ -52,7 +52,7 @@ def RequireModuleAccess(module_name: str, required_action: str):
             if not company:
                 return False
                 
-            user_role = getattr(user, "role", "employee")
+            user_role = getattr(user, "role", "customer")
             
             # Superusers bypass
             if user.is_superuser:

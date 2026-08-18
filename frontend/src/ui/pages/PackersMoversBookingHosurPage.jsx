@@ -11,6 +11,7 @@ import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
 import { createBooking } from "../../api/bookingService.js"
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
+import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -1184,12 +1185,22 @@ export function PackersMoversBookingHosurPage() {
     }
   }
 
-  const handleVerifyOtp = async () => {
-    if (otpValue.length < 6) return
+  const handleVerifyOtp = async (forcedVal = null) => {
+    const code = (forcedVal || otpValue).replace(/\D/g, "")
+    if (code.length < 6 || otpLoading) return
     setOtpLoading(true)
     setBookingError("")
     try {
-      await apiVerifyCustomerPhoneOTP(phone, otpValue)
+      let verified = false
+      try {
+        const wsRes = await verifyOtpViaWebSocket(phone, code)
+        if (wsRes && wsRes.success) verified = true
+      } catch {
+        // fallback
+      }
+      if (!verified) {
+        await apiVerifyCustomerPhoneOTP(phone, code)
+      }
       setLocalIsSignedIn(true)
       setLoginModalOpen(false)
       setOtpStep(false)
@@ -1197,7 +1208,7 @@ export function PackersMoversBookingHosurPage() {
       setOtpSent(false)
       await submitBooking()
     } catch (err) {
-      setBookingError(err?.body?.detail || "Invalid OTP. Please try again.")
+      setBookingError(err?.body?.detail || err?.message || "Invalid OTP. Please try again.")
     } finally {
       setOtpLoading(false)
     }
@@ -2680,7 +2691,13 @@ export function PackersMoversBookingHosurPage() {
                     type="text"
                     maxLength={6}
                     value={otpValue}
-                    onChange={(e) => setOtpValue(e.target.value.replace(/[^0-9]/g, ""))}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 6)
+                      setOtpValue(val)
+                      if (val.length === 6) {
+                        handleVerifyOtp(val)
+                      }
+                    }}
                     placeholder="• • • • • •"
                     className="w-full text-center text-2xl tracking-[1em] font-extrabold bg-slate-50 border border-slate-200 rounded-xl py-3 text-slate-900 outline-none focus:border-emerald-500 focus:bg-white"
                   />
@@ -2690,15 +2707,17 @@ export function PackersMoversBookingHosurPage() {
                   <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
                 )}
 
-                <button
-                  type="button"
-                  onClick={handleVerifyOtp}
-                  disabled={otpLoading || bookingSubmitting || otpValue.length < 6}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
-                >
-                  {(otpLoading || bookingSubmitting) && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{bookingSubmitting ? "Confirming booking..." : otpLoading ? "Verifying..." : "Verify & Confirm Booking"}</span>
-                </button>
+                {otpLoading || bookingSubmitting ? (
+                  <div className="w-full py-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-sm">
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                    <span>{bookingSubmitting ? "Confirming booking in real time..." : "Verifying OTP in real time..."}</span>
+                  </div>
+                ) : (
+                  <div className="w-full py-2.5 bg-slate-50 border border-dashed border-slate-200 text-slate-500 text-[11px] font-semibold rounded-xl text-center flex items-center justify-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Auto-verifying — enters and confirms instantly</span>
+                  </div>
+                )}
 
                 <div className="text-center">
                   <button

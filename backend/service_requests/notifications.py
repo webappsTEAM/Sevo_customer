@@ -675,3 +675,38 @@ def notify_complaint_assigned(complaint) -> None:
         logger.info("[Complaint] Assignment notification sent to %s", emp_email)
     except Exception as exc:
         logger.error("[Complaint] Failed to send assignment notification: %s", exc)
+
+
+def broadcast_tracking_event(service_request, event_type="job_updated", custom_data=None) -> None:
+    """
+    Broadcasts real-time events to all WebSocket clients connected to the tracking session
+    for this service request.
+    """
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        if not channel_layer or not service_request:
+            return
+
+        from service_requests.views import _build_tracking_payload
+        payload = custom_data or _build_tracking_payload(service_request, has_full_access=True)
+
+        group_names = [
+            f"tracking_{service_request.id}",
+            f"tracking_{service_request.request_id}",
+        ]
+        if service_request.tracking_token:
+            group_names.append(f"tracking_{service_request.tracking_token}")
+
+        for g in group_names:
+            async_to_sync(channel_layer.group_send)(
+                g,
+                {
+                    "type": event_type,
+                    "data": payload,
+                }
+            )
+    except Exception as e:
+        logger.warning("[Tracking WS] Failed to broadcast event %s for SR %s: %s", event_type, getattr(service_request, "request_id", None), e)
+

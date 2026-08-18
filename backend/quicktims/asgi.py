@@ -6,16 +6,14 @@ django.setup()
 
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
-
-# Imports must come AFTER django.setup()
-from live_locations.routing import websocket_urlpatterns
-from live_locations.ws_middleware import JWTTenantAuthMiddleware
+from channels.auth import AuthMiddlewareStack
+from quicktims.routing import websocket_urlpatterns
 
 django_asgi_app = get_asgi_application()
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": JWTTenantAuthMiddleware(
+    "websocket": AuthMiddlewareStack(
         URLRouter(websocket_urlpatterns)
     ),
 })

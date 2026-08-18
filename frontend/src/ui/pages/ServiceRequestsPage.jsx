@@ -165,39 +165,30 @@ function PipelineLanes({ requests, activeStatus, onFilter }) {
   )
 }
 
-/* ─── Employee Picker ────────────────────────────────────────────────────── */
-function EmployeePicker({ employees, onAssign, loading }) {
-  const [selected, setSelected] = useState("")
+/* ─── Dispatch Workforce Panel ────────────────────────────────────────────── */
+function DispatchWorkforcePanel({ onDispatch, loading }) {
+  const [notes, setNotes] = useState("")
 
   return (
     <div className="sr-assign-panel">
-      <div className="sr-assign-title"><Users size={13} /> Assign Technician</div>
-      <div className="sr-emp-list">
-        {employees.map(emp => (
-          <div
-            key={emp.id}
-            className={`sr-emp-card ${selected === emp.id ? "sr-emp-card--selected" : ""}`}
-            onClick={() => setSelected(selected === emp.id ? "" : emp.id)}
-          >
-            <TechAvatar name={emp.full_name} size={34} />
-            <div className="sr-emp-info">
-              <div className="sr-emp-name">{emp.full_name}</div>
-              <div className="sr-emp-role">{emp.title || "Field Technician"} · {emp.employee_id}</div>
-            </div>
-            {selected === emp.id && <CheckCircle2 size={16} style={{ color: "#7C3AED", flexShrink: 0 }} />}
-          </div>
-        ))}
-        {employees.length === 0 && (
-          <div className="sr-empty-mini">No technicians available</div>
-        )}
+      <div className="sr-assign-title"><Send size={13} /> Dispatch to Workforce System</div>
+      <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: 10, lineHeight: 1.4 }}>
+        This booking will be transmitted to the external Workforce system for automated technician allocation and scheduling.
       </div>
+      <textarea
+        className="sr-input"
+        style={{ width: "100%", minHeight: 60, fontSize: "0.82rem", padding: "8px 10px", borderRadius: 8, border: "1px solid #cbd5e1", marginBottom: 12 }}
+        placeholder="Optional dispatch notes or customer instructions..."
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
+      />
       <button
         className="sr-btn-primary"
-        disabled={!selected || loading}
-        onClick={() => selected && onAssign(selected)}
+        disabled={loading}
+        onClick={() => onDispatch(notes)}
       >
         {loading ? <RefreshCw size={13} className="sr-spin" /> : <Send size={13} />}
-        Assign Technician
+        Dispatch Booking
       </button>
     </div>
   )
@@ -211,7 +202,6 @@ export function ServiceRequestsPage() {
   const path = location.pathname
   const [requests, setRequests] = useState([])
   const [allRequests, setAllRequests] = useState([])
-  const [employees, setEmployees] = useState([])
   const [categoriesMap, setCategoriesMap] = useState({})
   const [selectedId, setSelectedId] = useState(null)
   const [detail, setDetail] = useState(null)
@@ -318,10 +308,6 @@ export function ServiceRequestsPage() {
 
   useEffect(() => {
     loadRequests()
-    apiRequest("/admin/service-requests/employees/")
-      .then(res => { if (res?.success) setEmployees(res.data) })
-      .catch(err => console.error("Error loading technicians:", err))
-      
     apiRequest("/catalog/categories/")
       .then(res => {
         if (res?.success) {
@@ -410,31 +396,22 @@ export function ServiceRequestsPage() {
     } finally { setActionLoading(false) }
   }
 
-  const handleAssign = async (empId) => {
+  const handleDispatch = async (notes = "") => {
     setActionLoading(true)
     try {
-      const res = await apiRequest(`/admin/service-requests/${selectedId}/assign/`, {
-        method: "PATCH", json: { employee_id: empId },
+      const res = await apiRequest(`/admin/service-requests/${selectedId}/dispatch/`, {
+        method: "POST", json: { notes },
       })
       if (res?.success) {
-        showToast("Technician assigned!", "success")
+        showToast("Booking dispatched to Workforce!", "success")
         setShowAssign(false)
         await refreshAll()
       } else {
-        const msg = res?.message || (res?.errors ? Object.values(res.errors).flat().join("; ") : "Assignment failed.")
+        const msg = res?.message || (res?.errors ? Object.values(res.errors).flat().join("; ") : "Dispatch failed.")
         showToast(msg, "error")
       }
     } catch (err) {
-      const msg =
-        err?.body?.detail ||
-        err?.body?.message ||
-        (err?.body?.errors && typeof err.body.errors === "object"
-          ? Object.entries(err.body.errors).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("; ")
-          : "") ||
-        (err?.body && typeof err.body === "object"
-          ? Object.entries(err.body).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("; ")
-          : "") ||
-        "Assignment error."
+      const msg = err?.body?.message || err?.body?.detail || "Dispatch error."
       showToast(msg, "error")
     } finally { setActionLoading(false) }
   }
@@ -973,10 +950,10 @@ export function ServiceRequestsPage() {
 
                   <div className="sr-item-bottom">
                     <StatusBadge status={r.status} />
-                    {r.assigned_employee && (
+                    {(r.technician_name || r.assigned_employee) && (
                       <div className="sr-item-tech">
-                        <TechAvatar name={r.assigned_employee.full_name} size={18} />
-                        <span>{r.assigned_employee.full_name?.split(" ")[0]}</span>
+                        <TechAvatar name={r.technician_name || r.assigned_employee?.full_name} size={18} />
+                        <span>{(r.technician_name || r.assigned_employee?.full_name)?.split(" ")[0]}</span>
                       </div>
                     )}
                   </div>
@@ -1091,40 +1068,35 @@ export function ServiceRequestsPage() {
                   </div>
                 </div>
 
-                {/* Technician */}
+                {/* Technician Snapshot (External Workforce) */}
                 <div className="sr-info-card">
-                  {(() => {
-                    const catKey = detail.service_category?.toString()
-                    const catEntry = categoriesMap[catKey]
-                    const catName = catEntry?.name || (catKey ? catKey.replace(/_/g, " ") : "")
-                    // Use the DB slug from categoriesMap; fall back to generating from name
-                    const catSlug = catEntry?.slug || catName.toLowerCase().replace(/ /g, "_")
-                    const reqRoleIds = CATEGORY_TO_ROLES_MAP[catSlug] || []
-                    const reqRoleLabels = reqRoleIds.map(id => TECHNICIAN_ROLES.find(r => r.id === id)?.label).filter(Boolean)
-                    const roleTitle = reqRoleLabels.length > 0 ? reqRoleLabels.join(" / ") : "Technician"
-                    return (
-                      <div className="sr-info-card-title"><Users size={13} /> {roleTitle}</div>
-                    )
-                  })()}
-                  {detail.assigned_employee ? (
+                  <div className="sr-info-card-title"><Users size={13} /> Field Technician</div>
+                  {(detail.technician_name || detail.assigned_employee) ? (
                     <div className="sr-tech-assigned">
-                      <TechAvatar name={detail.assigned_employee.full_name} size={40} />
+                      <TechAvatar name={detail.technician_name || detail.assigned_employee?.full_name} size={40} />
                       <div>
-                        <div className="sr-tech-name">{detail.assigned_employee.full_name}</div>
-                        <div className="sr-tech-role">{detail.assigned_employee.title || "Field Technician"}</div>
-                        <div className="sr-tech-id">ID: {detail.assigned_employee.employee_id}</div>
+                        <div className="sr-tech-name">{detail.technician_name || detail.assigned_employee?.full_name}</div>
+                        <div className="sr-tech-role">{detail.technician_phone || "External Workforce"}</div>
+                        {detail.technician_rating && (
+                          <div className="sr-tech-id" style={{ color: "#d97706", fontWeight: 600 }}>⭐ {detail.technician_rating} Rating</div>
+                        )}
+                        {detail.workforce_job_id && (
+                          <div className="sr-tech-id" style={{ color: "#6366f1" }}>Job: {detail.workforce_job_id}</div>
+                        )}
                       </div>
                     </div>
                   ) : (
                     <div className="sr-tech-unassigned">
                       <HelpCircle size={20} style={{ color: "#94a3b8" }} />
-                      <span>No technician assigned yet</span>
-                      <button
-                        className="sr-btn-sm"
-                        onClick={() => setShowAssign(v => !v)}
-                      >
-                        <Users size={11} /> Assign Now
-                      </button>
+                      <span>{detail.status === "confirmed" ? "Ready for Workforce Dispatch" : "No technician assigned yet"}</span>
+                      {detail.status === "confirmed" && (
+                        <button
+                          className="sr-btn-sm"
+                          onClick={() => setShowAssign(v => !v)}
+                        >
+                          <Send size={11} /> Dispatch Now
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1226,39 +1198,22 @@ export function ServiceRequestsPage() {
                 )}
               </div>
 
-              {/* Assign Panel (expandable) */}
+              {/* Dispatch Panel (expandable) */}
               {showAssign && (
-                (() => {
-                  const catKey = detail.service_category?.toString()
-                  const catEntry = categoriesMap[catKey]
-                  const catName = catEntry?.name || (catKey ? catKey.replace(/_/g, " ") : "")
-                  // Use the DB slug from categoriesMap; fall back to generating from name
-                  const catSlug = catEntry?.slug || catName.toLowerCase().replace(/ /g, "_")
-                  const reqRoleIds = CATEGORY_TO_ROLES_MAP[catSlug] || []
-                  
-                  const filteredEmployees = employees.filter(emp => {
-                    if (reqRoleIds.length === 0) return true;
-                    if (!emp.service_roles || !Array.isArray(emp.service_roles)) return false;
-                    return emp.service_roles.some(r => reqRoleIds.includes(r));
-                  });
-
-                  return (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                      <EmployeePicker employees={filteredEmployees} onAssign={handleAssign} loading={actionLoading} />
-                    </motion.div>
-                  )
-                })()
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                  <DispatchWorkforcePanel onDispatch={handleDispatch} loading={actionLoading} />
+                </motion.div>
               )}
 
               {/* Completion Proofs */}
-              {detail.employee_job?.proofs?.length > 0 && (
+              {((detail.completion_proofs || detail.proofs || detail.employee_job?.proofs)?.length > 0) && (
                 <div className="sr-proofs-card">
                   <div className="sr-info-card-title"><Eye size={13} /> Completion Proofs</div>
-                  {detail.employee_job.notes && (
-                    <div className="sr-proof-note">&ldquo;{detail.employee_job.notes}&rdquo;</div>
+                  {(detail.completion_notes || detail.employee_job?.notes) && (
+                    <div className="sr-proof-note">&ldquo;{detail.completion_notes || detail.employee_job?.notes}&rdquo;</div>
                   )}
                   <div className="sr-proof-grid">
-                    {detail.employee_job.proofs.map((proof, idx) => (
+                    {(detail.completion_proofs || detail.proofs || detail.employee_job?.proofs || []).map((proof, idx) => (
                       <div key={proof.id || idx} className="sr-proof-item">
                         {proof.photo ? (
                           <a href={proof.photo} target="_blank" rel="noreferrer" className="sr-proof-photo-link">
@@ -1266,7 +1221,7 @@ export function ServiceRequestsPage() {
                             <div className="sr-proof-hover"><Eye size={14} /></div>
                           </a>
                         ) : (
-                          <a href={proof.document} target="_blank" rel="noreferrer" className="sr-proof-doc">
+                          <a href={proof.document || proof.file} target="_blank" rel="noreferrer" className="sr-proof-doc">
                             <FileText size={20} style={{ color: "#7C3AED" }} />
                             <span>Document</span>
                           </a>

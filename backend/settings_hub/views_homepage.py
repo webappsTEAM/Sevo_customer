@@ -92,12 +92,17 @@ class HomePageConfigAPIView(APIView):
                             {"id": "b-3", "text": "1M+ Happy Homes"},
                             {"id": "b-4", "text": "30 Day Guarantee"}
                         ],
-                        "collageImages": []
+                        "collageImages": [
+                            "/mockups/service_hvac.png",
+                            "/mockups/service_electrical.png",
+                            "/mockups/service_cleaning.png",
+                            "/mockups/service_plumbing.png"
+                        ]
                     },
                     "categories": [
-                        {"id": "cat-1", "title": "For You", "subtitle": "Curated services & recommendations", "badge": "For You", "image": "", "link": "/booking?category=for_you", "enabled": True, "display_order": 1},
-                        {"id": "cat-2", "title": "Food and Health", "subtitle": "Groceries & farm-fresh vegetables", "badge": "Groceries & Veggies", "image": "", "link": "/booking?category=groceries", "enabled": True, "display_order": 2},
-                        {"id": "cat-3", "title": "Home, Repair & Transport Services", "subtitle": "Cleaning, repairs, painting & logistics", "badge": "8 Services", "image": "", "link": "/booking?category=home_repairs", "enabled": True, "display_order": 3}
+                        {"id": "cat-1", "title": "For You", "subtitle": "Curated services & recommendations", "badge": "For You", "image": "/mockups/category_for_you.png", "link": "/booking?category=for_you", "enabled": True, "display_order": 1},
+                        {"id": "cat-2", "title": "Food and Health", "subtitle": "Groceries & farm-fresh vegetables", "badge": "Groceries & Veggies", "image": "/mockups/category_food_health.png", "link": "/booking?category=groceries", "enabled": True, "display_order": 2},
+                        {"id": "cat-3", "title": "Home, Repair & Transport Services", "subtitle": "Cleaning, repairs, painting & logistics", "badge": "8 Services", "image": "/mockups/category_home_transport.png", "link": "/booking?category=home_repairs", "enabled": True, "display_order": 3}
                     ],
                     "offers": {
                         "mainCard": {"title": "Limited Time Offers!", "subtitle": "Great deals on services you love.", "buttonText": "Explore Offers"},

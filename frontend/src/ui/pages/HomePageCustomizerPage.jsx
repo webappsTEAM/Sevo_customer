@@ -330,34 +330,180 @@ export default function HomePageCustomizerPage() {
                 </div>
               </div>
 
-              {/* Hero Images Collage */}
-              <div className="space-y-3 pt-4 border-t border-slate-100">
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Right Hero Collage Images (4 Grid Cards)
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {config.hero.collageImages.map((imgUrl, idx) => {
-                    const fallbackHeroList = [
-                      "/mockups/service_hvac.png",
-                      "/mockups/service_electrical.png",
-                      "/mockups/service_cleaning.png",
-                      "/mockups/service_plumbing.png"
+              {/* Hero Images Collage Customization */}
+              <div className="space-y-4 pt-6 border-t border-slate-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Right Hero Side Image Customization (4 Grid Collage Cards)
+                    </label>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Upload custom images, pick high-resolution service presets, or edit direct image links for the landing page hero side cards.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateHero("collageImages", [
+                        "/mockups/service_hvac.png",
+                        "/mockups/service_electrical.png",
+                        "/mockups/service_cleaning.png",
+                        "/mockups/service_plumbing.png"
+                      ])
+                    }}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition shrink-0"
+                  >
+                    Reset All 4 Cards to Default Presets
+                  </button>
+                </div>
+
+                {/* Live Collage Visualizer Box */}
+                <div className="bg-slate-900 rounded-2xl p-4 sm:p-6 border border-slate-800 shadow-inner space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-400" /> Landing Page Collage Live Visual Preview
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono">Real-time Layout</span>
+                  </div>
+
+                  <div className="relative h-[260px] sm:h-[320px] w-full max-w-xl mx-auto overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-950/80 via-slate-900 to-teal-950/80 p-2 border border-slate-800/80">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-teal-500/10 to-amber-500/10 rounded-2xl -z-10" />
+                    
+                    {/* Card 1: Top-Left */}
+                    <div className="absolute top-3 left-3 w-[60%] h-[62%] rounded-xl overflow-hidden border-2 border-white/80 shadow-lg group">
+                      <img
+                        src={(config.hero.collageImages[0]?.startsWith("http") || config.hero.collageImages[0]?.startsWith("/")) ? config.hero.collageImages[0] : `/mockups/service_hvac.png`}
+                        onError={(e) => { e.currentTarget.src = "/mockups/service_hvac.png" }}
+                        alt="Hero Card 1"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
+                        Card 1 (Top-Left)
+                      </div>
+                    </div>
+
+                    {/* Card 2: Bottom-Left */}
+                    <div className="absolute bottom-3 left-[10%] w-[46%] h-[44%] rounded-xl overflow-hidden border-2 border-white/80 shadow-lg group">
+                      <img
+                        src={(config.hero.collageImages[1]?.startsWith("http") || config.hero.collageImages[1]?.startsWith("/")) ? config.hero.collageImages[1] : `/mockups/service_electrical.png`}
+                        onError={(e) => { e.currentTarget.src = "/mockups/service_electrical.png" }}
+                        alt="Hero Card 2"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
+                        Card 2 (Bottom-Left)
+                      </div>
+                    </div>
+
+                    {/* Card 3: Top-Right */}
+                    <div className="absolute top-4 right-3 w-[45%] h-[50%] rounded-xl overflow-hidden border-2 border-white/80 shadow-lg group">
+                      <img
+                        src={(config.hero.collageImages[2]?.startsWith("http") || config.hero.collageImages[2]?.startsWith("/")) ? config.hero.collageImages[2] : `/mockups/service_cleaning.png`}
+                        onError={(e) => { e.currentTarget.src = "/mockups/service_cleaning.png" }}
+                        alt="Hero Card 3"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
+                        Card 3 (Top-Right)
+                      </div>
+                    </div>
+
+                    {/* Card 4: Bottom-Right */}
+                    <div className="absolute bottom-4 right-4 w-[42%] h-[42%] rounded-xl overflow-hidden border-2 border-white/80 shadow-lg group">
+                      <img
+                        src={(config.hero.collageImages[3]?.startsWith("http") || config.hero.collageImages[3]?.startsWith("/")) ? config.hero.collageImages[3] : `/mockups/service_plumbing.png`}
+                        onError={(e) => { e.currentTarget.src = "/mockups/service_plumbing.png" }}
+                        alt="Hero Card 4"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
+                        Card 4 (Bottom-Right)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4 Collage Cards Editor Controls */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { id: 0, title: "Collage Card 1 (Top-Left)", defaultPreset: "/mockups/service_hvac.png" },
+                    { id: 1, title: "Collage Card 2 (Bottom-Left)", defaultPreset: "/mockups/service_electrical.png" },
+                    { id: 2, title: "Collage Card 3 (Top-Right)", defaultPreset: "/mockups/service_cleaning.png" },
+                    { id: 3, title: "Collage Card 4 (Bottom-Right)", defaultPreset: "/mockups/service_plumbing.png" }
+                  ].map((card) => {
+                    const currentVal = config.hero.collageImages[card.id] || ""
+                    const presetsList = [
+                      { label: "AC & HVAC", path: "/mockups/service_hvac.png" },
+                      { label: "Electrical", path: "/mockups/service_electrical.png" },
+                      { label: "Home Cleaning", path: "/mockups/service_cleaning.png" },
+                      { label: "Plumbing", path: "/mockups/service_plumbing.png" },
+                      { label: "Movers & Transport", path: "/mockups/category_home_transport.png" },
+                      { label: "Pest Control", path: "/mockups/cockroach_control.png" },
+                      { label: "Kitchen Clean", path: "/mockups/kitchen_cleaning_hero.png" },
+                      { label: "Appliance Repair", path: "/mockups/appliance_cleaning_hero.png" }
                     ]
 
                     return (
-                      <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <div key={card.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                            <ImageIcon className="w-4 h-4 text-teal-600" /> {card.title}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newImgs = [...config.hero.collageImages]
+                              newImgs[card.id] = card.defaultPreset
+                              updateHero("collageImages", newImgs)
+                            }}
+                            className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 hover:underline"
+                          >
+                            Reset Card {card.id + 1}
+                          </button>
+                        </div>
+
+                        {/* Image Upload Component */}
                         <ImageUploadField
-                          value={imgUrl}
+                          value={currentVal}
                           onChange={(newPath) => {
                             const newImgs = [...config.hero.collageImages]
-                            newImgs[idx] = newPath
+                            newImgs[card.id] = newPath
                             updateHero("collageImages", newImgs)
                           }}
                           section="hero"
-                          fallbackSrc={fallbackHeroList[idx % 4]}
-                          label={`Collage Card ${idx + 1}`}
+                          fallbackSrc={card.defaultPreset}
                           aspectRatio="aspect-[16/9]"
                         />
+
+                        {/* Presets Selector Buttons */}
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                            Select Service Preset Image:
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {presetsList.map((preset) => {
+                              const isSelected = currentVal === preset.path
+                              return (
+                                <button
+                                  key={preset.path}
+                                  type="button"
+                                  onClick={() => {
+                                    const newImgs = [...config.hero.collageImages]
+                                    newImgs[card.id] = preset.path
+                                    updateHero("collageImages", newImgs)
+                                  }}
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
+                                    isSelected
+                                      ? "bg-teal-600 text-white border-teal-600 shadow-2xs font-semibold"
+                                      : "bg-white text-slate-700 border-slate-200 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300"
+                                  }`}
+                                >
+                                  {preset.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
                       </div>
                     )
                   })}
@@ -474,7 +620,7 @@ export default function HomePageCustomizerPage() {
                           className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium"
                         />
                       </div>
-                      <div className="md:col-span-2">
+                      <div className="md:col-span-2 space-y-2">
                         <ImageUploadField
                           value={cat.image}
                           onChange={(newPath) => {
@@ -483,10 +629,46 @@ export default function HomePageCustomizerPage() {
                             setConfig(prev => ({ ...prev, categories: newCats }))
                           }}
                           section="categories"
-                          fallbackSrc="/mockups/category_for_you.png"
+                          fallbackSrc={idx === 0 ? "/mockups/category_for_you.png" : idx === 1 ? "/mockups/category_food_health.png" : "/mockups/category_home_transport.png"}
                           label="Category Cover Image"
                           aspectRatio="aspect-[16/9]"
                         />
+
+                        {/* Presets Quick Picker */}
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                            Quick Category Presets:
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { label: "For You", path: "/mockups/category_for_you.png" },
+                              { label: "Food & Health", path: "/mockups/category_food_health.png" },
+                              { label: "Home & Transport", path: "/mockups/category_home_transport.png" },
+                              { label: "Groceries", path: "/mockups/groceries_realistic.png" },
+                              { label: "Fresh Veggies", path: "/mockups/vegetables_realistic.png" },
+                              { label: "Home Cleaning", path: "/mockups/service_cleaning.png" },
+                              { label: "Electrical", path: "/mockups/service_electrical.png" },
+                              { label: "Plumbing", path: "/mockups/service_plumbing.png" }
+                            ].map((preset) => (
+                              <button
+                                key={preset.path}
+                                type="button"
+                                onClick={() => {
+                                  const newCats = [...config.categories]
+                                  newCats[idx].image = preset.path
+                                  setConfig(prev => ({ ...prev, categories: newCats }))
+                                }}
+                                className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition ${
+                                  cat.image === preset.path
+                                    ? "bg-blue-600 text-white border-blue-600 font-bold"
+                                    : "bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:text-blue-700"
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Target Link</label>

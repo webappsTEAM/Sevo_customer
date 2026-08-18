@@ -1645,15 +1645,6 @@ export function LandingPage() {
               {/* User Profile / Login (Urban Company Style) */}
               {user ? (
                 <div className="flex items-center gap-3">
-                  {user.companyId && user.role !== "customer" && (
-                    <button
-                      type="button"
-                      onClick={() => navigate(routes.dashboard)}
-                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-xs transition-colors cursor-pointer"
-                    >
-                      Dashboard
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -1673,13 +1664,6 @@ export function LandingPage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => navigate(routes.login)}
-                    className="text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
-                  >
-                    Staff Login
-                  </button>
                   <button
                     type="button"
                     onClick={goToLogin}
@@ -1749,26 +1733,26 @@ export function LandingPage() {
           <div className="relative h-[420px] hidden sm:block">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 via-violet-50 to-orange-50 rounded-[3rem] -z-10" />
             <img
-              src={homeConfig.hero?.collageImages_url?.[0] || homeConfig.hero?.collageImages?.[0] || "/assets/generic_image_placeholder.svg"}
-              onError={(e) => { e.currentTarget.src = "/assets/generic_image_placeholder.svg" }}
+              src={homeConfig.hero?.collageImages_url?.[0] || homeConfig.hero?.collageImages?.[0] || "/mockups/service_hvac.png"}
+              onError={(e) => { e.currentTarget.src = "/mockups/service_hvac.png" }}
               alt="Service photo 1"
               className="absolute top-0 left-0 w-[62%] h-[65%] object-cover rounded-3xl shadow-lg border-4 border-white"
             />
             <img
-              src={homeConfig.hero?.collageImages_url?.[1] || homeConfig.hero?.collageImages?.[1] || "/assets/generic_image_placeholder.svg"}
-              onError={(e) => { e.currentTarget.src = "/assets/generic_image_placeholder.svg" }}
+              src={homeConfig.hero?.collageImages_url?.[1] || homeConfig.hero?.collageImages?.[1] || "/mockups/service_electrical.png"}
+              onError={(e) => { e.currentTarget.src = "/mockups/service_electrical.png" }}
               alt="Service photo 2"
               className="absolute bottom-0 left-[8%] w-[48%] h-[45%] object-cover rounded-3xl shadow-lg border-4 border-white"
             />
             <img
-              src={homeConfig.hero?.collageImages_url?.[2] || homeConfig.hero?.collageImages?.[2] || "/assets/generic_image_placeholder.svg"}
-              onError={(e) => { e.currentTarget.src = "/assets/generic_image_placeholder.svg" }}
+              src={homeConfig.hero?.collageImages_url?.[2] || homeConfig.hero?.collageImages?.[2] || "/mockups/service_cleaning.png"}
+              onError={(e) => { e.currentTarget.src = "/mockups/service_cleaning.png" }}
               alt="Service photo 3"
               className="absolute top-[8%] right-0 w-[46%] h-[52%] object-cover rounded-3xl shadow-lg border-4 border-white"
             />
             <img
-              src={homeConfig.hero?.collageImages_url?.[3] || homeConfig.hero?.collageImages?.[3] || "/assets/generic_image_placeholder.svg"}
-              onError={(e) => { e.currentTarget.src = "/assets/generic_image_placeholder.svg" }}
+              src={homeConfig.hero?.collageImages_url?.[3] || homeConfig.hero?.collageImages?.[3] || "/mockups/service_plumbing.png"}
+              onError={(e) => { e.currentTarget.src = "/mockups/service_plumbing.png" }}
               alt="Service photo 4"
               className="absolute bottom-[4%] right-[2%] w-[42%] h-[42%] object-cover rounded-3xl shadow-lg border-4 border-white"
             />
@@ -1784,7 +1768,13 @@ export function LandingPage() {
           {/* Dynamic Category Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl">
             {(homeConfig.categories || []).filter(c => c.enabled !== false && c.is_enabled !== false).map((cat, idx) => {
-              const displayImg = cat.image_url || cat.image || "/assets/generic_image_placeholder.svg"
+              const defaultCatImgs = [
+                "/mockups/category_for_you.png",
+                "/mockups/category_food_health.png",
+                "/mockups/category_home_transport.png"
+              ]
+              const fallbackCatImg = defaultCatImgs[idx % defaultCatImgs.length]
+              const displayImg = (cat.image_url && cat.image_url.trim()) || (cat.image && cat.image.trim()) || fallbackCatImg
               return (
                 <button
                   key={cat.id || idx}
@@ -1799,7 +1789,7 @@ export function LandingPage() {
                   <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
                     <img
                       src={displayImg}
-                      onError={(e) => { e.currentTarget.src = "/assets/generic_image_placeholder.svg" }}
+                      onError={(e) => { e.currentTarget.src = fallbackCatImg }}
                       alt={cat.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />

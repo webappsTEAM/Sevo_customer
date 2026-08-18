@@ -10,6 +10,7 @@ import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
 import { createBooking } from "../../api/bookingService.js"
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
+import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -954,12 +955,22 @@ export function MiniTruckBookingHosurPage() {
     }
   }
 
-  const handleVerifyOtp = async () => {
-    if (otpValue.length < 6) return
+  const handleVerifyOtp = async (forcedVal = null) => {
+    const code = (forcedVal || otpValue).replace(/\D/g, "")
+    if (code.length < 6 || otpLoading) return
     setOtpLoading(true)
     setBookingError("")
     try {
-      await apiVerifyCustomerPhoneOTP(phone, otpValue)
+      let verified = false
+      try {
+        const wsRes = await verifyOtpViaWebSocket(phone, code)
+        if (wsRes && wsRes.success) verified = true
+      } catch {
+        // fallback
+      }
+      if (!verified) {
+        await apiVerifyCustomerPhoneOTP(phone, code)
+      }
       setLocalIsSignedIn(true)
       setLoginModalOpen(false)
       setOtpStep(false)
@@ -967,7 +978,7 @@ export function MiniTruckBookingHosurPage() {
       setOtpSent(false)
       await submitBooking()
     } catch (err) {
-      setBookingError(err?.body?.detail || "Invalid OTP. Please try again.")
+      setBookingError(err?.body?.detail || err?.message || "Invalid OTP. Please try again.")
     } finally {
       setOtpLoading(false)
     }
@@ -1991,10 +2002,14 @@ export function MiniTruckBookingHosurPage() {
                         value={otpValue[i] || ""}
                         onChange={(e) => {
                           const val = e.target.value.replace(/\D/g, "")
-                          const arr = otpValue.split("")
+                          const arr = (otpValue || "").split("")
                           arr[i] = val
-                          setOtpValue(arr.join(""))
+                          const updated = arr.join("").slice(0, 6)
+                          setOtpValue(updated)
                           if (val && e.target.nextSibling) e.target.nextSibling.focus()
+                          if (updated.length === 6) {
+                            handleVerifyOtp(updated)
+                          }
                         }}
                         className="w-[45px] sm:w-[54px] h-[54px] sm:h-[64px] text-center text-2xl sm:text-3xl font-extrabold border-2 border-slate-200 focus:border-emerald-500 rounded-2xl outline-none transition-colors text-slate-900"
                       />
@@ -2004,33 +2019,25 @@ export function MiniTruckBookingHosurPage() {
                     <p style={{ color: "var(--bad)", fontSize: 13, textAlign: "center" }}>{bookingError}</p>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={handleVerifyOtp}
-                    disabled={otpLoading || bookingSubmitting || otpValue.replace(/\D/g,"").length < 6}
-                    className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    {otpLoading || bookingSubmitting ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> {bookingSubmitting ? "Confirming booking..." : "Verifying..."}</>
-                    ) : (
-                      "Verify OTP & Book"
-                    )}
-                  </button>
-                  <div className="flex items-center justify-between mt-2 px-1">
+                  {otpLoading || bookingSubmitting ? (
+                    <div className="w-full py-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-extrabold text-xs shadow-sm flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                      <span>{bookingSubmitting ? "Confirming booking in real time..." : "Verifying OTP in real time..."}</span>
+                    </div>
+                  ) : (
+                    <div className="w-full py-2.5 bg-slate-50 border border-dashed border-slate-200 text-slate-500 text-[11px] font-semibold rounded-xl text-center flex items-center justify-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Auto-verifying — enters and confirms instantly</span>
+                    </div>
+                  )}
+
+                  <div className="text-center mt-2 px-1">
                     <button
                       type="button"
                       onClick={() => { setOtpStep(false); setOtpValue("") }}
                       className="text-xs text-slate-500 hover:text-emerald-700 font-semibold transition-colors cursor-pointer"
                     >
                       ← Change number
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSendOtp}
-                      disabled={otpLoading}
-                      className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      {otpLoading ? "Resending..." : "Resend OTP"}
                     </button>
                   </div>
                 </div>

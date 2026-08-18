@@ -208,8 +208,11 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
   const hasCustomerCoords = destLat != null && !isNaN(destLat) && destLng != null && !isNaN(destLng)
   const hasEmpCoords = empLat != null && !isNaN(empLat) && empLng != null && !isNaN(empLng)
 
-  const techName = empLocation?.employee_name || booking?.assigned_employee?.full_name || booking?.assigned_employee?.user?.first_name || "Assigned Partner"
-  const techPhone = empLocation?.phone || booking?.assigned_employee?.phone || ""
+  const techName = booking?.technician_name || empLocation?.technician_name || empLocation?.name || empLocation?.employee_name || booking?.assigned_employee?.full_name || "Assigned Field Technician"
+  const techPhone = booking?.technician_phone || empLocation?.technician_phone || empLocation?.phone || booking?.assigned_employee?.phone || ""
+  const techPhoto = booking?.technician_photo || empLocation?.technician_photo || empLocation?.photo || null
+  const techRating = booking?.technician_rating || empLocation?.technician_rating || empLocation?.rating || null
+  const techJobs = empLocation?.jobs_completed || null
   const startOtp = liveData?.start_otp || booking?.start_otp || booking?.otp || ""
 
   // Fetch real road navigation geometry via public OSRM routing engine
@@ -709,21 +712,35 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ position: "relative" }}>
-                  <div style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, #fef3c7, #fde68a)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "1.25rem",
-                    fontWeight: 900,
-                    color: "#b45309",
-                    border: "2px solid #FC8019",
-                  }}>
-                    {techName.charAt(0).toUpperCase()}
-                  </div>
+                  {techPhoto ? (
+                    <img
+                      src={techPhoto}
+                      alt={techName}
+                      style={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: "50%",
+                        objectFit: "cover",
+                        border: "2px solid #FC8019",
+                      }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, #fef3c7, #fde68a)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "1.25rem",
+                      fontWeight: 900,
+                      color: "#b45309",
+                      border: "2px solid #FC8019",
+                    }}>
+                      {(techName || "P").charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div style={{
                     position: "absolute",
                     bottom: 0,
@@ -745,10 +762,14 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                     </span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: "0.78rem", fontWeight: 800, color: "#d97706" }}>
-                      <Star size={13} fill="#d97706" /> 4.9
+                    {techRating != null && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: "0.78rem", fontWeight: 800, color: "#d97706" }}>
+                        <Star size={13} fill="#d97706" /> {Number(techRating).toFixed(1)}
+                      </span>
+                    )}
+                    <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                      {techRating != null ? "• " : ""}{techJobs ? `${techJobs}+ jobs completed` : "Assigned Service Professional"}
                     </span>
-                    <span style={{ fontSize: "0.76rem", color: "#64748b" }}>• 280+ jobs</span>
                   </div>
                 </div>
               </div>

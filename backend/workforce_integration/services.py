@@ -1,0 +1,209 @@
+"""
+workforce_integration/services.py
+
+Isolated Integration Client for CalServices <-> Workforce System boundary.
+All communication between CalServices and the external workforce system passes
+through this service layer. CalServices does not own employees, shifts, attendance,
+or GPS hardware tracking.
+"""
+import logging
+import os
+import uuid
+import requests
+from django.conf import settings
+from django.utils import timezone
+
+logger = logging.getLogger("workforce_integration")
+
+WORKFORCE_API_BASE_URL = os.getenv("WORKFORCE_API_BASE_URL", "http://localhost:8001/api/workforce")
+WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "wf_integration_key_default")
+
+
+class WorkforceIntegrationService:
+    """Client for delegating workforce tasks to the external Workforce system."""
+
+    @classmethod
+    def _headers(cls):
+        return {
+            "Authorization": f"Bearer {WORKFORCE_API_KEY}",
+            "Content-Type": "application/json",
+            "X-CalServices-Source": "calservices-platform",
+        }
+
+    @classmethod
+    def _resolve_sr(cls, service_request):
+        if hasattr(service_request, "request_id"):
+            return service_request
+        from service_requests.models import ServiceRequest
+        if isinstance(service_request, int) or (isinstance(service_request, str) and service_request.isdigit()):
+            return ServiceRequest.objects.filter(pk=int(service_request)).first()
+        if isinstance(service_request, str):
+            return ServiceRequest.objects.filter(request_id=service_request).first()
+        return None
+
+    @classmethod
+    def dispatch_job(cls, service_request, notes="") -> dict:
+        """
+        Dispatches a confirmed CalServices booking to the Workforce system for technician allocation.
+        Returns external job metadata (e.g. workforce_job_id, status).
+        """
+        sr = cls._resolve_sr(service_request)
+        if not sr:
+            return {"success": False, "error": "Booking not found"}
+
+        payload = {
+            "booking_id": sr.request_id,
+            "category": sr.service_category,
+            "title": sr.issue_title,
+            "description": sr.description,
+            "notes": notes,
+            "customer": {
+                "name": sr.customer_name,
+                "phone": sr.phone,
+                "email": sr.email,
+            },
+            "location": {
+                "address": sr.address,
+                "drop_address": getattr(sr, "drop_address", ""),
+                "latitude": float(sr.latitude) if sr.latitude else None,
+                "longitude": float(sr.longitude) if sr.longitude else None,
+            },
+            "schedule": {
+                "preferred_date": str(sr.preferred_date),
+                "preferred_time": sr.preferred_time,
+            },
+            "payment": {
+                "total_amount": float(sr.total_amount),
+                "payment_method": sr.payment_method,
+                "payment_status": sr.payment_status,
+            },
+            "cart_data": sr.cart_data,
+            "start_otp": sr.start_otp,
+            "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
+        }
+
+        try:
+            url = f"{WORKFORCE_API_BASE_URL}/jobs/dispatch/"
+            response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+            if response.status_code in [200, 201]:
+                data = response.json()
+                workforce_job_id = data.get("workforce_job_id") or data.get("job_id") or f"WFJ-{uuid.uuid4().hex[:8].upper()}"
+                sr.workforce_job_id = workforce_job_id
+                if data.get("status") in ["assigned", "accepted"]:
+                    sr.status = data.get("status")
+                    if data.get("technician"):
+                        tech = data.get("technician")
+                        sr.technician_name = tech.get("name", "")
+                        sr.technician_phone = tech.get("phone", "")
+                        sr.technician_photo = tech.get("photo", "")
+                        sr.technician_rating = tech.get("rating")
+                sr.save(update_fields=["workforce_job_id", "status", "technician_name", "technician_phone", "technician_photo", "technician_rating", "updated_at"])
+                return {"success": True, "workforce_job_id": workforce_job_id, "data": data}
+            else:
+                logger.warning(f"Workforce API responded with status {response.status_code}: {response.text}")
+        except Exception as e:
+            logger.info(f"Workforce API dispatch mock fallback (external service offline): {e}")
+
+        # Resilient fallback: Generate integration ID and record dispatch status, keeping status="confirmed" (waiting for partner)
+        workforce_job_id = f"WFJ-{uuid.uuid4().hex[:8].upper()}"
+        sr.workforce_job_id = workforce_job_id
+        sr.save(update_fields=["workforce_job_id", "updated_at"])
+        return {"success": True, "workforce_job_id": workforce_job_id, "fallback": True}
+
+    @classmethod
+    def cancel_workforce_job(cls, service_request, reason: str = "") -> dict:
+        """Notifies the external workforce system of booking cancellation."""
+        sr = cls._resolve_sr(service_request)
+        if not sr or not sr.workforce_job_id:
+            return {"success": True, "message": "No external workforce job attached"}
+
+        payload = {
+            "workforce_job_id": sr.workforce_job_id,
+            "booking_id": sr.request_id,
+            "reason": reason,
+            "cancelled_at": timezone.now().isoformat(),
+        }
+
+        try:
+            url = f"{WORKFORCE_API_BASE_URL}/jobs/{sr.workforce_job_id}/cancel/"
+            response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+            if response.status_code in [200, 204]:
+                return {"success": True}
+        except Exception as e:
+            logger.info(f"Workforce cancellation notification fallback: {e}")
+
+        return {"success": True, "fallback": True}
+
+    @classmethod
+    def reschedule_workforce_job(cls, service_request, new_date, new_time) -> dict:
+        """Updates the external workforce system schedule for an existing job."""
+        sr = cls._resolve_sr(service_request)
+        if not sr or not sr.workforce_job_id:
+            return {"success": True, "fallback": True}
+
+        payload = {
+            "workforce_job_id": sr.workforce_job_id,
+            "booking_id": sr.request_id,
+            "new_date": str(new_date),
+            "new_time": str(new_time),
+        }
+
+        try:
+            url = f"{WORKFORCE_API_BASE_URL}/jobs/reschedule/"
+            response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+            if response.status_code in [200, 204]:
+                return {"success": True}
+        except Exception as e:
+            logger.info(f"Workforce reschedule notification fallback: {e}")
+
+        return {"success": True, "fallback": True}
+
+    @classmethod
+    def get_available_slots(cls, service_category: str, date_str: str, latitude=None, longitude=None) -> list:
+        """
+        Queries the external Workforce system for available technician capacity slots on a given date.
+        """
+        params = {
+            "category": service_category,
+            "date": date_str,
+        }
+        if latitude and longitude:
+            params["lat"] = str(latitude)
+            params["lng"] = str(longitude)
+
+        try:
+            url = f"{WORKFORCE_API_BASE_URL}/capacity/slots/"
+            response = requests.get(url, params=params, headers=cls._headers(), timeout=4)
+            if response.status_code == 200:
+                slots = response.json().get("slots", [])
+                if slots:
+                    return slots
+        except Exception as e:
+            logger.info(f"Workforce slots query fallback: {e}")
+
+        # Standard business time slots fallback
+        return [
+            {"slot": "09-10", "label": "09:00 AM - 10:00 AM", "available": True},
+            {"slot": "10-11", "label": "10:00 AM - 11:00 AM", "available": True},
+            {"slot": "11-12", "label": "11:00 AM - 12:00 PM", "available": True},
+            {"slot": "14-15", "label": "02:00 PM - 03:00 PM", "available": True},
+            {"slot": "15-16", "label": "03:00 PM - 04:00 PM", "available": True},
+            {"slot": "16-17", "label": "04:00 PM - 05:00 PM", "available": True},
+        ]
+
+    @classmethod
+    def get_technician_tracking(cls, booking_id: str) -> dict:
+        """
+        Fetches the current live tracking coordinates and ETA for a technician assigned by the Workforce system.
+        """
+        try:
+            url = f"{WORKFORCE_API_BASE_URL}/tracking/{booking_id}/"
+            response = requests.get(url, headers=cls._headers(), timeout=4)
+            if response.status_code == 200:
+                data = response.json()
+                if data and isinstance(data, dict) and data.get("technician"):
+                    return data
+        except Exception as e:
+            logger.info(f"Workforce tracking query fallback: {e}")
+
+        return None

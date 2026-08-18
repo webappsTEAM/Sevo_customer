@@ -64,7 +64,6 @@ def add_missing_columns(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('employees', '0011_alter_employee_payroll_group'),
         ('service_requests', '0011_rename_original_scheduled_at_reschedulerequest_current_date_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
@@ -127,7 +126,7 @@ class Migration(migrations.Migration):
                             blank=True, null=True,
                             on_delete=django.db.models.deletion.SET_NULL,
                             related_name='assigned_refund_investigations',
-                            to='employees.employee',
+                            to=settings.AUTH_USER_MODEL,
                         )),
                         ('booking', models.ForeignKey(
                             on_delete=django.db.models.deletion.CASCADE,
@@ -176,7 +175,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('employee', models.ForeignKey(
                     on_delete=django.db.models.deletion.CASCADE,
-                    to='employees.employee',
+                    to=settings.AUTH_USER_MODEL,
                 )),
                 ('refund_request', models.ForeignKey(
                     on_delete=django.db.models.deletion.CASCADE,

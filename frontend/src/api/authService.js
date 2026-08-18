@@ -320,71 +320,6 @@ export function extractAuthError(err, fallback = "Something went wrong. Please t
 }
 
 /**
- * Fetch registration dossier from backend
- */
-export async function apiFetchRegistrationDossier(id = null, status = null) {
-  try {
-    if (!id) {
-      try {
-        const local = localStorage.getItem("caltrack_activation_dossier")
-        if (local) {
-          const parsed = JSON.parse(local)
-          if (parsed?.id) id = parsed.id
-        }
-      } catch (e) {}
-    }
-    let query = ""
-    if (id) query = `?id=${id}`
-    else if (status) query = `?status=${status}`
-    const res = await fetchJSON(`/auth/registration-dossier/${query}`)
-    // If it returns an array, return the first one for backward compatibility
-    if (Array.isArray(res)) return res.length > 0 ? res[0] : null
-    return res
-  } catch (err) {
-    console.error("Fetch dossier API error", err)
-    return null
-  }
-}
-
-export async function apiFetchRegistrationDossiers(status = "pending") {
-  try {
-    const res = await fetchJSON(`/auth/registration-dossier/?status=${status}`)
-    return Array.isArray(res) ? res : []
-  } catch (err) {
-    console.error("Fetch dossiers API error", err)
-    return []
-  }
-}
-
-/**
- * Save/update registration dossier to backend
- */
-export async function apiSaveRegistrationDossier(dossier) {
-  try {
-    return await fetchJSON("/auth/registration-dossier/", {
-      method: "POST",
-      body: JSON.stringify(dossier)
-    })
-  } catch (err) {
-    console.error("Save dossier API error", err)
-  }
-}
-
-/**
- * Delete registration dossier from backend
- */
-export async function apiDeleteRegistrationDossier(id) {
-  try {
-    return await fetchJSON("/auth/registration-dossier/", {
-      method: "DELETE",
-      body: JSON.stringify(id ? { id } : {})
-    })
-  } catch (err) {
-    console.error("Delete dossier API error", err)
-  }
-}
-
-/**
  * Send OTP via backend
  */
 export async function apiSendOTP(phone) {
@@ -401,66 +336,6 @@ export async function apiVerifyOTP(phone, code) {
   return fetchJSON("/auth/verify-otp/", {
     method: "POST",
     body: JSON.stringify({ phone, code })
-  })
-}
-
-/**
- * Send technician invitation email with password reset token
- */
-export async function apiSendTechnicianInvite(payload) {
-  return fetchJSON("/auth/send-invite/", {
-    method: "POST",
-    body: JSON.stringify(payload) // { email, name }
-  })
-}
-
-/**
- * Configure bcrypt password for the technician and establish logged-in session
- */
-export async function apiTechSetPassword(payload) {
-  return fetchJSON("/auth/set-password/", {
-    method: "POST",
-    body: JSON.stringify(payload) // { uid, token, password }
-  })
-}
-
-/**
- * Approve registration request dossier (generates invitation token)
- */
-export async function apiApproveRegistrationDossier(id) {
-  return fetchJSON("/auth/registration-dossier/approve/", {
-    method: "POST",
-    body: JSON.stringify({ id })
-  })
-}
-
-/**
- * Reject registration request dossier
- */
-export async function apiRejectRegistrationDossier(payload) {
-  return fetchJSON("/auth/registration-dossier/reject/", {
-    method: "POST",
-    body: JSON.stringify(payload) // { id, remarks, reasonCategory }
-  })
-}
-
-/**
- * Verify invitation token
- */
-export async function apiVerifyActivationToken(token) {
-  return fetchJSON("/auth/registration-dossier/verify-token/", {
-    method: "POST",
-    body: JSON.stringify({ token })
-  })
-}
-
-/**
- * Activate employee account and set security password
- */
-export async function apiActivateDossierAccount(token, password) {
-  return fetchJSON("/auth/registration-dossier/activate/", {
-    method: "POST",
-    body: JSON.stringify({ token, password })
   })
 }
 

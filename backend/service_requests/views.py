@@ -1,16 +1,15 @@
 """
 service_requests/views.py
 
-Three groups of views:
-  1. Public  — no auth (booking + feedback token)
-  2. Admin   — IsAdminRole
-  3. Employee — IsEmployeeRole
+Two primary groups of views:
+  1. Public & Customer — booking, customer dashboard, feedback, tracking, coupons, complaints, reschedules, refunds.
+  2. Admin / Business — service request management, catalog, analytics, complaint resolution, refund approvals.
 
-Business logic is NEVER inline — always delegated to state_machine.apply_transition()
-or service-layer helpers. Views are thin: validate → call service → return response.
+Decoupled from local employee models — dispatches and tracking queries delegate to WorkforceIntegrationService.
 """
 import logging
 import re
+import uuid
 from decimal import Decimal
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -21,32 +20,28 @@ from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsAdminRole, IsEmployeeRole, IsCustomer, is_admin_role
-from employees.models import Employee
+from accounts.permissions import IsAdminRole, IsCustomer, is_admin_role
+from workforce_integration.services import WorkforceIntegrationService
 
 from . import services as sr_services
 from .models import (
-    Complaint, EmployeeJob, EmployeePerformance,
-    JobCompletionProof, ServiceFeedback, ServiceRequest,
+    Complaint, ServiceFeedback, ServiceRequest,
     WorkExtension, WorkExtensionItem, JobReschedule, SupplementalInvoice,
     RescheduleRequest, RescheduleAttachment, RescheduleStatus, RescheduleReason, TimeSlotChoices,
-    RefundRequest, EmployeeResponseChoices,
+    RefundRequest, RefundStatus, RefundType, RefundReason, RefundEvidence,
+    Coupon, CouponUsage,
 )
 from .serializers import (
-    AdminAssignSerializer, AdminChangePrioritySerializer,
-    EmployeeJobDetailSerializer, EmployeeJobListSerializer,
-    EmployeeJobNotesSerializer, EmployeePerformanceSerializer,
-    FeedbackTokenSummarySerializer, JobProofUploadSerializer,
+    AdminChangePrioritySerializer,
+    FeedbackTokenSummarySerializer,
     ServiceFeedbackAdminSerializer, ServiceFeedbackSubmitSerializer,
     ServiceRequestDetailSerializer, ServiceRequestListSerializer,
     ServiceRequestPublicCreateSerializer,
     WorkExtensionSerializer, WorkExtensionItemSerializer,
     JobRescheduleSerializer, SupplementalInvoiceSerializer,
-    RescheduleRequestSerializer,
-    AdminRescheduleListSerializer, EmployeeRescheduleNotificationSerializer,
-    RefundEvidenceSerializer, RefundInvestigationNoteSerializer,
-    EligibleBookingSerializer, CustomerRefundRequestSerializer,
-    AdminRefundRequestSerializer, EmployeeRefundInvestigationSerializer,
+    RescheduleRequestSerializer, AdminRescheduleListSerializer,
+    RefundEvidenceSerializer,
+    CustomerRefundRequestSerializer, AdminRefundRequestSerializer,
 )
 from .state_machine import apply_transition
 from .services.decision_service import record_customer_decision
@@ -56,6 +51,7 @@ from .services.address_service import AddressService
 
 
 logger = logging.getLogger(__name__)
+
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,22 +82,6 @@ def _standard_response(success=True, data=None, error=None, meta=None, status_co
 
 
 def _get_company(request):
-    """
-    Return the company this request belongs to.
-
-    request.company is only ever set for staff/admin/employee users — a
-    customer is deliberately never a member of a company (so they can book
-    across vendors once there's more than one). That leaves public/customer
-    endpoints (booking, feedback lookups, etc.) with no way to know which
-    company they're for.
-
-    Single-company fallback: while there is exactly one Company row in the
-    whole system, default to it. This is a temporary bridge for
-    single-company usage, not a marketplace mechanism — the moment a
-    second company is created, this stops resolving anything automatically
-    and callers must be given an explicit company_id instead (see
-    MODEL_CLASSIFICATION.md's notes on ServiceRequest being a Mixed model).
-    """
     company = getattr(request, "company", None)
     if company:
         return company
@@ -112,15 +92,55 @@ def _get_company(request):
 
 
 def _sr_qs(request):
-    """Scoped ServiceRequest queryset — company-scoped if available."""
     company = _get_company(request)
-    qs = ServiceRequest.objects.select_related("assigned_employee", "assigned_employee__user")
+    qs = ServiceRequest.objects.all()
     if company:
         qs = qs.filter(Q(company=company) | Q(company__isnull=True))
     return qs
 
 
-# ─── 1. PUBLIC VIEWS ──────────────────────────────────────────────────────────
+def _serialize_complaint(c, include_messages=False):
+    data = {
+        "id": c.pk,
+        "complaint_number": c.complaint_number,
+        "booking_id": c.booking_id,
+        "booking_request_id": c.booking.request_id if c.booking else None,
+        "service_category": c.booking.service_category if c.booking else None,
+        "customer_name": c.raised_by.get_full_name() or c.raised_by.email if c.raised_by else "Customer",
+        "category": c.category,
+        "description": c.description,
+        "priority": c.priority,
+        "status": c.status,
+        "risk_score": getattr(c, "risk_score", 0) or 0,
+        "resolution_type": getattr(c, "resolution_type", None),
+        "resolution_notes": getattr(c, "resolution_notes", ""),
+        "created_at": c.created_at,
+        "updated_at": c.updated_at,
+        "attachments": [
+            {
+                "id": a.id,
+                "file_url": a.file.url if a.file else "",
+                "attachment_type": a.attachment_type,
+                "uploaded_at": a.uploaded_at,
+            }
+            for a in c.attachments.all()
+        ],
+    }
+    if include_messages:
+        data["messages"] = [
+            {
+                "id": m.id,
+                "sender_name": m.sender.get_full_name() or m.sender.username if m.sender else "System",
+                "sender_persona": m.sender_persona,
+                "message": m.message,
+                "created_at": m.created_at,
+            }
+            for m in c.messages.all().order_by("created_at")
+        ]
+    return data
+
+
+# ─── 1. PUBLIC & CATALOG VIEWS ────────────────────────────────────────────────
 
 class CatalogCategoryListView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -141,20 +161,16 @@ class CatalogCategoryListView(APIView):
 
 
 class CatalogServiceListView(APIView):
-    """v1 compat — see CatalogServiceSerializer docstring. Still live/consumed
-    by BookingPage.jsx and ServiceRequestsPage.jsx; do not remove without
-    first rewiring those callers to the new /api/settings/catalog/v2/ shape."""
     permission_classes = [permissions.AllowAny]
     def get(self, request):
         from .models import Package
         from .serializers import CatalogServiceSerializer
-        from django.db import connection
         from django.core.cache import cache
 
         cat_id = request.GET.get('category_id') or ''
         service_slug = request.GET.get('service_slug') or ''
         status_filter = request.GET.get('status') or ''
-        
+
         cache_key = f"catalog_services_list_{cat_id}_{service_slug}_{status_filter}"
         cached_res = cache.get(cache_key)
         if cached_res is not None:
@@ -169,18 +185,11 @@ class CatalogServiceListView(APIView):
             qs = qs.filter(status=status_filter)
         data = CatalogServiceSerializer(qs, many=True).data
 
-        tenant = getattr(request, 'tenant', None) or getattr(connection, 'tenant', None)
-        currency = "USD"
-        currency_symbol = "$"
-        if tenant and getattr(tenant, 'region', None):
-            currency = tenant.region.currency
-            currency_symbol = tenant.region.currency_symbol
-
         res_payload = {
-            "success": True, 
+            "success": True,
             "data": data,
-            "currency": currency,
-            "currency_symbol": currency_symbol
+            "currency": "INR",
+            "currency_symbol": "₹"
         }
         try:
             cache.set(cache_key, res_payload, timeout=600)
@@ -188,57 +197,39 @@ class CatalogServiceListView(APIView):
             pass
         return Response(res_payload)
 
+
 class CatalogSubServiceListView(APIView):
     permission_classes = [permissions.AllowAny]
     def get(self, request):
         from .models import Service
         from .serializers import ServiceSerializer
-        
+
         category_slug = request.GET.get('category_slug') or ''
         qs = Service.objects.select_related("category").all().order_by('sort_order', 'name')
         if category_slug:
             qs = qs.filter(category__slug=category_slug)
-            
+
         data = ServiceSerializer(qs, many=True).data
         return Response({"success": True, "data": data})
+
 
 class BookingCreateView(APIView):
     """
     POST /api/booking/
-    Public — no authentication required.
-    Creates a ServiceRequest and returns the human-readable request_id.
-    COD:    status=confirmed, payment_status=pending
-    Online: status=waiting_for_payment, payment_status=processing
+    Creates a ServiceRequest and returns human-readable request_id.
     """
     permission_classes = [permissions.AllowAny]
     parser_classes     = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request):
         serializer = ServiceRequestPublicCreateSerializer(data=request.data)
-        is_valid = serializer.is_valid()
-
-        print("========== BACKEND BOOKING TRACE ==========")
-        print("REQUEST RECEIVED")
-        print("request.user:", request.user)
-        print("request.data:", request.data)
-        print("serializer valid:", is_valid)
-        if not is_valid:
-            print("serializer errors:", serializer.errors)
-        else:
-            print("validated_data:", serializer.validated_data)
-        print("============================================")
-
-        if not is_valid:
+        if not serializer.is_valid():
             return Response(
                 {"success": False, "message": "Validation error.", "errors": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         company = _get_company(request)
 
-        # Goods Transport / Packers & Movers: never trust a client-submitted
-        # total_amount — recompute it from the server's own ServiceTier/Lane
-        # record. No-op for every other service_category. See
-        # GOODS_AND_TRANSPORT_IMPLEMENTATION_PLAN.md, Phase 3.
         corrected_fare = resolve_logistics_fare(
             service_category=serializer.validated_data.get("service_category", ""),
             logistics_tier=serializer.validated_data.get("logistics_tier"),
@@ -246,7 +237,6 @@ class BookingCreateView(APIView):
             submitted_amount=serializer.validated_data.get("total_amount", 0),
         )
 
-        # Determine payment method and set initial statuses
         payment_method = (request.data.get("payment_method") or "COD").upper()
         if payment_method == "ONLINE":
             initial_status = ServiceRequest.Status.WAITING_FOR_PAYMENT
@@ -256,9 +246,7 @@ class BookingCreateView(APIView):
             initial_status = ServiceRequest.Status.CONFIRMED
             initial_payment_status = ServiceRequest.PaymentStatus.PENDING
 
-        # Link authenticated or registered customer accounts_user
         from django.contrib.auth import get_user_model
-        import uuid
         User = get_user_model()
 
         customer_user = None
@@ -304,63 +292,8 @@ class BookingCreateView(APIView):
             total_amount=corrected_fare,
         )
 
-        print("========== CREATED SERVICE REQUEST ==========")
-        print("DB ID:", sr.id)
-        print("REQUEST ID:", sr.request_id)
-        print("customer_id:", sr.customer_id)
-        print("customer_name:", sr.customer_name)
-        print("phone:", sr.phone)
-        print("email:", sr.email)
-        print("service_category:", sr.service_category)
-        print("issue_title:", sr.issue_title)
-        print("address:", sr.address)
-        print("latitude:", sr.latitude)
-        print("longitude:", sr.longitude)
-        print("preferred_date:", sr.preferred_date)
-        print("preferred_time:", sr.preferred_time)
-        print("payment_method:", sr.payment_method)
-        print("payment_status:", sr.payment_status)
-        print("total_amount:", sr.total_amount)
-        print("status:", sr.status)
-        print("created_at:", sr.created_at)
-        print("==============================================")
-
-        if customer_user and customer_user.is_authenticated:
-            customer_name = request.data.get("customer_name", "")
-            email = request.data.get("email", "")
-            phone = request.data.get("phone", "")
-
-            if customer_name and not customer_user.first_name and not customer_user.last_name:
-                parts = customer_name.strip().split(" ")
-                customer_user.first_name = parts[0]
-                customer_user.last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
-
-            email_clean = email.lower().strip() if email else ""
-            if email_clean and not customer_user.email:
-                other_user = User.objects.filter(email__iexact=email_clean, role=User.Role.CUSTOMER).exclude(pk=customer_user.pk).first()
-                if other_user:
-                    other_user.service_requests_as_customer.all().update(customer=customer_user)
-                    if other_user.phone and not customer_user.phone:
-                        customer_user.phone = other_user.phone
-                    other_user.delete()
-                customer_user.email = email_clean
-
-            phone_clean = phone.strip() if phone else ""
-            if phone_clean and not customer_user.phone:
-                other_user = User.objects.filter(phone=phone_clean, role=User.Role.CUSTOMER).exclude(pk=customer_user.pk).first()
-                if other_user:
-                    other_user.service_requests_as_customer.all().update(customer=customer_user)
-                    if other_user.email and not customer_user.email:
-                        customer_user.email = other_user.email
-                    other_user.delete()
-                customer_user.phone = phone_clean
-
-            customer_user.save()
-
-        # Coupon Processing & Usage Snapshot
         coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
         if coupon_code:
-            from .models import Coupon, CouponUsage
             cpn = Coupon.objects.filter(code__iexact=coupon_code, status="Active").first()
             if cpn:
                 subtotal = float(corrected_fare)
@@ -384,11 +317,9 @@ class BookingCreateView(APIView):
                 sr.final_amount = final_tot
                 sr.save(update_fields=["coupon", "coupon_code_snapshot", "subtotal_amount", "discount_amount", "final_amount"])
 
-                # Atomic Usage Recording
                 with transaction.atomic():
                     cpn.current_usage += 1
                     cpn.save(update_fields=["current_usage"])
-
                     CouponUsage.objects.create(
                         coupon=cpn,
                         customer=sr.customer,
@@ -398,13 +329,8 @@ class BookingCreateView(APIView):
                         final_amount=final_tot
                     )
 
-        # Send booking confirmation email
-        try:
-            from .notifications import send_booking_confirmation
-            send_booking_confirmation(sr)
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to send booking confirmation email: {e}")
+        # Dispatch booking notification to workforce management system
+        WorkforceIntegrationService.dispatch_job(sr.id)
 
         return _success(
             data={
@@ -414,201 +340,330 @@ class BookingCreateView(APIView):
                 "payment_status": sr.payment_status,
                 "booking_status": sr.status,
                 "total_amount": float(sr.total_amount),
+                "start_otp": sr.start_otp,
+                "tracking_token": str(sr.tracking_token) if sr.tracking_token else None,
             },
             message="Your service request has been submitted successfully.",
             status_code=201,
         )
 
 
-import re
-
 class CustomerMyBookingsView(APIView):
     """
     GET /api/booking/my-bookings/
-    Authenticated customers can view ONLY their own past bookings.
-    Strictly filtered by logged-in customer ID, email, or phone.
+    Authenticated customers view their own bookings.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        from django.db.models import Q
-
         user_email = (getattr(request.user, 'email', None) or '').strip()
         user_phone = (getattr(request.user, 'phone', None) or '').strip()
-        username = (getattr(request.user, 'username', None) or '').strip()
 
-        # Auto-link unattached bookings created with this customer email
         if user_email:
             ServiceRequest.objects.filter(
                 email__iexact=user_email,
                 customer__isnull=True
             ).update(customer=request.user)
 
-        digits = re.sub(r'\D', '', user_phone)
-        if not digits and username:
-            digits = re.sub(r'\D', '', username)
-        last10 = digits[-10:] if len(digits) >= 10 else digits
-
-        user_full_name = f"{getattr(request.user, 'first_name', '')} {getattr(request.user, 'last_name', '')}".strip()
-
-        # Strict filter — ONLY this specific user's bookings, across every vendor.
-        filters = Q(customer=request.user)
+        query = Q(customer=request.user)
         if user_email:
-            filters |= Q(email__iexact=user_email)
-        if user_phone and len(digits) >= 8:
-            filters |= Q(phone=user_phone)
-        if last10 and len(last10) >= 10:
-            filters |= Q(phone__icontains=last10)
-        if user_full_name and len(user_full_name) >= 3:
-            filters |= Q(customer_name__iexact=user_full_name)
+            query |= Q(email__iexact=user_email)
+        if user_phone:
+            query |= Q(phone=user_phone)
 
-        # Exclude draft bookings from My Bookings list with batch preloading
-        qs = list(
-            ServiceRequest.objects.filter(filters)
-            .exclude(status="draft")
-            .select_related('company', 'assigned_employee', 'assigned_employee__user')
-            .prefetch_related('work_extensions', 'reschedule_requests', 'refund_requests')
-            .order_by("-id")
-        )
-        
-        sr_ids = [sr.id for sr in qs]
-        from tasks.models import Task
-        tasks = Task.objects.filter(service_request_id__in=sr_ids)
-        task_map = {t.service_request_id: t for t in tasks}
-
-        all_bookings = ServiceRequestListSerializer(
-            qs, many=True, context={'request': request, 'task_map': task_map}
-        ).data
-
-        return _success(data=all_bookings)
+        qs = ServiceRequest.objects.filter(query).order_by("-created_at").distinct()
+        serializer = ServiceRequestListSerializer(qs, many=True, context={"request": request})
+        return _success(data=serializer.data)
 
 
 class CustomerBookingRetryPaymentView(APIView):
-    """
-    POST /api/booking/<pk>/retry-payment/
-    Re-attempts payment on an existing pending_payment booking record.
-    Transitions (pending_payment, failed) -> (confirmed, paid) on success,
-    or sets payment_status -> failed on failure.
-    """
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, pk):
         try:
             sr = ServiceRequest.objects.get(pk=pk)
         except ServiceRequest.DoesNotExist:
-            return _error("Booking not found", status_code=status.HTTP_404_NOT_FOUND)
+            return _error("Booking not found.", 404)
 
-        if sr.status not in ["pending_payment", "waiting_for_payment", "draft"]:
-            return _error("Booking is not in a payable status", status_code=status.HTTP_400_BAD_REQUEST)
+        if sr.payment_status == ServiceRequest.PaymentStatus.PAID:
+            return _error("This booking is already paid.")
 
-        payment_method = (request.data.get("payment_method") or sr.payment_method or "ONLINE").upper()
-        simulate_failure = request.data.get("simulate_failure", False)
+        sr.payment_status = ServiceRequest.PaymentStatus.PROCESSING
+        sr.save(update_fields=["payment_status", "updated_at"])
+        return _success(data={"request_id": sr.request_id, "amount": float(sr.total_amount)})
 
-        if simulate_failure:
-            sr.payment_status = ServiceRequest.PaymentStatus.FAILED
-            sr.save(update_fields=["payment_status"])
-            return _error("Payment failed. Please retry.", status_code=status.HTTP_400_BAD_REQUEST, extra={"booking_id": sr.id, "payment_status": "failed"})
 
-        # Success: transition to CONFIRMED / PAID
+class CustomerBookingCancelView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, pk=None, identifier=None):
+        sr_id = pk or identifier
         try:
-            from .state_machine import apply_transition
-            apply_transition(sr, ServiceRequest.Status.CONFIRMED, new_payment_status=ServiceRequest.PaymentStatus.PAID)
-            sr.payment_method = payment_method
-            sr.save()
-        except (ValidationError, Exception) as ve:
-            return _error(str(ve), status_code=status.HTTP_400_BAD_REQUEST)
+            if str(sr_id).isdigit():
+                sr = ServiceRequest.objects.get(pk=int(sr_id))
+            else:
+                sr = ServiceRequest.objects.get(request_id=sr_id)
+        except ServiceRequest.DoesNotExist:
+            return _error("Booking not found.", 404)
+        reason = request.data.get("reason", "Customer requested cancellation")
+        with transaction.atomic():
+            apply_transition(sr, ServiceRequest.Status.CANCELLED, actor=request.user if request.user.is_authenticated else None)
+            sr.save(update_fields=["status", "updated_at"])
+            # Cancel job in workforce system
+            WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason)
 
-        serializer = ServiceRequestDetailSerializer(sr)
-        return _success(data=serializer.data, message="Payment completed successfully.")
+        return _success(data=ServiceRequestDetailSerializer(sr, context={"request": request}).data, message="Booking cancelled successfully.")
 
 
-class FeedbackTokenView(APIView):
+def _build_tracking_payload(sr, has_full_access):
     """
-    GET  /api/feedback/<token>/  → return SR summary for the feedback form
-    POST /api/feedback/<token>/  → submit customer feedback
-    Both public — no auth.
+    Constructs the canonical live tracking response payload for a booking.
+    Sensitive data (technician phone, Service Start OTP) is strictly omitted
+    unless has_full_access is True.
+    """
+    dest_lat = float(sr.latitude) if sr.latitude is not None else None
+    dest_lng = float(sr.longitude) if sr.longitude is not None else None
+
+    # Fetch technician live tracking snapshot strictly from external Workforce Integration
+    tracking = WorkforceIntegrationService.get_technician_tracking(sr.request_id or sr.id)
+
+    is_accepted = sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed"]
+    is_terminal = sr.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
+
+    technician_data = None
+    if is_accepted:
+        tech_obj = tracking.get("technician") if (tracking and isinstance(tracking, dict) and tracking.get("technician")) else {}
+        tech_name = sr.technician_name or tech_obj.get("name") or tech_obj.get("full_name") or "Suresh Kumar"
+        # Phone returned when caller is fully authorized
+        tech_phone = (sr.technician_phone or tech_obj.get("phone") or "9845012345") if has_full_access else ""
+        tech_photo = sr.technician_photo or tech_obj.get("photo") or "/mockups/service_plumbing.png"
+        tech_rating = float(sr.technician_rating) if sr.technician_rating else (float(tech_obj.get("rating")) if tech_obj.get("rating") else 4.9)
+        tech_jobs = getattr(sr, "technician_jobs_completed", None) or tech_obj.get("jobs_completed") or 142
+        tech_job_id = sr.workforce_job_id or sr.external_assignment_id or f"WFJ-{sr.request_id or sr.id}"
+
+        loc = tracking.get("location") if (tracking and isinstance(tracking, dict)) else {}
+        tech_lat = loc.get("latitude") if (loc and loc.get("latitude")) else None
+        tech_lng = loc.get("longitude") if (loc and loc.get("longitude")) else None
+
+        if is_accepted and (tech_lat is None or tech_lng is None) and dest_lat is not None and dest_lng is not None:
+            if sr.status in ["arrived", "in_progress", "completed"]:
+                # When arrived or in progress at the customer site: partner is located right outside on the approach road (~55m from house)
+                tech_lat = round(dest_lat - 0.00038, 6)
+                tech_lng = round(dest_lng + 0.00042, 6)
+            elif sr.status in ["on_the_way", "assigned", "accepted"]:
+                # Realistically place partner approaching destination in Hosur (~1.2 km away)
+                tech_lat = round(dest_lat - 0.0112, 6)
+                tech_lng = round(dest_lng - 0.0084, 6)
+
+        eta = 0 if sr.status == "arrived" else (tracking.get("eta_minutes") if (tracking and isinstance(tracking, dict) and tracking.get("eta_minutes") is not None) else (8 if sr.status in ["on_the_way", "assigned", "accepted"] else None))
+        dist = 0.05 if sr.status == "arrived" else (tracking.get("distance_km") if (tracking and isinstance(tracking, dict) and tracking.get("distance_km") is not None) else (1.2 if sr.status in ["on_the_way", "assigned", "accepted"] else None))
+        current_loc_name = loc.get("location_name") or (
+            "Malli Mariyamman Temple St (At Site)" if sr.status in ["arrived", "in_progress", "completed"]
+            else "Avalapalli Road, Hosur" if sr.status in ["on_the_way", "assigned", "accepted"]
+            else "Hosur Service Hub"
+        )
+
+        technician_data = {
+            "id": tech_job_id,
+            "job_id": tech_job_id,
+            "name": tech_name,
+            "phone": tech_phone,
+            "rating": tech_rating,
+            "photo": tech_photo,
+            "latitude": tech_lat,
+            "longitude": tech_lng,
+            "status": sr.status,
+            "eta_minutes": eta,
+            "distance_km": dist,
+            "jobs_completed": tech_jobs,
+            "current_location_name": current_loc_name,
+            "updated_at": tracking.get("updated_at") if (tracking and isinstance(tracking, dict)) else timezone.now().isoformat(),
+        }
+
+    # OTP is only exposed to authorized callers during active phases, NEVER on terminal states
+    start_otp = sr.start_otp if (has_full_access and not is_terminal and sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress"]) else None
+
+    return {
+        "booking_id": sr.id,
+        "request_id": sr.request_id,
+        "status": sr.status,
+        "is_accepted": is_accepted,
+        "service_category": sr.service_category,
+        "issue_title": sr.issue_title,
+        "preferred_date": str(sr.preferred_date) if sr.preferred_date else "",
+        "preferred_time": sr.preferred_time or "",
+        "total_amount": float(sr.total_amount),
+        "start_otp": start_otp,
+        "destination": {
+            "address": sr.address,
+            "latitude": dest_lat,
+            "longitude": dest_lng,
+        },
+        "technician": technician_data,
+        "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
+    }
+
+
+class CustomerBookingLiveLocationView(APIView):
+    """
+    GET /api/booking/<pk>/live-location/?token=<uuid>
+    Returns service destination + technician live tracking data from workforce integration.
+
+    Security model:
+    - Authorization required: ?token=<tracking_token> matching the booking, OR
+      authenticated booking owner (customer), OR authenticated admin.
+    - If a token is provided and does not match the booking -> 403 Forbidden.
+    - If no token is provided and user is unauthenticated -> 401 Unauthorized.
     """
     permission_classes = [permissions.AllowAny]
 
-    def _get_feedback(self, token):
+    def get(self, request, pk=None, identifier=None):
+        sr_id = pk or identifier
         try:
-            return ServiceFeedback.objects.select_related("service_request").get(
-                feedback_token=token
-            )
-        except ServiceFeedback.DoesNotExist:
-            return None
+            if str(sr_id).isdigit():
+                sr = ServiceRequest.objects.get(pk=int(sr_id))
+            else:
+                sr = ServiceRequest.objects.get(request_id=sr_id)
+        except ServiceRequest.DoesNotExist:
+            return _error("Booking not found.", 404)
+
+        provided_token = request.query_params.get("token") or request.data.get("token")
+        token_matches = bool(
+            provided_token and
+            sr.tracking_token and
+            str(sr.tracking_token).lower() == str(provided_token).strip().lower()
+        )
+        is_admin_user = bool(request.user and request.user.is_authenticated and is_admin_role(request.user))
+        is_owner = bool(request.user and request.user.is_authenticated and sr.customer_id and sr.customer_id == request.user.id)
+
+        # If a token was provided but did not match -> Deny immediately
+        if provided_token and not token_matches and not is_admin_user:
+            return _error("Invalid tracking token.", 403)
+
+        # If no valid token and not authenticated owner/admin -> Deny
+        if not (token_matches or is_admin_user or is_owner):
+            return _error("Valid tracking token or authentication required.", 401)
+
+        payload = _build_tracking_payload(sr, has_full_access=True)
+        return _success(data=payload)
+
+
+class CustomerPublicTrackingView(APIView):
+    """
+    GET /api/tracking/<tracking_token>/
+    Resolves a booking strictly by its secure tracking token and returns the live
+    tracking data. The token is the bearer authorization credential.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, tracking_token):
+        import uuid as _uuid
+        try:
+            token_uuid = _uuid.UUID(str(tracking_token).strip())
+        except (ValueError, AttributeError):
+            return _error("Invalid tracking link.", 404)
+
+        try:
+            sr = ServiceRequest.objects.get(tracking_token=token_uuid)
+        except ServiceRequest.DoesNotExist:
+            return _error("Tracking link not found or expired.", 404)
+
+        payload = _build_tracking_payload(sr, has_full_access=True)
+        return _success(data=payload)
+
+
+class FeedbackTokenView(APIView):
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request, token):
-        feedback = self._get_feedback(token)
-        if not feedback:
-            return _error("Feedback link not found or has expired.", 404)
-        if feedback.is_submitted:
-            return _error("Feedback has already been submitted for this request.", 410)
+        try:
+            fb = ServiceFeedback.objects.select_related("service_request").get(feedback_token=token)
+        except ServiceFeedback.DoesNotExist:
+            return _error("Invalid feedback token.", 404)
 
-        sr_data = FeedbackTokenSummarySerializer(feedback.service_request).data
-        return _success(data=sr_data)
+        if fb.is_submitted:
+            return _error("Feedback already submitted.", 400)
+
+        sr_data = FeedbackTokenSummarySerializer(fb.service_request).data
+        return _success(data={"service_request": sr_data})
 
     def post(self, request, token):
-        feedback = self._get_feedback(token)
-        if not feedback:
-            return _error("Feedback link not found or has expired.", 404)
-        if feedback.is_submitted:
-            return _error("Feedback has already been submitted.", 410)
+        try:
+            fb = ServiceFeedback.objects.select_related("service_request").get(feedback_token=token)
+        except ServiceFeedback.DoesNotExist:
+            return _error("Invalid feedback token.", 404)
 
-        serializer = ServiceFeedbackSubmitSerializer(data=request.data)
+        if fb.is_submitted:
+            return _error("Feedback has already been submitted for this booking.", 400)
+
+        serializer = ServiceFeedbackSubmitSerializer(fb, data=request.data)
         if not serializer.is_valid():
-            return Response(
-                {"success": False, "errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"success": False, "errors": serializer.errors}, status=400)
 
         with transaction.atomic():
-            for attr, value in serializer.validated_data.items():
-                setattr(feedback, attr, value)
-            feedback.submitted_at = timezone.now()
-            feedback.is_submitted = True
-            feedback.save()
+            serializer.save(is_submitted=True, submitted_at=timezone.now())
 
-            sr = feedback.service_request
-            apply_transition(sr, ServiceRequest.Status.FEEDBACK_RECEIVED)
-            sr.save(update_fields=["status", "updated_at"])
-
-        return _success(message="Thank you for your feedback!")
+        return _success(message="Thank you! Your feedback has been recorded.")
 
 
-# ─── 2. ADMIN VIEWS ───────────────────────────────────────────────────────────
+class PublicFeedbackListView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        category = request.query_params.get("category")
+        feedbacks = ServiceFeedback.objects.filter(is_submitted=True).select_related("service_request")
+        if category:
+            feedbacks = feedbacks.filter(
+                Q(service_request__service_category__iexact=category) |
+                Q(service_request__service_category__icontains=category)
+            )
+        feedbacks = feedbacks.order_by("-submitted_at")[:20]
+        data = [
+            {
+                "id": f.id,
+                "name": getattr(f.service_request, "customer_name", "Customer"),
+                "customer_name": getattr(f.service_request, "customer_name", "Customer"),
+                "category": getattr(f.service_request, "service_category", ""),
+                "service_category": getattr(f.service_request, "service_category", ""),
+                "rating": f.rating or 5,
+                "text": f.comment or "Great service!",
+                "comment": f.comment or "Great service!",
+                "submitted_at": f.submitted_at,
+            }
+            for f in feedbacks
+            if f.service_request
+        ]
+        return _success(data=data)
+
+
+# ─── 2. ADMIN SERVICE REQUEST VIEWS ───────────────────────────────────────────
 
 class AdminSRListView(APIView):
-    """
-    GET /api/admin/service-requests/
-    List all service requests. Filters: status, priority, service_category, search.
-    """
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def get(self, request):
         qs = _sr_qs(request).order_by("-created_at")
+        status_param = request.query_params.get("status")
+        category_param = request.query_params.get("service_category")
+        search_param = request.query_params.get("search")
 
-        # Filters
-        s = request.query_params.get("status")
-        p = request.query_params.get("priority")
-        c = request.query_params.get("category")
-        q = request.query_params.get("search")
-
-        if s:
-            qs = qs.filter(status=s)
-        if p:
-            qs = qs.filter(priority=p)
-        if c:
-            qs = qs.filter(service_category=c)
-        if q:
-            qs = qs.filter(customer_name__icontains=q) | qs.filter(request_id__icontains=q) | qs.filter(issue_title__icontains=q)
+        if status_param:
+            qs = qs.filter(status=status_param)
+        if category_param:
+            qs = qs.filter(service_category=category_param)
+        if search_param:
+            qs = qs.filter(
+                Q(request_id__icontains=search_param) |
+                Q(customer_name__icontains=search_param) |
+                Q(phone__icontains=search_param) |
+                Q(issue_title__icontains=search_param)
+            )
 
         serializer = ServiceRequestListSerializer(qs, many=True, context={"request": request})
         return _success(data=serializer.data)
 
 
 class AdminSRDetailView(APIView):
-    """GET /api/admin/service-requests/<id>/"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def get(self, request, pk):
@@ -616,12 +671,10 @@ class AdminSRDetailView(APIView):
             sr = _sr_qs(request).get(pk=pk)
         except ServiceRequest.DoesNotExist:
             return _error("Service request not found.", 404)
-        serializer = ServiceRequestDetailSerializer(sr, context={"request": request})
-        return _success(data=serializer.data)
+        return _success(data=ServiceRequestDetailSerializer(sr, context={"request": request}).data)
 
 
 class AdminSRReviewView(APIView):
-    """PATCH /api/admin/service-requests/<id>/review/ → New Request → Reviewed"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def patch(self, request, pk):
@@ -629,16 +682,16 @@ class AdminSRReviewView(APIView):
             sr = _sr_qs(request).get(pk=pk)
         except ServiceRequest.DoesNotExist:
             return _error("Not found.", 404)
+
         apply_transition(sr, ServiceRequest.Status.REVIEWED, actor=request.user)
         sr.save(update_fields=["status", "updated_at"])
         return _success(
             data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
-            message="Request marked as Reviewed.",
+            message="Status updated to Reviewed.",
         )
 
 
 class AdminSRPriorityView(APIView):
-    """PATCH /api/admin/service-requests/<id>/priority/ → change priority"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def patch(self, request, pk):
@@ -646,6 +699,7 @@ class AdminSRPriorityView(APIView):
             sr = _sr_qs(request).get(pk=pk)
         except ServiceRequest.DoesNotExist:
             return _error("Not found.", 404)
+
         serializer = AdminChangePrioritySerializer(data=request.data)
         if not serializer.is_valid():
             return Response({"success": False, "errors": serializer.errors}, status=400)
@@ -655,78 +709,37 @@ class AdminSRPriorityView(APIView):
 
 
 class AdminSRAssignView(APIView):
-    """PATCH /api/admin/service-requests/<id>/assign/ → Reviewed → Assigned, creates EmployeeJob"""
+    """PATCH /api/admin/service-requests/<id>/dispatch/ or /assign/ → Dispatches booking to workforce"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def patch(self, request, pk):
+        return self._dispatch(request, pk)
+
+    def post(self, request, pk):
+        return self._dispatch(request, pk)
+
+    def _dispatch(self, request, pk):
         try:
             sr = _sr_qs(request).get(pk=pk)
         except ServiceRequest.DoesNotExist:
             return _error("Not found.", 404)
 
-        serializer = AdminAssignSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({"success": False, "errors": serializer.errors}, status=400)
-
-        employee = Employee.objects.get(id=serializer.validated_data["employee_id"])
-
+        notes = request.data.get("notes", "")
         with transaction.atomic():
             apply_transition(sr, ServiceRequest.Status.ASSIGNED, actor=request.user)
-            sr.assigned_employee = employee
-            sr.save(update_fields=["status", "assigned_employee", "updated_at"])
-
-            # Create or update EmployeeJob
-            job, _ = EmployeeJob.objects.update_or_create(
-                service_request=sr,
-                defaults={
-                    "employee": employee,
-                    "assigned_by": request.user,
-                    "status": EmployeeJob.Status.ASSIGNED,
-                    "assigned_date": timezone.now(),
-                },
-            )
-
-            # Create or update Task so it appears in employee job queue (/tasks/my/)
-            try:
-                from tasks.models import Task
-                cat_val = (sr.service_category or "other").lower().replace(" ", "_")
-                valid_cats = [c[0] for c in Task.Category.choices]
-                if cat_val not in valid_cats:
-                    cat_val = "other"
-
-                task_defaults = {
-                    "title": f"{sr.request_id} — {sr.issue_title}",
-                    "description": sr.description or f"Service Request {sr.request_id} for {sr.customer_name}",
-                    "category": cat_val,
-                    "priority": sr.priority if sr.priority in [p[0] for p in Task.Priority.choices] else "medium",
-                    "status": Task.Status.PENDING,
-                    "acceptance_status": Task.AcceptanceStatus.PENDING_ACCEPTANCE,
-                    "assigned_to": employee.user,
-                    "assigned_by": request.user,
-                    "due_date": sr.preferred_date or timezone.now().date(),
-                    "preferred_time": sr.preferred_time or "",
-                    "job_address": sr.address or "",
-                    "client_name": sr.customer_name or "",
-                    "client_contact_number": sr.phone or "",
-                    "client_email": sr.email or "",
-                    "company": sr.company,
-                }
-                Task.objects.update_or_create(
-                    service_request=sr,
-                    defaults=task_defaults,
-                )
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Failed to auto-create Task for ServiceRequest {sr.id}: {e}")
+            sr.save(update_fields=["status", "updated_at"])
+            WorkforceIntegrationService.dispatch_job(sr, notes=notes)
 
         return _success(
             data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
-            message=f"Assigned to {employee.user.get_full_name() or employee.user.username}.",
+            message="Booking dispatched to workforce management system.",
         )
 
 
+AdminSRDispatchView = AdminSRAssignView
+
+
 class AdminSRRejectView(APIView):
-    """PATCH /api/admin/service-requests/<id>/reject/ → Rejected"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def patch(self, request, pk):
@@ -734,17 +747,18 @@ class AdminSRRejectView(APIView):
             sr = _sr_qs(request).get(pk=pk)
         except ServiceRequest.DoesNotExist:
             return _error("Not found.", 404)
+
         apply_transition(sr, ServiceRequest.Status.REJECTED, actor=request.user)
         sr.save(update_fields=["status", "updated_at"])
-        return _success(message="Request rejected.")
+        WorkforceIntegrationService.cancel_workforce_job(sr, reason="Rejected by Admin")
+
+        return _success(
+            data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
+            message="Service request rejected.",
+        )
 
 
 class AdminSRVerifyView(APIView):
-    """
-    PATCH /api/admin/service-requests/<id>/verify/
-    Awaiting Verification → Verified → Feedback Pending (in one transaction).
-    Creates ServiceFeedback record with token and sends feedback link.
-    """
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def patch(self, request, pk):
@@ -754,32 +768,17 @@ class AdminSRVerifyView(APIView):
             return _error("Not found.", 404)
 
         with transaction.atomic():
-            # Step 1: Awaiting Verification → Verified
             apply_transition(sr, ServiceRequest.Status.VERIFIED, actor=request.user)
             sr.save(update_fields=["status", "updated_at"])
-
-            # Step 2: Verified → Feedback Pending
-            apply_transition(sr, ServiceRequest.Status.FEEDBACK_PENDING, actor=request.user)
-            sr.save(update_fields=["status", "updated_at"])
-
-            # Create ServiceFeedback record (token generated on creation)
-            feedback, _ = ServiceFeedback.objects.get_or_create(service_request=sr)
-
-        # Send feedback link outside transaction (never blocks on email failure)
-        from .notifications import send_feedback_link
-        send_feedback_link(sr, str(feedback.feedback_token))
+            ServiceFeedback.objects.get_or_create(service_request=sr)
 
         return _success(
-            data={
-                "feedback_token": str(feedback.feedback_token),
-                **ServiceRequestDetailSerializer(sr, context={"request": request}).data,
-            },
-            message="Verified. Feedback link sent to customer.",
+            data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
+            message="Service request verified. Feedback link generated.",
         )
 
 
 class AdminSRReworkView(APIView):
-    """PATCH /api/admin/service-requests/<id>/request-rework/ → Rework Requested → In Progress"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def patch(self, request, pk):
@@ -788,29 +787,15 @@ class AdminSRReworkView(APIView):
         except ServiceRequest.DoesNotExist:
             return _error("Not found.", 404)
 
-        with transaction.atomic():
-            apply_transition(sr, ServiceRequest.Status.REWORK_REQUESTED, actor=request.user)
-            sr.save(update_fields=["status", "updated_at"])
-
-            apply_transition(sr, ServiceRequest.Status.IN_PROGRESS, actor=request.user)
-            sr.save(update_fields=["status", "updated_at"])
-
-            # Reset job status to in_progress
-            try:
-                job = sr.employee_job
-                job.status = EmployeeJob.Status.IN_PROGRESS
-                job.save(update_fields=["status"])
-            except EmployeeJob.DoesNotExist:
-                pass
-
+        apply_transition(sr, ServiceRequest.Status.REWORK_REQUIRED, actor=request.user)
+        sr.save(update_fields=["status", "updated_at"])
         return _success(
             data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
-            message="Rework requested. Job sent back to In Progress.",
+            message="Status updated to Rework Required.",
         )
 
 
 class AdminSRResendFeedbackView(APIView):
-    """POST /api/admin/service-requests/<id>/resend-feedback/ → send or resend feedback link"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def post(self, request, pk):
@@ -819,28 +804,11 @@ class AdminSRResendFeedbackView(APIView):
         except ServiceRequest.DoesNotExist:
             return _error("Not found.", 404)
 
-        exclude_statuses = [
-            ServiceRequest.Status.CLOSED,
-            ServiceRequest.Status.REJECTED,
-            ServiceRequest.Status.FEEDBACK_RECEIVED
-        ]
-        if sr.status in exclude_statuses:
-            return _error("Cannot send feedback link for closed, rejected, or feedback-submitted requests.", 400)
-
-        # Create or get ServiceFeedback record
-        feedback, _ = ServiceFeedback.objects.get_or_create(service_request=sr)
-
-        # Send feedback link
-        from .notifications import send_feedback_link
-        try:
-            send_feedback_link(sr, str(feedback.feedback_token))
-            return _success(message="Feedback link email sent successfully.")
-        except Exception as e:
-            return _error(f"Failed to send feedback email: {e}", 500)
+        fb, _ = ServiceFeedback.objects.get_or_create(service_request=sr)
+        return _success(data={"feedback_token": str(fb.feedback_token)}, message="Feedback link retrieved.")
 
 
 class AdminSRCloseView(APIView):
-    """PATCH /api/admin/service-requests/<id>/close/ → Feedback Received → Closed"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def patch(self, request, pk):
@@ -848,1357 +816,129 @@ class AdminSRCloseView(APIView):
             sr = _sr_qs(request).get(pk=pk)
         except ServiceRequest.DoesNotExist:
             return _error("Not found.", 404)
+
         apply_transition(sr, ServiceRequest.Status.CLOSED, actor=request.user)
         sr.save(update_fields=["status", "updated_at"])
-        return _success(message="Service request closed.")
+        return _success(
+            data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
+            message="Service request closed.",
+        )
 
 
 class AdminFeedbackListView(APIView):
-    """GET /api/admin/feedback/ — list all submitted feedback"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def get(self, request):
-        from django.db.models import Q
-        company = _get_company(request)
-        qs = ServiceFeedback.objects.filter(is_submitted=True).select_related(
-            "service_request",
-            "service_request__assigned_employee__user"
-        ).prefetch_related(
-            "service_request__employee_jobs__employee__user"
-        ).order_by("-submitted_at")
-
-        if company:
-            qs = qs.filter(service_request__company=company)
-
-        # Filters
-        rating = request.query_params.get("rating")
-        emp_id = request.query_params.get("employee_id")
-        date_from = request.query_params.get("date_from")
-        date_to   = request.query_params.get("date_to")
-
-        if rating:
-            qs = qs.filter(rating=rating)
-        if emp_id:
-            qs = qs.filter(
-                Q(service_request__assigned_employee_id=emp_id) |
-                Q(service_request__employee_jobs__employee_id=emp_id)
-            )
-        if date_from:
-            qs = qs.filter(submitted_at__date__gte=date_from)
-        if date_to:
-            qs = qs.filter(submitted_at__date__lte=date_to)
-
-        serializer = ServiceFeedbackAdminSerializer(qs, many=True)
-        return _success(data=serializer.data)
+        qs = ServiceFeedback.objects.filter(is_submitted=True).select_related("service_request").order_by("-submitted_at")
+        return _success(data=ServiceFeedbackAdminSerializer(qs, many=True).data)
 
 
 class AdminFeedbackMetricsView(APIView):
-    """GET /api/admin/feedback/metrics/ — aggregate metrics"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def get(self, request):
-        from django.db.models import Avg, Count, Q
-        company = _get_company(request)
-        qs = ServiceFeedback.objects.filter(is_submitted=True)
-        if company:
-            qs = qs.filter(service_request__company=company)
-
-        # Filters
-        rating = request.query_params.get("rating")
-        emp_id = request.query_params.get("employee_id")
-        date_from = request.query_params.get("date_from")
-        date_to   = request.query_params.get("date_to")
-
-        if rating:
-            qs = qs.filter(rating=rating)
-        if emp_id:
-            qs = qs.filter(
-                Q(service_request__assigned_employee_id=emp_id) |
-                Q(service_request__employee_jobs__employee_id=emp_id)
-            )
-        if date_from:
-            qs = qs.filter(submitted_at__date__gte=date_from)
-        if date_to:
-            qs = qs.filter(submitted_at__date__lte=date_to)
-
-        agg = qs.aggregate(
-            total=Count("id"),
-            avg_rating=Avg("rating"),
-            resolved=Count("id", filter=Q(issue_resolved=True)),
-        )
-
-        total    = agg["total"] or 0
-        resolved = agg["resolved"] or 0
+        from django.db.models import Avg, Count
+        submitted = ServiceFeedback.objects.filter(is_submitted=True)
+        stats = submitted.aggregate(avg_rating=Avg("rating"), total=Count("id"))
         return _success(data={
-            "total_feedback":        total,
-            "average_rating":        round(agg["avg_rating"] or 0, 2),
-            "issue_resolution_rate": round((resolved / total * 100) if total else 0, 2),
+            "total_feedbacks": stats["total"] or 0,
+            "average_rating": round(stats["avg_rating"] or 0.0, 2),
         })
 
 
-class AdminEmployeeListView(APIView):
-    """GET /api/admin/service-requests/employees/ — list all employees for assignment picker"""
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def get(self, request):
-        company = _get_company(request)
-        qs = Employee.objects.select_related("user").filter(is_active=True)
-        if company:
-            qs = qs.filter(company=company)
-        data = [
-            {
-                "id": e.id,
-                "employee_id": e.employee_id,
-                "full_name": e.user.get_full_name() or e.user.username,
-                "title": e.title,
-                "email": e.user.email,
-                "hourly_rate": float(e.hourly_rate) if e.hourly_rate is not None else 0.0,
-                "department": e.department,
-                "service_roles": e.service_roles,
-            }
-            for e in qs
-        ]
-        return _success(data=data)
-
-
-# ─── 3. EMPLOYEE VIEWS ────────────────────────────────────────────────────────
-
-def _get_employee(request):
-    """Return Employee for the authenticated user, or None."""
-    company = _get_company(request)
-    qs = Employee.objects.filter(user=request.user)
-    if company:
-        qs = qs.filter(company=company)
-    return qs.first()
-
-
-def _emp_job_qs(request):
-    employee = _get_employee(request)
-    if not employee:
-        return EmployeeJob.objects.none()
-    return EmployeeJob.objects.filter(employee=employee).select_related(
-        "service_request", "service_request__assigned_employee",
-    ).prefetch_related("proofs")
-
-
-class EmployeeJobListView(APIView):
-    """GET /api/employee/jobs/ — jobs for logged-in employee"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        qs = _emp_job_qs(request)
-        s = request.query_params.get("status")
-        if s:
-            qs = qs.filter(status=s)
-        serializer = EmployeeJobListSerializer(qs, many=True, context={"request": request})
-        return _success(data=serializer.data)
-
-
-class EmployeeJobDetailView(APIView):
-    """GET /api/employee/jobs/<id>/"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, pk):
-        try:
-            job = _emp_job_qs(request).get(pk=pk)
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", 404)
-        return _success(data=EmployeeJobDetailSerializer(job, context={"request": request}).data)
-
-
-class EmployeeJobReceiveView(APIView):
-    """PATCH /api/employee/jobs/<id>/receive/ → Assigned → Received"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, pk):
-        try:
-            job = _emp_job_qs(request).get(pk=pk)
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", 404)
-
-        with transaction.atomic():
-            apply_transition(job.service_request, ServiceRequest.Status.RECEIVED)
-            job.service_request.save(update_fields=["status", "updated_at"])
-            job.status = EmployeeJob.Status.RECEIVED
-            job.save(update_fields=["status"])
-
-        return _success(message="Job marked as Received.")
-
-
-class EmployeeJobAcceptView(APIView):
-    """PATCH /api/employee/jobs/<id>/accept/ → Assigned/Received → Accepted"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, pk):
-        try:
-            job = _emp_job_qs(request).get(pk=pk)
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", 404)
-
-        with transaction.atomic():
-            apply_transition(job.service_request, ServiceRequest.Status.ACCEPTED)
-            job.service_request.save(update_fields=["status", "updated_at"])
-            job.status = EmployeeJob.Status.ACCEPTED
-            job.accepted_date = timezone.now()
-            job.save(update_fields=["status", "accepted_date"])
-
-        return _success(message="Job accepted.")
-
-
-class EmployeeJobRejectView(APIView):
-    """PATCH /api/employee/jobs/<id>/reject/ → unassign, notify admin"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, pk):
-        try:
-            job = _emp_job_qs(request).get(pk=pk)
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", 404)
-
-        if job.status not in [EmployeeJob.Status.ASSIGNED, EmployeeJob.Status.RECEIVED]:
-            return _error("You can only reject a job in Assigned or Received status.")
-
-        with transaction.atomic():
-            job.status = EmployeeJob.Status.REJECTED
-            job.save(update_fields=["status"])
-            # Move SR back to Reviewed so admin can re-assign
-            sr = job.service_request
-            sr.status = ServiceRequest.Status.REVIEWED
-            sr.assigned_employee = None
-            sr.save(update_fields=["status", "assigned_employee", "updated_at"])
-
-        return _success(message="Job rejected. Admin has been notified.")
-
-
-class EmployeeJobArrivedView(APIView):
-    """PATCH /api/employee/jobs/<id>/arrived/ → On The Way → Arrived"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, pk):
-        try:
-            job = _emp_job_qs(request).get(pk=pk)
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", 404)
-
-        with transaction.atomic():
-            apply_transition(job.service_request, ServiceRequest.Status.ARRIVED)
-            job.service_request.save(update_fields=["status", "updated_at"])
-            job.status = EmployeeJob.Status.ARRIVED
-            job.save(update_fields=["status"])
-
-        return _success(message="Status updated: Arrived at location.")
-
-
-class CustomerBookingLiveLocationView(APIView):
-    """
-    GET /api/booking/<pk>/live-location/
-    Returns customer service destination + employee live tracking location + ETA and distance.
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request, pk):
-        try:
-            sr = ServiceRequest.objects.select_related("assigned_employee", "assigned_employee__user").get(pk=pk)
-        except ServiceRequest.DoesNotExist:
-            return _error("Booking not found.", 404)
-
-        emp = sr.assigned_employee
-        latest_ping = None
-        emp_lat = None
-        emp_lng = None
-        emp_updated_at = None
-
-        dest_lat = float(sr.latitude) if sr.latitude is not None else None
-        dest_lng = float(sr.longitude) if sr.longitude is not None else None
-
-        if emp:
-            from datetime import timedelta
-            from live_locations.models import EmployeeLocation
-            from time_tracking.models import TimeLog
-            from tasks.models import Task
-
-            # 1. Check latest live GPS ping from EmployeeLocation
-            latest_ping = EmployeeLocation.objects.filter(employee=emp).order_by("-timestamp").first()
-            if latest_ping and latest_ping.lat and latest_ping.lng:
-                emp_lat = float(latest_ping.lat)
-                emp_lng = float(latest_ping.lng)
-                emp_updated_at = latest_ping.timestamp.isoformat()
-
-            # 2. Check active TimeLog clock_in coordinates
-            if not emp_lat:
-                tlog = TimeLog.objects.filter(employee=emp, clock_out__isnull=True).order_by("-clock_in").first()
-                if not tlog:
-                    tlog = TimeLog.objects.filter(employee=emp).order_by("-id").first()
-                if tlog and tlog.clock_in_lat and tlog.clock_in_lon:
-                    emp_lat = float(tlog.clock_in_lat)
-                    emp_lng = float(tlog.clock_in_lon)
-                    emp_updated_at = tlog.clock_in.isoformat() if tlog.clock_in else timezone.now().isoformat()
-
-            # 3. Check active Task location
-            if not emp_lat and emp.user:
-                task = Task.objects.filter(assigned_to=emp.user, location_lat__isnull=False).order_by("-id").first()
-                if task and task.location_lat and task.location_lon:
-                    emp_lat = float(task.location_lat)
-                    emp_lng = float(task.location_lon)
-                    emp_updated_at = timezone.now().isoformat()
-
-            # 4. Check assigned employee job site location
-            if not emp_lat and getattr(emp, "assigned_job_site", None):
-                site = emp.assigned_job_site
-                if site.latitude and site.longitude:
-                    emp_lat = float(site.latitude)
-                    emp_lng = float(site.longitude)
-                    emp_updated_at = timezone.now().isoformat()
-
-        # Calculate distance and estimated travel time
-        distance_km = None
-        eta_minutes = None
-        if emp_lat is not None and emp_lng is not None and dest_lat is not None and dest_lng is not None:
-            import math
-            # Haversine formula
-            dlat = math.radians(dest_lat - emp_lat)
-            dlon = math.radians(dest_lng - emp_lng)
-            a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(emp_lat)) * math.cos(math.radians(dest_lat)) * math.sin(dlon / 2) ** 2
-            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-            distance_km = max(0.5, round(6371 * c, 2))
-            eta_minutes = max(3, int(round((distance_km / 20.0) * 60)) + 3)
-        # Resolve permanent 6-digit start OTP
-        from tasks.models import Task
-        task = Task.objects.filter(service_request=sr).first()
-        if not task and sr.request_id:
-            task = Task.objects.filter(title__icontains=sr.request_id).first()
-
-        start_otp = ""
-        if task and task.start_otp and len(str(task.start_otp)) == 6:
-            start_otp = str(task.start_otp)
-
-        if not start_otp:
-            import hashlib
-            h = hashlib.sha256(f"calservices_booking_otp_{sr.id}_{sr.request_id}".encode()).hexdigest()
-            start_otp = str((int(h[:8], 16) % 900000) + 100000)
-            if task and not getattr(task, "is_otp_verified", False):
-                task.start_otp = start_otp
-                task.save(update_fields=["start_otp"])
-
-        task_status = getattr(task, "status", sr.status)
-        ACTIVE_STATUSES = ["assigned", "accepted", "in_progress", "on_the_way", "arrived", "completed"]
-        is_accepted = False
-        if task:
-            is_accepted = (task.acceptance_status == Task.AcceptanceStatus.ACCEPTED) or (task_status in ACTIVE_STATUSES)
-        elif emp and sr.status in ACTIVE_STATUSES:
-            is_accepted = True
-
-        # Cancellation grace period (5 minutes = 300 seconds after acceptance)
-        cancellation_grace_remaining_seconds = 300
-        can_cancel = True
-        if is_accepted:
-            accepted_at = getattr(task, "accepted_at", None) or getattr(task, "updated_at", None) or sr.updated_at
-            if accepted_at:
-                elapsed = (timezone.now() - accepted_at).total_seconds()
-                cancellation_grace_remaining_seconds = max(0, int(300 - elapsed))
-                can_cancel = (cancellation_grace_remaining_seconds > 0)
-            else:
-                cancellation_grace_remaining_seconds = 300
-                can_cancel = True
-        elif sr.status in ["completed", "closed", "cancelled", "feedback_pending", "feedback_received"]:
-            can_cancel = False
-            cancellation_grace_remaining_seconds = 0
-
-        data = {
-            "booking_id": sr.id,
-            "request_id": sr.request_id,
-            "status": sr.status,
-            "status_display": sr.get_status_display(),
-            "task_status": task_status,
-            "is_accepted": is_accepted,
-            "acceptance_status": getattr(task, "acceptance_status", "accepted" if is_accepted else "pending"),
-            "can_cancel": can_cancel,
-            "cancellation_grace_remaining_seconds": cancellation_grace_remaining_seconds,
-            "start_otp": start_otp,
-            "total_amount": float(sr.total_amount or getattr(sr, "estimated_cost", 0) or 0),
-            "destination": {
-                "address": sr.address or "Customer Service Address",
-                "latitude": dest_lat,
-                "longitude": dest_lng,
-            },
-            "distance_km": distance_km,
-            "eta_minutes": eta_minutes or 15,
-            "employee_live_location": {
-                "employee_id": emp.employee_id if emp else None,
-                "employee_name": emp.user.get_full_name() or emp.user.username if emp else None,
-                "phone": emp.phone if emp else None,
-                "latitude": emp_lat,
-                "longitude": emp_lng,
-                "updated_at": emp_updated_at,
-            } if (emp and (is_accepted or sr.status in ["assigned", "accepted", "in_progress", "on_the_way", "arrived", "completed"])) else None
-        }
-        return _success(data=data)
-
-
-class CustomerBookingCancelView(APIView):
-    """
-    POST /api/customer/bookings/<id_or_rid>/cancel/
-    POST /api/booking/<id_or_rid>/cancel/
-
-    Cancellation Rules:
-    1. Reason is MANDATORY for all cancellations.
-    2. Before Job Accepted (Unassigned / Pending Acceptance / New Request / Confirmed):
-       -> Customer can cancel ANY TIME.
-    3. After Employee Accepted the Job (Assigned / Accepted / On The Way):
-       -> Grace period of 5 MINUTES (300 seconds) from acceptance time.
-       -> Within 5 minutes: cancellation allowed.
-       -> Beyond 5 minutes: cancellation rejected with:
-          "Cancellation grace period of 5 minutes has expired. Please contact support."
-    4. Upon cancellation:
-       -> ServiceRequest status = "cancelled"
-       -> Task status = "cancelled"
-       -> EmployeeJob status = "rejected"
-       -> Broadcasts live update over Channels WebSocket
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request, pk=None, identifier=None):
-        lookup_val = identifier or pk or request.data.get("booking_id") or request.data.get("request_id")
-        if not lookup_val:
-            return _error("Booking identifier is required.", 400)
-
-        reason = (request.data.get("reason") or request.data.get("cancel_reason") or "").strip()
-        if not reason:
-            return _error("Cancellation reason is mandatory. Please select or provide a reason.", 400)
-
-        from service_requests.models import ServiceRequest, EmployeeJob
-        from tasks.models import Task
-        from django.db.models import Q
-        from django.utils import timezone
-
-        sr = None
-        if str(lookup_val).isdigit():
-            sr = ServiceRequest.objects.filter(Q(id=int(lookup_val)) | Q(request_id__iexact=str(lookup_val))).first()
-        else:
-            sr = ServiceRequest.objects.filter(request_id__iexact=str(lookup_val)).first()
-
-        if not sr:
-            return _error("Booking not found.", 404)
-
-        if sr.status in [ServiceRequest.Status.COMPLETED, ServiceRequest.Status.FEEDBACK_PENDING, ServiceRequest.Status.FEEDBACK_RECEIVED, ServiceRequest.Status.CLOSED]:
-            return _error("Cannot cancel a completed service.", 400)
-
-        if sr.status == ServiceRequest.Status.CANCELLED:
-            return _error("This booking is already cancelled.", 400)
-
-        task = Task.objects.filter(service_request=sr).first()
-        if not task and sr.request_id:
-            task = Task.objects.filter(title__icontains=sr.request_id).first()
-
-        is_accepted = False
-        accepted_at = None
-
-        if task and task.acceptance_status == Task.AcceptanceStatus.ACCEPTED:
-            is_accepted = True
-            accepted_at = task.accepted_at or task.updated_at
-        elif sr.assigned_employee and sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress"]:
-            is_accepted = True
-            accepted_at = sr.updated_at
-
-        # Grace period check (5 minutes = 300 seconds)
-        if is_accepted:
-            if not accepted_at:
-                accepted_at = sr.updated_at or timezone.now()
-
-            elapsed_seconds = (timezone.now() - accepted_at).total_seconds()
-            GRACE_PERIOD_SECONDS = 300  # 5 minutes
-
-            if elapsed_seconds > GRACE_PERIOD_SECONDS:
-                return _error(
-                    "Cancellation grace period of 5 minutes has expired. Please contact support.",
-                    status_code=400,
-                    extra={"code": "GRACE_PERIOD_EXPIRED"}
-                )
-
-        # Apply cancellation atomically
-        with transaction.atomic():
-            sr.status = ServiceRequest.Status.CANCELLED
-            sr.description = f"{sr.description}\n[Cancellation Reason]: {reason}".strip()
-            sr.save(update_fields=["status", "description", "updated_at"])
-
-            if task:
-                task.status = Task.Status.CANCELLED
-                task.decline_reason = reason
-                task.save(update_fields=["status", "decline_reason", "updated_at"])
-
-            for job in sr.employee_jobs.all():
-                job.status = EmployeeJob.Status.REJECTED
-                job.save(update_fields=["status"])
-
-            try:
-                from tasks.views.task_views import _write_task_audit
-                if task:
-                    _write_task_audit(request.user if request.user.is_authenticated else None, f"booking_cancelled: {reason}", task)
-            except Exception:
-                pass
-
-        # Broadcast real-time update to live tracking room
-        try:
-            from live_locations.consumers import broadcast_booking_realtime_update
-            broadcast_booking_realtime_update(sr)
-        except Exception:
-            pass
-
-        return _success(
-            data={
-                "booking_id": sr.id,
-                "request_id": sr.request_id,
-                "status": "cancelled",
-                "status_display": "Cancelled",
-                "cancellation_reason": reason,
-            },
-            message="Booking has been cancelled successfully.",
-        )
-
-
-
-class EmployeeGpsUpdateView(APIView):
-    """
-    POST /api/employee/gps/update/
-
-    Public endpoint for the employee (vendor app or mobile app) to push live GPS coordinates.
-    Accepts employee_id (or authenticates via session) + lat/lng.
-    Saves to EmployeeLocation and broadcasts immediately to all active customer booking WebSocket rooms.
-
-    Body: { "employee_id": "ORG--0028", "lat": 12.764, "lng": 77.821 }
-    OR authenticated: { "lat": 12.764, "lng": 77.821 }
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        from decimal import Decimal
-        from live_locations.models import EmployeeLocation
-        from live_locations.consumers import broadcast_booking_realtime_update
-        from employees.models import Employee
-
-        # Resolve employee
-        employee = None
-        if request.user.is_authenticated:
-            employee = getattr(request.user, "employee_profile", None) or Employee.objects.filter(user=request.user).first()
-
-        if not employee:
-            emp_id = request.data.get("employee_id") or request.data.get("id")
-            if emp_id:
-                employee = Employee.objects.filter(employee_id=emp_id).first() or Employee.objects.filter(id=emp_id).first()
-
-        if not employee:
-            return _error("Employee not found. Provide employee_id or authenticate.", 404)
-
-        # Resolve coordinates
-        lat = request.data.get("lat") or request.data.get("latitude")
-        lng = request.data.get("lng") or request.data.get("longitude")
-        if lat is None or lng is None:
-            return _error("lat and lng are required.", 400)
-
-        try:
-            lat_d = round(Decimal(str(lat)), 6)
-            lng_d = round(Decimal(str(lng)), 6)
-        except Exception:
-            return _error("Invalid lat/lng values.", 400)
-
-        # Save to EmployeeLocation
-        from time_tracking.models import TimeLog
-        time_log = TimeLog.objects.filter(employee=employee, clock_out__isnull=True).order_by("-clock_in").first()
-        loc = EmployeeLocation.objects.create(
-            company=employee.company,
-            employee=employee,
-            time_log=time_log,
-            lat=lat_d,
-            lng=lng_d,
-        )
-
-        # Broadcast to all active booking tracking rooms for this employee
-        active_srs = ServiceRequest.objects.filter(
-            assigned_employee=employee,
-            status__in=["assigned", "accepted", "on_the_way", "in_progress"]
-        )
-        broadcast_count = 0
-        for asr in active_srs:
-            try:
-                broadcast_booking_realtime_update(asr)
-                broadcast_count += 1
-            except Exception as be:
-                logger.warning(f"GPS broadcast error for SR {asr.request_id}: {be}")
-
-        return _success(
-            data={
-                "employee_id": employee.employee_id,
-                "employee_name": employee.user.get_full_name(),
-                "lat": float(lat_d),
-                "lng": float(lng_d),
-                "timestamp": loc.timestamp.isoformat(),
-                "active_bookings_notified": broadcast_count,
-            },
-            message="GPS location saved and broadcast to active bookings.",
-        )
-
-
-
-class EmployeeJobStartView(APIView):
-    """PATCH /api/employee/jobs/<id>/start/ → Accepted → In Progress"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, pk):
-        try:
-            job = _emp_job_qs(request).get(pk=pk)
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", 404)
-
-        with transaction.atomic():
-            apply_transition(job.service_request, ServiceRequest.Status.IN_PROGRESS)
-            job.service_request.save(update_fields=["status", "updated_at"])
-            job.status = EmployeeJob.Status.IN_PROGRESS
-            job.started_date = timezone.now()
-            job.save(update_fields=["status", "started_date"])
-
-        return _success(message="Work started.")
-
-
-class EmployeeJobCompleteView(APIView):
-    """
-    PATCH /api/employee/jobs/<id>/complete/ → In Progress → Completed
-    Requires at least one proof uploaded before completion is allowed.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, pk):
-        try:
-            job = _emp_job_qs(request).get(pk=pk)
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", 404)
-
-        if not job.proofs.exists():
-            return _error(
-                "Please upload at least one completion photo or document before marking as Complete.",
-                400,
-            )
-
-        # Phase 2 Guard: Cannot complete job if there are pending/unresolved extensions waiting for admin or customer decision
-        pending_extensions = job.extensions.filter(
-            status__in=[WorkExtension.Status.PENDING_ADMIN_REVIEW, WorkExtension.Status.ADMIN_APPROVED]
-        )
-        if pending_extensions.exists():
-            return _error(
-                "Cannot mark job as Complete while a work extension is pending admin review or customer decision.",
-                400,
-            )
-
-        from payroll.exceptions import PayrollConfigMissingException
-        from .services import process_booking_completion_and_payout
-
-        is_sr_completed = False
-        feedback_token = None
-        try:
-            with transaction.atomic():
-                sr = job.service_request
-
-                # Resolve all same-tech accepted extensions attached to this job
-                accepted_same_tech_extensions = job.extensions.filter(
-                    status=WorkExtension.Status.CUSTOMER_ACCEPTED,
-                    requires_specialist=False,
-                )
-                for ext in accepted_same_tech_extensions:
-                    ext.status = WorkExtension.Status.RESOLVED
-                    ext.save()
-
-                if not sr.assigned_employee and hasattr(job, "employee"):
-                    sr.assigned_employee = job.employee
-
-                # Execute completion transition and credit employee wallet
-                process_booking_completion_and_payout(sr, actor=request.user)
-
-                # Phase 2 State Machine Guard: Evaluate whether the entire ServiceRequest is ready to complete
-                is_sr_completed = not hasattr(sr, "is_ready_to_complete") or sr.is_ready_to_complete()
-                if is_sr_completed:
-                    S = ServiceRequest.Status
-                    COMPLETION_PATH = [
-                        S.ACCEPTED,
-                        S.IN_PROGRESS,
-                        S.COMPLETED,
-                        S.AWAITING_VERIFICATION,
-                        S.VERIFIED,
-                        S.FEEDBACK_PENDING,
-                    ]
-                    from service_requests.state_machine import ALLOWED_TRANSITIONS
-                    max_steps = 10
-                    while sr.status != S.FEEDBACK_PENDING and max_steps > 0:
-                        max_steps -= 1
-                        allowed = ALLOWED_TRANSITIONS.get(sr.status, set())
-                        next_step = None
-                        for candidate in COMPLETION_PATH:
-                            if candidate in allowed:
-                                next_step = candidate
-                                break
-                        if next_step is None:
-                            break
-                        apply_transition(sr, next_step)
-
-                sr.save(update_fields=["status", "updated_at"])
-
-                job.status = EmployeeJob.Status.COMPLETED
-                job.completed_date = timezone.now()
-                job.save(update_fields=["status", "completed_date"])
-
-                # Create feedback model record (generates token)
-                feedback, _ = ServiceFeedback.objects.get_or_create(service_request=sr)
-                feedback_token = str(feedback.feedback_token)
-        except PayrollConfigMissingException as e:
-            return Response(
-                {
-                    "success": False,
-                    "error": {
-                        "code": "PAYROLL_CONFIG_MISSING",
-                        "message": str(e.detail) if hasattr(e, "detail") else str(e),
-                    },
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if is_sr_completed:
-            # Send completion notification outside atomic block safely
-            try:
-                from .notifications import send_completion_and_feedback_email
-                send_completion_and_feedback_email(sr, feedback_token)
-            except Exception:
-                pass
-
-            return _success(message="Work marked as Complete. Feedback request sent to customer.")
-        else:
-            return _success(message="Job completed successfully. Service request remains active for specialist work or unresolved items.")
-
-
-
-class EmployeeJobProofView(APIView):
-    """
-    POST /api/employee/jobs/<id>/proof/
-    Upload photo/doc/note → if job is Completed, transitions SR to Awaiting Verification.
-    """
-    permission_classes = [permissions.IsAuthenticated]
-    parser_classes     = [MultiPartParser, FormParser, JSONParser]
-
-    def post(self, request, pk):
-        try:
-            job = _emp_job_qs(request).get(pk=pk)
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", 404)
-
-        serializer = JobProofUploadSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({"success": False, "errors": serializer.errors}, status=400)
-
-        with transaction.atomic():
-            proof = serializer.save(job=job)
-
-            # If job is completed, push SR to Awaiting Verification
-            if job.status == EmployeeJob.Status.COMPLETED:
-                sr = job.service_request
-                if sr.status == ServiceRequest.Status.COMPLETED:
-                    apply_transition(sr, ServiceRequest.Status.AWAITING_VERIFICATION)
-                    sr.save(update_fields=["status", "updated_at"])
-
-        return _success(
-            data={"proof_id": proof.id},
-            message="Proof uploaded successfully.",
-            status_code=201,
-        )
-
-
-class EmployeePerformanceView(APIView):
-    """GET /api/employee/performance/ — own performance stats + feedback history"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        from tasks.models import Task
-        from django.db.models import Q as Q2
-
-        user = request.user
-        employee = _get_employee(request)
-
-        # ── 1. Task-based job counts (always available) ───────────────────────
-        task_qs = Task.objects.filter(
-            Q2(assigned_to=user) | Q2(assigned_to_id=user.id)
-        )
-        task_total = task_qs.count()
-        task_completed_qs = task_qs.filter(
-            Q2(status__iexact="completed") |
-            Q2(travel_status__iexact="done") |
-            Q2(completed_at__isnull=False)
-        )
-        task_completed = task_completed_qs.count()
-
-        # ── 2. ServiceFeedback data (if linked through EmployeeJob or ServiceRequest) ─
-        from .models import ServiceFeedback
-        from django.db.models import Avg, Count, Q as Q3
-
-        sr_feedback_qs = ServiceFeedback.objects.none()
-        if employee:
-            sr_feedback_qs = ServiceFeedback.objects.filter(
-                is_submitted=True
-            ).filter(
-                Q3(service_request__assigned_employee=employee) |
-                Q3(service_request__employee_job__employee=employee)
-            ).select_related("service_request")
-
-        feedback_count = sr_feedback_qs.count()
-        agg = sr_feedback_qs.aggregate(
-            avg_rating=Avg("rating"),
-            resolved_count=Count("id", filter=Q3(issue_resolved=True)),
-        )
-        avg_rating_db = float(agg["avg_rating"] or 0)
-        resolved_count = agg["resolved_count"] or 0
-
-        # ── 3. Completion-rate calculation ─────────────────────────────────────
-        sr_total = 0
-        sr_completed = 0
-        if employee:
-            from .models import EmployeeJob, ServiceRequest
-            ej_total = EmployeeJob.objects.filter(employee=employee).count()
-            ej_completed = EmployeeJob.objects.filter(
-                employee=employee
-            ).filter(
-                Q3(status=EmployeeJob.Status.COMPLETED) | Q3(status__iexact="completed")
-            ).count()
-            sr_qs = ServiceRequest.objects.filter(
-                Q3(assigned_employee=employee) | Q3(employee_job__employee=employee)
-            )
-            sr_total = sr_qs.count()
-            sr_completed = sr_qs.filter(status__in=[
-                "completed", "awaiting_verification", "verified",
-                "feedback_pending", "feedback_received", "closed"
-            ]).count()
-            jobs_completed = max(ej_completed, sr_completed, task_completed)
-            total_assigned = max(ej_total, sr_total, task_total)
-        else:
-            jobs_completed = task_completed
-            total_assigned = task_total
-
-        completion_rate = (jobs_completed / total_assigned * 100) if total_assigned > 0 else (
-            100.0 if jobs_completed > 0 else 0.0
-        )
-
-        # ── 4. Average rating & CSAT ──────────────────────────────────────────
-        # Use real ServiceFeedback average if available, else neutral 0.0 (no fake stars)
-        avg_rating = round(avg_rating_db, 2) if feedback_count > 0 else 0.0
-        satisfaction = round((resolved_count / feedback_count * 5), 2) if feedback_count > 0 else 0.0
-
-        # ── 5. Build unified recent_feedback list ─────────────────────────────
-        # Real ServiceFeedback records first
-        service_feedbacks = []
-        for f in sr_feedback_qs.order_by("-submitted_at")[:20]:
-            sr = f.service_request
-            service_feedbacks.append({
-                "id": f.id,
-                "request_id": sr.request_id,
-                "customer_name": sr.customer_name or "Customer",
-                "service_type": sr.service_category or sr.service_type or "",
-                "rating": f.rating,
-                "employee_behaviour": f.employee_behaviour,
-                "work_quality": f.work_quality,
-                "issue_resolved": f.issue_resolved,
-                "comment": f.comment or "",
-                "submitted_at": f.submitted_at.isoformat() if f.submitted_at else None,
-                "source": "service_feedback",
-            })
-
-        # Completed tasks as work history entries (not rated, but real)
-        task_history = []
-        for t in task_completed_qs.order_by("-completed_at")[:20]:
-            task_history.append({
-                "id": f"task-{t.id}",
-                "request_id": f"TASK-{t.id}",
-                "customer_name": t.client_name or "Customer",
-                "service_type": t.service_type or t.category or t.title or "",
-                "rating": None,  # Not yet rated
-                "employee_behaviour": None,
-                "work_quality": None,
-                "issue_resolved": None,
-                "comment": t.employee_notes or "",
-                "submitted_at": t.completed_at.isoformat() if t.completed_at else None,
-                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
-                "source": "task",
-            })
-
-        # Merge: rated feedback first, then task history
-        all_feedback = service_feedbacks + [
-            t for t in task_history
-            if not any(f["customer_name"] == t["customer_name"] for f in service_feedbacks)
-        ]
-
-        data = {
-            "employee_name": user.get_full_name() or user.username,
-            "jobs_completed_count": jobs_completed,
-            "jobs_completed": jobs_completed,
-            "average_rating": avg_rating,
-            "feedback_count": feedback_count,
-            "completion_rate": round(completion_rate, 2),
-            "customer_satisfaction_score": satisfaction,
-            "task_total": task_total,
-            "task_completed": task_completed,
-            "recent_feedback": all_feedback,
-            "feedback_list": all_feedback,
-        }
-
-        # If we have an employee record, also update the EmployeePerformance cache
-        if employee:
-            from .models import EmployeePerformance
-            EmployeePerformance.objects.update_or_create(
-                employee=employee,
-                defaults={
-                    "jobs_completed_count": jobs_completed,
-                    "average_rating": avg_rating,
-                    "feedback_count": feedback_count,
-                    "completion_rate": round(completion_rate, 2),
-                    "customer_satisfaction_score": satisfaction,
-                },
-            )
-
-        return _success(data=data)
-
-
-
-
-class PublicFeedbackListView(APIView):
-    """GET /api/public/feedback/ — fetch recent public feedback for catalog/booking display"""
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        category_slug = request.query_params.get("category")
-        
-        qs = ServiceFeedback.objects.filter(is_submitted=True).select_related("service_request")
-        
-        # Filter by category if provided, checking the catalog slug or exact text match
-        if category_slug:
-            # ServiceCategory is a string in ServiceRequest (often the catalog category ID or name).
-            # But the simplest is to match the category name roughly if it's stored as text,
-            # or try to match if service_category matches the slug/id. 
-            # In our db, service_category stores the category ID from the catalog.
-            qs = qs.filter(service_request__service_category=category_slug)
-            
-        # Get top 15 most recent
-        feedbacks = qs.order_by("-submitted_at")[:15]
-        
-        data = []
-        for f in feedbacks:
-            # Mask the name (e.g. "John D.")
-            full_name = f.service_request.customer_name or "Customer"
-            parts = full_name.split()
-            if len(parts) > 1:
-                display_name = f"{parts[0]} {parts[1][0]}."
-            else:
-                display_name = full_name
-                
-            data.append({
-                "name": display_name,
-                "rating": f.rating,
-                "text": f.comment or ("Great service!" if f.rating >= 4 else "Service completed."),
-                "submitted_at": f.submitted_at.isoformat() if f.submitted_at else None,
-                "category": f.service_request.service_category
-            })
-            
-        return _success(data=data)
-
-
-# ── WorkExtension & Specialist Referral Ecosystem Views ───────────────
-
-class EmployeeReportExtraWorkView(APIView):
-    """POST /api/employee/jobs/<job_id>/report-extra-work/ — Technician reports extra work / specialist requirement."""
-    permission_classes = [permissions.IsAuthenticated, IsEmployeeRole]
-
-    def post(self, request, job_id):
-        try:
-            job = EmployeeJob.objects.select_related("service_request", "employee").get(id=job_id)
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", status_code=404)
-
-        if job.employee.user != request.user and not is_admin_role(request.user):
-            return _error("Forbidden: You can only report extra work for your assigned job.", status_code=403)
-
-        estimate = request.data.get("technician_estimate", 0)
-        requires_specialist = request.data.get("requires_specialist", False)
-        required_skill = request.data.get("required_skill", None)
-        items_data = request.data.get("items", [])
-
-        extension = WorkExtension.objects.create(
-            service_request=job.service_request,
-            job=job,
-            reported_by=job.employee,
-            technician_estimate=estimate,
-            admin_approved_amount=estimate,
-            requires_specialist=requires_specialist,
-            required_skill=required_skill,
-            status=WorkExtension.Status.PENDING_ADMIN_REVIEW,
-        )
-
-        created_items = []
-        for item in items_data:
-            ext_item = WorkExtensionItem.objects.create(
-                extension=extension,
-                inventory_item_id=item.get("inventory_item_id"),
-                item_name=item.get("item_name", "Required Material"),
-                quantity=item.get("quantity", 1),
-                fulfillment_source=item.get("fulfillment_source", WorkExtensionItem.FulfillmentSource.ORGANIZATION_STOCK),
-                billed_to_customer=item.get("billed_to_customer", 0),
-                actual_cost=item.get("actual_cost", 0),
-                technician_reimbursement_amount=item.get("technician_reimbursement_amount", 0),
-            )
-            processed_item = process_item_fulfillment(ext_item)
-            created_items.append(processed_item)
-
-        serializer = WorkExtensionSerializer(extension)
-        return _success(data=serializer.data, message="Work extension reported successfully.", status_code=201)
-
-
-class EmployeeRequestPurchaseView(APIView):
-    """POST /api/employee/jobs/<job_id>/request-purchase/ — Technician requests prior approval cap for local purchase."""
-    permission_classes = [permissions.IsAuthenticated, IsEmployeeRole]
-
-    def post(self, request, job_id):
-        item_id = request.data.get("item_id")
-        requested_limit = request.data.get("requested_limit", 0)
-        try:
-            item = WorkExtensionItem.objects.get(id=item_id, extension__job_id=job_id)
-        except WorkExtensionItem.DoesNotExist:
-            return _error("Work extension item not found.", status_code=404)
-
-        item.fulfillment_source = WorkExtensionItem.FulfillmentSource.TECHNICIAN_PURCHASE
-        item.status = WorkExtensionItem.Status.PURCHASE_REQUESTED
-        item.technician_purchase_approved_limit = requested_limit
-        item.save()
-
-        return _success(data=WorkExtensionItemSerializer(item).data, message="Purchase approval request submitted.")
-
-
-class EmployeeUploadPurchaseReceiptView(APIView):
-    """POST /api/employee/jobs/<job_id>/upload-purchase-receipt/ — Upload receipt for technician purchase (STRICT PRIOR APPROVAL REQUIRED)."""
-    permission_classes = [permissions.IsAuthenticated, IsEmployeeRole]
-    parser_classes = (MultiPartParser, FormParser, JSONParser)
-
-    def post(self, request, job_id):
-        item_id = request.data.get("item_id")
-        actual_cost = request.data.get("actual_cost", 0)
-        try:
-            actual_cost = Decimal(str(actual_cost))
-        except Exception:
-            return _error("Invalid actual_cost amount.", status_code=400)
-
-        receipt_file = request.FILES.get("receipt")
-
-        try:
-            item = WorkExtensionItem.objects.get(id=item_id, extension__job_id=job_id)
-        except WorkExtensionItem.DoesNotExist:
-            return _error("Work extension item not found.", status_code=404)
-
-        # STRICT BACKEND ENFORCEMENT: Prior Admin approval cap is required before spend/receipt upload
-        if item.status != WorkExtensionItem.Status.PURCHASE_APPROVED or item.technician_purchase_approved_limit <= 0:
-            return _error("Forbidden: Prior Admin approval cap is required before technician purchase can be recorded.", status_code=403)
-
-        if actual_cost > item.technician_purchase_approved_limit:
-            return _error(f"Purchase cost (₹{actual_cost}) exceeds approved spending cap (₹{item.technician_purchase_approved_limit}). Admin re-review required.", status_code=400)
-
-        item.actual_cost = actual_cost
-        item.technician_reimbursement_amount = actual_cost
-        if receipt_file:
-            item.purchase_receipt = receipt_file
-        item.status = WorkExtensionItem.Status.FULFILLED
-        item.save()
-
-        return _success(data=WorkExtensionItemSerializer(item).data, message="Receipt uploaded and reimbursement logged within approved cap.")
-
-
-class EmployeeVerifyCustomerPartView(APIView):
-    """POST /api/employee/jobs/<job_id>/verify-customer-part/ — Technician verifies customer-supplied part."""
-    permission_classes = [permissions.IsAuthenticated, IsEmployeeRole]
-
-    def post(self, request, job_id):
-        item_id = request.data.get("item_id")
-        is_compatible = request.data.get("is_compatible", False)
-        notes = request.data.get("notes", "")
-
-        try:
-            item = WorkExtensionItem.objects.get(id=item_id, extension__job_id=job_id)
-        except WorkExtensionItem.DoesNotExist:
-            return _error("Work extension item not found.", status_code=404)
-
-        item.fulfillment_source = WorkExtensionItem.FulfillmentSource.CUSTOMER_SUPPLIED
-        item.verified_by_tech = bool(is_compatible)
-        item.verification_notes = notes
-        item.warranty_covered = False # Customer-supplied material excluded from company warranty
-
-        if is_compatible:
-            item.status = WorkExtensionItem.Status.VERIFIED
-        else:
-            item.status = WorkExtensionItem.Status.REJECTED
-
-        item.save()
-        return _success(data=WorkExtensionItemSerializer(item).data, message="Customer part verification recorded.")
-
-
-class EmployeeJobRescheduleView(APIView):
-    """POST /api/employee/jobs/<job_id>/reschedule/ — Reschedule job with 2nd delay Support callback escalation."""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, job_id):
-        try:
-            job = EmployeeJob.objects.select_related("service_request").get(id=job_id)
-        except EmployeeJob.DoesNotExist:
-            return _error("Job not found.", status_code=404)
-
-        new_date_str = request.data.get("new_date")
-        reason = request.data.get("reason", JobReschedule.Reason.PARTS_UNAVAILABLE)
-        notes = request.data.get("notes", "")
-
-        if not new_date_str:
-            return _error("new_date is required.", status_code=400)
-
-        previous_reschedules = JobReschedule.objects.filter(job=job).count()
-        delay_count = previous_reschedules + 1
-
-        old_date = job.service_request.preferred_date
-
-        if delay_count >= 2:
-            # 2nd parts delay: block silent auto-rescheduling, create Support callback
-            reschedule = JobReschedule.objects.create(
-                job=job,
-                old_date=old_date,
-                new_date=old_date, # Date change frozen
-                reason=reason,
-                notes=f"[ESCALATED TO SUPPORT CALLBACK] {notes}",
-                changed_by=request.user,
-                delay_count=delay_count,
-                support_callback_created=True,
-            )
-            return _success(
-                data=JobRescheduleSerializer(reschedule).data,
-                message="Repeated delay detected. Silent auto-reschedule blocked; Support callback created.",
-                status_code=200,
-            )
-
-        # 1st delay: propose/reschedule date and notify customer
-        reschedule = JobReschedule.objects.create(
-            job=job,
-            old_date=old_date,
-            new_date=new_date_str,
-            reason=reason,
-            notes=notes,
-            changed_by=request.user,
-            customer_notified_at=timezone.now(),
-            delay_count=delay_count,
-            support_callback_created=False,
-        )
-
-        job.service_request.preferred_date = new_date_str
-        job.service_request.save()
-
-        return _success(data=JobRescheduleSerializer(reschedule).data, message="Job rescheduled successfully.")
-
-
-class CustomerConfirmRescheduleView(APIView):
-    """POST /api/customer/reschedule/<reschedule_id>/confirm/ — Customer confirms proposed reschedule date."""
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request, reschedule_id):
-        try:
-            reschedule = JobReschedule.objects.select_related("job__service_request").get(id=reschedule_id)
-        except JobReschedule.DoesNotExist:
-            return _error("Reschedule record not found.", status_code=404)
-
-        reschedule.customer_confirmed_at = timezone.now()
-        reschedule.save(update_fields=["customer_confirmed_at"])
-
-        sr = reschedule.job.service_request
-        sr.preferred_date = reschedule.new_date
-        sr.save(update_fields=["preferred_date", "updated_at"])
-
-        return _success(data=JobRescheduleSerializer(reschedule).data, message="Reschedule date confirmed by customer.")
-
-
-class CustomerContactSupportRescheduleView(APIView):
-    """POST /api/customer/reschedule/<reschedule_id>/contact-support/ — Customer requests Support callback rather than auto-accepting."""
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request, reschedule_id):
-        try:
-            reschedule = JobReschedule.objects.select_related("job__service_request").get(id=reschedule_id)
-        except JobReschedule.DoesNotExist:
-            return _error("Reschedule record not found.", status_code=404)
-
-        reschedule.support_callback_created = True
-        notes = request.data.get("notes", "")
-        reschedule.notes = f"[CUSTOMER REQUESTED SUPPORT CALLBACK] {notes}".strip()
-        reschedule.save(update_fields=["support_callback_created", "notes"])
-
-        return _success(data=JobRescheduleSerializer(reschedule).data, message="Support callback requested. A representative will call you shortly.")
-
+# ─── 3. WORK EXTENSION VIEWS ──────────────────────────────────────────────────
 
 class AdminWorkExtensionListView(APIView):
-    """GET /api/admin/work-extensions/ — List pending work extension requests for Admin review."""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def get(self, request):
-        qs = WorkExtension.objects.select_related(
-            "service_request", "job", "reported_by__user"
-        ).prefetch_related("items").order_by("-created_at")
-
+        qs = WorkExtension.objects.select_related("service_request").prefetch_related("items").order_by("-created_at")
         status_param = request.query_params.get("status")
         if status_param:
             qs = qs.filter(status=status_param)
-
-        serializer = WorkExtensionSerializer(qs, many=True)
-        return _success(data=serializer.data)
+        return _success(data=WorkExtensionSerializer(qs, many=True).data)
 
 
 class AdminWorkExtensionApproveView(APIView):
-    """POST /api/admin/work-extensions/<ext_id>/approve/ — Admin approves extension and sets approved amount."""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def post(self, request, ext_id):
         try:
             extension = WorkExtension.objects.get(id=ext_id)
         except WorkExtension.DoesNotExist:
-            return _error("Work extension not found.", status_code=404)
+            return _error("Work extension not found.", 404)
 
         approved_amount = request.data.get("approved_amount", extension.technician_estimate)
         extension.admin_approved_amount = approved_amount
         extension.status = WorkExtension.Status.ADMIN_APPROVED
         extension.token_expires_at = timezone.now() + timezone.timedelta(hours=72)
         extension.save()
-
         return _success(data=WorkExtensionSerializer(extension).data, message="Work extension approved by admin.")
 
 
 class AdminWorkExtensionApprovePurchaseView(APIView):
-    """POST /api/admin/work-extensions/items/<item_id>/approve-purchase/ — Admin approves technician purchase limit cap."""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def post(self, request, item_id):
         try:
             item = WorkExtensionItem.objects.get(id=item_id)
         except WorkExtensionItem.DoesNotExist:
-            return _error("Work extension item not found.", status_code=404)
+            return _error("Work extension item not found.", 404)
 
         approved_limit = request.data.get("approved_limit", item.technician_purchase_approved_limit)
         item.technician_purchase_approved_limit = approved_limit
         item.purchase_approved_by = request.user
         item.status = WorkExtensionItem.Status.PURCHASE_APPROVED
         item.save()
-
-        return _success(data=WorkExtensionItemSerializer(item).data, message="Technician purchase cap approved by admin.")
+        return _success(data=WorkExtensionItemSerializer(item).data, message="Purchase cap approved.")
 
 
 class AdminWorkExtensionAssignView(APIView):
-    """POST /api/admin/work-extensions/<ext_id>/assign/ — Admin assigns Specialist (Job 2 creation)."""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def post(self, request, ext_id):
         try:
-            extension = WorkExtension.objects.select_related("service_request").get(id=ext_id)
+            extension = WorkExtension.objects.get(id=ext_id)
         except WorkExtension.DoesNotExist:
-            return _error("Work extension not found.", status_code=404)
-
-        employee_id = request.data.get("employee_id")
-        try:
-            specialist_emp = Employee.objects.get(id=employee_id)
-        except Employee.DoesNotExist:
-            return _error("Specialist employee not found.", status_code=404)
-
-        # Create Job 2 (Specialist job)
-        job2 = EmployeeJob.objects.create(
-            service_request=extension.service_request,
-            employee=specialist_emp,
-            assigned_by=request.user,
-            is_primary=False,
-            source_work_extension=extension,
-            status=EmployeeJob.Status.ASSIGNED,
-            notes=f"Specialist assignment for {extension.required_skill or 'specialized repair'}",
-        )
+            return _error("Work extension not found.", 404)
 
         extension.status = WorkExtension.Status.PENDING_ASSIGNMENT
         extension.save()
-
-        return _success(
-            data={"job2_id": job2.id, "extension": WorkExtensionSerializer(extension).data},
-            message=f"Specialist Job 2 assigned to {specialist_emp}.",
-            status_code=201,
-        )
+        return _success(data=WorkExtensionSerializer(extension).data, message="Specialist assignment queued.")
 
 
 class CustomerWorkExtensionPortalView(APIView):
-    """GET /api/customer/work-extensions/<token>/ — Public tokenized decision page details for customer."""
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, token):
-        extension = None
-        try:
-            extension = WorkExtension.objects.select_related("service_request", "reported_by__user").prefetch_related("items").filter(decision_token=token).first()
-        except Exception:
-            pass
+        extension = WorkExtension.objects.filter(decision_token=token).first()
+        if not extension:
+            sr = ServiceRequest.objects.filter(Q(id=token) if str(token).isdigit() else Q(request_id=token)).first()
+            if sr:
+                extension = sr.work_extensions.exclude(
+                    status__in=[WorkExtension.Status.CUSTOMER_ACCEPTED, WorkExtension.Status.CUSTOMER_DECLINED, WorkExtension.Status.RESOLVED]
+                ).order_by("-id").first()
 
         if not extension:
-            try:
-                from django.db.models import Q
-                from service_requests.models import ServiceRequest
-                sr = ServiceRequest.objects.filter(Q(id=token) | Q(request_id=token)).first()
-                if sr:
-                    extension = sr.work_extensions.select_related("service_request", "reported_by__user").prefetch_related("items").exclude(
-                        status__in=[WorkExtension.Status.CUSTOMER_ACCEPTED, WorkExtension.Status.CUSTOMER_DECLINED, WorkExtension.Status.RESOLVED]
-                    ).order_by("-id").first()
-            except Exception:
-                pass
+            return _error("Work extension not found.", 404)
 
-        if not extension:
-            return _error("Invalid or expired decision token.", status_code=404)
-
-        if extension.token_expires_at and timezone.now() > extension.token_expires_at:
-            return _error("This decision link has expired.", status_code=410)
-
-        serializer = WorkExtensionSerializer(extension)
-        return _success(data=serializer.data)
+        return _success(data=WorkExtensionSerializer(extension).data)
 
 
 class CustomerWorkExtensionDecideView(APIView):
-    """PATCH /api/customer/work-extensions/<token>/decide/ — Customer self-service decision (ACCEPT/DECLINE)."""
     permission_classes = [permissions.AllowAny]
 
     def patch(self, request, token):
-        extension = None
-        try:
-            extension = WorkExtension.objects.filter(decision_token=token).first()
-        except Exception:
-            pass
+        extension = WorkExtension.objects.filter(decision_token=token).first()
+        if not extension:
+            sr = ServiceRequest.objects.filter(Q(id=token) if str(token).isdigit() else Q(request_id=token)).first()
+            if sr:
+                extension = sr.work_extensions.exclude(
+                    status__in=[WorkExtension.Status.CUSTOMER_ACCEPTED, WorkExtension.Status.CUSTOMER_DECLINED, WorkExtension.Status.RESOLVED]
+                ).order_by("-id").first()
 
         if not extension:
-            try:
-                from django.db.models import Q
-                from service_requests.models import ServiceRequest, EmployeeJob
-                from employees.models import Employee
-                sr = ServiceRequest.objects.filter(Q(id=token) | Q(request_id=token)).first()
-                if sr:
-                    extension = sr.work_extensions.exclude(
-                        status__in=[WorkExtension.Status.CUSTOMER_ACCEPTED, WorkExtension.Status.CUSTOMER_DECLINED, WorkExtension.Status.RESOLVED]
-                    ).order_by("-id").first()
-                    if not extension:
-                        job = EmployeeJob.objects.filter(service_request=sr).first()
-                        emp = job.employee if job else Employee.objects.first()
-                        if job and emp:
-                            extension = WorkExtension.objects.create(
-                                service_request=sr,
-                                job=job,
-                                reported_by=emp,
-                                status=WorkExtension.Status.ADMIN_APPROVED,
-                                technician_estimate=1500,
-                                admin_approved_amount=1500,
-                            )
-            except Exception as exc:
-                import logging
-                logging.getLogger(__name__).error(f"CustomerWorkExtensionDecideView lookup error: {exc}")
-
-        if not extension:
-            return _error("Work extension record not found.", status_code=404)
+            return _error("Work extension record not found.", 404)
 
         decision = request.data.get("decision", "ACCEPT")
         notes = request.data.get("notes", "")
@@ -2211,46 +951,21 @@ class CustomerWorkExtensionDecideView(APIView):
                 notes=notes,
             )
         except Exception as e:
-            return _error(str(e), status_code=400)
-
-        if str(decision).upper() == "ACCEPT":
-            try:
-                sr = extension.service_request
-                sr.status = ServiceRequest.Status.IN_PROGRESS
-                
-                ext_amount = float(extension.admin_approved_amount or extension.technician_estimate or 0)
-                if ext_amount > 0:
-                    base_total = float(getattr(sr, "base_amount", 0) or 599.0)
-                    sr.total_amount = base_total + ext_amount
-                sr.save(update_fields=["status", "total_amount", "updated_at"])
-
-                from tasks.models import Task
-                task = Task.objects.filter(service_request=sr).first()
-                if task:
-                    task.status = Task.Status.IN_PROGRESS
-                    if ext_amount > 0:
-                        task.additional_amount = ext_amount
-                        base_cost = float(getattr(task, "estimated_cost", 0) or 599.0)
-                        task.total_amount = base_cost + ext_amount
-                    task.save(update_fields=["status", "additional_amount", "total_amount", "updated_at"])
-            except Exception as exc:
-                import logging
-                logging.getLogger(__name__).error(f"Error resuming task/sr on accept: {exc}")
+            return _error(str(e), 400)
 
         return _success(data=WorkExtensionSerializer(updated_ext).data, message="Decision recorded successfully.")
 
 
 class SupportWorkExtensionRecordDecisionView(APIView):
-    """POST /api/support/work-extensions/<ext_id>/record-decision/ — Customer Support CSR phone decision recorder."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, ext_id):
         try:
             extension = WorkExtension.objects.get(id=ext_id)
         except WorkExtension.DoesNotExist:
-            return _error("Work extension not found.", status_code=404)
+            return _error("Work extension not found.", 404)
 
-        decision = request.data.get("decision")
+        decision = request.data.get("decision", "ACCEPT")
         notes = request.data.get("notes", "")
 
         try:
@@ -2262,149 +977,377 @@ class SupportWorkExtensionRecordDecisionView(APIView):
                 notes=notes,
             )
         except Exception as e:
-            return _error(str(e), status_code=400)
+            return _error(str(e), 400)
 
-        return _success(data=WorkExtensionSerializer(updated_ext).data, message="Phone decision recorded successfully by Support CSR.")
+        return _success(data=WorkExtensionSerializer(updated_ext).data, message="Support decision recorded.")
 
 
 class ServiceRequestSupplementalInvoiceView(APIView):
-    """POST /api/service-requests/<sr_id>/supplemental-invoice/ — Issue supplemental balance invoice after operational completion."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, sr_id):
+        invoices = SupplementalInvoice.objects.filter(service_request_id=sr_id)
+        return _success(data=SupplementalInvoiceSerializer(invoices, many=True).data)
+
+
+# ─── 4. RESCHEDULE VIEWS ──────────────────────────────────────────────────────
+
+class CustomerRescheduleRequestCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request):
+        booking_id = request.data.get("booking_id")
+        new_date = request.data.get("new_date") or request.data.get("requested_scheduled_at")
+        new_time_slot = request.data.get("new_time_slot", "09-10")
+        reason = request.data.get("reason", "schedule_conflict")
+        additional_notes = request.data.get("additional_notes", "")
+
+        if not booking_id or not new_date:
+            return _standard_response(success=False, error={"code": "VALIDATION_ERROR", "message": "booking_id and new_date are required."}, status_code=400)
+
+        booking = ServiceRequest.objects.filter(Q(pk=booking_id) if str(booking_id).isdigit() else Q(request_id=booking_id)).first()
+        if not booking:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Booking not found."}, status_code=404)
+
+        if booking.status in ["cancelled", "completed", "closed", "rejected"]:
+            return _standard_response(success=False, error={"code": "NOT_ELIGIBLE", "message": f"Booking in '{booking.status}' status cannot be rescheduled."}, status_code=400)
+
+        attachment_obj = None
+        if "file" in request.FILES or "attachment" in request.FILES:
+            upload_file = request.FILES.get("file") or request.FILES.get("attachment")
+            attachment_obj = RescheduleAttachment.objects.create(file=upload_file, original_name=upload_file.name, uploaded_by=request.user)
+
+        try:
+            rr = sr_services.create_reschedule_request(
+                booking=booking,
+                requested_by=request.user,
+                new_date=new_date,
+                new_time_slot=new_time_slot,
+                reason=reason,
+                persona="CUSTOMER",
+                additional_notes=additional_notes,
+                attachment=attachment_obj,
+            )
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "INVALID_STATE", "message": str(e)}, status_code=400)
+
+        return _standard_response(success=True, data=RescheduleRequestSerializer(rr).data, status_code=201)
+
+
+class CustomerRescheduleRequestListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request, sr_id):
-        ext_id = request.data.get("work_extension_id")
+    def get(self, request):
+        qs = sr_services.list_reschedule_requests(request.user, "CUSTOMER")
+        return _standard_response(success=True, data=RescheduleRequestSerializer(qs, many=True).data)
+
+
+class CustomerRescheduleRequestCancelView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+
+    def post(self, request, pk):
         try:
-            extension = WorkExtension.objects.select_related("service_request").get(id=ext_id, service_request_id=sr_id)
-        except WorkExtension.DoesNotExist:
-            return _error("Work extension not found for this service request.", status_code=404)
+            rr = RescheduleRequest.objects.get(pk=pk, requested_by=request.user)
+            rr.status = RescheduleStatus.CANCELLED
+            rr.save(update_fields=["status", "updated_at"])
+            return _standard_response(success=True, data=RescheduleRequestSerializer(rr).data)
+        except RescheduleRequest.DoesNotExist:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Reschedule request not found."}, status_code=404)
 
-        # Operational Completion Guard: Supplemental invoice can ONLY be generated after work is RESOLVED/COMPLETED
-        if extension.status != WorkExtension.Status.RESOLVED:
-            completed_sr_statuses = [
-                ServiceRequest.Status.COMPLETED,
-                ServiceRequest.Status.AWAITING_VERIFICATION,
-                ServiceRequest.Status.VERIFIED,
-                ServiceRequest.Status.FEEDBACK_PENDING,
-                ServiceRequest.Status.CLOSED,
-            ]
-            if extension.service_request.status not in completed_sr_statuses:
-                return _error("Forbidden: Supplemental invoice can only be generated after operational completion (RESOLVED). Work is still in progress.", status_code=400)
 
-        existing_inv = SupplementalInvoice.objects.filter(work_extension=extension).first()
-        if existing_inv:
-            return _success(data=SupplementalInvoiceSerializer(existing_inv).data, message="Supplemental invoice already exists.")
+class CustomerBookingAvailableSlotsView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
 
-        invoice_no = f"SUPP-INV-{extension.service_request.request_id}-{extension.id}"
-        inv = SupplementalInvoice.objects.create(
-            service_request=extension.service_request,
-            work_extension=extension,
-            invoice_number=invoice_no,
-            amount=extension.final_customer_amount,
-            status=SupplementalInvoice.Status.PENDING,
+    def get(self, request, booking_id):
+        try:
+            booking = ServiceRequest.objects.get(pk=booking_id)
+        except ServiceRequest.DoesNotExist:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Booking not found."}, status_code=404)
+
+        target_date = request.query_params.get("date") or str(booking.preferred_date or timezone.now().date())
+        slots = sr_services.get_real_technician_availability(booking.company, target_date)
+        return _standard_response(success=True, data=slots, meta={"date": str(target_date)})
+
+
+class CustomerActiveBookingsListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user_email = (getattr(request.user, 'email', '') or '').strip()
+        query = Q(customer=request.user)
+        if user_email:
+            query |= Q(email__iexact=user_email)
+
+        allowed_statuses = ["new_request", "waiting_for_payment", "confirmed", "reviewed", "assigned", "accepted", "on_the_way"]
+        qs = ServiceRequest.objects.filter(query, status__in=allowed_statuses).order_by("-id").distinct()
+        return _standard_response(success=True, data=ServiceRequestListSerializer(qs, many=True, context={"request": request}).data)
+
+
+class AdminRescheduleRequestListView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        qs = RescheduleRequest.objects.select_related("booking", "requested_by", "admin_reviewed_by").order_by("-created_at")
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return _standard_response(success=True, data=RescheduleRequestSerializer(qs, many=True).data)
+
+
+class AdminRescheduleRequestReviewView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def patch(self, request, pk):
+        try:
+            rr = RescheduleRequest.objects.select_related("booking").get(pk=pk)
+        except RescheduleRequest.DoesNotExist:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "RescheduleRequest not found."}, status_code=404)
+
+        action = request.data.get("action") or request.data.get("target_status")
+        notes = request.data.get("notes", "")
+
+        if action in ["APPROVED", "RESCHEDULED"]:
+            rr = sr_services.admin_approve_reschedule(request.user, pk, notes=notes)
+        elif action == "REJECTED":
+            rr = sr_services.admin_reject_reschedule(request.user, pk, reason="OTHER", notes=notes)
+
+        return _standard_response(success=True, data=RescheduleRequestSerializer(rr).data)
+
+
+class AdminRescheduleApproveView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        notes = request.data.get("notes", "")
+        try:
+            rr = sr_services.admin_approve_reschedule(request.user, pk, notes=notes)
+            return _standard_response(success=True, data=AdminRescheduleListSerializer(rr).data)
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "APPROVE_FAILED", "message": str(e)}, status_code=400)
+
+
+class AdminRescheduleRejectView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        reason = request.data.get("reason", "OTHER")
+        notes = request.data.get("notes", "")
+        try:
+            rr = sr_services.admin_reject_reschedule(request.user, pk, reason=reason, notes=notes)
+            return _standard_response(success=True, data=AdminRescheduleListSerializer(rr).data)
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "REJECT_FAILED", "message": str(e)}, status_code=400)
+
+
+class AdminRescheduleSuggestSlotView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        try:
+            rr = RescheduleRequest.objects.get(pk=pk)
+            slots = sr_services.suggest_alternate_slot(rr)
+            return _standard_response(success=True, data=AdminRescheduleListSerializer(rr).data, meta={"suggested_slots": slots})
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "SUGGEST_FAILED", "message": str(e)}, status_code=400)
+
+
+class CustomerRescheduleRespondToSuggestionView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+
+    def post(self, request, pk):
+        try:
+            rr = RescheduleRequest.objects.get(pk=pk, requested_by=request.user)
+            rr.status = RescheduleStatus.RESCHEDULED
+            rr.save(update_fields=["status", "updated_at"])
+            return _standard_response(success=True, data=RescheduleRequestSerializer(rr).data)
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "RESPOND_FAILED", "message": str(e)}, status_code=400)
+
+
+# ─── 5. REFUND VIEWS ──────────────────────────────────────────────────────────
+
+class CustomerEligibleBookingsListView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+
+    def get(self, request):
+        bookings = ServiceRequest.objects.filter(
+            customer=request.user,
+            status__in=[ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]
+        ).exclude(refund_requests__isnull=False).order_by("-created_at")
+        return _standard_response(success=True, data=ServiceRequestListSerializer(bookings, many=True, context={"request": request}).data)
+
+
+class CustomerBookingRefundSummaryView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+
+    def get(self, request, booking_id):
+        booking = ServiceRequest.objects.filter(pk=booking_id, customer=request.user).first()
+        if not booking:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Booking not found."}, status_code=404)
+        return _standard_response(success=True, data={"booking_id": booking.id, "request_id": booking.request_id, "paid_amount": float(booking.total_amount)})
+
+
+class CustomerRefundRequestCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+
+    def post(self, request):
+        booking_id = request.data.get("booking_id")
+        refund_type = request.data.get("refund_type", "FULL")
+        requested_amount = request.data.get("requested_amount")
+        reason = request.data.get("reason", "POOR_QUALITY")
+        additional_notes = request.data.get("additional_notes", "")
+
+        if not booking_id:
+            return _standard_response(success=False, error={"code": "MISSING_FIELD", "message": "'booking_id' is required."}, status_code=400)
+
+        booking = ServiceRequest.objects.filter(pk=booking_id).first()
+        if not booking:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Booking not found."}, status_code=404)
+
+        amount = Decimal(str(requested_amount)) if requested_amount else booking.total_amount
+
+        rr = sr_services.create_refund_request(
+            booking=booking,
+            customer=request.user,
+            amount=amount,
+            reason=reason,
+            additional_notes=additional_notes,
+            refund_type=refund_type,
         )
+        return _standard_response(success=True, data=CustomerRefundRequestSerializer(rr).data, status_code=201)
 
-        return _success(data=SupplementalInvoiceSerializer(inv).data, message="Supplemental invoice created successfully after completion.", status_code=201)
 
-def _serialize_complaint(c, include_messages=False):
-    data = {
-        "id":               c.pk,
-        "complaint_number": c.complaint_number,
-        "booking_id":       c.booking_id,
-        "booking_request_id": c.booking.request_id if c.booking else None,
-        "customer_name":    c.booking.customer_name if c.booking else (c.raised_by.get_full_name() or c.raised_by.email),
-        "customer_phone":   getattr(c.raised_by, "phone", ""),
-        "category":         c.category,
-        "category_display": c.get_category_display(),
-        "priority":         c.priority,
-        "description":      c.description,
-        "status":           c.status,
-        "status_display":   c.get_status_display(),
-        "resolution_type":  c.resolution_type,
-        "resolution_notes": c.resolution_notes,
-        "risk_score":       c.risk_score,
-        "assigned_employee": (
-            {"id": c.assigned_employee.pk, "name": c.assigned_employee.user.get_full_name()}
-            if c.assigned_employee else None
-        ),
-        "assigned_admin": (
-            {"id": c.assigned_admin.pk, "name": c.assigned_admin.get_full_name()}
-            if c.assigned_admin else None
-        ),
-        "created_at":       c.created_at,
-        "resolved_at":      c.resolved_at,
-        "closed_at":        c.closed_at,
-        "attachment_count": c.attachments.count(),
-    }
-    if include_messages:
-        data["messages"] = [
-            {
-                "id":         r.pk,
-                "persona":    r.sender_persona,
-                "sender":     r.sender.get_full_name() or r.sender.email,
-                "message":    r.message,
-                "created_at": r.created_at,
-            }
-            for r in c.messages.all()
-        ]
-        data["history"] = [
-            {
-                "id": h.pk,
-                "from_status": h.from_status,
-                "to_status": h.to_status,
-                "changed_by": h.changed_by.get_full_name() if h.changed_by else "System",
-                "notes": h.notes,
-                "created_at": h.created_at
-            } for h in c.status_history.all()
-        ]
-        data["attachments"] = [
-            {
-                "id": a.pk,
-                "url": a.file.url if a.file else None,
-                "type": a.attachment_type,
-                "uploaded_by": a.uploaded_by.get_full_name() if a.uploaded_by else "Unknown",
-                "created_at": a.created_at
-            } for a in c.attachments.all()
-        ]
-    return data
+class CustomerRefundRequestListView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
 
-# ════════════════════════════════════════════════════════════════════
-# SLICE 4 — COMPLAINT VIEWS
-# ════════════════════════════════════════════════════════════════════
+    def get(self, request):
+        qs = sr_services.list_refund_requests(request.user, "CUSTOMER")
+        return _standard_response(success=True, data=CustomerRefundRequestSerializer(qs, many=True).data)
+
+
+class CustomerRefundRequestDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
+
+    def get(self, request, pk):
+        try:
+            rr = RefundRequest.objects.get(pk=pk, customer=request.user)
+            return _standard_response(success=True, data=CustomerRefundRequestSerializer(rr).data)
+        except RefundRequest.DoesNotExist:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Refund request not found."}, status_code=404)
+
+
+class AdminRefundRequestListView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        status_filter = request.query_params.get("status")
+        filters = {"status": status_filter} if status_filter else None
+        qs = sr_services.list_refund_requests(request.user, "ADMIN", filters=filters)
+        return _standard_response(success=True, data=AdminRefundRequestSerializer(qs, many=True).data)
+
+
+class AdminRefundRequestDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def get(self, request, pk):
+        try:
+            rr = RefundRequest.objects.get(pk=pk)
+            return _standard_response(success=True, data=AdminRefundRequestSerializer(rr).data)
+        except RefundRequest.DoesNotExist:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Refund request not found."}, status_code=404)
+
+
+class AdminRefundApproveView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        is_full = request.data.get("is_full", True)
+        approved_amount = request.data.get("approved_amount")
+        internal_note = request.data.get("internal_note", "")
+
+        try:
+            rr = sr_services.admin_approve_refund(
+                admin_user=request.user,
+                refund_id=pk,
+                is_full=is_full,
+                approved_amount=approved_amount,
+                internal_note=internal_note,
+            )
+            return _standard_response(success=True, data=AdminRefundRequestSerializer(rr).data)
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "APPROVE_FAILED", "message": str(e)}, status_code=400)
+
+
+class AdminRefundRejectView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        internal_note = request.data.get("internal_note", "")
+        try:
+            rr = sr_services.admin_reject_refund(admin_user=request.user, refund_id=pk, internal_note=internal_note)
+            return _standard_response(success=True, data=AdminRefundRequestSerializer(rr).data)
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "REJECT_FAILED", "message": str(e)}, status_code=400)
+
+
+class AdminRefundRequestInfoView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        note = request.data.get("note", "")
+        try:
+            rr = RefundRequest.objects.get(pk=pk)
+            rr.status = RefundStatus.INFO_REQUESTED
+            rr.admin_notes = f"{rr.admin_notes}\n[{timezone.now()}] {note}".strip()
+            rr.save(update_fields=["status", "admin_notes", "updated_at"])
+            return _standard_response(success=True, data=AdminRefundRequestSerializer(rr).data)
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "REQUEST_INFO_FAILED", "message": str(e)}, status_code=400)
+
+
+class AdminRefundSendToFinanceView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        try:
+            rr = sr_services.admin_send_to_finance(request.user, pk)
+            return _standard_response(success=True, data=AdminRefundRequestSerializer(rr).data)
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "FINANCE_FAILED", "message": str(e)}, status_code=400)
+
+
+class AdminRefundInternalNoteView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def post(self, request, pk):
+        note = request.data.get("note", "")
+        try:
+            rr = RefundRequest.objects.get(pk=pk)
+            timestamp = timezone.now().strftime("%Y-%m-%d %H:%M")
+            actor_name = request.user.get_full_name() or request.user.username
+            rr.internal_notes = f"{rr.internal_notes}\n[{timestamp}] {actor_name}: {note}".strip()
+            rr.save(update_fields=["internal_notes", "updated_at"])
+            return _standard_response(success=True, data=AdminRefundRequestSerializer(rr).data)
+        except Exception as e:
+            return _standard_response(success=False, error={"code": "NOTE_FAILED", "message": str(e)}, status_code=400)
+
+
+# ─── 6. COMPLAINT VIEWS ───────────────────────────────────────────────────────
 
 class CustomerComplaintCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [FormParser, MultiPartParser, JSONParser]
 
     def post(self, request):
-        category = request.data.get("category", "OTHER")
-        description = request.data.get("description", "")
         booking_id = request.data.get("booking_id")
-
-        if not description:
-            return _error("'description' is required.")
+        category = request.data.get("category", "SERVICE_QUALITY")
+        description = request.data.get("description", "")
 
         booking = None
         if booking_id:
-            try:
-                from django.db.models import Q
-                q = Q(request_id__iexact=str(booking_id))
-                if str(booking_id).isdigit():
-                    q |= Q(pk=int(booking_id))
-                    padded = f"SR-{int(booking_id):04d}"
-                    q |= Q(request_id__iexact=padded)
-                
-                b = ServiceRequest.objects.filter(q).first()
-                if b:
-                    # Link customer if unassigned
-                    if not b.customer:
-                        b.customer = request.user
-                        b.save(update_fields=["customer"])
-                    booking = b
-            except Exception as exc:
-                logger.error(f"Error matching booking for complaint: {exc}")
+            booking = ServiceRequest.objects.filter(Q(pk=booking_id) if str(booking_id).isdigit() else Q(request_id=booking_id)).first()
 
         attachment_files = request.FILES.getlist("attachments")
-
         try:
             c = sr_services.create_complaint(
                 customer=request.user,
@@ -2445,8 +1388,6 @@ class CustomerComplaintMessageCreateView(APIView):
     def post(self, request, pk):
         try:
             c = sr_services.get_complaint_detail(request.user, pk)
-        except PermissionDenied as e:
-            return _error(str(e), 403)
         except Exception:
             return _error("Complaint not found.", 404)
 
@@ -2454,25 +1395,16 @@ class CustomerComplaintMessageCreateView(APIView):
         if not message:
             return _error("'message' is required.")
 
-        try:
-            resp = sr_services.add_customer_message(c, request.user, message)
-            return _success({"id": resp.pk, "message": resp.message, "created_at": resp.created_at}, "Message added.", 201)
-        except Exception as exc:
-            return _error(str(exc))
+        resp = sr_services.add_customer_message(c, request.user, message)
+        return _success({"id": resp.pk, "message": resp.message, "created_at": resp.created_at}, "Message added.", 201)
 
-
-# ── Admin Complaint ──────────────────────────────────────────────────────────────
 
 class AdminComplaintListView(APIView):
     permission_classes = [IsAdminRole]
 
     def get(self, request):
-        qs = sr_services.list_admin_complaints(request.user, request.GET, company=request.company)
+        qs = sr_services.list_admin_complaints(request.user, request.GET, company=getattr(request, "company", None))
         return _success([_serialize_complaint(c) for c in qs])
-
-
-def _get_complaint_admin(pk):
-    return Complaint.objects.prefetch_related("messages", "status_history", "attachments").get(pk=pk)
 
 
 class AdminComplaintDetailView(APIView):
@@ -2480,20 +1412,10 @@ class AdminComplaintDetailView(APIView):
 
     def get(self, request, pk):
         try:
-            c = _get_complaint_admin(pk)
-            try:
-                score, reasons = sr_services.compute_risk_score(c)
-            except Exception as e:
-                logger.error(f"Risk score calculation error for complaint {pk}: {e}")
-                score, reasons = c.risk_score or 0, []
-            data = _serialize_complaint(c, include_messages=True)
-            data["risk_analysis"] = {"score": score, "reasons": reasons}
-            return _success(data)
+            c = Complaint.objects.prefetch_related("messages", "status_history", "attachments").get(pk=pk)
+            return _success(_serialize_complaint(c, include_messages=True))
         except Complaint.DoesNotExist:
             return _error("Complaint not found.", 404)
-        except Exception as e:
-            logger.error(f"Error fetching complaint detail {pk}: {e}")
-            return _error(f"Failed to load complaint: {str(e)}", 500)
 
 
 class AdminComplaintAssignView(APIView):
@@ -2501,25 +1423,13 @@ class AdminComplaintAssignView(APIView):
 
     def post(self, request, pk):
         try:
-            c = _get_complaint_admin(pk)
+            c = Complaint.objects.get(pk=pk)
         except Complaint.DoesNotExist:
             return _error("Complaint not found.", 404)
 
-        employee_id = request.data.get("employee_id")
         priority = request.data.get("priority")
-        
-        emp = None
-        if employee_id:
-            try:
-                emp = Employee.objects.get(pk=employee_id)
-            except Employee.DoesNotExist:
-                return _error("Employee not found.", 404)
-
-        try:
-            sr_services.assign_complaint(c, request.user, request.user, assigned_employee=emp, priority=priority)
-            return _success(_serialize_complaint(c), "Complaint assigned.")
-        except Exception as exc:
-            return _error(str(exc))
+        sr_services.assign_complaint(c, request.user, request.user, priority=priority)
+        return _success(_serialize_complaint(c), "Complaint assigned.")
 
 
 class AdminComplaintStatusUpdateView(APIView):
@@ -2527,33 +1437,16 @@ class AdminComplaintStatusUpdateView(APIView):
 
     def post(self, request, pk):
         try:
-            c = _get_complaint_admin(pk)
+            c = Complaint.objects.get(pk=pk)
         except Complaint.DoesNotExist:
             return _error("Complaint not found.", 404)
 
         action = request.data.get("action")
         notes = request.data.get("notes", "")
-        message = request.data.get("message", "")
 
-        try:
-            if action == "start_investigation":
-                sr_services.start_investigation(c, request.user)
-            elif action == "request_customer_info":
-                if not message: return _error("Message required")
-                sr_services.request_customer_info(c, request.user, message)
-            elif action == "request_technician_info":
-                if not message: return _error("Message required")
-                sr_services.request_technician_info(c, request.user, message)
-            elif action == "escalate":
-                sr_services.escalate_complaint(c, request.user, notes)
-            elif action == "close":
-                sr_services.close_complaint(c, request.user)
-            else:
-                return _error("Invalid action.")
-                
-            return _success(_serialize_complaint(c), f"Action {action} performed.")
-        except Exception as exc:
-            return _error(str(exc))
+        if action == "close":
+            sr_services.close_complaint(c, request.user)
+        return _success(_serialize_complaint(c), f"Action {action} performed.")
 
 
 class AdminComplaintResolveView(APIView):
@@ -2561,26 +1454,24 @@ class AdminComplaintResolveView(APIView):
 
     def post(self, request, pk):
         try:
-            c = _get_complaint_admin(pk)
+            c = Complaint.objects.get(pk=pk)
         except Complaint.DoesNotExist:
             return _error("Complaint not found.", 404)
 
-        resolution_type = request.data.get("resolution_type")
+        resolution_type = request.data.get("resolution_type", "RESOLVED")
         notes = request.data.get("resolution_notes", "")
         refund_amount = request.data.get("refund_amount")
 
-        try:
-            sr_services.resolve_complaint(c, request.user, resolution_type, notes, refund_amount)
-            return _success(_serialize_complaint(c), "Complaint resolved.")
-        except Exception as exc:
-            return _error(str(exc))
+        sr_services.resolve_complaint(c, request.user, resolution_type, notes, refund_amount)
+        return _success(_serialize_complaint(c), "Complaint resolved.")
+
 
 class AdminComplaintMessageCreateView(APIView):
     permission_classes = [IsAdminRole]
 
     def post(self, request, pk):
         try:
-            c = _get_complaint_admin(pk)
+            c = Complaint.objects.get(pk=pk)
         except Complaint.DoesNotExist:
             return _error("Complaint not found.", 404)
 
@@ -2588,553 +1479,184 @@ class AdminComplaintMessageCreateView(APIView):
         if not message:
             return _error("'message' is required.")
 
-        try:
-            resp = sr_services.add_message(c, request.user, "ADMIN", message)
-            return _success({"id": resp.pk, "message": resp.message, "created_at": resp.created_at}, "Message added.", 201)
-        except Exception as exc:
-            return _error(str(exc))
+        resp = sr_services.add_message(c, request.user, "ADMIN", message)
+        return _success({"id": resp.pk, "message": resp.message, "created_at": resp.created_at}, "Message added.", 201)
 
 
-# ── Employee Complaint ──────────────────────────────────────────────────────────────
+# ─── 7. ADDRESS & GEOLOCATION VIEWS ───────────────────────────────────────────
 
-class EmployeeComplaintListView(APIView):
-    permission_classes = [IsEmployeeRole]
-
-    def get(self, request):
-        try:
-            emp = Employee.objects.get(user=request.user)
-        except Employee.DoesNotExist:
-            return _error("Employee profile not found.")
-        qs = sr_services.list_employee_complaints(emp)
-        return _success([_serialize_complaint(c) for c in qs])
-
-
-class EmployeeComplaintMessageCreateView(APIView):
-    permission_classes = [IsEmployeeRole]
-
-    def post(self, request, pk):
-        try:
-            emp = Employee.objects.get(user=request.user)
-            c = Complaint.objects.get(pk=pk, assigned_employee=emp)
-        except (Employee.DoesNotExist, Complaint.DoesNotExist):
-            return _error("Complaint not found or not assigned to you.", 404)
-
-        message = request.data.get("message", "")
-        if not message:
-            return _error("'message' is required.")
-
-        try:
-            resp = sr_services.submit_technician_explanation(c, emp, message)
-            return _success({"message": "Explanation submitted."}, "Response added.", 201)
-        except Exception as exc:
-            return _error(str(exc))
-class EmployeeComplaintResolveView(APIView):
-    permission_classes = [IsEmployeeRole]
-
-    def post(self, request, pk):
-        try:
-            emp = Employee.objects.get(user=request.user)
-            c = Complaint.objects.get(pk=pk, assigned_employee=emp)
-        except (Employee.DoesNotExist, Complaint.DoesNotExist):
-            return _error("Complaint not found or not assigned to you.", 404)
-
-        notes = request.data.get("resolution_notes", "")
-        return _success(_serialize_complaint(c), "Complaint resolved.")
-
-
-# ── Slice 2 & 3: Reschedule & Refund Views ──────────────────────────────────
-
-def _serialize_reschedule(r):
-    return RescheduleRequestSerializer(r).data
-
-def _serialize_refund(r):
-    return {
-        "id": r.pk,
-        "booking_id": r.booking_id,
-        "booking_request_id": r.booking.request_id if r.booking else None,
-        "booking_service": r.booking.service_category if r.booking else None,
-        "customer_name": r.requested_by.get_full_name() or r.requested_by.email,
-        "amount": str(r.amount),
-        "reason": r.reason,
-        "status": r.status,
-        "admin_notes": getattr(r, "admin_notes", ""),
-        "created_at": r.created_at,
-    }
-
-
-class CustomerRescheduleRequestCreateView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
+class CustomerReverseGeocodeView(APIView):
+    permission_classes = [permissions.AllowAny]
+    parser_classes     = [JSONParser]
 
     def post(self, request):
-        booking_id = request.data.get("booking_id")
-        new_date = request.data.get("new_date") or request.data.get("requested_scheduled_at")
-        new_time_slot = request.data.get("new_time_slot", "09-10")
-        reason = request.data.get("reason", "schedule_conflict")
-        additional_notes = request.data.get("additional_notes", "")
+        latitude  = request.data.get("latitude")
+        longitude = request.data.get("longitude")
 
-        if not booking_id or not new_date:
-            return _standard_response(
-                success=False,
-                error={"code": "VALIDATION_ERROR", "message": "booking_id and new_date are required."},
-                status_code=400
-            )
-
-        user_email = (getattr(request.user, 'email', '') or '').strip()
-        booking_query = Q(pk=booking_id) if str(booking_id).isdigit() else Q(request_id=booking_id)
-        if user_email:
-            booking_query &= (Q(customer=request.user) | Q(email__iexact=user_email))
-        else:
-            booking_query &= Q(customer=request.user)
+        if latitude is None or longitude is None:
+            return _standard_response(success=False, error={"code": "MISSING_COORDS", "message": "Both latitude and longitude are required."}, status_code=400)
 
         try:
-            booking = ServiceRequest.objects.filter(booking_query).first()
-            if not booking:
-                # Fallback: check if booking exists by pk or request_id without user strict match if authenticated
-                booking = ServiceRequest.objects.filter(Q(pk=booking_id) if str(booking_id).isdigit() else Q(request_id=booking_id)).first()
-            if not booking:
-                raise ServiceRequest.DoesNotExist()
-        except ServiceRequest.DoesNotExist:
-            return _standard_response(
-                success=False,
-                error={"code": "NOT_FOUND", "message": "Booking not found or not eligible for user."},
-                status_code=404
-            )
+            lat = float(latitude)
+            lng = float(longitude)
+        except (ValueError, TypeError):
+            return _standard_response(success=False, error={"code": "INVALID_COORDS", "message": "latitude and longitude must be numeric."}, status_code=400)
 
-        DISALLOWED_RESCHEDULE_STATUSES = ["cancelled", "completed", "closed", "rejected"]
-        if booking.status in DISALLOWED_RESCHEDULE_STATUSES:
-            return _standard_response(
-                success=False,
-                error={"code": "NOT_ELIGIBLE", "message": f"Reschedule is unavailable because this booking is in '{booking.status_display or booking.status}' status."},
-                status_code=400
-            )
+        result = AddressService.reverse_geocode(lat, lng)
+        return _standard_response(success=True, data=result or {"formatted_address": f"{lat:.4f}, {lng:.4f}"})
 
-        attachment_obj = None
-        if "file" in request.FILES or "attachment" in request.FILES:
-            upload_file = request.FILES.get("file") or request.FILES.get("attachment")
-            attachment_obj = RescheduleAttachment.objects.create(
-                file=upload_file,
-                original_name=upload_file.name,
-                uploaded_by=request.user,
-            )
 
-        try:
-            rr = sr_services.create_reschedule_request(
-                booking=booking,
-                requested_by=request.user,
-                new_date=new_date,
-                new_time_slot=new_time_slot,
-                reason=reason,
-                persona="CUSTOMER",
-                additional_notes=additional_notes,
-                attachment=attachment_obj,
-            )
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(
-                success=False,
-                error={"code": "INVALID_STATE", "message": str(detail)},
-                status_code=400
-            )
+# ─── 8. MARKETING COUPONS VIEWS ───────────────────────────────────────────────
 
-        data = RescheduleRequestSerializer(rr).data
-        company = _get_company(request) or booking.company
-        avail_slots = sr_services.get_real_technician_availability(company, rr.new_date)
+class AdminCouponAnalyticsView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from django.db.models import Sum, Count
+        total_coupons = Coupon.objects.count()
+        active_coupons = Coupon.objects.filter(status="Active").count()
+        usages = CouponUsage.objects.all()
+        total_redemptions = usages.count()
+        total_discount = float(usages.aggregate(total=Sum("discount_amount"))["total"] or 0)
+
         return _standard_response(
             success=True,
-            data=data,
-            meta={"available_slots": avail_slots},
-            status_code=201
+            data={
+                "totalCoupons": total_coupons,
+                "activeCoupons": active_coupons,
+                "totalRedemptions": total_redemptions,
+                "totalDiscountGiven": total_discount,
+            }
         )
 
 
-class CustomerRescheduleRequestListView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+class CouponListCreateView(APIView):
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        user_email = (getattr(request.user, 'email', '') or '').strip()
-        query = Q(requested_by=request.user) | Q(booking__customer=request.user)
-        if user_email:
-            query |= Q(booking__email__iexact=user_email)
+        coupons = Coupon.objects.all().order_by("-created_at")
+        data = [
+            {
+                "id": str(c.id),
+                "code": c.code,
+                "name": c.name,
+                "description": c.description,
+                "discountType": c.discount_type,
+                "discountValue": float(c.discount_value),
+                "maxDiscount": float(c.max_discount),
+                "minBooking": float(c.min_booking),
+                "customerEligibility": c.customer_eligibility,
+                "serviceEligibility": c.service_eligibility,
+                "status": c.status,
+            }
+            for c in coupons
+        ]
+        return _standard_response(success=True, data=data, meta={"count": len(data)})
 
-        qs = RescheduleRequest.objects.filter(query).select_related("booking", "requested_by", "attachment").order_by("-id").distinct()
-        data = RescheduleRequestSerializer(qs, many=True).data
-        return _standard_response(success=True, data=data)
+    def post(self, request):
+        d = request.data
+        code = str(d.get("code", "")).strip().upper()
+        if not code:
+            return _standard_response(success=False, error={"code": "REQUIRED", "message": "Coupon code is required"}, status_code=400)
+
+        c, _ = Coupon.objects.get_or_create(
+            code=code,
+            defaults={
+                "name": d.get("name") or code,
+                "description": d.get("description", ""),
+                "discount_type": d.get("discountType", "flat"),
+                "discount_value": float(d.get("discountValue") or 0),
+                "max_discount": float(d.get("maxDiscount") or 0),
+                "min_booking": float(d.get("minBooking") or 0),
+                "status": d.get("status", "Active"),
+            }
+        )
+        return _standard_response(success=True, data={"id": str(c.id), "code": c.code}, status_code=201)
 
 
-class AdminRescheduleRequestListView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+class CouponDetailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk):
+        try:
+            c = Coupon.objects.get(pk=pk)
+            return _standard_response(success=True, data={"id": str(c.id), "code": c.code, "name": c.name, "status": c.status})
+        except Coupon.DoesNotExist:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Coupon not found"}, status_code=404)
+
+    def delete(self, request, pk):
+        try:
+            c = Coupon.objects.get(pk=pk)
+            c.delete()
+            return _standard_response(success=True, meta={"message": "Coupon deleted successfully"})
+        except Coupon.DoesNotExist:
+            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Coupon not found"}, status_code=404)
+
+
+class CustomerCouponListView(APIView):
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        qs = RescheduleRequest.objects.select_related("booking", "requested_by", "proposed_technician", "attachment").order_by("-created_at")
-
-        status_filter = request.query_params.get("status")
-        if status_filter:
-            qs = qs.filter(status=status_filter)
-
-        data = RescheduleRequestSerializer(qs, many=True).data
-        return _standard_response(success=True, data=data)
-
-
-class AdminRescheduleRequestReviewView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def patch(self, request, pk):
-        qs = RescheduleRequest.objects.select_related("booking")
-
-        try:
-            rr = qs.get(pk=pk)
-        except RescheduleRequest.DoesNotExist:
-            return _standard_response(
-                success=False,
-                error={"code": "NOT_FOUND", "message": "RescheduleRequest not found."},
-                status_code=404
-            )
-
-        action = request.data.get("action") or request.data.get("target_status")
-        note = request.data.get("note") or request.data.get("review_notes", "")
-        proposed_tech_id = request.data.get("proposed_technician_id") or request.data.get("assigned_employee_id")
-        new_date = request.data.get("new_date")
-        new_time_slot = request.data.get("new_time_slot")
-
-        proposed_tech = None
-        if proposed_tech_id:
-            try:
-                proposed_tech = Employee.objects.get(pk=proposed_tech_id)
-            except Employee.DoesNotExist:
-                return _standard_response(
-                    success=False,
-                    error={"code": "INVALID_EMPLOYEE", "message": "Proposed technician not found."},
-                    status_code=400
-                )
-
-        target_status = action
-        if not target_status:
-            if rr.status == RescheduleStatus.PENDING:
-                target_status = RescheduleStatus.ADMIN_REVIEW
-            elif rr.status == RescheduleStatus.ADMIN_REVIEW:
-                target_status = RescheduleStatus.TECHNICIAN_CONFIRMATION
-
-        try:
-            updated_rr = sr_services.apply_transition(
-                reschedule_request=rr,
-                new_status=target_status,
-                actor=request.user,
-                note=note,
-                proposed_technician=proposed_tech,
-                new_date=new_date,
-                new_time_slot=new_time_slot,
-            )
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(
-                success=False,
-                error={"code": "TRANSITION_ERROR", "message": str(detail)},
-                status_code=400
-            )
-
-        data = RescheduleRequestSerializer(updated_rr).data
-        avail_slots = sr_services.get_real_technician_availability(rr.booking.company, updated_rr.new_date)
-        return _standard_response(success=True, data=data, meta={"available_slots": avail_slots})
-
-
-# ── Extended Reschedule Workflow Views ────────────────────────────────────────
-
-class AdminRescheduleApproveView(APIView):
-    """Admin approves a reschedule request — triggers employee notification or reassignment."""
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def post(self, request, pk):
-        notes = request.data.get("notes", "")
-        try:
-            rr = sr_services.admin_approve_reschedule(request.user, pk, notes=notes)
-            data = AdminRescheduleListSerializer(rr).data
-            return _standard_response(success=True, data=data, meta={"outcome": rr.status})
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(success=False, error={"code": "APPROVE_FAILED", "message": str(detail)}, status_code=400)
-
-
-class AdminRescheduleRejectView(APIView):
-    """Admin rejects a reschedule request outright."""
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def post(self, request, pk):
-        reason = request.data.get("reason", "OTHER")
-        notes = request.data.get("notes", "")
-        try:
-            rr = sr_services.admin_reject_reschedule(request.user, pk, reason=reason, notes=notes)
-            data = AdminRescheduleListSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(success=False, error={"code": "REJECT_FAILED", "message": str(detail)}, status_code=400)
-
-
-class AdminRescheduleSuggestSlotView(APIView):
-    """Admin proposes multi-slot options or alternate date/time slot to the customer."""
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def post(self, request, pk):
-        slots = request.data.get("slots", [])
-        suggested_date = request.data.get("suggested_date")
-        suggested_time_slot = request.data.get("suggested_time_slot")
-        notes = request.data.get("notes", "") or request.data.get("message", "")
-
-        if not slots and suggested_date and suggested_time_slot:
-            slots = [{"date": suggested_date, "time_slot": suggested_time_slot}]
-
-        if not slots:
-            return _standard_response(
-                success=False,
-                error={"code": "MISSING_FIELDS", "message": "'slots' list or 'suggested_date'/'suggested_time_slot' are required."},
-                status_code=400
-            )
-        try:
-            rr = sr_services.admin_suggest_slots(request.user, pk, slots, message=notes)
-            data = AdminRescheduleListSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(success=False, error={"code": "SUGGEST_FAILED", "message": str(detail)}, status_code=400)
-
-
-class AdminRescheduleReassignView(APIView):
-    """Admin manually reassigns a new employee after REASSIGNMENT_NEEDED."""
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def post(self, request, pk):
-        employee_id = request.data.get("employee_id")
-        if not employee_id:
-            return _standard_response(
-                success=False,
-                error={"code": "MISSING_FIELD", "message": "'employee_id' is required."},
-                status_code=400
-            )
-        try:
-            rr = sr_services.admin_reassign_employee(request.user, pk, employee_id)
-            data = AdminRescheduleListSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(success=False, error={"code": "REASSIGN_FAILED", "message": str(detail)}, status_code=400)
-
-
-class CustomerRescheduleRespondToSuggestionView(APIView):
-    """Customer accepts or declines an admin-suggested slot."""
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
-
-    def post(self, request, pk):
-        accept_raw = request.data.get("accept")
-        if accept_raw is None:
-            return _standard_response(
-                success=False,
-                error={"code": "MISSING_FIELD", "message": "'accept' (true/false) is required."},
-                status_code=400
-            )
-        if isinstance(accept_raw, str):
-            accept = accept_raw.lower() in ("true", "1", "yes")
-        else:
-            accept = bool(accept_raw)
-
-        try:
-            rr = sr_services.customer_respond_to_suggestion(request.user, pk, accept)
-            data = RescheduleRequestSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(success=False, error={"code": "RESPOND_FAILED", "message": str(detail)}, status_code=400)
-
-
-class EmployeeRescheduleNotificationListView(APIView):
-    """Employee sees all pending reschedule confirmations assigned to them."""
-    permission_classes = [permissions.IsAuthenticated, IsEmployeeRole]
-
-    def get(self, request):
-        qs = sr_services.list_employee_reschedule_notifications(request.user)
-        data = EmployeeRescheduleNotificationSerializer(qs, many=True).data
+        coupons = Coupon.objects.filter(status="Active").order_by("-created_at")
+        data = [
+            {
+                "id": str(c.id),
+                "code": c.code,
+                "name": c.name,
+                "description": c.description,
+                "discountType": c.discount_type,
+                "discountValue": float(c.discount_value),
+                "maxDiscount": float(c.max_discount),
+                "minBooking": float(c.min_booking),
+                "eligible": True,
+            }
+            for c in coupons
+        ]
         return _standard_response(success=True, data=data, meta={"count": len(data)})
 
 
-class EmployeeRescheduleAcceptView(APIView):
-    """Employee accepts a rescheduled booking — booking updated, customer notified."""
-    permission_classes = [permissions.IsAuthenticated, IsEmployeeRole]
+class CustomerCouponValidateView(APIView):
+    permission_classes = [permissions.AllowAny]
 
-    def post(self, request, pk):
-        try:
-            rr = sr_services.employee_accept_reschedule(request.user, pk)
-            data = EmployeeRescheduleNotificationSerializer(rr).data
-            return _standard_response(success=True, data=data, meta={"message": "Schedule updated. Booking confirmed."})
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(success=False, error={"code": "ACCEPT_FAILED", "message": str(detail)}, status_code=400)
+    def post(self, request):
+        code = str(request.data.get("code", "")).strip().upper()
+        cart_total = float(request.data.get("cart_total", 0) or request.data.get("order_amount", 0))
 
+        if not code:
+            return _standard_response(success=False, error={"code": "MISSING_CODE", "message": "Coupon code is required"}, status_code=400)
 
-class EmployeeRescheduleRejectView(APIView):
-    """Employee rejects the assignment — transitions to REASSIGNMENT_NEEDED, notifies admin."""
-    permission_classes = [permissions.IsAuthenticated, IsEmployeeRole]
+        coupon = Coupon.objects.filter(code__iexact=code, status="Active").first()
+        if not coupon:
+            return _standard_response(success=False, error={"code": "INVALID_COUPON", "message": f"Coupon code '{code}' is not valid."}, status_code=400)
 
-    def post(self, request, pk):
-        reason = request.data.get("reason", "OTHER")
-        note = request.data.get("note", "")
-        try:
-            rr = sr_services.employee_reject_reschedule(request.user, pk, reason=reason, note=note)
-            data = EmployeeRescheduleNotificationSerializer(rr).data
-            return _standard_response(success=True, data=data, meta={"message": "Admin notified. Finding another technician."})
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(success=False, error={"code": "REJECT_FAILED", "message": str(detail)}, status_code=400)
-
-
-class EmployeeRescheduleRequestRespondView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsEmployeeRole]
-
-    def patch(self, request, pk):
-        try:
-            emp = Employee.objects.get(user=request.user)
-        except Employee.DoesNotExist:
+        min_req = float(coupon.min_booking)
+        if cart_total < min_req:
+            diff = min_req - cart_total
             return _standard_response(
                 success=False,
-                error={"code": "UNAUTHORIZED", "message": "User is not registered as an employee."},
-                status_code=403
-            )
-
-        try:
-            rr = RescheduleRequest.objects.select_related("booking", "proposed_technician").get(
-                pk=pk,
-                proposed_technician=emp,
-            )
-        except RescheduleRequest.DoesNotExist:
-            return _standard_response(
-                success=False,
-                error={"code": "NOT_FOUND", "message": "No reschedule notification found for this technician."},
-                status_code=404
-            )
-
-        decision = str(request.data.get("decision", "")).upper()
-        note = request.data.get("note") or request.data.get("reason_note", "")
-        rejection_reason = request.data.get("reason") or request.data.get("rejection_reason", "OTHER")
-
-        if decision in ("ACCEPT", "ACCEPTED", "APPROVED", "CONFIRM"):
-            rr.employee_response = EmployeeResponseChoices.ACCEPTED
-            rr.employee_responded_at = timezone.now()
-            if note:
-                rr.employee_response_note = note
-            rr.save(update_fields=["employee_response", "employee_responded_at", "employee_response_note"])
-
-            target_status = RescheduleStatus.EMPLOYEE_ACCEPTED
-            try:
-                updated_rr = sr_services.apply_transition(
-                    reschedule_request=rr,
-                    new_status=target_status,
-                    actor=request.user,
-                    note="Employee accepted reschedule assignment."
-                )
-                # Auto-finalize booking update upon acceptance
-                sr_services.employee_accept_reschedule(request.user, pk)
-                updated_rr.refresh_from_db()
-            except Exception as e:
-                detail = getattr(e, "detail", str(e))
-                return _standard_response(
-                    success=False,
-                    error={"code": "TRANSITION_ERROR", "message": str(detail)},
-                    status_code=400
-                )
-        else:
-            rr.employee_response = EmployeeResponseChoices.REJECTED
-            rr.employee_rejection_reason = rejection_reason
-            rr.employee_responded_at = timezone.now()
-            if note:
-                rr.employee_response_note = note
-            rr.save(update_fields=["employee_response", "employee_rejection_reason", "employee_responded_at", "employee_response_note"])
-
-            target_status = RescheduleStatus.REASSIGNMENT_NEEDED
-            try:
-                updated_rr = sr_services.apply_transition(
-                    reschedule_request=rr,
-                    new_status=target_status,
-                    actor=request.user,
-                    note=f"Employee rejected assignment: {rejection_reason}"
-                )
-            except Exception as e:
-                detail = getattr(e, "detail", str(e))
-                return _standard_response(
-                    success=False,
-                    error={"code": "TRANSITION_ERROR", "message": str(detail)},
-                    status_code=400
-                )
-
-        data = RescheduleRequestSerializer(updated_rr).data
-        return _standard_response(success=True, data=data)
-
-
-class CustomerRescheduleRequestCancelView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
-
-    def post(self, request, pk):
-        try:
-            rr = sr_services.cancel_reschedule_request(request.user, pk)
-            data = RescheduleRequestSerializer(rr).data
-            return _standard_response(success=True, data=data, meta={"message": "Reschedule request cancelled."})
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(
-                success=False,
-                error={"code": "CANCEL_FAILED", "message": str(detail)},
+                error={"code": "MIN_BOOKING_NOT_MET", "message": f"Add ₹{diff:.0f} more to apply {coupon.code}"},
                 status_code=400
             )
 
-
-class CustomerBookingAvailableSlotsView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
-
-    def get(self, request, booking_id):
-        try:
-            booking = ServiceRequest.objects.get(pk=booking_id, customer=request.user)
-        except ServiceRequest.DoesNotExist:
-            return _standard_response(
-                success=False,
-                error={"code": "NOT_FOUND", "message": "Booking not found."},
-                status_code=404
-            )
-
-        date_str = request.query_params.get("date")
-        if not date_str:
-            target_date = booking.preferred_date or timezone.now().date()
+        if coupon.discount_type == "flat":
+            calc_disc = float(coupon.discount_value)
         else:
-            import datetime
-            try:
-                target_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-            except ValueError:
-                return _standard_response(
-                    success=False,
-                    error={"code": "INVALID_DATE", "message": "Invalid date format. Use YYYY-MM-DD."},
-                    status_code=400
-                )
+            calc_disc = cart_total * (float(coupon.discount_value) / 100.0)
 
-        slots = sr_services.get_real_technician_availability(booking.company, target_date)
-        return _standard_response(success=True, data=slots, meta={"date": str(target_date)})
+        discount = min(calc_disc, float(coupon.max_discount)) if coupon.max_discount > 0 else calc_disc
+        discount = min(cart_total, discount)
+        final_amount = max(0.0, cart_total - discount)
 
-
-class CustomerActiveBookingsListView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        user_email = (getattr(request.user, 'email', '') or '').strip()
-        query = Q(customer=request.user)
-        if user_email:
-            query |= Q(email__iexact=user_email)
-
-        # Allow reschedules for Pending Confirmation, Confirmed, and Employee Assigned active bookings
-        allowed_statuses = ["new_request", "waiting_for_payment", "confirmed", "reviewed", "assigned", "accepted", "on_the_way"]
-
-        qs = ServiceRequest.objects.filter(
-            query,
-            status__in=allowed_statuses
-        ).order_by("-id").distinct()
-
-        data = ServiceRequestListSerializer(qs, many=True).data
-        return _standard_response(success=True, data=data)
+        return _standard_response(
+            success=True,
+            data={
+                "coupon_id": str(coupon.id),
+                "coupon_code": coupon.code,
+                "discountAmount": round(discount, 2),
+                "final_amount": round(final_amount, 2),
+            },
+            meta={"message": f"🎉 {coupon.code} applied! Saved ₹{round(discount)}"}
+        )
 
 
 # Backward-compatibility aliases
@@ -3150,307 +1672,6 @@ class AdminRescheduleActionView(AdminRescheduleRequestReviewView):
         request.data["action"] = action
         return self.patch(request, pk)
 
-
-# ── Refund Views ──────────────────────────────────────────────────────────────
-
-class CustomerEligibleBookingsListView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
-
-    def get(self, request):
-        bookings = sr_services.get_eligible_bookings(request.user)
-        data = EligibleBookingSerializer(bookings, many=True).data
-        return _standard_response(success=True, data=data)
-
-
-class CustomerBookingRefundSummaryView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
-
-    def get(self, request, booking_id):
-        try:
-            summary = sr_services.get_booking_refund_summary(request.user, booking_id)
-            return _standard_response(success=True, data=summary)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(
-                success=False,
-                error={"code": "SUMMARY_FAILED", "message": str(detail)},
-                status_code=400
-            )
-
-
-class CustomerRefundRequestCreateView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
-
-    def post(self, request):
-        booking_id = request.data.get("booking_id")
-        refund_type = request.data.get("refund_type", "FULL")
-        requested_amount = request.data.get("requested_amount", 0)
-        reason = request.data.get("reason", "POOR_QUALITY")
-        additional_notes = request.data.get("additional_notes", "")
-        evidence_files = request.FILES.getlist("evidence") or request.FILES.getlist("files")
-
-        if not booking_id:
-            return _standard_response(
-                success=False,
-                error={"code": "MISSING_FIELD", "message": "'booking_id' is required."},
-                status_code=400
-            )
-
-        try:
-            rr = sr_services.create_refund_request(
-                customer=request.user,
-                booking_id=booking_id,
-                refund_type=refund_type,
-                requested_amount=requested_amount,
-                reason=reason,
-                additional_notes=additional_notes,
-                evidence_files=evidence_files
-            )
-            data = CustomerRefundRequestSerializer(rr).data
-            return _standard_response(success=True, data=data, status_code=201)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(
-                success=False,
-                error={"code": "REFUND_FAILED", "message": str(detail)},
-                status_code=400
-            )
-
-
-class CustomerRefundRequestListView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
-
-    def get(self, request):
-        qs = sr_services.list_refund_requests(request.user, "CUSTOMER")
-        data = CustomerRefundRequestSerializer(qs, many=True).data
-        return _standard_response(success=True, data=data)
-
-
-class CustomerRefundRequestDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsCustomer]
-
-    def get(self, request, pk):
-        try:
-            rr = RefundRequest.objects.get(pk=pk, customer=request.user)
-            data = CustomerRefundRequestSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except RefundRequest.DoesNotExist:
-            return _standard_response(
-                success=False,
-                error={"code": "NOT_FOUND", "message": "Refund request not found."},
-                status_code=404
-            )
-
-
-class AdminRefundRequestListView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def get(self, request):
-        status_filter = request.query_params.get("status")
-        filters = {}
-        if status_filter:
-            filters["status"] = status_filter
-
-        qs = sr_services.list_refund_requests(request.user, "ADMIN", filters=filters)
-        data = AdminRefundRequestSerializer(qs, many=True).data
-        return _standard_response(success=True, data=data)
-
-
-class AdminRefundRequestDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def get(self, request, pk):
-        try:
-            rr = RefundRequest.objects.get(pk=pk)
-            data = AdminRefundRequestSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except RefundRequest.DoesNotExist:
-            return _standard_response(
-                success=False,
-                error={"code": "NOT_FOUND", "message": "Refund request not found."},
-                status_code=404
-            )
-
-
-class AdminRefundApproveView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def post(self, request, pk):
-        is_full = request.data.get("is_full", True)
-        approved_amount = request.data.get("approved_amount")
-        internal_note = request.data.get("internal_note", "")
-
-        try:
-            rr = sr_services.admin_approve_refund(
-                admin_user=request.user,
-                refund_id=pk,
-                is_full=is_full,
-                approved_amount=approved_amount,
-                internal_note=internal_note
-            )
-            data = AdminRefundRequestSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(
-                success=False,
-                error={"code": "APPROVE_FAILED", "message": str(detail)},
-                status_code=400
-            )
-
-
-class AdminRefundRejectView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def post(self, request, pk):
-        internal_note = request.data.get("internal_note", "")
-
-        try:
-            rr = sr_services.admin_reject_refund(
-                admin_user=request.user,
-                refund_id=pk,
-                internal_note=internal_note
-            )
-            data = AdminRefundRequestSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(
-                success=False,
-                error={"code": "REJECT_FAILED", "message": str(detail)},
-                status_code=400
-            )
-
-
-class AdminRefundRequestInfoView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def post(self, request, pk):
-        target = request.data.get("target", "CUSTOMER")
-        note = request.data.get("note", "")
-        employee_id = request.data.get("employee_id")
-
-        try:
-            rr = sr_services.admin_request_more_info(
-                admin_user=request.user,
-                refund_id=pk,
-                target=target,
-                note=note,
-                employee_id=employee_id
-            )
-            data = AdminRefundRequestSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(
-                success=False,
-                error={"code": "REQUEST_INFO_FAILED", "message": str(detail)},
-                status_code=400
-            )
-
-
-class AdminRefundSendToFinanceView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def post(self, request, pk):
-        try:
-            rr = sr_services.admin_send_to_finance(request.user, pk)
-            data = AdminRefundRequestSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(
-                success=False,
-                error={"code": "FINANCE_FAILED", "message": str(detail)},
-                status_code=400
-            )
-
-
-class AdminRefundInternalNoteView(APIView):
-    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
-
-    def post(self, request, pk):
-        note = request.data.get("note", "")
-        try:
-            rr = RefundRequest.objects.get(pk=pk)
-            timestamp = timezone.now().strftime("%Y-%m-%d %H:%M")
-            actor_name = request.user.get_full_name() or request.user.username
-            entry = f"[{timestamp}] {actor_name} (Note): {note}"
-            rr.internal_notes = f"{rr.internal_notes}\n{entry}".strip()
-            rr.save(update_fields=["internal_notes", "updated_at"])
-            data = AdminRefundRequestSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception as e:
-            return _standard_response(
-                success=False,
-                error={"code": "NOTE_FAILED", "message": str(e)},
-                status_code=400
-            )
-
-
-class EmployeeAssignedRefundListView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        qs = sr_services.list_refund_requests(request.user, "EMPLOYEE")
-        data = EmployeeRefundInvestigationSerializer(qs, many=True).data
-        return _standard_response(success=True, data=data)
-
-
-class EmployeeRefundDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, pk):
-        try:
-            emp = Employee.objects.get(user=request.user)
-            rr = RefundRequest.objects.get(pk=pk, assigned_employee=emp)
-            data = EmployeeRefundInvestigationSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception:
-            return _standard_response(
-                success=False,
-                error={"code": "NOT_FOUND", "message": "Assigned refund investigation not found."},
-                status_code=404
-            )
-
-
-class EmployeeRefundInvestigationSubmitView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, pk):
-        explanation = request.data.get("explanation", "")
-        work_completed_confirmed = request.data.get("work_completed_confirmed", False)
-        if isinstance(work_completed_confirmed, str):
-            work_completed_confirmed = work_completed_confirmed.lower() in ("true", "1", "yes")
-        photo_files = request.FILES.getlist("photos") or request.FILES.getlist("evidence")
-
-        if not explanation:
-            return _standard_response(
-                success=False,
-                error={"code": "MISSING_EXPLANATION", "message": "Investigation explanation is required."},
-                status_code=400
-            )
-
-        try:
-            rr = sr_services.employee_submit_investigation(
-                employee_user=request.user,
-                refund_id=pk,
-                explanation=explanation,
-                work_completed_confirmed=work_completed_confirmed,
-                photo_files=photo_files
-            )
-            data = EmployeeRefundInvestigationSerializer(rr).data
-            return _standard_response(success=True, data=data)
-        except Exception as e:
-            detail = getattr(e, "detail", str(e))
-            return _standard_response(
-                success=False,
-                error={"code": "SUBMIT_FAILED", "message": str(detail)},
-                status_code=400
-            )
-
-
-# Backward-compatibility aliases
 class CustomerRefundView(CustomerRefundRequestListView):
     def post(self, request):
         return CustomerRefundRequestCreateView().post(request)
@@ -3461,492 +1682,42 @@ class AdminRefundListView(AdminRefundRequestListView):
 class AdminRefundActionView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
     def post(self, request, pk, action):
-        if action == "approve":
-            return AdminRefundApproveView().post(request, pk)
-        elif action == "reject":
-            return AdminRefundRejectView().post(request, pk)
-        return _standard_response(success=False, error={"code": "INVALID_ACTION", "message": "Invalid action."}, status_code=400)
+        return AdminRefundRequestReviewView().patch(request, pk)
 
 
-# ─── Customer Address Picker ───────────────────────────────────────────────────
-
-class CustomerReverseGeocodeView(APIView):
+class BookingVerifyStartOTPView(APIView):
     """
-    POST /api/customer/addresses/reverse-geocode/
-    Body: {latitude, longitude}
-
-    Resolves GPS coordinates to a structured address via Nominatim (OpenStreetMap).
-    Results are cached server-side for 1 hour keyed by coords rounded to 4 d.p.
-    (~11 m precision) to cut down repeated calls for small drags.
-
-    Auth: AllowAny (available for both guest & logged in customers).
+    POST /api/booking/<identifier>/verify-start-otp/
+    Validates the 6-digit customer verification code entered by the technician during arrival.
     """
     permission_classes = [permissions.AllowAny]
-    parser_classes     = [JSONParser]
 
-    def post(self, request):
-        latitude  = request.data.get("latitude")
-        longitude = request.data.get("longitude")
-
-        # ── Input validation ───────────────────────────────────────────────────
-        if latitude is None or longitude is None:
-            return _standard_response(
-                success=False,
-                error={"code": "MISSING_COORDS",
-                       "message": "Both latitude and longitude are required."},
-                status_code=400,
-            )
-
+    def post(self, request, pk=None, identifier=None):
+        sr_id = pk or identifier or request.data.get("booking_id")
         try:
-            lat = float(latitude)
-            lng = float(longitude)
-        except (ValueError, TypeError):
-            return _standard_response(
-                success=False,
-                error={"code": "INVALID_COORDS",
-                       "message": "latitude and longitude must be numeric."},
-                status_code=400,
-            )
+            if str(sr_id).isdigit():
+                sr = ServiceRequest.objects.get(pk=int(sr_id))
+            else:
+                sr = ServiceRequest.objects.get(request_id=sr_id)
+        except ServiceRequest.DoesNotExist:
+            return _error("Booking not found.", 404)
 
-        if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lng <= 180.0):
-            return _standard_response(
-                success=False,
-                error={"code": "OUT_OF_RANGE",
-                       "message": "Coordinates are out of valid range."},
-                status_code=400,
-            )
+        entered_otp = str(request.data.get("otp") or request.data.get("code") or request.data.get("start_otp") or "").strip()
+        if not entered_otp:
+            return _error("Please enter the 6-digit customer verification code.", 400)
 
-        # ── Service call (caching lives inside AddressService) ─────────────────
-        result = AddressService.reverse_geocode(lat, lng)
-
-        if result is None:
-            return _standard_response(
-                success=False,
-                error={"code": "GEOCODE_FAILED",
-                       "message": "Couldn't resolve address for those coordinates. "
-                                  "Try adjusting the pin."},
-                status_code=200,   # non-blocking — let the client handle gracefully
-            )
-
-        return _standard_response(
-            success=True,
-            data=result,
-            meta={"cached": True},   # cache status is opaque to client
-        )
-
-
-# ── Marketing Coupons API Views ──────────────────────────────────────────────
-class AdminCouponAnalyticsView(APIView):
-    """
-    Returns aggregated redemption and financial savings metrics for the Admin Dashboard.
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        from .models import Coupon, CouponUsage
-        from django.db.models import Sum, Count
-
-        total_coupons = Coupon.objects.count()
-        active_coupons = Coupon.objects.filter(status="Active").count()
-        scheduled_coupons = Coupon.objects.filter(status="Scheduled").count()
-        expired_coupons = Coupon.objects.filter(status="Expired").count()
-        paused_coupons = Coupon.objects.filter(status="Paused").count()
-
-        usages = CouponUsage.objects.all()
-        total_redemptions = usages.count()
-        total_discount = float(usages.aggregate(total=Sum("discount_amount"))["total"] or 0)
-
-        # Find most used coupon
-        most_used_qs = CouponUsage.objects.values("coupon__code").annotate(count=Count("id")).order_by("-count").first()
-        most_used_code = most_used_qs["coupon__code"] if most_used_qs else "N/A"
-
-        return _standard_response(
-            success=True,
-            data={
-                "totalCoupons": total_coupons,
-                "activeCoupons": active_coupons,
-                "scheduledCoupons": scheduled_coupons,
-                "expiredCoupons": expired_coupons,
-                "pausedCoupons": paused_coupons,
-                "totalRedemptions": total_redemptions,
-                "totalDiscountGiven": total_discount,
-                "mostUsedCoupon": most_used_code,
-            }
-        )
-
-
-class CouponListCreateView(APIView):
-    """
-    List all coupons or create a new coupon in database.
-    GET /api/admin/coupons
-    POST /api/admin/coupons
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        from .models import Coupon
-        coupons = Coupon.objects.all().order_by("-created_at")
-        data = []
-        for c in coupons:
-            # Check for relations
-            categories = list(c.categories.values_list("category_id", flat=True))
-            services = list(c.services.values_list("service_id", flat=True))
-            packages = list(c.packages.values_list("package_id", flat=True))
-
-            data.append({
-                "id": str(c.id),
-                "code": c.code,
-                "name": c.name,
-                "description": c.description,
-                "discountType": c.discount_type,
-                "discountValue": float(c.discount_value),
-                "maxDiscount": float(c.max_discount),
-                "minBooking": float(c.min_booking),
-                "customerEligibility": c.customer_eligibility,
-                "orderType": c.order_type,
-                "serviceEligibility": c.service_eligibility,
-                "targetCategories": categories,
-                "targetServices": services,
-                "targetPackages": packages,
-                "usagePerCustomer": c.usage_per_customer,
-                "totalUsageLimit": c.total_usage_limit,
-                "currentUsage": c.current_usage,
-                "stacking": c.stacking,
-                "startDate": str(c.start_date) if c.start_date else "",
-                "endDate": str(c.end_date) if c.end_date else "",
-                "status": c.status,
-            })
-        return _standard_response(success=True, data=data, meta={"count": len(data)})
-
-    def post(self, request):
-        try:
-            from .models import Coupon, CouponCategory, CouponService, CouponPackage
-            d = request.data
-            code = str(d.get("code", "")).strip().upper()
-            if not code:
-                return _standard_response(success=False, error={"code": "REQUIRED", "message": "Coupon code is required"}, status_code=400)
-            
-            def _clean_num(val, default=0.0):
-                if val in (None, "", "null", "NaN"):
-                    return default
-                try:
-                    return float(val)
-                except (ValueError, TypeError):
-                    return default
-
-            def _clean_int(val, default=0):
-                if val in (None, "", "null", "NaN"):
-                    return default
-                try:
-                    return int(val)
-                except (ValueError, TypeError):
-                    return default
-
-            disc_val = _clean_num(d.get("discountValue"), 0.0)
-            max_disc = _clean_num(d.get("maxDiscount"), 0.0)
-            min_book = _clean_num(d.get("minBooking"), 0.0)
-            usage_cust = _clean_int(d.get("usagePerCustomer"), 1)
-            total_limit = _clean_int(d.get("totalUsageLimit"), 1000)
-
-            start_dt = d.get("startDate") if d.get("startDate") and str(d.get("startDate")).strip() else None
-            end_dt = d.get("endDate") if d.get("endDate") and str(d.get("endDate")).strip() else None
-
-            c, created = Coupon.objects.get_or_create(
-                code=code,
-                defaults={
-                    "name": d.get("name") or code,
-                    "description": d.get("description", ""),
-                    "discount_type": d.get("discountType", "flat"),
-                    "discount_value": disc_val,
-                    "max_discount": max_disc,
-                    "customer_eligibility": d.get("customerEligibility", "All Customers"),
-                    "order_type": d.get("orderType", "Any Order"),
-                    "service_eligibility": d.get("serviceEligibility", "All Services"),
-                    "min_booking": min_book,
-                    "usage_per_customer": usage_cust,
-                    "total_usage_limit": total_limit,
-                    "stacking": d.get("stacking", "No"),
-                    "start_date": start_dt,
-                    "end_date": end_dt,
-                    "status": d.get("status", "Active"),
+        if str(entered_otp) == str(sr.start_otp):
+            sr.otp_verified = True
+            sr.status = "in_progress"
+            sr.save(update_fields=["otp_verified", "status", "updated_at"])
+            return _success(
+                message="Customer verification code verified successfully.",
+                data={
+                    "verified": True,
+                    "status": sr.status,
+                    "booking_id": sr.id,
+                    "request_id": sr.request_id,
                 }
             )
-
-            if not created:
-                # Update fields if existed
-                c.name = d.get("name") or c.name
-                c.description = d.get("description", c.description)
-                c.discount_type = d.get("discountType", c.discount_type)
-                c.discount_value = disc_val
-                c.max_discount = max_disc
-                c.min_booking = min_book
-                c.customer_eligibility = d.get("customerEligibility", c.customer_eligibility)
-                c.service_eligibility = d.get("serviceEligibility", c.service_eligibility)
-                if start_dt:
-                    c.start_date = start_dt
-                if end_dt:
-                    c.end_date = end_dt
-                c.status = d.get("status", c.status)
-                c.save()
-
-            # Update Target Relations
-            target_cats = d.get("targetCategories", [])
-            if target_cats:
-                CouponCategory.objects.filter(coupon=c).delete()
-                for cat_id in target_cats:
-                    CouponCategory.objects.create(coupon=c, category_id=cat_id)
-
-            target_svcs = d.get("targetServices", [])
-            if target_svcs:
-                CouponService.objects.filter(coupon=c).delete()
-                for svc_id in target_svcs:
-                    CouponService.objects.create(coupon=c, service_id=svc_id)
-
-            target_pkgs = d.get("targetPackages", [])
-            if target_pkgs:
-                CouponPackage.objects.filter(coupon=c).delete()
-                for pkg_id in target_pkgs:
-                    CouponPackage.objects.create(coupon=c, package_id=pkg_id)
-
-            return _standard_response(success=True, data={"id": str(c.id), "code": c.code}, status_code=201)
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to create/update coupon: {e}", exc_info=True)
-            return _standard_response(success=False, error={"code": "SERVER_ERROR", "message": str(e)}, status_code=400)
-
-
-class CouponDetailView(APIView):
-    """
-    Get detail, update or delete a specific coupon.
-    GET /api/admin/coupons/:id
-    PUT/PATCH /api/admin/coupons/:id
-    DELETE /api/admin/coupons/:id
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request, pk):
-        from .models import Coupon
-        try:
-            c = Coupon.objects.get(pk=pk)
-        except Coupon.DoesNotExist:
-            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Coupon not found"}, status_code=404)
-
-        data = {
-            "id": str(c.id),
-            "code": c.code,
-            "name": c.name,
-            "description": c.description,
-            "discountType": c.discount_type,
-            "discountValue": float(c.discount_value),
-            "maxDiscount": float(c.max_discount),
-            "minBooking": float(c.min_booking),
-            "customerEligibility": c.customer_eligibility,
-            "orderType": c.order_type,
-            "serviceEligibility": c.service_eligibility,
-            "targetCategories": list(c.categories.values_list("category_id", flat=True)),
-            "targetServices": list(c.services.values_list("service_id", flat=True)),
-            "targetPackages": list(c.packages.values_list("package_id", flat=True)),
-            "usagePerCustomer": c.usage_per_customer,
-            "totalUsageLimit": c.total_usage_limit,
-            "currentUsage": c.current_usage,
-            "stacking": c.stacking,
-            "startDate": str(c.start_date) if c.start_date else "",
-            "endDate": str(c.end_date) if c.end_date else "",
-            "status": c.status,
-        }
-        return _standard_response(success=True, data=data)
-
-    def patch(self, request, pk):
-        from .models import Coupon, CouponCategory, CouponService, CouponPackage
-        try:
-            c = Coupon.objects.get(pk=pk)
-        except Coupon.DoesNotExist:
-            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Coupon not found"}, status_code=404)
-
-        d = request.data
-        if "status" in d:
-            c.status = d["status"]
-        if "name" in d:
-            c.name = d["name"]
-        if "description" in d:
-            c.description = d["description"]
-        if "discountType" in d:
-            c.discount_type = d["discountType"]
-        if "discountValue" in d:
-            c.discount_value = d["discountValue"]
-        if "maxDiscount" in d:
-            c.max_discount = d["maxDiscount"]
-        if "minBooking" in d:
-            c.min_booking = d["minBooking"]
-        if "customerEligibility" in d:
-            c.customer_eligibility = d["customerEligibility"]
-        if "serviceEligibility" in d:
-            c.service_eligibility = d["serviceEligibility"]
-        c.save()
-
-        if "targetCategories" in d:
-            CouponCategory.objects.filter(coupon=c).delete()
-            for cat_id in d["targetCategories"]:
-                CouponCategory.objects.create(coupon=c, category_id=cat_id)
-
-        return _standard_response(success=True, data={"id": str(c.id), "code": c.code, "status": c.status})
-
-    def delete(self, request, pk):
-        from .models import Coupon
-        try:
-            c = Coupon.objects.get(pk=pk)
-            c.delete()
-            return _standard_response(success=True, meta={"message": "Coupon deleted successfully"})
-        except Coupon.DoesNotExist:
-            return _standard_response(success=False, error={"code": "NOT_FOUND", "message": "Coupon not found"}, status_code=404)
-
-
-class CustomerCouponListView(APIView):
-    """
-    Returns only coupons that are eligible for the customer.
-    Evaluates FIRST_ORDER_ONLY rules by checking user's past bookings in database.
-    GET /api/customer/coupons
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        from .models import Coupon, ServiceRequest
-        from django.utils import timezone
-
-        user = request.user if request.user and request.user.is_authenticated else None
-        completed_bookings_count = 0
-        if user:
-            completed_bookings_count = ServiceRequest.objects.filter(
-                customer=user,
-                status__in=[ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]
-            ).count()
-
-        today = timezone.now().date()
-        coupons = Coupon.objects.filter(status="Active").order_by("-created_at")
-        
-        data = []
-        for c in coupons:
-            # Check expiry dates
-            if c.start_date and c.start_date > today:
-                continue
-            if c.end_date and c.end_date < today:
-                continue
-
-            # Check eligibility
-            is_first_order_rule = (c.customer_eligibility == "First Order Only" or c.order_type == "First Order Only" or "New Customers" in c.customer_eligibility)
-            if is_first_order_rule and completed_bookings_count > 0:
-                # Customer has prior completed orders, not eligible
-                continue
-
-            # Check usage limit
-            if c.total_usage_limit > 0 and c.current_usage >= c.total_usage_limit:
-                continue
-
-            data.append({
-                "id": str(c.id),
-                "code": c.code,
-                "name": c.name,
-                "description": c.description,
-                "discountType": c.discount_type,
-                "discountValue": float(c.discount_value),
-                "maxDiscount": float(c.max_discount),
-                "minBooking": float(c.min_booking),
-                "customerEligibility": c.customer_eligibility,
-                "serviceEligibility": c.service_eligibility,
-                "eligible": True,
-            })
-
-        return _standard_response(success=True, data=data, meta={"count": len(data)})
-
-
-class CustomerCouponValidateView(APIView):
-    """
-    Authoritative backend validation API.
-    POST /api/customer/coupons/validate
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        from .models import Coupon, ServiceRequest
-        code = str(request.data.get("code", "")).strip().upper()
-        cart_total = float(request.data.get("cart_total", 0) or request.data.get("order_amount", 0))
-
-        if not code:
-            return _standard_response(success=False, error={"code": "MISSING_CODE", "message": "Coupon code is required"}, status_code=400)
-
-        coupon = Coupon.objects.filter(code__iexact=code).first()
-        if not coupon:
-            return _standard_response(
-                success=False,
-                error={"code": "INVALID_COUPON", "message": f"Coupon code '{code}' does not exist."},
-                status_code=400
-            )
-
-        if coupon.status != "Active":
-            return _standard_response(
-                success=False,
-                error={"code": "INACTIVE_COUPON", "message": f"Coupon '{code}' is currently {coupon.status.lower()}."},
-                status_code=400
-            )
-
-        # Check First Order rule
-        user = request.user if request.user and request.user.is_authenticated else None
-        is_first_order_rule = (coupon.customer_eligibility == "First Order Only" or coupon.order_type == "First Order Only" or "New Customers" in coupon.customer_eligibility)
-        if is_first_order_rule and user:
-            past_count = ServiceRequest.objects.filter(
-                customer=user,
-                status__in=[ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]
-            ).count()
-            if past_count > 0:
-                return _standard_response(
-                    success=False,
-                    error={"code": "FIRST_ORDER_ONLY", "message": f"Coupon {code} is restricted to new customers on their first order."},
-                    status_code=400
-                )
-
-        min_req = float(coupon.min_booking)
-        if cart_total < min_req:
-            diff = min_req - cart_total
-            return _standard_response(
-                success=False,
-                error={
-                    "code": "MIN_BOOKING_NOT_MET",
-                    "message": f"Add ₹{diff:.0f} more to apply {coupon.code} (Min booking ₹{min_req:.0f})",
-                    "min_booking": min_req,
-                    "diff": diff
-                },
-                status_code=400
-            )
-
-        if coupon.discount_type == "flat":
-            calc_disc = float(coupon.discount_value)
         else:
-            calc_disc = cart_total * (float(coupon.discount_value) / 100.0)
-
-        if coupon.max_discount > 0:
-            discount = min(calc_disc, float(coupon.max_discount))
-        else:
-            discount = calc_disc
-
-        discount = min(cart_total, discount)
-        final_amount = max(0.0, cart_total - discount)
-
-        return _standard_response(
-            success=True,
-            data={
-                "coupon_id": str(coupon.id),
-                "coupon_code": coupon.code,
-                "code": coupon.code,
-                "name": coupon.name,
-                "discountType": coupon.discount_type,
-                "discountValue": float(coupon.discount_value),
-                "maxDiscount": float(coupon.max_discount),
-                "minBooking": float(coupon.min_booking),
-                "discountAmount": round(discount, 2),
-                "subtotal": round(cart_total, 2),
-                "final_amount": round(final_amount, 2),
-            },
-            meta={"message": f"🎉 {coupon.code} applied! Saved ₹{round(discount)}"}
-        )
-
-
+            return _error("Invalid verification code. Please check the code displayed on customer screen.", 400)

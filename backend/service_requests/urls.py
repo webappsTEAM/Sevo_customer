@@ -2,54 +2,39 @@
 from django.urls import path
 
 from .views import (
-    # Public
+    # Public & Customer
     BookingCreateView,
+    BookingVerifyStartOTPView,
     CustomerMyBookingsView,
     CustomerBookingRetryPaymentView,
+    CustomerBookingLiveLocationView,
+    CustomerPublicTrackingView,
+    CustomerBookingCancelView,
     FeedbackTokenView,
     PublicFeedbackListView,
+    CustomerReverseGeocodeView,
     CatalogCategoryListView,
     CatalogServiceListView,
     CatalogSubServiceListView,
+
     # Admin — Service Requests
     AdminSRListView,
     AdminSRDetailView,
     AdminSRReviewView,
     AdminSRPriorityView,
     AdminSRAssignView,
+    AdminSRDispatchView,
     AdminSRRejectView,
     AdminSRVerifyView,
     AdminSRReworkView,
     AdminSRCloseView,
     AdminSRResendFeedbackView,
-    AdminEmployeeListView,
 
     # Admin — Feedback
     AdminFeedbackListView,
     AdminFeedbackMetricsView,
-    # Employee
-    EmployeeJobListView,
-    EmployeeJobDetailView,
-    EmployeeJobReceiveView,
-    EmployeeJobAcceptView,
-    EmployeeJobRejectView,
-    EmployeeJobArrivedView,
-    EmployeeJobStartView,
-    EmployeeJobCompleteView,
-    EmployeeJobProofView,
-    EmployeePerformanceView,
-    CustomerBookingLiveLocationView,
-    CustomerBookingCancelView,
-    EmployeeGpsUpdateView,
 
-    # WorkExtension Ecosystem
-    EmployeeReportExtraWorkView,
-    EmployeeRequestPurchaseView,
-    EmployeeUploadPurchaseReceiptView,
-    EmployeeVerifyCustomerPartView,
-    EmployeeJobRescheduleView,
-    CustomerConfirmRescheduleView,
-    CustomerContactSupportRescheduleView,
+    # Work Extensions
     AdminWorkExtensionListView,
     AdminWorkExtensionApproveView,
     AdminWorkExtensionApprovePurchaseView,
@@ -58,15 +43,43 @@ from .views import (
     CustomerWorkExtensionDecideView,
     SupportWorkExtensionRecordDecisionView,
     ServiceRequestSupplementalInvoiceView,
-    
-    # Marketing & Coupons
-    AdminCouponAnalyticsView,
-    CouponListCreateView,
-    CouponDetailView,
-    CustomerCouponListView,
-    CustomerCouponValidateView,
-    CustomerComplaintCreateView,
+
+    # Reschedule
+    CustomerActiveBookingsListView,
+    CustomerBookingAvailableSlotsView,
+    CustomerRescheduleRequestListView,
+    CustomerRescheduleRequestCreateView,
+    CustomerRescheduleRequestCancelView,
+    CustomerRescheduleRespondToSuggestionView,
+    CustomerRescheduleView,
+    AdminRescheduleRequestListView,
+    AdminRescheduleRequestReviewView,
+    AdminRescheduleApproveView,
+    AdminRescheduleRejectView,
+    AdminRescheduleSuggestSlotView,
+    AdminRescheduleListView,
+    AdminRescheduleActionView,
+
+    # Refund
+    CustomerEligibleBookingsListView,
+    CustomerBookingRefundSummaryView,
+    CustomerRefundRequestCreateView,
+    CustomerRefundRequestListView,
+    CustomerRefundRequestDetailView,
+    CustomerRefundView,
+    AdminRefundRequestListView,
+    AdminRefundRequestDetailView,
+    AdminRefundApproveView,
+    AdminRefundRejectView,
+    AdminRefundRequestInfoView,
+    AdminRefundSendToFinanceView,
+    AdminRefundInternalNoteView,
+    AdminRefundListView,
+    AdminRefundActionView,
+
+    # Complaints
     CustomerComplaintListView,
+    CustomerComplaintCreateView,
     CustomerComplaintDetailView,
     CustomerComplaintMessageCreateView,
     AdminComplaintListView,
@@ -75,57 +88,20 @@ from .views import (
     AdminComplaintStatusUpdateView,
     AdminComplaintResolveView,
     AdminComplaintMessageCreateView,
-    EmployeeComplaintListView,
-    EmployeeComplaintMessageCreateView,
-    EmployeeComplaintResolveView,
-    
-    CustomerRescheduleView,
-    AdminRescheduleListView,
-    AdminRescheduleActionView,
-    CustomerRescheduleRequestCreateView,
-    CustomerRescheduleRequestListView,
-    CustomerRescheduleRequestCancelView,
-    CustomerBookingAvailableSlotsView,
-    CustomerActiveBookingsListView,
-    AdminRescheduleRequestListView,
-    AdminRescheduleRequestReviewView,
-    EmployeeRescheduleRequestRespondView,
-    AdminRescheduleApproveView,
-    AdminRescheduleRejectView,
-    AdminRescheduleSuggestSlotView,
-    AdminRescheduleReassignView,
-    CustomerRescheduleRespondToSuggestionView,
-    EmployeeRescheduleNotificationListView,
-    EmployeeRescheduleAcceptView,
-    EmployeeRescheduleRejectView,
-    CustomerRefundView,
-    AdminRefundListView,
-    AdminRefundActionView,
-    CustomerEligibleBookingsListView,
-    CustomerBookingRefundSummaryView,
-    CustomerRefundRequestCreateView,
-    CustomerRefundRequestListView,
-    CustomerRefundRequestDetailView,
-    AdminRefundRequestListView,
-    AdminRefundRequestDetailView,
-    AdminRefundApproveView,
-    AdminRefundRejectView,
-    AdminRefundRequestInfoView,
-    AdminRefundSendToFinanceView,
-    AdminRefundInternalNoteView,
-    EmployeeAssignedRefundListView,
-    EmployeeRefundDetailView,
-    EmployeeRefundInvestigationSubmitView,
+
+    # Marketing & Coupons
+    CouponListCreateView,
+    CouponDetailView,
+    CustomerCouponListView,
+    CustomerCouponValidateView,
+    AdminCouponAnalyticsView,
 )
 from .payment_views import (
     PaymentInitiateView,
     PaymentVerifyView,
-    EmployeeCashCollectView,
-    EmployeeJobOnTheWayView,
     AdminPaymentUpdateView,
     InvoiceDownloadView,
 )
-from .views import CustomerReverseGeocodeView   # Address Picker — Slice 2
 
 urlpatterns = [
     # ── Public & Customer ─────────────────────────────────────────────────────
@@ -138,6 +114,9 @@ urlpatterns = [
     path("booking/<int:pk>/invoice/",        InvoiceDownloadView.as_view(),  name="sr-invoice"),
     path("booking/<int:pk>/live-location/",  CustomerBookingLiveLocationView.as_view(), name="sr-booking-live-location"),
     path("booking/<str:identifier>/live-location/", CustomerBookingLiveLocationView.as_view(), name="sr-booking-live-location-identifier"),
+    path("tracking/<str:tracking_token>/",   CustomerPublicTrackingView.as_view(), name="sr-public-tracking-token"),
+    path("booking/<int:pk>/verify-start-otp/", BookingVerifyStartOTPView.as_view(), name="sr-booking-verify-start-otp"),
+    path("booking/<str:identifier>/verify-start-otp/", BookingVerifyStartOTPView.as_view(), name="sr-booking-verify-start-otp-identifier"),
     path("booking/<int:pk>/cancel/",         CustomerBookingCancelView.as_view(),       name="sr-booking-cancel"),
     path("booking/<str:identifier>/cancel/", CustomerBookingCancelView.as_view(),       name="sr-booking-cancel-identifier"),
     path("customer/bookings/<int:pk>/cancel/", CustomerBookingCancelView.as_view(),     name="customer-booking-cancel"),
@@ -145,7 +124,7 @@ urlpatterns = [
     path("feedback/<uuid:token>/",           FeedbackTokenView.as_view(),    name="sr-feedback-token"),
     path("public/feedback/",                 PublicFeedbackListView.as_view(), name="sr-public-feedback"),
 
-    # ── Customer Address Picker (Slice 2) ──────────────────────────────
+    # ── Customer Address Geocoding ─────────────────────────────────────────────
     path("customer/addresses/reverse-geocode/", CustomerReverseGeocodeView.as_view(), name="customer-reverse-geocode"),
 
     # ── Payment ───────────────────────────────────────────────────────────────
@@ -154,11 +133,11 @@ urlpatterns = [
 
     # ── Admin — Service Requests ──────────────────────────────────────────────
     path("admin/service-requests/",          AdminSRListView.as_view(),      name="sr-admin-list"),
-    path("admin/service-requests/employees/", AdminEmployeeListView.as_view(), name="sr-admin-employees"),
     path("admin/service-requests/<int:pk>/", AdminSRDetailView.as_view(),    name="sr-admin-detail"),
     path("admin/service-requests/<int:pk>/review/",       AdminSRReviewView.as_view(),   name="sr-admin-review"),
     path("admin/service-requests/<int:pk>/priority/",     AdminSRPriorityView.as_view(), name="sr-admin-priority"),
     path("admin/service-requests/<int:pk>/assign/",       AdminSRAssignView.as_view(),   name="sr-admin-assign"),
+    path("admin/service-requests/<int:pk>/dispatch/",     AdminSRDispatchView.as_view(), name="sr-admin-dispatch"),
     path("admin/service-requests/<int:pk>/reject/",       AdminSRRejectView.as_view(),   name="sr-admin-reject"),
     path("admin/service-requests/<int:pk>/verify/",       AdminSRVerifyView.as_view(),   name="sr-admin-verify"),
     path("admin/service-requests/<int:pk>/request-rework/", AdminSRReworkView.as_view(), name="sr-admin-rework"),
@@ -170,41 +149,17 @@ urlpatterns = [
     path("admin/feedback/",                  AdminFeedbackListView.as_view(),   name="sr-admin-feedback-list"),
     path("admin/feedback/metrics/",          AdminFeedbackMetricsView.as_view(),name="sr-admin-feedback-metrics"),
 
-    # ── Employee ──────────────────────────────────────────────────────────────
-    path("employee/gps/update/",                    EmployeeGpsUpdateView.as_view(),   name="sr-emp-gps-update"),
-    path("employee/jobs/",                          EmployeeJobListView.as_view(),     name="sr-emp-jobs"),
-    path("employee/jobs/<int:pk>/",                 EmployeeJobDetailView.as_view(),   name="sr-emp-job-detail"),
-    path("employee/jobs/<int:pk>/receive/",         EmployeeJobReceiveView.as_view(),  name="sr-emp-receive"),
-    path("employee/jobs/<int:pk>/accept/",          EmployeeJobAcceptView.as_view(),   name="sr-emp-accept"),
-    path("employee/jobs/<int:pk>/reject/",          EmployeeJobRejectView.as_view(),   name="sr-emp-reject"),
-    path("employee/jobs/<int:pk>/on-the-way/",      EmployeeJobOnTheWayView.as_view(), name="sr-emp-on-the-way"),
-    path("employee/jobs/<int:pk>/arrived/",         EmployeeJobArrivedView.as_view(),   name="sr-emp-arrived"),
-    path("employee/jobs/<int:pk>/start/",           EmployeeJobStartView.as_view(),    name="sr-emp-start"),
-    path("employee/jobs/<int:pk>/complete/",        EmployeeJobCompleteView.as_view(), name="sr-emp-complete"),
-    path("employee/jobs/<int:pk>/collect-cash/",    EmployeeCashCollectView.as_view(), name="sr-emp-collect-cash"),
-    path("employee/jobs/<int:pk>/proof/",           EmployeeJobProofView.as_view(),    name="sr-emp-proof"),
-    path("employee/performance/",                   EmployeePerformanceView.as_view(), name="sr-emp-performance"),
-
-    # ── Work Extensions & Specialist Handoff ──────────────────────────────
-    path("employee/jobs/<int:job_id>/report-extra-work/",        EmployeeReportExtraWorkView.as_view(), name="sr-emp-report-extra-work"),
-    path("employee/jobs/<int:job_id>/request-purchase/",         EmployeeRequestPurchaseView.as_view(), name="sr-emp-request-purchase"),
-    path("employee/jobs/<int:job_id>/upload-purchase-receipt/", EmployeeUploadPurchaseReceiptView.as_view(), name="sr-emp-upload-purchase-receipt"),
-    path("employee/jobs/<int:job_id>/verify-customer-part/",     EmployeeVerifyCustomerPartView.as_view(), name="sr-emp-verify-customer-part"),
-    path("employee/jobs/<int:job_id>/reschedule/",        EmployeeJobRescheduleView.as_view(), name="sr-emp-reschedule"),
-    path("customer/reschedule/<int:reschedule_id>/confirm/", CustomerConfirmRescheduleView.as_view(), name="sr-cust-reschedule-confirm"),
-    path("customer/reschedule/<int:reschedule_id>/contact-support/", CustomerContactSupportRescheduleView.as_view(), name="sr-cust-reschedule-contact-support"),
-
+    # ── Work Extensions ───────────────────────────────────────────────────────
     path("admin/work-extensions/",                         AdminWorkExtensionListView.as_view(), name="sr-admin-work-extensions"),
     path("admin/work-extensions/<int:ext_id>/approve/",    AdminWorkExtensionApproveView.as_view(), name="sr-admin-work-extension-approve"),
     path("admin/work-extensions/items/<int:item_id>/approve-purchase/", AdminWorkExtensionApprovePurchaseView.as_view(), name="sr-admin-work-extension-approve-purchase"),
     path("admin/work-extensions/<int:ext_id>/assign/",     AdminWorkExtensionAssignView.as_view(), name="sr-admin-work-extension-assign"),
-
     path("customer/work-extensions/<str:token>/",         CustomerWorkExtensionPortalView.as_view(), name="sr-customer-work-extension-portal"),
     path("customer/work-extensions/<str:token>/decide/",  CustomerWorkExtensionDecideView.as_view(), name="sr-customer-work-extension-decide"),
     path("support/work-extensions/<int:ext_id>/record-decision/", SupportWorkExtensionRecordDecisionView.as_view(), name="sr-support-work-extension-record-decision"),
     path("service-requests/<int:sr_id>/supplemental-invoice/", ServiceRequestSupplementalInvoiceView.as_view(), name="sr-supplemental-invoice"),
-    
-    # ── Slice 4: Complaint ────────────────────────────────────────────────────
+
+    # ── Complaints ────────────────────────────────────────────────────────────
     path('booking/complaints/',                          CustomerComplaintListView.as_view(),          name='customer-complaint-list'),
     path('booking/complaints/create/',                   CustomerComplaintCreateView.as_view(),        name='customer-complaint-create'),
     path('booking/complaints/<int:pk>/',                 CustomerComplaintDetailView.as_view(),        name='customer-complaint-detail'),
@@ -215,11 +170,8 @@ urlpatterns = [
     path('admin/complaints/<int:pk>/status/',            AdminComplaintStatusUpdateView.as_view(),     name='admin-complaint-status'),
     path('admin/complaints/<int:pk>/resolve/',           AdminComplaintResolveView.as_view(),          name='admin-complaint-resolve'),
     path('admin/complaints/<int:pk>/response/',          AdminComplaintMessageCreateView.as_view(),    name='admin-complaint-response'),
-    path('employee/complaints/',                         EmployeeComplaintListView.as_view(),          name='employee-complaint-list'),
-    path('employee/complaints/<int:pk>/response/',       EmployeeComplaintMessageCreateView.as_view(), name='employee-complaint-response'),
-    path('employee/complaints/<int:pk>/resolve/',        EmployeeComplaintResolveView.as_view(),       name='employee-complaint-resolve'),
 
-    # ── Slice 2 & 3: Reschedule & Refund ────────────────────────────────────────
+    # ── Reschedule ────────────────────────────────────────────────────────────
     path('customer/active-bookings/',                    CustomerActiveBookingsListView.as_view(),      name='customer-active-bookings'),
     path('customer/bookings/<int:booking_id>/slots/',    CustomerBookingAvailableSlotsView.as_view(),   name='customer-booking-slots'),
     path('customer/reschedules/',                        CustomerRescheduleRequestListView.as_view(),   name='customer-reschedule-list'),
@@ -232,36 +184,23 @@ urlpatterns = [
     path('service-requests/admin/reschedules/',          AdminRescheduleRequestListView.as_view(),      name='sr-admin-reschedule-request-list'),
     path('admin/reschedules/<int:pk>/review/',           AdminRescheduleRequestReviewView.as_view(),    name='admin-reschedule-request-review'),
     path('service-requests/admin/reschedules/<int:pk>/review/', AdminRescheduleRequestReviewView.as_view(), name='sr-admin-reschedule-request-review'),
-    # Extended admin reschedule workflow actions
     path('admin/reschedules/<int:pk>/approve/',          AdminRescheduleApproveView.as_view(),          name='admin-reschedule-approve'),
     path('admin/reschedules/<int:pk>/reject/',           AdminRescheduleRejectView.as_view(),           name='admin-reschedule-reject'),
     path('admin/reschedules/<int:pk>/suggest-slot/',     AdminRescheduleSuggestSlotView.as_view(),      name='admin-reschedule-suggest-slot'),
-    path('admin/reschedules/<int:pk>/reassign/',         AdminRescheduleReassignView.as_view(),         name='admin-reschedule-reassign'),
-    # Customer respond to suggestion
     path('customer/reschedules/<int:pk>/respond-suggestion/', CustomerRescheduleRespondToSuggestionView.as_view(), name='customer-reschedule-respond-suggestion'),
-    path('employee/reschedules/respond/<int:pk>/',       EmployeeRescheduleRequestRespondView.as_view(),name='employee-reschedule-request-respond'),
-    path('service-requests/employee/reschedules/<int:pk>/respond/', EmployeeRescheduleRequestRespondView.as_view(), name='sr-employee-reschedule-request-respond'),
-    # Employee reschedule notification list + new accept/reject
-    path('employee/reschedules/notifications/',          EmployeeRescheduleNotificationListView.as_view(), name='employee-reschedule-notifications'),
-    path('employee/reschedules/<int:pk>/accept/',        EmployeeRescheduleAcceptView.as_view(),        name='employee-reschedule-accept'),
-    path('employee/reschedules/<int:pk>/reject/',        EmployeeRescheduleRejectView.as_view(),        name='employee-reschedule-reject'),
-
     path('booking/reschedule/',                          CustomerRescheduleView.as_view(),             name='customer-reschedule'),
     path('admin/reschedules/',                           AdminRescheduleListView.as_view(),            name='admin-reschedule-list'),
     path('admin/reschedules/<int:pk>/<str:action>/',     AdminRescheduleActionView.as_view(),          name='admin-reschedule-action'),
 
+    # ── Refund ────────────────────────────────────────────────────────────────
     path('booking/refunds/',                             CustomerRefundView.as_view(),                 name='customer-refund'),
     path('admin/refunds/',                               AdminRefundListView.as_view(),                name='admin-refund-list'),
     path('admin/refunds/<int:pk>/<str:action>/',         AdminRefundActionView.as_view(),              name='admin-refund-action'),
-
-    # Customer Refund routes
     path('customer/refunds/eligible-bookings/',          CustomerEligibleBookingsListView.as_view(),   name='customer-refund-eligible-bookings'),
     path('customer/refunds/bookings/<int:booking_id>/summary/', CustomerBookingRefundSummaryView.as_view(), name='customer-refund-summary'),
     path('customer/refunds/create/',                     CustomerRefundRequestCreateView.as_view(),    name='customer-refund-create'),
     path('customer/refunds/',                            CustomerRefundRequestListView.as_view(),      name='customer-refund-list'),
     path('customer/refunds/<int:pk>/',                   CustomerRefundRequestDetailView.as_view(),    name='customer-refund-detail'),
-
-    # Admin Refund routes
     path('admin/refunds/list/',                          AdminRefundRequestListView.as_view(),         name='admin-refund-request-list'),
     path('admin/refunds/<int:pk>/detail/',               AdminRefundRequestDetailView.as_view(),       name='admin-refund-request-detail'),
     path('admin/refunds/<int:pk>/approve/',              AdminRefundApproveView.as_view(),             name='admin-refund-approve'),
@@ -270,12 +209,7 @@ urlpatterns = [
     path('admin/refunds/<int:pk>/send-to-finance/',      AdminRefundSendToFinanceView.as_view(),       name='admin-refund-send-to-finance'),
     path('admin/refunds/<int:pk>/internal-note/',        AdminRefundInternalNoteView.as_view(),        name='admin-refund-internal-note'),
 
-    # Employee Refund Investigation routes
-    path('employee/refunds/assigned/',                   EmployeeAssignedRefundListView.as_view(),     name='employee-refund-assigned-list'),
-    path('employee/refunds/<int:pk>/',                   EmployeeRefundDetailView.as_view(),           name='employee-refund-detail'),
-    path('employee/refunds/<int:pk>/submit-investigation/', EmployeeRefundInvestigationSubmitView.as_view(), name='employee-refund-submit-investigation'),
-
-    # Marketing Coupons API routes (Admin & Customer)
+    # ── Marketing & Coupons ───────────────────────────────────────────────────
     path('coupons/',                                     CouponListCreateView.as_view(),               name='coupon-list-create'),
     path('coupons/<int:pk>/',                            CouponDetailView.as_view(),                   name='coupon-detail'),
     path('coupons/apply/',                               CustomerCouponValidateView.as_view(),        name='coupon-apply'),

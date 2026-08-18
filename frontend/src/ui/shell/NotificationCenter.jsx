@@ -279,39 +279,47 @@ export function NotificationCenter() {
     setLoading(true)
     setError("")
     try {
-      const tasksUrl = isAdmin ? "/tasks/admin/" : "/tasks/my/"
-      
-      // Sequential fetches to avoid connection pool exhaustion (EMAXCONNSESSION)
-      let tasks = []; try { tasks = await apiRequest(tasksUrl) } catch(e) {}
-      let leaves = []; try { leaves = await apiRequest("/leaves/") } catch(e) {}
-      let shifts = []; try { shifts = await apiRequest("/scheduling/shifts/") } catch(e) {}
-      let payroll = []; try { payroll = await apiRequest("/payroll/records/") } catch(e) {}
-      let sos = []; try { if (isAdmin) sos = await apiRequest("/live-locations/sos/") } catch(e) {}
-      let timesheet = null; try { timesheet = await apiRequest("/time/timesheets/") } catch(e) {}
+      // Core CalServices notifications: Pending complaints and new service requests
+      let srRes = null; try { srRes = await apiRequest("/admin/service-requests/") } catch(e) {}
+      let careRes = null; try { careRes = await apiRequest("/customer-care/tickets/") } catch(e) {}
 
-      // ── Early-return / cancel notifications from the backend ──────────
-      let backendNotifs = []
-      try { backendNotifs = await apiRequest("/leaves/notifications/") } catch(e) {}
-      const backendItems = (Array.isArray(backendNotifs) ? backendNotifs : []).map(n => ({
-        id: `backend:${n.notif_type}:${n.created_at}`,
-        kind: "early_return",
-        when: n.created_at ? new Date(n.created_at) : null,
-        to: isAdmin ? routes.employees : routes.leaves,
-        read: !!n.read,
-        icon: { bg: "#d1fae5", fg: "#065f46", el: <LogIn size={16} /> },
-        body: (
-          <span>
-            <strong>{n.title?.replace(/^[🏃✅]\s*/, "")}</strong>
-            {n.employee_name ? <span style={{ color: "var(--muted)", fontWeight: 600 }}> · {n.employee_name}</span> : null}<br />
-            <span style={{ fontSize: 11, color: "var(--muted)" }}>{n.body}</span>
-          </span>
-        ),
-      }))
+      const srs = Array.isArray(srRes?.data) ? srRes.data : Array.isArray(srRes?.results) ? srRes.results : []
+      const tickets = Array.isArray(careRes?.data) ? careRes.data : Array.isArray(careRes?.results) ? careRes.results : []
 
-      const next = [
-        ...backendItems,
-        ...buildNotifications({ tasks, leaves, shifts, payroll, timesheet, sos, isAdmin })
-      ]
+      const next = []
+      // Add unassigned / new service requests
+      srs.filter(sr => sr.status === "confirmed" || sr.status === "NEW_REQUEST").slice(0, 5).forEach(sr => {
+        next.push({
+          id: `sr:new:${sr.id}`,
+          kind: "service_request",
+          when: sr.created_at ? new Date(sr.created_at) : new Date(),
+          to: routes.service_requests,
+          icon: { bg: "#EFF0FE", fg: "#5D5FEF", el: <Wrench size={16} /> },
+          body: (
+            <span>
+              <strong>New Booking {sr.request_id || `#${sr.id}`}</strong> · {sr.customer_name || "Customer"}<br />
+              <span style={{ fontSize: 11, color: "var(--muted)" }}>{sr.issue_title || sr.service_category || "Service Request"}</span>
+            </span>
+          )
+        })
+      })
+
+      // Add open customer care tickets
+      tickets.filter(t => t.status === "OPEN" || t.status === "WAITING_AGENT").slice(0, 5).forEach(t => {
+        next.push({
+          id: `ticket:open:${t.id}`,
+          kind: "care_ticket",
+          when: t.created_at ? new Date(t.created_at) : new Date(),
+          to: routes.customer_care,
+          icon: { bg: "#FEF2F2", fg: "#E94560", el: <Headphones size={16} /> },
+          body: (
+            <span>
+              <strong>Care Ticket #{t.id}</strong> · {t.customer_name || t.subject}<br />
+              <span style={{ fontSize: 11, color: "var(--muted)" }}>{t.subject || "Customer Support Inquiry"}</span>
+            </span>
+          )
+        })
+      })
       
       // Trigger emergency audio chime if new active SOS alerts arrive
       if (Array.isArray(sos) && sos.length > 0) {

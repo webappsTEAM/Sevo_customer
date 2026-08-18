@@ -56,26 +56,11 @@ class UserSerializer(serializers.ModelSerializer):
             return None
 
     def get_employee_country(self, obj):
-        try:
-            if obj.company:
-                from employees.models import Employee
-                employee = Employee.objects.filter(user=obj, company=obj.company).first()
-                if employee and employee.country:
-                    return employee.country
-            return obj.company.primary_country if obj.company else None
-        except Exception:
-            return None
+        return obj.company.primary_country if obj.company else "IN"
 
     def get_employee_roles(self, obj):
-        try:
-            if obj.role == "employee" and obj.company:
-                from employees.models import Employee
-                employee = Employee.objects.filter(user=obj, company=obj.company).first()
-                if employee and employee.service_roles:
-                    return employee.service_roles
-            return []
-        except Exception:
-            return []
+        return []
+
 
     def get_company_country(self, obj):
         try:

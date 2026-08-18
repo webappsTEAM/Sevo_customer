@@ -5,7 +5,6 @@ from rest_framework.test import APIClient
 from rest_framework.exceptions import ValidationError
 
 from companies.models import Company
-from employees.models import Employee
 from service_requests.models import (
     ServiceRequest, RescheduleRequest, RescheduleStatus, RescheduleReason, TimeSlotChoices
 )
@@ -36,18 +35,6 @@ class RescheduleWorkflowTestCase(TestCase):
             is_staff=True
         )
 
-        self.tech_user = User.objects.create_user(
-            username="tech_user",
-            email="tech@example.com",
-            password="Password123!",
-            role="employee"
-        )
-        self.tech_employee = Employee.objects.create(
-            user=self.tech_user,
-            employee_id="EMP-001",
-            company=self.company
-        )
-
         self.booking = ServiceRequest.objects.create(
             company=self.company,
             customer=self.customer_user,
@@ -60,7 +47,8 @@ class RescheduleWorkflowTestCase(TestCase):
             preferred_date=datetime.date(2026, 8, 1),
             preferred_time="09-10",
             status="confirmed",
-            assigned_employee=self.tech_employee
+            technician_name="Ramesh Kumar",
+            technician_phone="+91 9876543210",
         )
 
         self.client = APIClient()
@@ -88,9 +76,9 @@ class RescheduleWorkflowTestCase(TestCase):
             new_time_slot="10-11",
             reason=RescheduleReason.EMERGENCY
         )
-        # Attempt direct jump from PENDING to APPROVED (not allowed)
+        # Attempt direct jump from PENDING to RESCHEDULED (not allowed without approval)
         with self.assertRaises(ValidationError):
-            sr_services.apply_transition(rr, RescheduleStatus.APPROVED, actor=self.admin_user)
+            sr_services.apply_transition(rr, RescheduleStatus.RESCHEDULED, actor=self.admin_user)
 
     def test_full_successful_transition_pipeline(self):
         rr = sr_services.create_reschedule_request(
@@ -105,23 +93,23 @@ class RescheduleWorkflowTestCase(TestCase):
         rr = sr_services.apply_transition(rr, RescheduleStatus.ADMIN_REVIEW, actor=self.admin_user)
         self.assertEqual(rr.status, RescheduleStatus.ADMIN_REVIEW)
 
-        # 2. ADMIN_REVIEW -> TECHNICIAN_CONFIRMATION
+        # 2. ADMIN_REVIEW -> ADMIN_APPROVED
         rr = sr_services.apply_transition(
             rr,
-            RescheduleStatus.TECHNICIAN_CONFIRMATION,
+            RescheduleStatus.ADMIN_APPROVED,
             actor=self.admin_user,
-            proposed_technician=self.tech_employee
+            note="Approved by Admin"
         )
-        self.assertEqual(rr.status, RescheduleStatus.TECHNICIAN_CONFIRMATION)
+        self.assertEqual(rr.status, RescheduleStatus.ADMIN_APPROVED)
 
-        # 3. TECHNICIAN_CONFIRMATION -> APPROVED (auto moves to CUSTOMER_NOTIFIED)
+        # 3. ADMIN_APPROVED -> RESCHEDULED
         rr = sr_services.apply_transition(
             rr,
-            RescheduleStatus.APPROVED,
-            actor=self.tech_user,
-            note="Confirmed available"
+            RescheduleStatus.RESCHEDULED,
+            actor=self.admin_user,
+            note="Confirmed available in external workforce"
         )
-        self.assertEqual(rr.status, RescheduleStatus.CUSTOMER_NOTIFIED)
+        self.assertEqual(rr.status, RescheduleStatus.RESCHEDULED)
 
         # Verify booking updated date/time
         self.booking.refresh_from_db()

@@ -6,7 +6,6 @@ import { isOffline } from "../../api/client.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { routes } from "../routes.js"
 import { ThemeToggle } from "./ThemeToggle.jsx"
-import { TECHNICIAN_ROLES } from "../../utils/roles.js"
 import ThemeSwitch from "@/components/ui/theme-switch"
 import { CommandPalette } from "./CommandPalette.jsx"
 import { NotificationCenter } from "./NotificationCenter.jsx"
@@ -30,76 +29,25 @@ import {
 } from "lucide-react"
 
 const ADMIN_NAV_ITEMS = [
-  { label: "Get Started", to: routes.get_started, icon: <Rocket size={20} />, color: "#0EA5E9", adminOnly: true },
+  { label: "Get Started", to: routes.get_started, icon: <Rocket size={20} />, color: "#0EA5E9" },
   {
     label: "Dashboard",
     to: routes.dashboard,
     icon: <Home size={20} />,
     color: "#10B981",
-    children: [
-      { label: "Employee View", to: "/?view=employee", icon: <Users size={16} />, color: "#10B981" },
-      { label: "Customer View", to: "/?view=customer", icon: <MessageSquare size={16} />, color: "#6366F1" },
-    ]
   },
   {
-    label: "Customers",
+    label: "Customers & Bookings",
     to: "/customers/bookings",
     icon: <MessageSquare size={20} />,
     color: "#6366F1",
-    adminOnly: true,
     children: [
-      { label: "Customer List", to: "/customers/list", icon: <Users size={16} />, color: "#6366F1" },
       { label: "Bookings", to: "/customers/bookings", icon: <CalendarDays size={16} />, color: "#38BDF8" },
       { label: "Reschedule Requests", to: "/customers/reschedules", icon: <Repeat2 size={16} />, color: "#F59E0B" },
       { label: "Refund Requests", to: "/customers/refunds", icon: <Banknote size={16} />, color: "#10B981" },
       { label: "Payments", to: "/customers/payments", icon: <Banknote size={16} />, color: "#10B981" },
       { label: "Complaints", to: "/customers/complaints", icon: <ShieldAlert size={16} />, color: "#EF4444" },
-      { label: "Reviews", to: "/customers/reviews", icon: <Award size={16} />, color: "#F59E0B" },
-      { label: "Documents", to: "/customers/documents", icon: <FolderOpen size={16} />, color: "#3B82F6" },
-    ]
-  },
-  {
-    label: "Employees",
-    to: "/employees",
-    icon: <Users size={20} />,
-    color: "#D946EF",
-    adminOnly: true,
-    children: [
-      { label: "Employee List", to: "/employees", icon: <Users size={16} />, color: "#D946EF" },
-      { label: "Recruitment", to: "/employees/pending", icon: <FileText size={16} />, color: "#F59E0B" },
-      { label: "Verification", to: "/employees/documents", icon: <FolderOpen size={16} />, color: "#3B82F6" },
-      { label: "Attendance", to: "/time", icon: <Clock size={16} />, color: "#F59E0B" },
-      { label: "Audit Ledger", to: "/audit-ledger", icon: <FileText size={16} />, color: "#3B82F6" },
-      { label: "Leave", to: "/leaves", icon: <CalendarDays size={16} />, color: "#EC4899" },
-      { label: "Performance", to: "/employees/training", icon: <GraduationCap size={16} />, color: "#8B5CF6" },
-      { label: "Payroll", to: "/payroll", icon: <Banknote size={16} />, color: "#6366F1" },
-      { label: "Compliance", to: "/compliance", icon: <ShieldAlert size={16} />, color: "#2563EB" },
-    ]
-  },
-  {
-    label: "Work Orders",
-    to: "/tasks",
-    icon: <CheckSquare size={20} />,
-    color: "#14B8A6",
-    children: [
-      { label: "Pending", to: "/tasks?status=pending", icon: <Clock size={16} />, color: "#F59E0B" },
-      { label: "Assigned", to: "/tasks?status=assigned", icon: <UserCheck size={16} />, color: "#38BDF8" },
-      { label: "In Progress", to: "/tasks?status=in_progress", icon: <Activity size={16} />, color: "#14B8A6" },
-      { label: "Completed", to: "/tasks?status=completed", icon: <CheckCircle size={16} />, color: "#10B981" },
-      { label: "Cancelled", to: "/tasks?status=cancelled", icon: <XCircle size={16} />, color: "#EF4444" },
-      { label: "Reassigned", to: "/tasks?status=reassigned", icon: <ArrowUpRight size={16} />, color: "#8B5CF6" },
-    ]
-  },
-  {
-    label: "Locations & Tracking",
-    to: "/live-locations",
-    icon: <MapPin size={20} />,
-    color: "#EC4899",
-    adminOnly: true,
-    children: [
-      { label: "Live GPS Map", to: "/live-locations", icon: <Activity size={16} />, color: "#EC4899" },
-      { label: "Work Sites & Geofences", to: "/locations", icon: <MapPin size={16} />, color: "#38BDF8" },
-      { label: "Location Settings", to: "/settings/location", icon: <Settings size={16} />, color: "#64748B" },
+      { label: "Customer Reviews", to: "/customers/reviews", icon: <Award size={16} />, color: "#F59E0B" },
     ]
   },
   {
@@ -107,7 +55,6 @@ const ADMIN_NAV_ITEMS = [
     to: routes.catalog_dashboard,
     icon: <Package size={20} />,
     color: "#3B82F6",
-    adminOnly: true,
     children: [
       { label: "Dashboard", to: routes.catalog_dashboard, icon: <Home size={16} />, color: "#3B82F6" },
       { label: "Categories", to: routes.catalog_categories, icon: <FolderOpen size={16} />, color: "#3B82F6" },
@@ -122,7 +69,6 @@ const ADMIN_NAV_ITEMS = [
     to: routes.marketing_coupons,
     icon: <Ticket size={20} />,
     color: "#8B5CF6",
-    adminOnly: true,
     children: [
       { label: "Coupons", to: routes.marketing_coupons, icon: <Ticket size={16} />, color: "#8B5CF6" },
       { label: "Offers", to: routes.marketing_offers, icon: <Gift size={16} />, color: "#F59E0B" },
@@ -134,7 +80,6 @@ const ADMIN_NAV_ITEMS = [
     to: routes.homepage_customizer,
     icon: <Globe size={20} />,
     color: "#F59E0B",
-    adminOnly: true,
     children: [
       { label: "Hero Banner", to: `${routes.homepage_customizer}?tab=hero`, icon: <Globe size={16} />, color: "#F59E0B" },
       { label: "Browse Categories", to: `${routes.homepage_customizer}?tab=categories`, icon: <FolderOpen size={16} />, color: "#3B82F6" },
@@ -147,7 +92,8 @@ const ADMIN_NAV_ITEMS = [
       { label: "Footer & Contacts", to: `${routes.homepage_customizer}?tab=footer`, icon: <FileText size={16} />, color: "#64748B" },
     ]
   },
-  { label: "Inventory", to: routes.inventory, icon: <Package size={20} />, color: "#8B5CF6" },
+  { label: "Warehouse Inventory", to: routes.inventory, icon: <Package size={20} />, color: "#8B5CF6" },
+  { label: "Reports & Analytics", to: routes.reports, icon: <BarChart3 size={20} />, color: "#10B981" },
   { label: "Customer Care", to: "/support/tickets", icon: <Headset size={20} />, color: "#0EA5E9" },
   {
     label: "Settings",
@@ -158,24 +104,10 @@ const ADMIN_NAV_ITEMS = [
       { label: "My Profile", to: "/settings?section=profile", icon: <User size={16} />, color: "#3B82F6" },
       { label: "Security", to: "/settings?section=security", icon: <Shield size={16} />, color: "#10B981" },
       { label: "Appearance", to: "/settings?section=appearance", icon: <Palette size={16} />, color: "#8B5CF6" },
-      { label: "Payroll Config", to: "/settings?section=payroll", icon: <Banknote size={16} />, color: "#6366F1", adminOnly: true },
-      { label: "Billing", to: "/settings?section=billing", icon: <CreditCard size={16} />, color: "#EC4899", adminOnly: true },
-      { label: "Workspace", to: "/settings?section=organization", icon: <Building2 size={16} />, color: "#06B6D4", adminOnly: true },
+      { label: "Billing & Invoices", to: "/settings?section=billing", icon: <CreditCard size={16} />, color: "#EC4899" },
+      { label: "Workspace & Team", to: "/settings?section=organization", icon: <Building2 size={16} />, color: "#06B6D4" },
     ]
   },
-]
-
-const EMPLOYEE_NAV_ITEMS = [
-  { label: "Dashboard", to: routes.dashboard, icon: <Home size={20} />, color: "#10B981" },
-  { label: "My Wallet", to: routes.payroll, icon: <Banknote size={20} />, color: "#059669" },
-  { label: "Feedback", to: routes.employee_feedback, icon: <MessageSquare size={20} />, color: "#F59E0B" },
-  { label: "Analysis", to: routes.analysis, icon: <BarChart3 size={20} />, color: "#6366F1" },
-  { label: "Jobs", to: routes.tasks, icon: <CheckSquare size={20} />, color: "#14B8A6" },
-  { label: "Inventory", to: routes.inventory, icon: <Package size={20} />, color: "#8B5CF6" },
-  { label: "Leaves", to: routes.leaves, icon: <CalendarDays size={20} />, color: "#EC4899" },
-  { label: "Time", to: routes.time, icon: <Clock size={20} />, color: "#F59E0B", module: "attendance" },
-  { label: "Mileage", to: routes.mileage, icon: <Car size={20} />, color: "#EF4444" },
-  { label: "Settings", to: routes.settings, icon: <Settings size={20} />, color: "#64748B" },
 ]
 
 const THEME_STORAGE_KEY = "quicktims.theme"
@@ -339,51 +271,6 @@ export function AppShell() {
   const [flyout, setFlyout] = useState(null)
   const [drillDownParent, setDrillDownParent] = useState(null)
   const flyoutTimerRef = useRef(null)
-  const [onlineNotifications, setOnlineNotifications] = useState([])
-
-  const handlePresenceStatusChange = useCallback((data) => {
-    if (!data.is_online) return
-
-    // Prevent showing popup for the current user's own status changes
-    const currentUserName = user?.username || ""
-    const currentUserFullName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim()
-    const eventName = (data.employee_name || "").trim()
-
-    if (
-      eventName.toLowerCase() === currentUserName.toLowerCase() ||
-      (currentUserFullName && eventName.toLowerCase() === currentUserFullName.toLowerCase())
-    ) {
-      return
-    }
-
-    const now = new Date()
-    const formattedTime = now.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    })
-    const formattedDate = now.toLocaleDateString("en-US", {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-    })
-    const timestamp = `${formattedDate} ${formattedTime}`
-
-    const id = Math.random().toString(36).substring(2, 9)
-
-    setOnlineNotifications((prev) => [
-      ...prev,
-      {
-        id,
-        employeeName: data.employee_name,
-        timestamp,
-      },
-    ])
-
-    setTimeout(() => {
-      setOnlineNotifications((prev) => prev.filter((n) => n.id !== id))
-    }, 5000)
-  }, [user])
 
   const isAdmin = user?.role === "admin" || user?.role === "manager"
 
@@ -397,8 +284,7 @@ export function AppShell() {
       ]
     }
 
-    const navSource = isAdminUser ? ADMIN_NAV_ITEMS : EMPLOYEE_NAV_ITEMS
-    return navSource.filter(item => hasModuleAccess(user, item))
+    return ADMIN_NAV_ITEMS.filter(item => hasModuleAccess(user, item))
   }, [user])
 
   useEffect(() => {
@@ -523,36 +409,7 @@ export function AppShell() {
     }
   }, [workspaceMenuOpen])
 
-  const handleGlobalWsMessage = useCallback((msg) => {
-    if (msg.type === "sos_alert") {
-      dispatch(addSosAlert(msg.data))
-      playCriticalAlert()
-      NotificationService.send("🆘 SOS ALERT", `${msg.data.employee_name} needs assistance!`)
-    } else if (msg.type === "geofence_breach") {
-      dispatch(addGeofenceBreach(msg.data))
-    } else if (msg.type === "employee_status_change") {
-      playStatusBeep(msg.status === "online")
-      NotificationService.send("Workforce Status Alert", msg.message)
-      window.dispatchEvent(new CustomEvent("quicktims:employeeStatusChange", { detail: msg }))
-    }
-  }, [dispatch])
 
-  const isLiveTrackingPage = location.pathname === routes.live_locations
-  const isStaffOrAdmin = user && (user.role === 'admin' || user.role === 'owner' || user.role === 'manager' || user.role === 'employee' || user.role === 'tech' || user.is_staff)
-
-  useWebSocket(isAdmin && isStaffOrAdmin && !isLiveTrackingPage ? "/ws/live/admin/" : null, {
-    onMessage: handleGlobalWsMessage,
-  })
-
-  // Global presence socket connection — staff/employees only
-  useWebSocket(isStaffOrAdmin ? "/ws/live/presence/" : null, {
-    onMessage: (msg) => {
-      if (msg.type === "presence_status_change") {
-        window.dispatchEvent(new CustomEvent("quicktims:presenceStatusChange", { detail: msg.data }))
-        handlePresenceStatusChange(msg.data)
-      }
-    }
-  })
 
 
 
@@ -576,16 +433,6 @@ export function AppShell() {
               </span>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[10px] professional-subtitle text-blue-500 leading-none">Enterprise</span>
-                {user?.employee_country && (
-                  <span style={{
-                    padding: "2px 6px", borderRadius: 12,
-                    background: user.employee_country === "UK" ? "#eff0fe" : "#ecfdf5",
-                    color: user.employee_country === "UK" ? "#5d5fef" : "#059669",
-                    fontSize: "9px", fontWeight: 800, lineHeight: 1
-                  }}>
-                    {user.employee_country === "UK" ? "🇬🇧 UK · WTR" : "🇺🇸 US · FLSA"}
-                  </span>
-                )}
               </div>
             </div>
           </div>
@@ -639,12 +486,25 @@ export function AppShell() {
                   <span className="text-sm font-bold leading-none">{displayName(user.username)}</span>
                   <span
                     className="text-[10px] font-bold uppercase tracking-wider mt-1 px-1.5 py-0.5 rounded-md"
-                    style={{
-                      color: isAdmin ? "#4f46e5" : "#059669",
-                      background: isAdmin ? "#ede9fe" : "#d1fae5",
-                    }}
+                    style={
+                      user?.role === "manager"
+                        ? { color: "#0ea5e9", background: "#e0f2fe" }
+                        : user?.role === "support" || user?.isCareAgent
+                        ? { color: "#10b981", background: "#d1fae5" }
+                        : user?.role === "customer"
+                        ? { color: "#f59e0b", background: "#fef3c7" }
+                        : { color: "#4f46e5", background: "#ede9fe" }
+                    }
                   >
-                    {user.role}
+                    {user?.role === "admin"
+                      ? "Administrator"
+                      : user?.role === "manager"
+                      ? "Manager"
+                      : user?.role === "support" || user?.isCareAgent
+                      ? "Support"
+                      : user?.role === "customer"
+                      ? "Customer"
+                      : user?.role || "Staff"}
                   </span>
                 </div>
               )}
@@ -668,19 +528,25 @@ export function AppShell() {
                         <div className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[180px] font-medium">{email}</div>
                         <span
                           className="inline-block mt-1.5 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full"
-                          style={{
-                            color: isAdmin ? "#4f46e5" : "#059669",
-                            background: isAdmin ? "#ede9fe" : "#d1fae5",
-                            border: `1px solid ${isAdmin ? "#c4b5fd" : "#a7f3d0"}`,
-                          }}
+                          style={
+                            user?.role === "manager"
+                              ? { color: "#0ea5e9", background: "#e0f2fe", border: "1px solid #bae6fd" }
+                              : user?.role === "support" || user?.isCareAgent
+                              ? { color: "#10b981", background: "#d1fae5", border: "1px solid #a7f3d0" }
+                              : user?.role === "customer"
+                              ? { color: "#f59e0b", background: "#fef3c7", border: "1px solid #fde68a" }
+                              : { color: "#4f46e5", background: "#ede9fe", border: "1px solid #c4b5fd" }
+                          }
                         >
-                          {(() => {
-                            if (isAdmin) return "Administrator"
-                            if (user?.role === "employee" && Array.isArray(user?.employee_roles) && user.employee_roles.length > 0) {
-                              return user.employee_roles.map(rId => TECHNICIAN_ROLES.find(t => t.id === rId)?.label).filter(Boolean).join(" / ") || "Employee"
-                            }
-                            return "Employee"
-                          })()}
+                          {user?.role === "admin"
+                            ? "Administrator"
+                            : user?.role === "manager"
+                            ? "Manager"
+                            : user?.role === "support" || user?.isCareAgent
+                            ? "Support"
+                            : user?.role === "customer"
+                            ? "Customer"
+                            : user?.title || user?.role || "Staff"}
                         </span>
                       </div>
                     </div>
@@ -784,7 +650,7 @@ export function AppShell() {
                         sib => sib !== child.to && location.pathname.startsWith(sib) && sib.startsWith(child.to)
                       )
                       const active = location.pathname === child.to ||
-                        (!isSiblingMoreSpecific && child.to !== '/settings' && child.to !== '/employees' && location.pathname.startsWith(child.to));
+                        (!isSiblingMoreSpecific && child.to !== '/settings' && location.pathname.startsWith(child.to));
                       const color = child.color || drillDownParent.color || "#3b82f6";
                       return (
                         <NavLink
@@ -837,66 +703,6 @@ export function AppShell() {
         user={user}
         onClose={() => setFlyout(null)}
       />
-
-      {/* ── Real-time Online Status Notifications ───────────────────── */}
-      <div className="fixed bottom-6 right-6 z-[99999] flex flex-col gap-3 pointer-events-none">
-        <AnimatePresence>
-          {onlineNotifications.map((notif) => (
-            <motion.div
-              key={notif.id}
-              initial={{ opacity: 0, y: 50, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
-              className="flex items-center gap-4 p-4 pl-5 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.3)] relative overflow-hidden pointer-events-auto min-w-[320px] max-w-[400px] border-l-[6px] border-l-emerald-500"
-            >
-              {/* Avatar */}
-              <div className="w-10 h-10 rounded-full bg-emerald-500 text-white font-bold flex items-center justify-center text-sm shrink-0 shadow-md shadow-emerald-500/10">
-                {initials(notif.employeeName)}
-              </div>
-
-              {/* Details */}
-              <div className="flex-1 min-w-0">
-                {/* Header line */}
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">
-                      Employee Online
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold whitespace-nowrap">
-                    {notif.timestamp}
-                  </span>
-                </div>
-
-                {/* Body info */}
-                <div className="text-xs text-slate-600 dark:text-slate-300 space-y-0.5">
-                  <div className="truncate">
-                    <span className="text-slate-400 dark:text-slate-500 font-bold">Employee:</span>{" "}
-                    <span className="font-extrabold text-slate-800 dark:text-slate-200">{notif.employeeName}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 dark:text-slate-500 font-bold">Status:</span>{" "}
-                    <span className="font-extrabold text-emerald-500 dark:text-emerald-400">Online</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Dismiss button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setOnlineNotifications((prev) => prev.filter((n) => n.id !== notif.id))
-                }}
-                className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-                aria-label="Close"
-              >
-                <X size={14} />
-              </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
     </div>
   )
 }

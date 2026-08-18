@@ -15,26 +15,18 @@ class NotificationPreference(models.Model):
     # Email channel
     email_security_alerts = models.BooleanField(default=True)
     email_login_alerts = models.BooleanField(default=True)
-    email_leave_updates = models.BooleanField(default=True)
-    email_payroll_ready = models.BooleanField(default=True)
-    email_task_assigned = models.BooleanField(default=True)
+    email_booking_updates = models.BooleanField(default=True)
     email_weekly_digest = models.BooleanField(default=False)
     email_product_updates = models.BooleanField(default=False)
-    email_shift_reminders = models.BooleanField(default=True)
 
     # In-app channel
     inapp_security_alerts = models.BooleanField(default=True)
-    inapp_leave_updates = models.BooleanField(default=True)
-    inapp_task_assigned = models.BooleanField(default=True)
-    inapp_clock_reminders = models.BooleanField(default=True)
+    inapp_booking_updates = models.BooleanField(default=True)
     inapp_announcements = models.BooleanField(default=True)
-    inapp_payroll_ready = models.BooleanField(default=True)
 
     # SMS channel
     sms_security_alerts = models.BooleanField(default=False)
-    sms_clock_reminders = models.BooleanField(default=False)
-    sms_leave_updates = models.BooleanField(default=False)
-    sms_shift_reminders = models.BooleanField(default=False)
+    sms_booking_updates = models.BooleanField(default=True)
 
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -131,12 +123,12 @@ class Webhook(models.Model):
 
 class TeamInvite(models.Model):
     STATUS_CHOICES = [("pending", "Pending"), ("accepted", "Accepted"), ("expired", "Expired"), ("revoked", "Revoked")]
-    ROLE_CHOICES = [("admin", "Admin"), ("manager", "Manager"), ("employee", "Employee")]
+    ROLE_CHOICES = [("admin", "Admin"), ("manager", "Manager"), ("support", "Customer Support")]
 
     company = models.ForeignKey("companies.Company", on_delete=models.CASCADE, related_name="team_invites")
     invited_by = models.ForeignKey(AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="sent_invites")
     email = models.EmailField()
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="employee")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="support")
     region = models.CharField(
         max_length=2,
         choices=[("US", "United States"), ("UK", "United Kingdom"), ("IN", "India")],
@@ -170,7 +162,7 @@ class Invoice(models.Model):
     company = models.ForeignKey("companies.Company", on_delete=models.CASCADE, related_name="invoices")
     invoice_number = models.CharField(max_length=50, unique=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    currency = models.CharField(max_length=10, default="USD")
+    currency = models.CharField(max_length=10, default="INR")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="paid")
     billing_date = models.DateField(default=timezone.now)
     due_date = models.DateField(null=True, blank=True)
@@ -251,4 +243,3 @@ class HomePageMedia(models.Model):
 
     def __str__(self):
         return f"[{self.section}] {self.image_path} ({self.cleanup_status})"
-

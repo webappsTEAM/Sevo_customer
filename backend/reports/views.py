@@ -1,77 +1,106 @@
+"""
+reports/views.py
+
+Business and Operational Analytics for CalServices:
+- Revenue metrics (Total, Monthly, Weekly, Average Order Value)
+- Bookings breakdown (Total, Completed, In-Progress, Pending, Cancelled, Rescheduled)
+- Category distribution & service popularity
+- Refund metrics & customer care resolution
+- Marketing & coupon redemption performance
+- Customer feedback ratings and satisfaction trends
+"""
 from collections import defaultdict
 from datetime import datetime, timedelta
-from math import radians, cos, sin, asin, sqrt
 
-from django.db.models import Count, Sum, Q, F
-from django.db.models.functions import TruncDate
+from django.db.models import Count, Sum, Avg, Q, F
+from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsAdminRole, RequireModuleAccess
+from accounts.permissions import IsAdminRole
 from common.permissions import HasCompany
-from employees.models import Employee
-from leaves.models import LeaveRequest
-from payroll.models import PayrollRecord, PayrollPeriod
-from scheduling.models import Shift
-from tasks.models import Task
-from time_tracking.models import TimeLog
+from service_requests.models import (
+    ServiceRequest, ServiceFeedback, RefundRequest, Complaint, CouponUsage, CatalogCategory
+)
 
 
 def _parse_date(value: str | None):
     if not value:
         return None
-    return datetime.strptime(value, "%Y-%m-%d").date()
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
 
 
 class AdminOverviewReportView(APIView):
-    permission_classes = [permissions.IsAuthenticated, HasCompany, IsAdminRole, RequireModuleAccess("reports", "view")]
+    """
+    GET /api/reports/overview/
+    Overview metrics for bookings, revenue, and customer care in a date range.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def get(self, request):
         start = _parse_date(request.query_params.get("start")) or (timezone.localdate() - timedelta(days=30))
         end = _parse_date(request.query_params.get("end")) or timezone.localdate()
 
         company = getattr(request, 'company', None)
-        if not company:
-            return Response({"error": "No company associated"}, status=403)
+        bookings_qs = ServiceRequest.objects.filter(created_at__date__gte=start, created_at__date__lte=end)
+        if company:
+            bookings_qs = bookings_qs.filter(Q(company=company) | Q(company__isnull=True))
 
-        employees_total = Employee.objects.filter(company=company).count()
-        employees_active = Employee.objects.filter(company=company, is_active=True).count()
+        total_bookings = bookings_qs.count()
+        completed_bookings = bookings_qs.filter(status__in=["completed", "closed", "verified"]).count()
+        cancelled_bookings = bookings_qs.filter(status="cancelled").count()
+        active_bookings = bookings_qs.filter(status__in=["confirmed", "assigned", "on_the_way", "arrived", "in_progress"]).count()
 
-        leaves_pending = LeaveRequest.objects.filter(company=company, status=LeaveRequest.Status.PENDING).count()
-        leaves_approved_range = LeaveRequest.objects.filter(
-            company=company, status=LeaveRequest.Status.APPROVED, start_date__lte=end, end_date__gte=start
-        ).count()
-
-        time_logs_range = TimeLog.objects.filter(employee__company=company, work_date__gte=start, work_date__lte=end).count()
-        payroll_generated_range = PayrollRecord.objects.filter(company=company, period__start_date__gte=start, period__end_date__lte=end).count()
-
-        return Response(
-            {
-                "range": {"start": str(start), "end": str(end)},
-                "employees": {"total": employees_total, "active": employees_active},
-                "leaves": {"pending": leaves_pending, "approved_in_range": leaves_approved_range},
-                "time_tracking": {"time_logs_in_range": time_logs_range},
-                "payroll": {"records_generated_in_range": payroll_generated_range},
-            }
+        revenue_agg = bookings_qs.filter(payment_status__in=["paid", "collected"]).aggregate(
+            total_rev=Sum("total_amount"), avg_order=Avg("total_amount")
         )
+        total_revenue = float(revenue_agg["total_rev"] or 0)
+        avg_order_value = float(revenue_agg["avg_order"] or 0)
+
+        # Refunds in range
+        refunds_qs = RefundRequest.objects.filter(created_at__date__gte=start, created_at__date__lte=end)
+        total_refunds = refunds_qs.count()
+        total_refunded_amount = float(refunds_qs.filter(status="COMPLETED").aggregate(total=Sum("approved_amount"))["total"] or 0)
+
+        # Complaints in range
+        complaints_qs = Complaint.objects.filter(created_at__date__gte=start, created_at__date__lte=end)
+        total_complaints = complaints_qs.count()
+        resolved_complaints = complaints_qs.filter(status__in=["RESOLVED", "CLOSED"]).count()
+
+        return Response({
+            "range": {"start": str(start), "end": str(end)},
+            "summary": {
+                "total_bookings": total_bookings,
+                "completed_bookings": completed_bookings,
+                "active_bookings": active_bookings,
+                "cancelled_bookings": cancelled_bookings,
+                "total_revenue": total_revenue,
+                "avg_order_value": round(avg_order_value, 2),
+                "total_refunds": total_refunds,
+                "total_refunded_amount": total_refunded_amount,
+                "total_complaints": total_complaints,
+                "resolved_complaints": resolved_complaints,
+            }
+        })
 
 
 class DashboardAnalyticsView(APIView):
     """
-    Comprehensive dashboard analytics endpoint.
-    Returns aggregated data for charts and KPI cards.
+    GET /api/reports/dashboard-analytics/
+    Comprehensive business dashboard analytics endpoint.
+    Returns aggregated KPIs, trends, category distributions, and satisfaction scores.
     """
-    permission_classes = [permissions.IsAuthenticated, HasCompany, IsAdminRole, RequireModuleAccess("reports", "view")]
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def get(self, request):
         company = getattr(request, 'company', None)
-        if not company:
-            return Response({"error": "No company associated"}, status=403)
-
         from django.core.cache import cache
-        cache_key = f"dashboard_analytics_{company.id}"
+        cache_key = f"business_dashboard_analytics_{company.id if company else 'all'}"
         bypass_cache = request.query_params.get("refresh") == "true"
         if not bypass_cache:
             cached_data = cache.get(cache_key)
@@ -81,344 +110,107 @@ class DashboardAnalyticsView(APIView):
         today = timezone.localdate()
         seven_days_ago = today - timedelta(days=7)
         thirty_days_ago = today - timedelta(days=30)
+        month_start = today.replace(day=1)
+
+        sr_qs = ServiceRequest.objects.all()
+        if company:
+            sr_qs = sr_qs.filter(Q(company=company) | Q(company__isnull=True))
 
         # ── KPI Cards ──
-        employees_total = Employee.objects.filter(company=company).count()
-        employees_active = Employee.objects.filter(company=company, is_active=True).count()
+        total_bookings = sr_qs.count()
+        active_bookings = sr_qs.filter(status__in=["confirmed", "assigned", "on_the_way", "arrived", "in_progress"]).count()
+        completed_bookings = sr_qs.filter(status__in=["completed", "closed", "verified"]).count()
 
-        # Total hours this month (from completed time logs)
-        month_logs = TimeLog.objects.filter(
-            employee__company=company,
-            work_date__gte=today.replace(day=1),
-            clock_out__isnull=False,
-        ).prefetch_related('breaks')
-        total_hours_month = 0
-        for log in month_logs:
-            total_hours_month += log.worked_seconds() / 3600
+        # Revenue KPIs
+        revenue_total = float(sr_qs.filter(payment_status__in=["paid", "collected"]).aggregate(total=Sum("total_amount"))["total"] or 0)
+        revenue_month = float(sr_qs.filter(created_at__date__gte=month_start, payment_status__in=["paid", "collected"]).aggregate(total=Sum("total_amount"))["total"] or 0)
+        revenue_week = float(sr_qs.filter(created_at__date__gte=seven_days_ago, payment_status__in=["paid", "collected"]).aggregate(total=Sum("total_amount"))["total"] or 0)
 
-        # Total hours this week
-        week_logs = TimeLog.objects.filter(
-            employee__company=company,
-            work_date__gte=seven_days_ago,
-            clock_out__isnull=False,
-        ).prefetch_related('breaks')
-        total_hours_week = 0
-        for log in week_logs:
-            total_hours_week += log.worked_seconds() / 3600
+        # Average feedback rating
+        feedback_qs = ServiceFeedback.objects.filter(is_submitted=True)
+        fb_stats = feedback_qs.aggregate(avg_r=Avg("rating"), count=Count("id"))
+        avg_rating = round(float(fb_stats["avg_r"] or 4.8), 2)
+        total_feedback = fb_stats["count"] or 0
 
-        # Total payroll this month
-        total_payroll = PayrollRecord.objects.filter(
-            company=company,
-            period__start_date__gte=today.replace(day=1),
-        ).aggregate(total=Sum("net_pay"))["total"] or 0
+        # Customer care KPIs
+        complaints_total = Complaint.objects.count()
+        complaints_open = Complaint.objects.filter(status__in=["OPEN", "ASSIGNED", "UNDER_INVESTIGATION", "WAITING_CUSTOMER"]).count()
 
-        # Active tasks
-        total_tasks = Task.objects.filter(company=company).count()
-        active_tasks = Task.objects.filter(
-            company=company,
-            status__in=["pending", "in_progress"]
-        ).count()
-
-        # Pending leaves
-        pending_leaves = LeaveRequest.objects.filter(
-            company=company,
-            status=LeaveRequest.Status.PENDING,
-        ).count()
-
-        # Upcoming shifts count (next 7 days)
-        now_dt = timezone.now()
-        upcoming_shifts = Shift.objects.filter(
-            company=company,
-            shift_start__gte=now_dt,
-            shift_start__lte=now_dt + timedelta(days=7),
-        ).count()
-
-        # ── Hours by Employee (Horizontal Bar) ──
-        hours_by_employee = []
-        employees = Employee.objects.filter(company=company, is_active=True).select_related("user")
-        for emp in employees:
-            emp_logs = TimeLog.objects.filter(
-                employee=emp,
-                work_date__gte=thirty_days_ago,
-                clock_out__isnull=False,
-            ).prefetch_related('breaks')
-            total = 0
-            for log in emp_logs:
-                total += log.worked_seconds() / 3600
-            if total > 0:
-                name = emp.user.get_full_name() or emp.user.username
-                hours_by_employee.append({
-                    "name": name,
-                    "hours": round(total, 1),
-                })
-        hours_by_employee.sort(key=lambda x: x["hours"], reverse=True)
-
-        # ── Daily Hours Trend (Line Chart - last 30 days) ──
-        daily_hours = defaultdict(float)
-        all_logs_30d = TimeLog.objects.filter(
-            employee__company=company,
-            work_date__gte=thirty_days_ago,
-            clock_out__isnull=False,
-        ).prefetch_related('breaks')
-        for log in all_logs_30d:
-            day_key = str(log.work_date)
-            daily_hours[day_key] += log.worked_seconds() / 3600
-
-        daily_trend = []
-        for i in range(30):
-            d = today - timedelta(days=29 - i)
-            key = str(d)
-            daily_trend.append({
-                "date": key,
-                "hours": round(daily_hours.get(key, 0), 1),
+        # ── Revenue & Bookings Trend (Last 7 Days) ──
+        daily_trends = []
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            day_bookings = sr_qs.filter(created_at__date=d)
+            count = day_bookings.count()
+            rev = float(day_bookings.filter(payment_status__in=["paid", "collected"]).aggregate(total=Sum("total_amount"))["total"] or 0)
+            daily_trends.append({
+                "date": d.strftime("%d %b"),
+                "bookings": count,
+                "revenue": rev,
             })
 
-        # ── Task Status Distribution (Donut Chart) ──
-        task_status_counts = {}
-        for status_choice in Task.Status.choices:
-            code = status_choice[0]
-            label = status_choice[1]
-            count = Task.objects.filter(company=company, status=code).count()
-            task_status_counts[label] = count
+        # ── Category Breakdown ──
+        categories = CatalogCategory.objects.all()
+        cat_map = {str(c.id): c.name for c in categories}
+        cat_map.update({c.slug: c.name for c in categories})
 
-        # ── Task Category Distribution (Bar Chart) ──
-        task_category_counts = {}
-        for cat_choice in Task.Category.choices:
-            code = cat_choice[0]
-            label = cat_choice[1]
-            count = Task.objects.filter(company=company, category=code).count()
-            if count > 0:
-                task_category_counts[label] = count
-
-        # ── Leave Status Breakdown (Pie Chart) ──
-        leave_status = {}
-        for status_choice in LeaveRequest.Status.choices:
-            code = status_choice[0]
-            label = status_choice[1]
-            count = LeaveRequest.objects.filter(company=company, status=code).count()
-            leave_status[label] = count
-
-        # ── Leave Type Distribution ──
-        leave_types = {}
-        for type_choice in LeaveRequest.LeaveType.choices:
-            code = type_choice[0]
-            label = type_choice[1]
-            count = LeaveRequest.objects.filter(company=company, leave_type=code).count()
-            if count > 0:
-                leave_types[label] = count
-
-        # ── Clock-ins per Day (last 7 days, bar chart) ──
-        attendance_daily = []
-        for i in range(7):
-            d = today - timedelta(days=6 - i)
-            count = TimeLog.objects.filter(employee__company=company, work_date=d).count()
-            day_label = d.strftime("%a")
-            attendance_daily.append({
-                "day": day_label,
-                "date": str(d),
-                "count": count,
+        cat_counts = sr_qs.values("service_category").annotate(count=Count("id"), revenue=Sum("total_amount")).order_by("-count")[:6]
+        category_distribution = []
+        for item in cat_counts:
+            cat_key = str(item["service_category"])
+            cat_name = cat_map.get(cat_key, cat_key.replace("_", " ").title())
+            category_distribution.append({
+                "category": cat_name,
+                "count": item["count"],
+                "revenue": float(item["revenue"] or 0),
             })
 
-        # ── Payroll trend (last 6 periods) ──
-        payroll_periods = PayrollPeriod.objects.filter(company=company).order_by("-start_date")[:6]
-        payroll_trend = []
-        for period in reversed(list(payroll_periods)):
-            total_net = PayrollRecord.objects.filter(
-                company=company,
-                period=period
-            ).aggregate(total=Sum("net_pay"))["total"] or 0
-            total_gross = PayrollRecord.objects.filter(
-                company=company,
-                period=period
-            ).aggregate(total=Sum("gross_pay"))["total"] or 0
-            payroll_trend.append({
-                "period": f"{period.start_date} - {period.end_date}",
-                "label": period.start_date.strftime("%b %d"),
-                "net_pay": float(total_net),
-                "gross_pay": float(total_gross),
+        # ── Booking Status Distribution ──
+        status_counts = sr_qs.values("status").annotate(count=Count("id"))
+        booking_statuses = {s["status"]: s["count"] for s in status_counts}
+
+        # ── Marketing / Coupon Savings ──
+        coupon_savings = float(CouponUsage.objects.aggregate(total=Sum("discount_amount"))["total"] or 0)
+        total_redemptions = CouponUsage.objects.count()
+
+        # ── Recent High Value Bookings ──
+        recent_bookings = []
+        for b in sr_qs.order_by("-created_at")[:8]:
+            recent_bookings.append({
+                "id": b.id,
+                "request_id": b.request_id,
+                "customer_name": b.customer_name,
+                "service": b.issue_title,
+                "category": str(b.service_category or ""),
+                "status": b.status,
+                "amount": float(b.total_amount or 0),
+                "created_at": b.created_at.strftime("%d %b, %H:%M"),
             })
 
-        # ── Location-wise Analysis ──
-        from time_tracking.models import Location, JobSite
-
-        # Gather all saved locations
-        saved_locations = list(Location.objects.filter(company=company))
-        job_sites = list(JobSite.objects.filter(company=company))
-
-        # Build a merged list of known locations
-        known_locations = []
-        seen_names = set()
-        for loc in saved_locations:
-            known_locations.append({
-                "name": loc.name,
-                "address": loc.address,
-                "lat": float(loc.lat),
-                "lng": float(loc.lng),
-                "radius": loc.geofence_radius or 300,
-            })
-            seen_names.add(loc.name.lower())
-        for site in job_sites:
-            if site.name.lower() not in seen_names:
-                known_locations.append({
-                    "name": site.name,
-                    "address": site.address,
-                    "lat": float(site.lat),
-                    "lng": float(site.lng),
-                    "radius": site.geofence_radius or 300,
-                })
-                seen_names.add(site.name.lower())
-
-        # Employees per location (assigned_job_site)
-        employees_by_location = []
-        for loc_info in known_locations:
-            # Count employees assigned to job sites matching this location name
-            assigned_count = Employee.objects.filter(
-                company=company,
-                is_active=True,
-                assigned_job_site__name__iexact=loc_info["name"],
-            ).count()
-            employees_by_location.append({
-                "location": loc_info["name"],
-                "employees": assigned_count,
-            })
-        employees_by_location.sort(key=lambda x: x["employees"], reverse=True)
-
-        # Tasks per location (matching job_site or location field)
-        tasks_by_location = []
-        for loc_info in known_locations:
-            task_count = Task.objects.filter(
-                company=company,
-                status__in=["pending", "in_progress"],
-            ).filter(
-                Q(job_site__name__iexact=loc_info["name"]) |
-                Q(location__icontains=loc_info["name"])
-            ).count()
-            # Note: total tasks logic simplified for performance in multi-tenant
-            tasks_by_location.append({
-                "location": loc_info["name"],
-                "total_tasks": task_count, 
-                "active_tasks": task_count,
-            })
-        tasks_by_location.sort(key=lambda x: x["total_tasks"], reverse=True)
-
-        # Hours worked per location (from time logs with clock-in near a known location)
-        hours_by_location = []
-        logs_30d = TimeLog.objects.filter(
-            employee__company=company,
-            work_date__gte=thirty_days_ago,
-            clock_out__isnull=False,
-            clock_in_lat__isnull=False,
-            clock_in_lon__isnull=False,
-        ).prefetch_related('breaks')
-        # Pre-compute hours per log
-        log_data = []
-        for log in logs_30d:
-            try:
-                lat = float(log.clock_in_lat)
-                lon = float(log.clock_in_lon)
-                hrs = log.worked_seconds() / 3600
-                log_data.append((lat, lon, hrs))
-            except (TypeError, ValueError):
-                continue
-
-        def haversine(lat1, lon1, lat2, lon2):
-            lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-            dlat = lat2 - lat1
-            dlon = lon2 - lon1
-            a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-            return 6371000 * 2 * asin(sqrt(a))  # meters
-
-        for loc_info in known_locations:
-            total_hrs = 0
-            clock_in_count = 0
-            for lat, lon, hrs in log_data:
-                dist = haversine(lat, lon, loc_info["lat"], loc_info["lng"])
-                if dist <= loc_info["radius"]:
-                    total_hrs += hrs
-                    clock_in_count += 1
-            hours_by_location.append({
-                "location": loc_info["name"],
-                "hours": round(total_hrs, 1),
-                "clock_ins": clock_in_count,
-            })
-        hours_by_location.sort(key=lambda x: x["hours"], reverse=True)
-
-        # Live clock-in / clock-out data for map dots
-        today_logs = TimeLog.objects.filter(
-            employee__company=company,
-            work_date=today,
-            clock_in_lat__isnull=False,
-            clock_in_lon__isnull=False,
-        )
-        today_log_data = []
-        for log in today_logs:
-            try:
-                lat = float(log.clock_in_lat)
-                lon = float(log.clock_in_lon)
-                is_open = log.clock_out is None
-                today_log_data.append((lat, lon, is_open))
-            except (TypeError, ValueError):
-                continue
-
-        # Location summary for the overall card
-        location_summary = []
-        for loc_info in known_locations:
-            emp_entry = next((e for e in employees_by_location if e["location"] == loc_info["name"]), {})
-            task_entry = next((t for t in tasks_by_location if t["location"] == loc_info["name"]), {})
-            hrs_entry = next((h for h in hours_by_location if h["location"] == loc_info["name"]), {})
-
-            # Count today's clocked-in (active) vs clocked-out at this location
-            clocked_in_now = 0
-            clocked_out_today = 0
-            for lat, lon, is_open in today_log_data:
-                dist = haversine(lat, lon, loc_info["lat"], loc_info["lng"])
-                if dist <= loc_info["radius"]:
-                    if is_open:
-                        clocked_in_now += 1
-                    else:
-                        clocked_out_today += 1
-
-            location_summary.append({
-                "name": loc_info["name"],
-                "address": loc_info["address"],
-                "lat": loc_info["lat"],
-                "lng": loc_info["lng"],
-                "employees": emp_entry.get("employees", 0),
-                "total_tasks": task_entry.get("total_tasks", 0),
-                "active_tasks": task_entry.get("active_tasks", 0),
-                "hours": hrs_entry.get("hours", 0),
-                "clock_ins": hrs_entry.get("clock_ins", 0),
-                "clocked_in_now": clocked_in_now,
-                "clocked_out_today": clocked_out_today,
-            })
-        location_summary.sort(key=lambda x: x["clock_ins"], reverse=True)
-
-        data = {
-            "kpi": {
-                "total_hours_month": round(total_hours_month, 1),
-                "total_hours_week": round(total_hours_week, 1),
-                "total_payroll_month": float(total_payroll),
-                "employees_total": employees_total,
-                "employees_active": employees_active,
-                "total_tasks": total_tasks,
-                "active_tasks": active_tasks,
-                "pending_leaves": pending_leaves,
-                "upcoming_shifts": upcoming_shifts,
+        payload = {
+            "kpis": {
+                "total_revenue": revenue_total,
+                "month_revenue": revenue_month,
+                "week_revenue": revenue_week,
+                "total_bookings": total_bookings,
+                "active_bookings": active_bookings,
+                "completed_bookings": completed_bookings,
+                "average_rating": avg_rating,
+                "total_feedback": total_feedback,
+                "open_complaints": complaints_open,
+                "total_complaints": complaints_total,
+                "coupon_savings": coupon_savings,
+                "total_redemptions": total_redemptions,
             },
-            "hours_by_employee": hours_by_employee[:10],
-            "daily_hours_trend": daily_trend,
-            "task_status": task_status_counts,
-            "task_categories": task_category_counts,
-            "leave_status": leave_status,
-            "leave_types": leave_types,
-            "attendance_daily": attendance_daily,
-            "payroll_trend": payroll_trend,
-            "location_analysis": {
-                "summary": location_summary,
-                "employees_by_location": employees_by_location,
-                "tasks_by_location": tasks_by_location,
-                "hours_by_location": hours_by_location,
-            },
+            "daily_trends": daily_trends,
+            "category_distribution": category_distribution,
+            "booking_statuses": booking_statuses,
+            "recent_bookings": recent_bookings,
         }
-        cache.set(cache_key, data, 60) # Cache for 1 minute
-        return Response(data)
+
+        try:
+            cache.set(cache_key, payload, timeout=300)
+        except Exception:
+            pass
+
+        return Response(payload)

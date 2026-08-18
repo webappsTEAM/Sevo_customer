@@ -9,10 +9,8 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("employees", "0006_employee_bank_details_employee_currency_and_more"),
         ("inventory", "0002_inventory_extensions"),
         ("service_requests", "0008_remove_employeeperformance_issue_resolution_rate_and_more"),
-        ("time_tracking", "0006_timelog_tl_status_date_idx_timelog_tl_emp_status_idx"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -117,7 +115,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="reported_extensions",
-                        to="employees.employee",
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
                 (
@@ -223,7 +221,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
                         related_name="extension_item_locations",
-                        to="time_tracking.location",
+                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
                 (
