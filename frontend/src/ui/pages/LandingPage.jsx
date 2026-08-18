@@ -862,7 +862,7 @@ const FOOD_HEALTH_SUB = [
     graphic: VegetablesGraphic,
     photo: "/mockups/vegetables_realistic.png",
     badge: "8-min Farm Delivery",
-    items: [], // populated dynamically from API
+    items: VEGETABLE_ITEMS,
   },
 ]
 
@@ -1170,13 +1170,13 @@ export function LandingPage() {
             tagline: svc.description,
             badge: svc.slug === "groceries" ? "Coming Soon" : "8-min Farm Express",
             image: svc.image || (svc.slug === "groceries" ? "/mockups/groceries_realistic.png" : "/mockups/vegetables_realistic.png"),
-            items: svc.slug === "groceries" ? GROCERY_ITEMS : [],
+            items: svc.slug === "groceries" ? GROCERY_ITEMS : VEGETABLE_ITEMS,
           }))
 
           // Fetch active vegetable packages
           apiRequest("/catalog/services/?service_slug=vegetables&status=ACTIVE")
             .then((pkgRes) => {
-              if (pkgRes.success && Array.isArray(pkgRes.data)) {
+              if (pkgRes.success && Array.isArray(pkgRes.data) && pkgRes.data.length > 0) {
                 const apiVegs = pkgRes.data.map((pkg) => ({
                   id: pkg.id,
                   name: pkg.name,
@@ -1195,11 +1195,19 @@ export function LandingPage() {
                   )
                 )
               } else {
-                setFoodHealthSub(apiServices)
+                setFoodHealthSub(
+                  apiServices.map((sub) =>
+                    sub.id === "vegetables" ? { ...sub, items: VEGETABLE_ITEMS } : sub
+                  )
+                )
               }
             })
             .catch(() => {
-              setFoodHealthSub(apiServices)
+              setFoodHealthSub(
+                apiServices.map((sub) =>
+                  sub.id === "vegetables" ? { ...sub, items: VEGETABLE_ITEMS } : sub
+                )
+              )
             })
         }
       })
