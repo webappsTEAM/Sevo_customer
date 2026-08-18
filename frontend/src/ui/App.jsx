@@ -20,10 +20,6 @@ const LandingPage = lazy(() =>
   import("./pages/LandingPage.jsx").then(m => ({ default: m.LandingPage }))
 )
 
-const CustomerLoginPage = lazy(() =>
-  import("./pages/CustomerLoginPage.jsx").then(m => ({ default: m.CustomerLoginPage }))
-)
-
 const DashboardPage = lazy(() =>
   import("./pages/DashboardPage.jsx").then(m => ({ default: m.DashboardPage }))
 )
@@ -210,11 +206,6 @@ export function App() {
           <Route
             path={routes.login}
             element={<LoginPage />}
-          />
-
-          <Route
-            path={routes.customer_login}
-            element={<CustomerLoginPage />}
           />
 
           <Route

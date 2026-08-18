@@ -126,105 +126,23 @@ class AuthOtpConsumer(AsyncJsonWebsocketConsumer):
 
     @sync_to_async
     def _verify_phone_otp_backend(self, phone, otp):
-        digits = re.sub(r'\D', '', phone)
-        last10 = digits[-10:] if len(digits) >= 10 else digits
-
-        from django.db.models import Q
-        user = User.objects.filter(
-            Q(phone=phone) | Q(phone__icontains=last10)
-        ).first()
-
-        if not user:
-            return {"success": False, "error": "User not found for this mobile number.", "code": "USER_NOT_FOUND"}
-
-        if not user.phone_otp or not user.otp_created_at:
-            return {"success": False, "error": "No active OTP request found. Please request a new OTP.", "code": "NO_ACTIVE_OTP"}
-
-        # Expiration check (5 minutes = 300 seconds)
-        if (timezone.now() - user.otp_created_at).total_seconds() > 300:
-            return {"success": False, "error": "OTP has expired. Please request a new OTP.", "code": "OTP_EXPIRED"}
-
-        # OTP match check
-        if str(user.phone_otp).strip() != str(otp).strip():
-            return {"success": False, "error": "Invalid OTP. Please check the code.", "code": "INVALID_OTP"}
-
-        # Check if user is a new profile (missing name)
-        is_new_customer = not bool(user.first_name and user.first_name.strip())
-
-        # Clear OTP and update customer record
-        user.phone_otp = None
-        user.otp_created_at = None
-        user.phone = phone
-        user.role = User.Role.CUSTOMER
-        user.save(update_fields=["phone_otp", "otp_created_at", "phone", "role"])
-
-        # Link any pending service request if customer object was not set
+        from accounts.services import verify_otp, OTPChannel, InvalidOTPError
         try:
-            from service_requests.models import ServiceRequest
-            sr = ServiceRequest.objects.filter(phone__icontains=last10).order_by("-id").first()
-            if sr and not sr.customer:
-                sr.customer = user
-                sr.save(update_fields=["customer"])
-        except Exception:
-            pass
-
-        refresh = RefreshToken.for_user(user)
-        access_token = str(refresh.access_token)
-        refresh_token = str(refresh)
-
-        return {
-            "success": True,
-            "data": {
-                "customer_id": user.id,
-                "is_new_customer": is_new_customer,
-                "first_name": user.first_name or "",
-                "last_name": user.last_name or "",
-                "full_name": f"{user.first_name} {user.last_name}".strip() or "Customer",
-                "phone": user.phone,
-                "email": user.email or "",
-                "role": user.role,
-                "access": access_token,
-                "refresh": refresh_token,
-            }
-        }
+            res = verify_otp(phone, str(otp).strip(), channel=OTPChannel.PHONE)
+            return res
+        except InvalidOTPError as e:
+            return {"success": False, "error": str(e), "code": getattr(e, "code", "INVALID_OTP")}
+        except Exception as e:
+            return {"success": False, "error": str(e), "code": "SERVER_ERROR"}
 
     @sync_to_async
     def _verify_email_otp_backend(self, email, otp):
-        user = User.objects.filter(email__iexact=email).first()
-        if not user:
-            return {"success": False, "error": "User not found.", "code": "USER_NOT_FOUND"}
+        from accounts.services import verify_otp, OTPChannel, InvalidOTPError
+        try:
+            res = verify_otp(email, str(otp).strip(), channel=OTPChannel.EMAIL)
+            return res
+        except InvalidOTPError as e:
+            return {"success": False, "error": str(e), "code": getattr(e, "code", "INVALID_OTP")}
+        except Exception as e:
+            return {"success": False, "error": str(e), "code": "SERVER_ERROR"}
 
-        if not user.email_otp or not user.otp_created_at:
-            return {"success": False, "error": "No active OTP request found. Please request a new OTP.", "code": "NO_ACTIVE_OTP"}
-
-        if (timezone.now() - user.otp_created_at).total_seconds() > 300:
-            return {"success": False, "error": "OTP has expired. Please request a new OTP.", "code": "OTP_EXPIRED"}
-
-        if str(user.email_otp).strip() != str(otp).strip():
-            return {"success": False, "error": "Invalid OTP. Please check the code.", "code": "INVALID_OTP"}
-
-        is_new_customer = not bool(user.first_name and user.first_name.strip())
-
-        user.email_otp = None
-        user.otp_created_at = None
-        user.save(update_fields=["email_otp", "otp_created_at"])
-
-        refresh = RefreshToken.for_user(user)
-        access_token = str(refresh.access_token)
-        refresh_token = str(refresh)
-
-        return {
-            "success": True,
-            "data": {
-                "customer_id": user.id,
-                "is_new_customer": is_new_customer,
-                "first_name": user.first_name or "",
-                "last_name": user.last_name or "",
-                "full_name": f"{user.first_name} {user.last_name}".strip() or "Customer",
-                "phone": user.phone or "",
-                "email": user.email or "",
-                "role": user.role,
-                "access": access_token,
-                "refresh": refresh_token,
-            }
-        }

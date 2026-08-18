@@ -1,16 +1,16 @@
 /**
  * CustomerEntryFlowModal.jsx
- * Full Urban-Style Customer Entry Flow:
- * Login (Mobile +91 / Email) -> OTP Verification -> Profile Setup -> Location
+ * Professional, Clean & Refined Customer Authentication & Onboarding Modal
+ * CalServices Signature Emerald & Modern Typography Design
  */
 
 import React, { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useGoogleLogin } from "@react-oauth/google"
 import {
-  Phone, ArrowLeft, ShieldCheck, MapPin, Sparkles, User, Mail,
+  Phone, ArrowLeft, ShieldCheck, MapPin, User, Mail,
   CheckCircle2, AlertCircle, RefreshCcw, Search, Compass, ChevronRight, X,
-  Lock, Home, Check
+  Lock, Home, Check, Sparkles
 } from "lucide-react"
 import {
   apiRequestCustomerOTP,
@@ -20,205 +20,189 @@ import {
   apiDetectCustomerLocation,
   apiCustomerGoogleLogin
 } from "../../api/authService.js"
-import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { LocationPermissionHandler } from "./AddressPicker"
 
 const MODAL_STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
   .cef-overlay {
     position: fixed; inset: 0; z-index: 9999;
-    display: flex; align-items: center; justify-content: center; padding: 1rem;
-    background: rgba(15, 23, 42, 0.78); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    display: flex; align-items: center; justify-content: center; padding: 1.25rem;
+    background: rgba(15, 23, 42, 0.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   }
-  .cef-card {
-    width: 100%; max-width: 440px; background: #ffffff; border-radius: 28px;
-    box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.3), 0 0 0 1px rgba(255,255,255,0.4) inset, 0 1px 3px rgba(0,0,0,0.08);
-    overflow: hidden; position: relative; box-sizing: border-box;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  }
-  .cef-header {
-    background: linear-gradient(135deg, #090d16 0%, #151435 45%, #2a1b54 100%);
-    padding: 1.85rem 1.85rem 1.4rem; position: relative; overflow: hidden; box-sizing: border-box;
-  }
-  .cef-header::before {
-    content: ''; position: absolute; top: -60px; right: -50px; width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(129, 140, 248, 0.35) 0%, rgba(99, 102, 241, 0.08) 60%, transparent 80%);
-    border-radius: 50%; pointer-events: none;
-  }
-  .cef-header::after {
-    content: ''; position: absolute; bottom: -30px; left: -20px; width: 120px; height: 120px;
-    background: radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 70%);
-    border-radius: 50%; pointer-events: none;
-  }
-  .cef-brand { display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 2; margin-bottom: 1.1rem; }
-  .cef-brand-left { display: flex; align-items: center; gap: 9px; }
-  .cef-brand-icon {
-    width: 34px; height: 34px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
-    border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #ffffff;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15); backdrop-filter: blur(12px);
-  }
-  .cef-brand-name { font-size: 0.92rem; font-weight: 800; color: #ffffff; letter-spacing: -0.01em; }
-  .cef-brand-badge {
-    font-size: 0.68rem; font-weight: 700; color: #a5b4fc; background: rgba(99,102,241,0.2);
-    border: 1px solid rgba(165,180,252,0.3); border-radius: 20px; padding: 2px 9px; letter-spacing: 0.02em;
-  }
-  .cef-header-title { font-size: 1.48rem; font-weight: 800; color: #ffffff; line-height: 1.25; position: relative; z-index: 2; margin: 0 0 6px; letter-spacing: -0.02em; }
-  .cef-header-sub { font-size: 0.82rem; color: #cbd5e1; font-weight: 400; position: relative; z-index: 2; margin: 0; line-height: 1.4; }
-  .cef-close {
-    width: 32px; height: 32px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ffffff; cursor: pointer;
-    transition: all 0.2s; backdrop-filter: blur(8px);
-  }
-  .cef-close:hover { background: rgba(255,255,255,0.25); transform: scale(1.05); }
-  
-  .cef-progress-bar-wrap {
-    background: #f8fafc; padding: 0.85rem 1.85rem; border-bottom: 1px solid #f1f5f9;
-    display: flex; align-items: center; justify-content: space-between; box-sizing: border-box;
-  }
-  .cef-step-indicators { display: flex; align-items: center; gap: 7px; }
-  .cef-step-pill {
-    height: 5px; border-radius: 99px; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    background: #e2e8f0; width: 12px;
-  }
-  .cef-step-pill.active { background: #6366f1; width: 32px; box-shadow: 0 0 10px rgba(99,102,241,0.5); }
-  .cef-step-pill.done { background: #10b981; width: 16px; }
-  .cef-step-text { font-size: 0.72rem; font-weight: 700; color: #64748b; letter-spacing: 0.02em; }
-
-  .cef-body { padding: 1.65rem 1.85rem 1.85rem; box-sizing: border-box; }
-  .cef-error {
-    display: flex; align-items: flex-start; gap: 10px; padding: 0.85rem 1rem;
-    background: #fff1f2; border: 1.5px solid #fecdd3; border-radius: 14px; margin-bottom: 1.25rem;
-    font-size: 0.8rem; color: #be123c; font-weight: 600; line-height: 1.4; box-sizing: border-box;
+  .cef-card-clean {
+    width: 100%; max-width: 440px; background: #ffffff;
+    border-radius: 28px; position: relative; overflow: hidden;
+    box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.9) inset, 0 1px 3px rgba(0,0,0,0.06);
+    box-sizing: border-box;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
 
-  .cef-tabs-segmented {
-    display: flex; background: #f1f5f9; padding: 4px; border-radius: 14px; margin-bottom: 1.25rem;
-    position: relative; box-sizing: border-box; border: 1px solid #e2e8f0;
+  /* Top Bar */
+  .cef-header-top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.75rem 2rem 0.5rem;
   }
-  .cef-tab-btn {
+  .cef-brand-group { display: flex; align-items: center; gap: 10px; }
+  .cef-brand-logo-sq {
+    width: 36px; height: 36px; border-radius: 11px;
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    display: flex; align-items: center; justify-content: center; color: #ffffff;
+    box-shadow: 0 6px 14px rgba(5, 150, 105, 0.28);
+  }
+  .cef-brand-title { font-size: 1.15rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em; }
+  .cef-brand-pill {
+    font-size: 0.68rem; font-weight: 700; color: #047857; background: #ecfdf5;
+    border: 1px solid #a7f3d0; padding: 2px 9px; border-radius: 20px; letter-spacing: 0.01em;
+  }
+  .cef-close-circle {
+    width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9; border: none;
+    display: flex; align-items: center; justify-content: center; color: #64748b; cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .cef-close-circle:hover { background: #e2e8f0; color: #0f172a; transform: scale(1.06); }
+
+  /* Body Content */
+  .cef-body-wrap { padding: 1.15rem 2rem 1.85rem; }
+  .cef-title-main { font-size: 1.42rem; font-weight: 800; color: #0f172a; margin: 0 0 4px; letter-spacing: -0.025em; line-height: 1.25; }
+  .cef-title-sub { font-size: 0.82rem; color: #64748b; margin: 0 0 1.25rem; line-height: 1.45; font-weight: 500; }
+
+  /* Step Progress */
+  .cef-progress-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.35rem; padding-bottom: 0.85rem; border-bottom: 1px solid #f1f5f9;
+  }
+  .cef-progress-dots { display: flex; align-items: center; gap: 6px; }
+  .cef-dot-item { height: 4px; border-radius: 99px; background: #e2e8f0; width: 14px; transition: all 0.35s ease; }
+  .cef-dot-item.active { background: #059669; width: 32px; box-shadow: 0 0 8px rgba(5, 150, 105, 0.35); }
+  .cef-dot-item.done { background: #10b981; width: 14px; }
+  .cef-step-count { font-size: 0.72rem; font-weight: 700; color: #94a3b8; letter-spacing: 0.02em; }
+
+  /* Segmented Switcher */
+  .cef-segmented-tab {
+    display: flex; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px;
+    padding: 3.5px; margin-bottom: 1.25rem;
+  }
+  .cef-tab-button {
     flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
-    padding: 9px 12px; border-radius: 10px; font-weight: 700; font-size: 0.84rem;
+    padding: 9px 12px; border-radius: 11px; font-weight: 700; font-size: 0.82rem;
     border: none; background: transparent; color: #64748b; cursor: pointer; transition: all 0.2s;
   }
-  .cef-tab-btn.active {
-    background: #ffffff; color: #1e1b4b; font-weight: 800;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  .cef-tab-button.active {
+    background: #ffffff; color: #064e3b; font-weight: 800;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;
   }
 
-  .cef-label { display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; margin-bottom: 0.45rem; }
-  .cef-input-container {
-    position: relative; display: flex; align-items: center; background: #ffffff;
+  /* Form Fields */
+  .cef-label-tag {
+    display: flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; color: #475569; margin-bottom: 0.45rem;
+  }
+  .cef-req-star { color: #059669; font-weight: 800; }
+  
+  .cef-input-field-group {
+    position: relative; display: flex; align-items: center; background: #f8fafc;
     border: 1.5px solid #cbd5e1; border-radius: 14px; transition: all 0.2s; overflow: hidden;
-    margin-bottom: 1.15rem; box-sizing: border-box; width: 100%;
+    margin-bottom: 1.25rem; width: 100%; height: 50px; box-sizing: border-box;
   }
-  .cef-input-container:hover { border-color: #94a3b8; }
-  .cef-input-container:focus-within {
-    border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
+  .cef-input-field-group:hover { border-color: #94a3b8; background: #ffffff; }
+  .cef-input-field-group:focus-within {
+    border-color: #059669; box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.12); background: #ffffff;
   }
-  .cef-prefix-badge {
+  .cef-prefix-box {
     display: flex; align-items: center; gap: 6px; padding: 0 14px;
-    font-size: 0.88rem; font-weight: 800; color: #1e293b; border-right: 1.5px solid #e2e8f0;
-    height: 50px; background: #f8fafc; flex-shrink: 0; box-sizing: border-box;
+    font-size: 0.88rem; font-weight: 800; color: #064e3b; border-right: 1.5px solid #e2e8f0;
+    height: 100%; background: #f1f5f9; flex-shrink: 0;
   }
-  .cef-main-input {
-    flex: 1; height: 50px; padding: 0 1rem; border: none; outline: none; background: transparent;
-    font-size: 0.95rem; font-weight: 700; color: #0f172a; min-width: 0; box-sizing: border-box;
+  .cef-input-core {
+    flex: 1; height: 100%; padding: 0 1rem; border: none; outline: none; background: transparent;
+    font-size: 0.95rem; font-weight: 700; color: #0f172a; min-width: 0; font-family: inherit;
   }
-  .cef-main-input::placeholder { color: #94a3b8; font-weight: 400; }
+  .cef-input-core::placeholder { color: #94a3b8; font-weight: 400; }
 
-  .cef-standalone-input-wrap { position: relative; margin-bottom: 1.15rem; width: 100%; box-sizing: border-box; }
-  .cef-standalone-icon { position: absolute; left: 14px; top: 38px; color: #94a3b8; pointer-events: none; }
-  .cef-standalone-input {
+  .cef-single-input-card { position: relative; margin-bottom: 1.25rem; width: 100%; box-sizing: border-box; }
+  .cef-single-icon { position: absolute; left: 14px; top: 38px; color: #94a3b8; pointer-events: none; }
+  .cef-single-field {
     width: 100%; height: 50px; padding: 0 1rem 0 2.85rem; border: 1.5px solid #cbd5e1; border-radius: 14px;
-    background: #ffffff; font-size: 0.92rem; font-weight: 600; color: #0f172a; outline: none; transition: all 0.2s;
-    box-sizing: border-box;
+    background: #f8fafc; font-size: 0.92rem; font-weight: 600; color: #0f172a; outline: none; transition: all 0.2s;
+    box-sizing: border-box; font-family: inherit;
   }
-  .cef-standalone-input:hover { border-color: #94a3b8; }
-  .cef-standalone-input:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99,102,241,0.12); }
+  .cef-single-field:hover { border-color: #94a3b8; background: #ffffff; }
+  .cef-single-field:focus { border-color: #059669; box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.12); background: #ffffff; }
+  .cef-single-field::placeholder { color: #94a3b8; font-weight: 400; }
 
-  .cef-btn {
+  /* Avatar in Step 3 */
+  .cef-avatar-center-wrap {
+    display: flex; justify-content: center; margin-bottom: 1.35rem; position: relative;
+  }
+  .cef-avatar-circle-badge {
+    width: 68px; height: 68px; border-radius: 50%;
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    box-shadow: 0 8px 24px -4px rgba(5, 150, 105, 0.35), 0 0 0 4px rgba(5, 150, 105, 0.12);
+    display: flex; align-items: center; justify-content: center; color: #ffffff;
+    font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em;
+  }
+
+  /* Action Buttons */
+  .cef-btn-primary-green {
     width: 100%; height: 50px; border: none; border-radius: 14px; font-size: 0.92rem; font-weight: 800; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; box-sizing: border-box;
+    background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #ffffff; display: flex;
+    align-items: center; justify-content: center; gap: 8px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 24px -4px rgba(5, 150, 105, 0.42); font-family: inherit; letter-spacing: 0.01em;
   }
-  .cef-btn-primary {
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #ffffff;
-    box-shadow: 0 10px 25px -5px rgba(99,102,241,0.38), 0 4px 10px -2px rgba(99,102,241,0.2);
+  .cef-btn-primary-green:hover:not(:disabled) {
+    background: linear-gradient(135deg, #047857 0%, #065f46 100%); transform: translateY(-1px);
+    box-shadow: 0 12px 28px -4px rgba(5, 150, 105, 0.52);
   }
-  .cef-btn-primary:hover:not(:disabled) {
-    transform: translateY(-1px); box-shadow: 0 14px 30px -5px rgba(99,102,241,0.48);
+  .cef-btn-primary-green:active:not(:disabled) { transform: translateY(0); }
+  .cef-btn-primary-green:disabled {
+    background: #e2e8f0; color: #94a3b8; cursor: not-allowed; transform: none; box-shadow: none;
   }
-  .cef-btn-primary:active:not(:disabled) { transform: translateY(0); }
-  .cef-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
-  .cef-divider-row { display: flex; align-items: center; gap: 12px; margin: 1.15rem 0; color: #94a3b8; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
-  .cef-divider-row::before, .cef-divider-row::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
-
-  .cef-google-btn-modern {
-    width: 100%; display: flex; align-items: center; justify-content: center; gap: 11px; height: 48px;
-    border: 1.5px solid #cbd5e1; border-radius: 14px; background: #ffffff; font-size: 0.88rem; font-weight: 700;
-    color: #1e293b; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  .cef-divider-clean {
+    display: flex; align-items: center; gap: 12px; margin: 1.15rem 0;
+    color: #94a3b8; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
   }
-  .cef-google-btn-modern:hover:not(:disabled) {
-    border-color: #6366f1; background: #faf5ff; transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(99,102,241,0.08);
+  .cef-divider-clean::before, .cef-divider-clean::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
+
+  .cef-google-sso-btn {
+    width: 100%; height: 48px; border: 1.5px solid #cbd5e1; border-radius: 14px; background: #ffffff;
+    font-size: 0.88rem; font-weight: 700; color: #1e293b; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; gap: 10px; transition: all 0.2s; font-family: inherit;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   }
-  .cef-google-btn-modern:disabled { opacity: 0.6; cursor: not-allowed; }
+  .cef-google-sso-btn:hover:not(:disabled) {
+    border-color: #059669; background: #f0fdf4; transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(5, 150, 105, 0.08);
+  }
+  .cef-google-sso-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-  .cef-tos-text { font-size: 0.72rem; color: #94a3b8; text-align: center; line-height: 1.5; margin: 1rem 0 0.85rem; }
-  .cef-tos-text a { color: #6366f1; font-weight: 700; text-decoration: none; cursor: pointer; }
-  .cef-tos-text a:hover { text-decoration: underline; }
+  /* Error Banner */
+  .cef-alert-box {
+    display: flex; align-items: flex-start; gap: 9px; padding: 0.8rem 1rem;
+    background: #fff1f2; border: 1.5px solid #fecdd3; border-radius: 14px; margin-bottom: 1.15rem;
+    font-size: 0.8rem; color: #be123c; font-weight: 600; line-height: 1.4;
+  }
 
-  .cef-trust-footer {
+  /* OTP */
+  .cef-otp-row { display: flex; gap: 8px; justify-content: center; align-items: center; width: 100%; margin-bottom: 1.25rem; }
+  .cef-otp-box {
+    flex: 1; width: 0; min-width: 0; height: 54px; text-align: center; font-size: 1.4rem; font-weight: 800;
+    color: #064e3b; border: 2px solid #cbd5e1; border-radius: 14px; background: #f8fafc; outline: none;
+    transition: all 0.18s; caret-color: #059669; box-sizing: border-box; padding: 0; font-family: inherit;
+  }
+  .cef-otp-box:focus {
+    border-color: #059669; background: #ffffff; box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.16);
+    transform: scale(1.04);
+  }
+  .cef-otp-box.filled { border-color: #059669; background: #ecfdf5; color: #047857; }
+
+  /* Bottom Trust Strip */
+  .cef-trust-row {
     display: flex; align-items: center; justify-content: center; gap: 14px;
-    padding-top: 0.85rem; border-top: 1px solid #f1f5f9; flex-wrap: wrap;
-  }
-  .cef-trust-pill {
-    display: flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 700; color: #64748b;
-  }
-
-  .cef-back-nav {
-    display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700;
-    color: #6366f1; background: none; border: none; cursor: pointer; margin-bottom: 1.15rem; padding: 0;
-  }
-  .cef-back-nav:hover { color: #4338ca; }
-
-  .otp-input-group { display: flex; gap: 8px; justify-content: center; align-items: center; width: 100%; margin-bottom: 1.25rem; box-sizing: border-box; }
-  .otp-digit-slot {
-    flex: 1; width: 0; min-width: 0; height: 54px; text-align: center; font-size: 1.35rem; font-weight: 900;
-    color: #0f172a; border: 2px solid #cbd5e1; border-radius: 12px; background: #f8fafc; outline: none;
-    transition: all 0.18s; caret-color: #6366f1; box-sizing: border-box; padding: 0;
-  }
-  .otp-digit-slot:focus {
-    border-color: #6366f1; background: #ffffff; box-shadow: 0 0 0 4px rgba(99,102,241,0.18), 0 4px 12px rgba(99,102,241,0.12);
-    transform: scale(1.03);
-  }
-  .otp-digit-slot.filled { border-color: #6366f1; background: #eef2ff; color: #4338ca; }
-
-  .cef-resend-row {
-    display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; font-size: 0.8rem;
-  }
-  .cef-resend-btn {
-    background: none; border: none; font-size: 0.8rem; font-weight: 800; color: #6366f1; cursor: pointer; padding: 0;
-  }
-  .cef-resend-btn:disabled { color: #94a3b8; cursor: not-allowed; font-weight: 600; }
-  .cef-resend-btn:hover:not(:disabled) { text-decoration: underline; }
-
-  .cef-profile-avatar {
-    width: 68px; height: 68px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #9333ea);
-    display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem; font-weight: 900;
-    margin: 0 auto 1.15rem; box-shadow: 0 8px 24px rgba(99,102,241,0.28);
-  }
-
-  .cef-loc-option-card {
-    border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 1.1rem 1.25rem; display: flex; align-items: center;
-    gap: 1rem; cursor: pointer; transition: all 0.2s; background: #ffffff; margin-bottom: 0.85rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-  }
-  .cef-loc-option-card:hover {
-    border-color: #6366f1; background: #f8fafc; box-shadow: 0 6px 20px rgba(99,102,241,0.1); transform: translateY(-1px);
-  }
-  .cef-loc-icon-bubble {
-    width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    padding-top: 1rem; margin-top: 1.15rem; border-top: 1px solid #f1f5f9;
+    font-size: 0.72rem; font-weight: 700; color: #64748b; flex-wrap: wrap;
   }
 `
 
@@ -234,7 +218,6 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   const [secondIdentifier, setSecondIdentifier] = useState("")
   const [manualLocationInput, setManualLocationInput] = useState("")
   const [showManualLocation, setShowManualLocation] = useState(false)
-  const [geoLoading, setGeoLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
   const [successToast, setSuccessToast] = useState("")
@@ -246,6 +229,29 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   const otpInputRefs = useRef([])
   const isVerifyingRef = useRef(false)
   const timerRef = useRef(null)
+
+  // Reset all modal fields and return to Step 1 whenever modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1)
+      setChannel("PHONE")
+      setMobileNumber("")
+      setEmailInput("")
+      setOtpDigits(["", "", "", "", "", ""])
+      setCustomerId(null)
+      setFullName("")
+      setSecondIdentifier("")
+      setManualLocationInput("")
+      setShowManualLocation(false)
+      setLoading(false)
+      setErrorMsg("")
+      setSuccessToast("")
+      setAttemptsRemaining(null)
+      setDevOtp("")
+      setResendCooldown(30)
+      setShowMapPicker(false)
+    }
+  }, [isOpen])
 
   // Countdown timer for Resend OTP
   useEffect(() => {
@@ -291,7 +297,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
           if (typeof onComplete === "function") onComplete()
           onClose()
         } catch (err) {
-          setErrorMsg(err?.body?.detail || err?.message || "Google sign-in failed. Please try with OTP.")
+          setErrorMsg(err?.body?.detail || err?.message || "Google sign-in failed. Please try with phone or email.")
         } finally {
           setLoading(false)
         }
@@ -337,7 +343,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
     }
   }
 
-  // ── 3. OTP Digit Changes & Keyboard Navigation ────────────────────────────
+  // ── 3. OTP Digit Handling ────────────────────────────────────────────────
   const handleOtpChange = (index, value) => {
     if (value.length > 1) {
       const digits = value.replace(/\D/g, "").slice(0, 6).split("")
@@ -396,49 +402,40 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
     setErrorMsg("")
 
     try {
-      let res = null
-      try {
-        // Fast WebSocket verification for phone channel
-        if (channel === "PHONE") {
-          res = await verifyOtpViaWebSocket(identifier, otpCode)
-        } else {
-          res = await apiVerifyCustomerOTP(identifier, "EMAIL", otpCode)
-        }
-      } catch {
-        // Resilient REST fallback
-        res = await apiVerifyCustomerOTP(identifier, channel, otpCode)
-      }
+      const res = await apiVerifyCustomerOTP(identifier, channel, otpCode)
 
       if (res && res.success) {
         const { is_new_customer, customer_id } = res.data || {}
         setCustomerId(customer_id)
-        if (typeof refreshMe === "function") await refreshMe()
         if (is_new_customer) {
           setStep(3)
         } else {
+          if (typeof refreshMe === "function") await refreshMe()
           if (typeof onComplete === "function") onComplete()
           onClose()
         }
       } else {
-        if (res?.error?.code === "MAX_ATTEMPTS_EXCEEDED") {
+        const errCode = res?.error?.code
+        if (errCode === "MAX_ATTEMPTS_EXCEEDED") {
           setErrorMsg("Too many failed attempts. Please request a new OTP.")
           setOtpDigits(["", "", "", "", "", ""])
           setStep(1)
         } else {
           if (res?.error?.attempts_remaining !== undefined) setAttemptsRemaining(res.error.attempts_remaining)
-          setErrorMsg(res?.error?.message || "Invalid OTP code. Please check and re-enter.")
+          setErrorMsg(res?.error?.message || res?.error || "Invalid OTP code. Please check and re-enter.")
           otpInputRefs.current[0]?.focus()
         }
       }
     } catch (e) {
-      setErrorMsg(e?.body?.error?.message || e?.body?.detail || e?.message || "Verification error.")
+      const serverMsg = e?.body?.error?.message || e?.body?.error || e?.body?.detail || e?.message || "Verification error."
+      setErrorMsg(serverMsg)
     } finally {
       setLoading(false)
       isVerifyingRef.current = false
     }
   }
 
-  // ── 5. Profile Completion (New Customers) ─────────────────────────────────
+  // ── 5. Profile Completion (Step 3) ────────────────────────────────────────
   const secondChannel = channel === "EMAIL" ? "PHONE" : "EMAIL"
   const isSecondIdentifierValid = secondChannel === "EMAIL"
     ? EMAIL_RE.test(secondIdentifier.trim())
@@ -459,7 +456,6 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
         : { phone: secondIdentifier.trim() }
       const res = await apiCompleteCustomerProfile(customerId, fullName.trim(), profileArgs)
       if (res && res.success) {
-        if (typeof refreshMe === "function") await refreshMe()
         setStep(4)
       } else {
         setErrorMsg(res?.error?.message || "Failed to complete profile.")
@@ -472,6 +468,12 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   }
 
   // ── 6. Location Handler (Step 4) ──────────────────────────────────────────
+  const handleFinishFlow = async (savedLoc = null) => {
+    if (typeof refreshMe === "function") await refreshMe()
+    if (typeof onComplete === "function") onComplete(savedLoc)
+    onClose()
+  }
+
   const handleSaveManualLocation = async () => {
     if (!manualLocationInput.trim()) { setErrorMsg("Please enter a location."); return }
     setLoading(true)
@@ -481,122 +483,126 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
       console.warn("Location save warning:", e)
     } finally {
       setLoading(false)
-      if (typeof onComplete === "function") onComplete()
-      onClose()
+      await handleFinishFlow({ label: manualLocationInput.trim() })
     }
   }
 
   const STEP_TITLES = {
-    1: { title: "Welcome Back", sub: channel === "EMAIL" ? "Enter your email to receive an instant OTP" : "Enter your mobile number to receive an instant OTP" },
-    2: { title: "Verify OTP", sub: channel === "EMAIL" ? `6-digit code sent to ${emailInput}` : `6-digit code sent to +91 ${mobileNumber}` },
-    3: { title: "Create Profile", sub: "Tell us your name to personalize your account" },
-    4: { title: "Service Location", sub: "Set your location to view available experts near you" },
+    1: { title: "Welcome Back", sub: channel === "EMAIL" ? "Enter your email address to receive an instant verification code" : "Enter your mobile number to receive an instant verification code" },
+    2: { title: "Verify OTP", sub: channel === "EMAIL" ? `6-digit verification code sent to ${emailInput}` : `6-digit verification code sent to +91 ${mobileNumber}` },
+    3: { title: "Create Profile", sub: "Tell us your name to personalize your service experience" },
+    4: { title: "Service Location", sub: "Set your location to discover verified professionals in your area" },
   }
 
-  const initials = fullName.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || null
+  const initials = fullName.trim().split(" ").filter(Boolean).map(w => w[0]).join("").toUpperCase().slice(0, 2) || null
 
   return (
     <>
       <style>{MODAL_STYLES}</style>
       <div className="cef-overlay" onClick={onClose}>
         <motion.div
-          className="cef-card"
-          initial={{ opacity: 0, scale: 0.94, y: 16 }}
+          className="cef-card-clean"
+          initial={{ opacity: 0, scale: 0.95, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 12 }}
-          transition={{ type: "spring", damping: 28, stiffness: 340 }}
+          transition={{ type: "spring", damping: 30, stiffness: 350 }}
           onClick={e => e.stopPropagation()}
         >
-          {/* Top Header */}
-          <div className="cef-header">
-            <div className="cef-brand">
-              <div className="cef-brand-left">
-                <div className="cef-brand-icon"><Home size={17} /></div>
-                <span className="cef-brand-name">CalServices</span>
-                <span className="cef-brand-badge">Customer Access</span>
+          {/* Top Brand Header */}
+          <div className="cef-header-top">
+            <div className="cef-brand-group">
+              <div className="cef-brand-logo-sq">
+                <Home size={19} strokeWidth={2.2} />
               </div>
-              <button className="cef-close" onClick={onClose} aria-label="Close modal">
-                <X size={15} />
-              </button>
+              <span className="cef-brand-title">CalServices</span>
+              <span className="cef-brand-pill">Customer Access</span>
             </div>
-            <h2 className="cef-header-title">{STEP_TITLES[step]?.title}</h2>
-            <p className="cef-header-sub">{STEP_TITLES[step]?.sub}</p>
+            <button className="cef-close-circle" onClick={onClose} aria-label="Close modal">
+              <X size={15} strokeWidth={2.5} />
+            </button>
           </div>
 
-          {/* Progress Tracker */}
-          <div className="cef-progress-bar-wrap">
-            <div className="cef-step-indicators">
-              {[1, 2, 3, 4].map(s => (
-                <div
-                  key={s}
-                  className={`cef-step-pill ${step === s ? "active" : step > s ? "done" : ""}`}
-                />
-              ))}
-            </div>
-            <span className="cef-step-text">Step {step} of 4</span>
-          </div>
+          <div className="cef-body-wrap">
+            {/* Title & Subtitle */}
+            <h2 className="cef-title-main">{STEP_TITLES[step]?.title}</h2>
+            <p className="cef-title-sub">{STEP_TITLES[step]?.sub}</p>
 
-          {/* Modal Body */}
-          <div className="cef-body">
+            {/* Step Progress Tracker */}
+            <div className="cef-progress-row">
+              <div className="cef-progress-dots">
+                {[1, 2, 3, 4].map(s => (
+                  <div
+                    key={s}
+                    className={`cef-dot-item ${step === s ? "active" : step > s ? "done" : ""}`}
+                  />
+                ))}
+              </div>
+              <span className="cef-step-count">Step {step} of 4</span>
+            </div>
+
+            {/* Error & Success Messages */}
             <AnimatePresence mode="wait">
               {errorMsg && (
                 <motion.div
-                  className="cef-error"
-                  initial={{ opacity: 0, y: -6 }}
+                  className="cef-alert-box"
+                  initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
+                  exit={{ opacity: 0, y: -4 }}
                 >
-                  <AlertCircle size={17} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
                   <span>{errorMsg}</span>
                 </motion.div>
               )}
               {successToast && (
                 <motion.div
-                  className="cef-error"
+                  className="cef-alert-box"
                   style={{ background: "#f0fdf4", borderColor: "#bbf7d0", color: "#15803d" }}
-                  initial={{ opacity: 0, y: -6 }}
+                  initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
+                  exit={{ opacity: 0, y: -4 }}
                 >
-                  <CheckCircle2 size={17} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: 1 }} />
                   <span>{successToast}</span>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* STEP 1: Phone or Email Sign-in */}
+            {/* STEP 1: Phone / Email Login */}
             {step === 1 && (
-              <motion.div key="s1" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }}>
-                <div className="cef-tabs-segmented">
+              <motion.div key="s1" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.18 }}>
+                <div className="cef-segmented-tab">
                   <button
                     type="button"
-                    className={`cef-tab-btn ${channel === "PHONE" ? "active" : ""}`}
+                    className={`cef-tab-button ${channel === "PHONE" ? "active" : ""}`}
                     onClick={() => { setChannel("PHONE"); setErrorMsg("") }}
                   >
-                    <Phone size={14} style={{ color: channel === "PHONE" ? "#4f46e5" : "#64748b" }} />
+                    <Phone size={14} style={{ color: channel === "PHONE" ? "#059669" : "#64748b" }} />
                     Phone Number
                   </button>
                   <button
                     type="button"
-                    className={`cef-tab-btn ${channel === "EMAIL" ? "active" : ""}`}
+                    className={`cef-tab-button ${channel === "EMAIL" ? "active" : ""}`}
                     onClick={() => { setChannel("EMAIL"); setErrorMsg("") }}
                   >
-                    <Mail size={14} style={{ color: channel === "EMAIL" ? "#4f46e5" : "#64748b" }} />
+                    <Mail size={14} style={{ color: channel === "EMAIL" ? "#059669" : "#64748b" }} />
                     Email Address
                   </button>
                 </div>
 
                 {channel === "PHONE" ? (
                   <>
-                    <label className="cef-label">Mobile Number</label>
-                    <div className="cef-input-container">
-                      <div className="cef-prefix-badge">
+                    <label className="cef-label-tag">
+                      <span>Mobile Number</span>
+                      <span className="cef-req-star">*</span>
+                    </label>
+                    <div className="cef-input-field-group">
+                      <div className="cef-prefix-box">
                         <span>🇮🇳</span>
                         <span>+91</span>
                       </div>
                       <input
                         type="tel"
-                        className="cef-main-input"
+                        className="cef-input-core"
                         maxLength={10}
                         value={mobileNumber}
                         onChange={e => {
@@ -608,17 +614,20 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                         autoFocus
                       />
                       {mobileNumber.length === 10 && (
-                        <CheckCircle2 size={18} style={{ marginRight: 12, color: "#10b981", flexShrink: 0 }} />
+                        <CheckCircle2 size={18} style={{ marginRight: 14, color: "#10b981", flexShrink: 0 }} />
                       )}
                     </div>
                   </>
                 ) : (
-                  <div className="cef-standalone-input-wrap">
-                    <label className="cef-label">Email Address</label>
-                    <Mail size={16} className="cef-standalone-icon" />
+                  <div className="cef-single-input-card">
+                    <label className="cef-label-tag">
+                      <span>Email Address</span>
+                      <span className="cef-req-star">*</span>
+                    </label>
+                    <Mail size={16} className="cef-single-icon" />
                     <input
                       type="email"
-                      className="cef-standalone-input"
+                      className="cef-single-field"
                       value={emailInput}
                       onChange={e => {
                         setEmailInput(e.target.value)
@@ -633,7 +642,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
 
                 <button
                   type="button"
-                  className="cef-btn cef-btn-primary"
+                  className="cef-btn-primary-green"
                   disabled={loading || !isIdentifierValid}
                   onClick={() => handleRequestOTP()}
                 >
@@ -647,11 +656,11 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                   )}
                 </button>
 
-                <div className="cef-divider-row">or continue with</div>
+                <div className="cef-divider-clean">or continue with</div>
 
                 <button
                   type="button"
-                  className="cef-google-btn-modern"
+                  className="cef-google-sso-btn"
                   disabled={loading}
                   onClick={() => googleLoginHandler()}
                 >
@@ -664,43 +673,43 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                   <span>Continue with Google</span>
                 </button>
 
-                <p className="cef-tos-text">
-                  By continuing, you agree to CalServices' <a>Terms of Service</a> &amp; <a>Privacy Policy</a>
-                </p>
-
-                <div className="cef-trust-footer">
-                  <span className="cef-trust-pill"><ShieldCheck size={13} style={{ color: "#10b981" }} /> Verified Pros</span>
-                  <span className="cef-trust-pill"><Lock size={13} style={{ color: "#6366f1" }} /> 256-Bit SSL</span>
-                  <span className="cef-trust-pill">⭐ 4.8 / 5 Rated</span>
+                <div className="cef-trust-row">
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <ShieldCheck size={13} style={{ color: "#059669" }} /> Verified Pros
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <Lock size={13} style={{ color: "#059669" }} /> 256-Bit SSL
+                  </span>
+                  <span>⭐ 4.8 / 5 Rating</span>
                 </div>
               </motion.div>
             )}
 
             {/* STEP 2: Verify OTP */}
             {step === 2 && (
-              <motion.div key="s2" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }}>
+              <motion.div key="s2" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.18 }}>
                 <button
                   type="button"
-                  className="cef-back-nav"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.82rem", fontWeight: 700, color: "#059669", background: "none", border: "none", cursor: "pointer", marginBottom: "1.1rem", padding: 0, fontFamily: "inherit" }}
                   onClick={() => {
                     setStep(1)
                     setErrorMsg("")
                     setOtpDigits(["", "", "", "", "", ""])
                   }}
                 >
-                  <ArrowLeft size={14} />
+                  <ArrowLeft size={15} />
                   <span>{channel === "EMAIL" ? `Change Email (${emailInput})` : `Change Number (+91 ${mobileNumber})`}</span>
                 </button>
 
                 {attemptsRemaining !== null && (
-                  <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 12, padding: "0.6rem 0.9rem", marginBottom: "1rem", fontSize: "0.78rem", fontWeight: 700, color: "#c2410c", textAlign: "center" }}>
+                  <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 12, padding: "0.6rem 0.9rem", marginBottom: "0.9rem", fontSize: "0.78rem", fontWeight: 700, color: "#c2410c", textAlign: "center" }}>
                     ⚠️ {attemptsRemaining} attempt{attemptsRemaining !== 1 ? "s" : ""} remaining
                   </div>
                 )}
 
                 {devOtp && (
-                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "0.6rem 0.85rem", marginBottom: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: "0.78rem", fontWeight: 700, color: "#166534" }}>
-                    <span>🔑 Dev OTP: <strong style={{ letterSpacing: "0.12em", fontSize: "0.92rem" }}>{devOtp}</strong></span>
+                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "0.6rem 0.9rem", marginBottom: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: "0.8rem", fontWeight: 700, color: "#166534" }}>
+                    <span>🔑 Dev OTP: <strong style={{ letterSpacing: "0.12em", fontSize: "0.92rem", color: "#047857" }}>{devOtp}</strong></span>
                     <button
                       type="button"
                       onClick={() => {
@@ -708,15 +717,18 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                         setOtpDigits(digits)
                         setTimeout(() => handleVerifyOTP(devOtp), 60)
                       }}
-                      style={{ background: "#166534", color: "white", border: "none", borderRadius: 8, padding: "4px 10px", fontSize: "0.72rem", fontWeight: 800, cursor: "pointer" }}
+                      style={{ background: "#059669", color: "white", border: "none", borderRadius: 8, padding: "4px 10px", fontSize: "0.74rem", fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}
                     >
                       Auto-fill
                     </button>
                   </div>
                 )}
 
-                <label className="cef-label">Enter 6-Digit Verification Code</label>
-                <div className="otp-input-group" onPaste={handleOtpPaste}>
+                <label className="cef-label-tag">
+                  <span>Enter 6-Digit OTP Code</span>
+                  <span className="cef-req-star">*</span>
+                </label>
+                <div className="cef-otp-row" onPaste={handleOtpPaste}>
                   {otpDigits.map((digit, i) => (
                     <input
                       key={i}
@@ -725,7 +737,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                       inputMode="numeric"
                       maxLength={6}
                       value={digit}
-                      className={`otp-digit-slot ${digit ? "filled" : ""}`}
+                      className={`cef-otp-box ${digit ? "filled" : ""}`}
                       onChange={e => handleOtpChange(i, e.target.value)}
                       onKeyDown={e => handleOtpKeyDown(i, e)}
                       onFocus={e => e.target.select()}
@@ -734,25 +746,25 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                   ))}
                 </div>
 
-                <div className="cef-resend-row">
-                  <span style={{ color: "#64748b" }}>Didn't receive code?</span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", fontSize: "0.8rem" }}>
+                  <span style={{ color: "#64748b", fontWeight: 500 }}>Didn't receive code?</span>
                   {resendCooldown > 0 ? (
                     <span style={{ color: "#94a3b8", fontWeight: 700 }}>Resend in {resendCooldown}s</span>
                   ) : (
                     <button
                       type="button"
-                      className="cef-resend-btn"
+                      style={{ background: "none", border: "none", fontSize: "0.8rem", fontWeight: 800, color: "#059669", cursor: "pointer", padding: 0, fontFamily: "inherit" }}
                       disabled={loading}
                       onClick={() => handleRequestOTP(true)}
                     >
-                      Resend OTP
+                      Resend Code
                     </button>
                   )}
                 </div>
 
                 <button
                   type="button"
-                  className="cef-btn cef-btn-primary"
+                  className="cef-btn-primary-green"
                   disabled={loading || otpDigits.some(d => !d)}
                   onClick={() => handleVerifyOTP()}
                 >
@@ -761,29 +773,31 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                   ) : (
                     <>
                       <span>Verify &amp; Continue</span>
-                      <Check size={16} />
+                      <Check size={16} strokeWidth={2.5} />
                     </>
                   )}
                 </button>
               </motion.div>
             )}
 
-            {/* STEP 3: Profile Setup */}
+            {/* STEP 3: Complete Profile */}
             {step === 3 && (
-              <motion.div key="s3" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }}>
-                <div className="cef-profile-avatar">
-                  {initials ? initials : <User size={28} />}
+              <motion.div key="s3" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.18 }}>
+                <div className="cef-avatar-center-wrap">
+                  <div className="cef-avatar-circle-badge">
+                    {initials ? initials : <User size={28} strokeWidth={2.2} />}
+                  </div>
                 </div>
-                <p style={{ textAlign: "center", fontSize: "0.8rem", color: "#64748b", fontWeight: 600, marginBottom: "1.25rem" }}>
-                  Welcome! Complete your profile to finalize booking services.
-                </p>
 
-                <div className="cef-standalone-input-wrap">
-                  <label className="cef-label">Full Name *</label>
-                  <User size={16} className="cef-standalone-icon" />
+                <div className="cef-single-input-card">
+                  <label className="cef-label-tag">
+                    <span>Full Name</span>
+                    <span className="cef-req-star">*</span>
+                  </label>
+                  <User size={16} className="cef-single-icon" />
                   <input
                     type="text"
-                    className="cef-standalone-input"
+                    className="cef-single-field"
                     value={fullName}
                     onChange={e => {
                       setFullName(e.target.value)
@@ -794,18 +808,19 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                   />
                 </div>
 
-                <div className="cef-standalone-input-wrap">
-                  <label className="cef-label">
-                    {secondChannel === "EMAIL" ? "Email Address *" : "Mobile Number *"}
+                <div className="cef-single-input-card">
+                  <label className="cef-label-tag">
+                    <span>{secondChannel === "EMAIL" ? "Email Address" : "Mobile Number"}</span>
+                    <span className="cef-req-star">*</span>
                   </label>
                   {secondChannel === "EMAIL" ? (
-                    <Mail size={16} className="cef-standalone-icon" />
+                    <Mail size={16} className="cef-single-icon" />
                   ) : (
-                    <Phone size={16} className="cef-standalone-icon" />
+                    <Phone size={16} className="cef-single-icon" />
                   )}
                   <input
                     type={secondChannel === "EMAIL" ? "email" : "tel"}
-                    className="cef-standalone-input"
+                    className="cef-single-field"
                     value={secondIdentifier}
                     onChange={e => {
                       setSecondIdentifier(e.target.value)
@@ -817,7 +832,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
 
                 <button
                   type="button"
-                  className="cef-btn cef-btn-primary"
+                  className="cef-btn-primary-green"
                   disabled={loading || !fullName.trim() || !isSecondIdentifierValid}
                   onClick={handleCompleteProfile}
                 >
@@ -826,7 +841,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                   ) : (
                     <>
                       <span>Continue to Location</span>
-                      <ChevronRight size={16} />
+                      <ChevronRight size={16} strokeWidth={2.5} />
                     </>
                   )}
                 </button>
@@ -835,39 +850,32 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
 
             {/* STEP 4: Location */}
             {step === 4 && (
-              <motion.div key="s4" initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }}>
-                <div style={{ textAlign: "center", marginBottom: "1.25rem" }}>
-                  <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg,#ede9fe,#ddd6fe)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 0.75rem", boxShadow: "0 8px 20px rgba(99,102,241,0.15)" }}>
-                    <MapPin size={26} style={{ color: "#6366f1" }} />
-                  </div>
-                  <p style={{ fontSize: "0.82rem", color: "#475569", fontWeight: 600, maxWidth: 300, margin: "0 auto" }}>
-                    Select your location to discover verified professionals in your neighborhood.
-                  </p>
-                </div>
-
+              <motion.div key="s4" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.18 }}>
                 {!showManualLocation ? (
                   <>
                     <div
-                      className="cef-loc-option-card"
                       onClick={() => setShowMapPicker(true)}
-                      id="use-current-location-card"
+                      style={{ border: "1.5px solid #e2e8f0", borderRadius: 16, padding: "1.05rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem", cursor: "pointer", background: "#ffffff", marginBottom: "0.85rem", transition: "all 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}
                     >
-                      <div className="cef-loc-icon-bubble" style={{ background: "linear-gradient(135deg,#ede9fe,#ddd6fe)" }}>
-                        <Compass size={20} style={{ color: "#6366f1" }} />
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: "#ecfdf5", display: "flex", alignItems: "center", justifyContent: "center", color: "#059669", flexShrink: 0 }}>
+                        <Compass size={22} strokeWidth={2.2} />
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a", marginBottom: 2 }}>Use Current Location</div>
+                        <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#0f172a", marginBottom: 2 }}>Use Current Location</div>
                         <div style={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 500 }}>Auto-detect via GPS map</div>
                       </div>
                       <ChevronRight size={16} style={{ color: "#94a3b8" }} />
                     </div>
 
-                    <div className="cef-loc-option-card" onClick={() => setShowManualLocation(true)}>
-                      <div className="cef-loc-icon-bubble" style={{ background: "#f1f5f9" }}>
-                        <Search size={20} style={{ color: "#64748b" }} />
+                    <div
+                      onClick={() => setShowManualLocation(true)}
+                      style={{ border: "1.5px solid #e2e8f0", borderRadius: 16, padding: "1.05rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem", cursor: "pointer", background: "#ffffff", marginBottom: "0.85rem", transition: "all 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}
+                    >
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", flexShrink: 0 }}>
+                        <Search size={20} strokeWidth={2.2} />
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a", marginBottom: 2 }}>Enter Location Manually</div>
+                        <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#0f172a", marginBottom: 2 }}>Enter Location Manually</div>
                         <div style={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 500 }}>Type your city, area or pincode</div>
                       </div>
                       <ChevronRight size={16} style={{ color: "#94a3b8" }} />
@@ -875,11 +883,8 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        if (typeof onComplete === "function") onComplete()
-                        onClose()
-                      }}
-                      style={{ width: "100%", background: "none", border: "none", padding: "0.5rem", fontSize: "0.78rem", fontWeight: 700, color: "#94a3b8", cursor: "pointer", textAlign: "center", marginTop: "0.35rem" }}
+                      onClick={() => handleFinishFlow()}
+                      style={{ width: "100%", background: "none", border: "none", padding: "0.6rem", fontSize: "0.8rem", fontWeight: 700, color: "#94a3b8", cursor: "pointer", textAlign: "center", marginTop: "0.25rem", fontFamily: "inherit" }}
                     >
                       Skip for now
                     </button>
@@ -888,18 +893,21 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                   <>
                     <button
                       type="button"
-                      className="cef-back-nav"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.82rem", fontWeight: 700, color: "#059669", background: "none", border: "none", cursor: "pointer", marginBottom: "0.9rem", padding: 0, fontFamily: "inherit" }}
                       onClick={() => { setShowManualLocation(false); setErrorMsg(""); }}
                     >
                       <ArrowLeft size={14} /> Back to options
                     </button>
 
-                    <div className="cef-standalone-input-wrap">
-                      <label className="cef-label">City or Area Name</label>
-                      <MapPin size={16} className="cef-standalone-icon" />
+                    <div className="cef-single-input-card">
+                      <label className="cef-label-tag">
+                        <span>City or Area Name</span>
+                        <span className="cef-req-star">*</span>
+                      </label>
+                      <MapPin size={16} className="cef-single-icon" />
                       <input
                         type="text"
-                        className="cef-standalone-input"
+                        className="cef-single-field"
                         value={manualLocationInput}
                         onChange={e => {
                           setManualLocationInput(e.target.value)
@@ -914,16 +922,15 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                     <div style={{ display: "flex", gap: 10 }}>
                       <button
                         type="button"
-                        className="cef-btn"
-                        style={{ flex: 1, background: "#f1f5f9", color: "#334155" }}
+                        style={{ flex: 1, height: 48, border: "1.5px solid #cbd5e1", borderRadius: 14, background: "#f1f5f9", fontWeight: 700, fontSize: "0.88rem", color: "#334155", cursor: "pointer", fontFamily: "inherit" }}
                         onClick={() => setShowManualLocation(false)}
                       >
                         Back
                       </button>
                       <button
                         type="button"
-                        className="cef-btn cef-btn-primary"
-                        style={{ flex: 2 }}
+                        className="cef-btn-primary-green"
+                        style={{ flex: 2, height: 48 }}
                         disabled={loading || !manualLocationInput.trim()}
                         onClick={handleSaveManualLocation}
                       >
@@ -948,10 +955,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
           }}
           onLocationConfirmed={(savedAddress) => {
             setShowMapPicker(false)
-            if (typeof onComplete === "function") {
-              onComplete(savedAddress)
-            }
-            onClose()
+            handleFinishFlow(savedAddress)
           }}
         />
       )}

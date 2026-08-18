@@ -175,31 +175,35 @@ def request_otp(identifier: str, channel: str = OTPChannel.PHONE) -> dict:
 
     now = timezone.now()
 
-    # Rate Limit 1: 60-second gap check
-    last_request = OTPRequest.objects.filter(identifier=clean_identifier, channel=channel).order_by('-created_at').first()
-    if last_request:
-        elapsed_seconds = (now - last_request.created_at).total_seconds()
-        if elapsed_seconds < 60:
-            wait_seconds = int(60 - elapsed_seconds)
+    is_debug = getattr(settings, "DEBUG", False)
+
+    if not is_debug:
+        # Rate Limit 1: 60-second gap check
+        last_request = OTPRequest.objects.filter(identifier=clean_identifier, channel=channel).order_by('-created_at').first()
+        if last_request:
+            elapsed_seconds = (now - last_request.created_at).total_seconds()
+            if elapsed_seconds < 60:
+                wait_seconds = int(60 - elapsed_seconds)
+                raise RateLimitError(
+                    f"Please wait {wait_seconds} seconds before requesting a new OTP.",
+                    code="RATE_LIMITED",
+                    extra={"resend_after_seconds": wait_seconds}
+                )
+
+        # Rate Limit 2: Max 5 sends per rolling hour
+        one_hour_ago = now - timedelta(hours=1)
+        recent_count = OTPRequest.objects.filter(
+            identifier=clean_identifier,
+            channel=channel,
+            created_at__gte=one_hour_ago
+        ).count()
+
+        if recent_count >= 5:
             raise RateLimitError(
-                f"Please wait {wait_seconds} seconds before requesting a new OTP.",
-                code="RATE_LIMITED",
-                extra={"resend_after_seconds": wait_seconds}
+                "Maximum OTP request limit (5 per hour) reached for this identifier.",
+                code="RATE_LIMITED"
             )
 
-    # Rate Limit 2: Max 5 sends per rolling hour
-    one_hour_ago = now - timedelta(hours=1)
-    recent_count = OTPRequest.objects.filter(
-        identifier=clean_identifier,
-        channel=channel,
-        created_at__gte=one_hour_ago
-    ).count()
-
-    if recent_count >= 5:
-        raise RateLimitError(
-            "Maximum OTP request limit (5 per hour) reached for this identifier.",
-            code="RATE_LIMITED"
-        )
 
     # Generate 6-digit OTP code & hash it
     otp_code = "".join([str(random.randint(0, 9)) for _ in range(6)])
