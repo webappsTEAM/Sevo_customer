@@ -1246,10 +1246,18 @@ export function CatalogPackagesPage() {
             subSlug: "cabinet_tile",
             displayName: "Cabinet & Tile Care",
             filterFn: (p) =>
-              p.slug.startsWith("kitchen-") ||
-              p.slug.startsWith("cabinet-") ||
-              p.slug.startsWith("tile-") ||
-              p.slug.startsWith("care-"),
+              (p.slug.startsWith("kitchen-") ||
+               p.slug.startsWith("cabinet-") ||
+               p.slug.startsWith("tile-") ||
+               p.slug.startsWith("care-")) &&
+              !p.slug.includes("fridge") &&
+              !p.slug.includes("microwave") &&
+              !p.slug.includes("chimney") &&
+              !p.slug.includes("stove") &&
+              !p.slug.includes("dishwasher") &&
+              !p.slug.includes("air-fryer") &&
+              !p.slug.includes("otg") &&
+              !p.slug.includes("sandwich"),
           },
           {
             subSlug: "addons",
@@ -1561,10 +1569,12 @@ export function CatalogPackagesPage() {
 
     // Normalize existingIncludes into lowercase set for quick lookup
     const existingIncludesLower = new Set(
-      existingIncludes.map(inc => {
-        const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
-        return text.toLowerCase()
-      }).filter(Boolean)
+      existingIncludes
+        .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false))
+        .map(inc => {
+          const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
+          return text.toLowerCase()
+        }).filter(Boolean)
     )
 
     // 1. Process preset items first, maintaining their original order
@@ -1584,12 +1594,13 @@ export function CatalogPackagesPage() {
     // 2. Add any custom items from existingIncludes that are not in presets
     existingIncludes.forEach((inc, idx) => {
       const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
+      const checked = typeof inc === "string" ? true : (inc.checked !== false)
       if (text && !seen.has(text.toLowerCase())) {
         seen.add(text.toLowerCase())
         items.push({
           id: `inc-${idx}-${Date.now()}`,
           text,
-          checked: true,
+          checked: checked,
         })
       }
     })
@@ -1625,8 +1636,8 @@ export function CatalogPackagesPage() {
       let finalIncludes = []
       if (Array.isArray(quickPriceEditing.checklist)) {
         finalIncludes = quickPriceEditing.checklist
-          .filter((i) => i.checked && i.text && i.text.trim())
-          .map((i) => i.text.trim())
+          .filter((i) => i.text && i.text.trim())
+          .map((i) => ({ text: i.text.trim(), checked: i.checked }))
       } else if (typeof quickPriceEditing.includes === "string") {
         finalIncludes = quickPriceEditing.includes.split(",").map((s) => s.trim()).filter(Boolean)
       } else if (Array.isArray(quickPriceEditing.includes)) {
@@ -1649,10 +1660,43 @@ export function CatalogPackagesPage() {
         includes: finalIncludes,
         image: quickPriceEditing.image || "",
         offer_price: null,
-        tools: Array.isArray(vd.tools) ? vd.tools.filter(Boolean) : [],
-        ready: Array.isArray(vd.ready) ? vd.ready.filter(Boolean) : [],
-        reviews: Array.isArray(vd.reviews) ? vd.reviews.filter(r => r.name || r.text) : [],
-        faqs: Array.isArray(vd.faqs) ? vd.faqs.filter(f => f.q || f.a) : [],
+        tools: Array.isArray(vd.tools)
+          ? vd.tools
+              .map(t => {
+                const text = typeof t === "string" ? t : (t.text || "");
+                const enabled = typeof t === "string" ? true : (t.enabled !== false);
+                return { text, enabled };
+              })
+              .filter(t => t.text.trim())
+          : [],
+        ready: Array.isArray(vd.ready)
+          ? vd.ready
+              .map(r => {
+                const text = typeof r === "string" ? r : (r.text || "");
+                const enabled = typeof r === "string" ? true : (r.enabled !== false);
+                return { text, enabled };
+              })
+              .filter(r => r.text.trim())
+          : [],
+        reviews: Array.isArray(vd.reviews)
+          ? vd.reviews
+              .map(r => ({
+                name: r.name || "",
+                text: r.text || "",
+                rating: r.rating || "5.0",
+                enabled: r.enabled !== false
+              }))
+              .filter(r => r.name.trim() || r.text.trim())
+          : [],
+        faqs: Array.isArray(vd.faqs)
+          ? vd.faqs
+              .map(f => ({
+                q: f.q || "",
+                a: f.a || "",
+                enabled: f.enabled !== false
+              }))
+              .filter(f => f.q.trim() || f.a.trim())
+          : [],
         sort_order: parseInt(quickPriceEditing.sort_order) || 0,
         button_text: quickPriceEditing.button_text || "Add",
         icon: quickPriceEditing.icon || "",
@@ -3394,7 +3438,7 @@ export function CatalogPackagesPage() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Input
                 label="Package Heading / Vehicle Name"
                 required
@@ -3412,6 +3456,15 @@ export function CatalogPackagesPage() {
                 value={quickPriceEditing.base_price}
                 onChange={(e) =>
                   setQuickPriceEditing({ ...quickPriceEditing, base_price: e.target.value })
+                }
+              />
+              <Input
+                label="Time / Duration"
+                required
+                placeholder="e.g. 1.5 hrs, 2 hrs, 45 mins"
+                value={quickPriceEditing.duration || ""}
+                onChange={(e) =>
+                  setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
                 }
               />
             </div>

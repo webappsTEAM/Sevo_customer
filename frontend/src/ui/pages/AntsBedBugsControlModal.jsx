@@ -7,8 +7,8 @@ import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const ANTS_BUGS_SUB_TABS = [
-  { id: "bedbugs", name: "Bedbugs Control", image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=150&q=80&fit=crop" },
-  { id: "ants", name: "Ants Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" }
+  { id: "bedbugs", name: "Bedbugs Control", image: "/mockups/bedbugs_control.jpg" },
+  { id: "ants", name: "Ants Control", image: "/mockups/ants_control.jpg" }
 ];
 
 const PEST_SERVICES = {
@@ -21,7 +21,7 @@ const PEST_SERVICES = {
       price: 1899,
       duration: "1.5 hrs",
       description: "Two-stage chemical & steam extraction treatment to completely eliminate bed bugs.",
-      image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+      image: "/mockups/bedbugs_control.jpg",
       includes: [
         "Thorough inspection of the entire home before treatment",
         "Targeted treatment of beds, mattresses, cushion and other objects"
@@ -41,7 +41,7 @@ const PEST_SERVICES = {
       price: 999,
       duration: "45 mins",
       description: "Focused gel and spray treatment targeting kitchen & bathroom ant colonies.",
-      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+      image: "/mockups/ants_control.jpg",
       includes: [
         "Before inspection we will handle utensils",
         "After removal customer has to keep the utensils",
@@ -58,7 +58,7 @@ const PEST_SERVICES = {
       price: 1549,
       duration: "1 hr",
       description: "Complete ant control for apartments with chemical spray and crevice sealing.",
-      image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop",
+      image: "/mockups/ants_control.jpg",
       includes: [
         "Before inspection we will handle utensils",
         "After removal customer has to keep the utensils",
@@ -73,7 +73,7 @@ const PEST_SERVICES = {
       price: 2099,
       duration: "1.5 hrs",
       description: "Whole-bungalow ant treatment including chemical perimeter barriers.",
-      image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop",
+      image: "/mockups/ants_control.jpg",
       includes: [
         "Before inspection we will handle utensils",
         "After removal customer has to keep the utensils",

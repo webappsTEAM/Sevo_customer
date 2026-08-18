@@ -8,7 +8,7 @@ const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const PEST_SUB_TABS = [
   { id: "cockroach", name: "Cockroach Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" },
-  { id: "termite", name: "Termite Control", image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=150&q=80&fit=crop" }
+  { id: "termite", name: "Termite Control", image: "/mockups/termite_control.jpg" }
 ];
 
 const PEST_SERVICES = {
@@ -21,7 +21,7 @@ const PEST_SERVICES = {
       price: 999,
       duration: "45 mins",
       description: "Dual-session gel and spray treatment targeting kitchen & bathroom cockroaches.",
-      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+      image: "/mockups/cockroach_control.png",
       includes: [
         "Before inspection we will handle utensils",
         "After removal customer has to keep the utensils",
@@ -38,7 +38,7 @@ const PEST_SERVICES = {
       price: 1549,
       duration: "1 hr",
       description: "Complete cockroach control for apartments with odorless bio-spray.",
-      image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop",
+      image: "/mockups/cockroach_control.png",
       includes: [
         "Before inspection we will handle utensils",
         "After removal customer has to keep the utensils",
@@ -53,7 +53,7 @@ const PEST_SERVICES = {
       price: 2099,
       duration: "1.5 hrs",
       description: "Full independent house & villa cockroach eradication service.",
-      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
+      image: "/mockups/cockroach_control.png",
       includes: [
         "Before inspection we will handle utensils",
         "After removal customer has to keep the utensils",
@@ -70,7 +70,7 @@ const PEST_SERVICES = {
       price: 1499,
       duration: "1 hr",
       description: "Targeted drill-and-inject barrier protection for termite control in kitchens & bathrooms.",
-      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+      image: "/mockups/termite_control.jpg",
       includes: [
         "Before inspection we will handle utensils",
         "After removal customer has to keep the utensils",
@@ -87,7 +87,7 @@ const PEST_SERVICES = {
       price: 2499,
       duration: "2 hrs",
       description: "Drilling and chemical shield treatment to safeguard apartments from termites.",
-      image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&q=80&fit=crop",
+      image: "/mockups/termite_control.jpg",
       includes: [
         "Before inspection we will handle utensils",
         "After removal customer has to keep the utensils",
@@ -102,7 +102,7 @@ const PEST_SERVICES = {
       price: 3499,
       duration: "3 hrs",
       description: "Comprehensive whole-bungalow drilling shield for ultimate termite protection.",
-      image: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=300&q=80&fit=crop",
+      image: "/mockups/termite_control.jpg",
       includes: [
         "Before inspection we will handle utensils",
         "After removal customer has to keep the utensils",
