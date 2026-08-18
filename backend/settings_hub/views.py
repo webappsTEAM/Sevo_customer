@@ -60,7 +60,7 @@ class InvoiceListView(APIView):
                     if ext_amount > 0 and total_amount <= base_amount:
                         total_amount = base_amount + ext_amount
 
-                    service_title = sr.get_service_category_display() or sr.issue_title or "Service Booking"
+                    service_title = sr.service_category or sr.issue_title or "Service Booking"
                     if ext_title:
                         service_title += f" (+ {ext_title})"
 

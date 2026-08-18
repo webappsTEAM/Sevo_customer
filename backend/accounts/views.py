@@ -806,6 +806,8 @@ class AcceptInviteView(APIView):
 
                 user.company = invite.company
                 user.is_active = True
+                if user.role == "admin":
+                    user.is_staff = True
                 user.save()
 
                 invite.status = "accepted"
