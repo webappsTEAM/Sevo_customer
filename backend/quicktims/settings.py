@@ -105,6 +105,7 @@ if USE_POSTGRES:
             "ENGINE": "django.db.backends.postgresql",
             "NAME": os.getenv("DB_NAME", "postgres"),
             "USER": os.getenv("DB_USER", "postgres"),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": _db_host,
             "PORT": os.getenv("DB_PORT", "5432"),
             "OPTIONS": _db_options,
