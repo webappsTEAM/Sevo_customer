@@ -46,19 +46,4 @@ class Migration(migrations.Migration):
             new_name='service_req_entity__1965a7_idx',
             old_name='service_req_entity__idx',
         ),
-        migrations.AddField(
-            model_name='refundrequest',
-            name='admin_notes',
-            field=models.TextField(blank=True, default=''),
-        ),
-        migrations.AddField(
-            model_name='refundrequest',
-            name='amount',
-            field=models.DecimalField(decimal_places=2, default=0.0, max_digits=10),
-        ),
-        migrations.AddField(
-            model_name='refundrequest',
-            name='requested_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='legacy_requested_refunds', to=settings.AUTH_USER_MODEL),
-        ),
     ]

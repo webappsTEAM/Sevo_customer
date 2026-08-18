@@ -96,6 +96,7 @@ class User(AbstractBaseUser):
         indexes = [
             models.Index(fields=["role"], name="idx_user_role"),
             models.Index(fields=["company", "role"], name="idx_user_company_role"),
+            models.Index(fields=["role", "date_joined"], name="idx_user_role_date_joined"),
         ]
 
     def get_full_name(self):
