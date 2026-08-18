@@ -823,6 +823,24 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
     let list = FULL_HOUSE_SERVICES[activeTab] || [];
     list = JSON.parse(JSON.stringify(list));
 
+    const applyStaticDetails = (item) => {
+      const staticDetails = HOUSE_DETAILS_CONTENT[item.id] || {};
+      item.tools = item.tools || staticDetails.tools || [];
+      item.ready = item.ready || staticDetails.ready || [];
+      item.reviews_list = item.reviews_list || staticDetails.reviews || [];
+      item.faqs = item.faqs || staticDetails.faqs || [];
+      return item;
+    };
+
+    list = list.map(item => {
+      if (Array.isArray(item.subOptions)) {
+        item.subOptions = item.subOptions.map(subOpt => applyStaticDetails(subOpt));
+      } else {
+        item = applyStaticDetails(item);
+      }
+      return item;
+    });
+
     if (dbPackages.length > 0) {
       list = list.map(item => {
         if (Array.isArray(item.subOptions)) {
@@ -836,11 +854,13 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 duration: dbMatch.duration || subOpt.duration,
                 includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : { text: inc.text || '', checked: inc.checked !== false }) : subOpt.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : inc),
-                tools: dbMatch.tools,
-                ready: dbMatch.ready,
+                tools: (dbMatch.tools && dbMatch.tools.length > 0) ? dbMatch.tools : subOpt.tools,
+                ready: (dbMatch.ready && dbMatch.ready.length > 0) ? dbMatch.ready : subOpt.ready,
                 reviews: subOpt.reviews || "1.7M bookings",
-                reviews_list: dbMatch.reviews,
-                faqs: dbMatch.faqs,
+                reviews_list: (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0)
+                  ? dbMatch.reviews.map(r => ({ ...r, comment: r.comment || r.text || "" }))
+                  : subOpt.reviews_list,
+                faqs: (dbMatch.faqs && dbMatch.faqs.length > 0) ? dbMatch.faqs : subOpt.faqs,
                 image: dbMatch.image || subOpt.image,
               };
             }
@@ -857,10 +877,12 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
             item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : { text: inc.text || '', checked: inc.checked !== false }) : item.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : inc);
-            item.tools = dbMatch.tools;
-            item.ready = dbMatch.ready;
-            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
-            item.faqs = dbMatch.faqs;
+            item.tools = (dbMatch.tools && dbMatch.tools.length > 0) ? dbMatch.tools : item.tools;
+            item.ready = (dbMatch.ready && dbMatch.ready.length > 0) ? dbMatch.ready : item.ready;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) {
+              item.reviews_list = dbMatch.reviews.map(r => ({ ...r, comment: r.comment || r.text || "" }));
+            }
+            item.faqs = (dbMatch.faqs && dbMatch.faqs.length > 0) ? dbMatch.faqs : item.faqs;
             item.image = dbMatch.image || item.image;
             item.badge = dbMatch.tag || item.badge;
           }
