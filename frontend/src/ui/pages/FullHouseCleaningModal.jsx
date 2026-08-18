@@ -766,7 +766,8 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : subOpt.includes,
                 tools: dbMatch.tools,
                 ready: dbMatch.ready,
-                reviews: dbMatch.reviews,
+                reviews: subOpt.reviews || "1.7M bookings",
+                reviews_list: dbMatch.reviews,
                 faqs: dbMatch.faqs,
                 image: dbMatch.image || subOpt.image,
               };
@@ -786,7 +787,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
             item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : item.includes;
             item.tools = dbMatch.tools;
             item.ready = dbMatch.ready;
-            item.reviews = dbMatch.reviews;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
             item.faqs = dbMatch.faqs;
             item.image = dbMatch.image || item.image;
             item.badge = dbMatch.tag || item.badge;
@@ -1106,7 +1107,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                   <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-2">
                     <Star className="text-[#7C3AED] fill-[#7C3AED]" size={12} />
                     <span className="text-slate-800">{selectedServiceDetails.rating || "4.81"}</span>
-                    <span className="text-slate-400 font-normal underline">({selectedServiceDetails.reviews || "1.7M bookings"})</span>
+                    <span className="text-slate-400 font-normal underline">({typeof selectedServiceDetails.reviews === 'string' ? selectedServiceDetails.reviews : (Array.isArray(selectedServiceDetails.reviews) ? `${selectedServiceDetails.reviews.length} reviews` : "1.7M bookings")})</span>
                   </div>
                 )}
                 <p className="text-xs text-slate-500 font-bold">

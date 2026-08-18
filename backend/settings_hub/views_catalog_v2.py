@@ -198,6 +198,22 @@ class AdminPackageListView(APIView):
         if status_filter:
             qs = qs.filter(status=status_filter)
         data = PackageSerializer(qs, many=True).data
+        try:
+            from logistics.models import ServiceTier
+            tiers_by_slug = {t.slug: t for t in ServiceTier.objects.all()}
+            for item in data:
+                slug = item.get("slug")
+                tier = tiers_by_slug.get(slug)
+                if not tier:
+                    for t_slug, t in tiers_by_slug.items():
+                        if t_slug in slug or slug in t_slug:
+                            tier = t
+                            break
+                if tier and tier.includes and len(tier.includes) > 0:
+                    if not item.get("includes") or len(item["includes"]) == 0:
+                        item["includes"] = tier.includes
+        except Exception:
+            pass
         return Response({"success": True, "data": data})
 
     def post(self, request):

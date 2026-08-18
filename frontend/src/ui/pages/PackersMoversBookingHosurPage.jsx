@@ -10,7 +10,6 @@ import {
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
 import { createBooking } from "../../api/bookingService.js"
-import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -821,16 +820,9 @@ export function PackersMoversBookingHosurPage() {
   // Booking Flow State
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
   const [selectedPackage, setSelectedPackage] = useState(null)
-  const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
-  const [otpStep, setOtpStep] = useState(false)
-  const [otpValue, setOtpValue] = useState("")
-  const [otpLoading, setOtpLoading] = useState(false)
-  const [otpSent, setOtpSent] = useState(false)
-  const [loginEmail, setLoginEmail] = useState("")
-  const [loginWhatsapp, setLoginWhatsapp] = useState(true)
   const { user } = useAuth()
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
@@ -903,7 +895,7 @@ export function PackersMoversBookingHosurPage() {
   }, [])
 
   useEffect(() => {
-    if (inventoryBuilderOpen || vehicleSelectorOpen || loginModalOpen || bookingSuccessOpen) {
+    if (inventoryBuilderOpen || vehicleSelectorOpen || showCustomerEntryModal || bookingSuccessOpen) {
       document.body.style.overflow = "hidden"
     } else {
       document.body.style.overflow = "unset"
@@ -911,7 +903,7 @@ export function PackersMoversBookingHosurPage() {
     return () => {
       document.body.style.overflow = "unset"
     }
-  }, [inventoryBuilderOpen, vehicleSelectorOpen, loginModalOpen, bookingSuccessOpen])
+  }, [inventoryBuilderOpen, vehicleSelectorOpen, showCustomerEntryModal, bookingSuccessOpen])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -1127,9 +1119,15 @@ export function PackersMoversBookingHosurPage() {
     setBookingError("")
     setBookingSubmitting(true)
     try {
-      const today = todayDateString()
       const pkg = selectedPackage || PACKERS_PACKAGES[0]
       const fare = Number(String(pkg.price).replace(/[^0-9.]/g, "")) || 0
+      
+      let dateString = todayDateString()
+      if (selectedDate && selectedDate.fullDate) {
+        const d = selectedDate.fullDate
+        dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      }
+
       const payload = {
         customer_name: name || "Guest",
         phone,
@@ -1138,12 +1136,14 @@ export function PackersMoversBookingHosurPage() {
         description: userType,
         address: pickup || "Hosur",
         drop_address: drop,
-        preferred_date: today,
+        preferred_date: dateString,
+        preferred_time: selectedSlot || "Morning",
         total_amount: fare,
         payment_method: "COD",
         cart_data: [{
           package: pkg.name, price: pkg.price, route: selectedRoute?.to || null,
           relocation_type: relocationType, inventory: inventoryItems,
+          date: selectedDate?.value, slot: selectedSlot
         }],
       }
       if (pkg._tierId) payload.logistics_tier = pkg._tierId
@@ -1151,6 +1151,8 @@ export function PackersMoversBookingHosurPage() {
 
       const res = await createBooking(payload)
       setLastBookingId(res?.data?.request_id || res?.request_id || null)
+      setInventoryBuilderOpen(false)
+      setVehicleSelectorOpen(false)
       setBookingSuccessOpen(true)
     } catch (err) {
       setBookingError(err?.body?.message || "Couldn't confirm your booking. Please try again.")
@@ -1161,45 +1163,9 @@ export function PackersMoversBookingHosurPage() {
 
   const handleBookNow = () => {
     if (!isSignedIn) {
-      setVehicleSelectorOpen(false)
-      setLoginModalOpen(true)
+      setShowCustomerEntryModal(true)
     } else {
-      setVehicleSelectorOpen(false)
       submitBooking()
-    }
-  }
-
-  const handleSendOtp = async () => {
-    if (!phone || phone.trim().length < 10) return
-    setOtpLoading(true)
-    setBookingError("")
-    try {
-      await apiRequestCustomerPhoneOTP(phone)
-      setOtpSent(true)
-      setOtpStep(true)
-    } catch (err) {
-      setBookingError(err?.body?.detail || "Couldn't send OTP. Please check the number and try again.")
-    } finally {
-      setOtpLoading(false)
-    }
-  }
-
-  const handleVerifyOtp = async () => {
-    if (otpValue.length < 6) return
-    setOtpLoading(true)
-    setBookingError("")
-    try {
-      await apiVerifyCustomerPhoneOTP(phone, otpValue)
-      setLocalIsSignedIn(true)
-      setLoginModalOpen(false)
-      setOtpStep(false)
-      setOtpValue("")
-      setOtpSent(false)
-      await submitBooking()
-    } catch (err) {
-      setBookingError(err?.body?.detail || "Invalid OTP. Please try again.")
-    } finally {
-      setOtpLoading(false)
     }
   }
 
@@ -2542,12 +2508,12 @@ export function PackersMoversBookingHosurPage() {
                       </div>
                       <button
                         onClick={() => {
-                          setInventoryBuilderOpen(false)
                           handleBookNow()
                         }}
-                        className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer"
+                        disabled={bookingSubmitting}
+                        className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60"
                       >
-                        Confirm Booking
+                        {bookingSubmitting ? "Confirming..." : "Confirm Booking"}
                       </button>
                     </div>
                   </>
@@ -2584,133 +2550,6 @@ export function PackersMoversBookingHosurPage() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Login & OTP Verification Modal */}
-      {loginModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-extrabold text-slate-900">
-                  {otpStep ? "Enter OTP Verification" : "Sign In to Complete Booking"}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  {otpStep ? `We sent a 6-digit code to +91 ${phone}` : "Quick verification to confirm your moving booking"}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setLoginModalOpen(false)
-                  setOtpStep(false)
-                }}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {!otpStep ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Mobile Number <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 focus-within:bg-white transition-all">
-                    <span className="text-xs font-bold text-slate-500 mr-2">+91</span>
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))}
-                      placeholder="Enter 10-digit mobile number"
-                      className="w-full bg-transparent text-xs font-semibold text-slate-800 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Email Address (Optional)
-                  </label>
-                  <input
-                    type="email"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="name@example.com for invoice & insurance"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="pm-whatsapp"
-                    checked={loginWhatsapp}
-                    onChange={(e) => setLoginWhatsapp(e.target.checked)}
-                    className="rounded text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <label htmlFor="pm-whatsapp" className="text-xs text-slate-600 cursor-pointer">
-                    Receive moving schedule &amp; supervisor details on WhatsApp
-                  </label>
-                </div>
-
-                {bookingError && (
-                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleSendOtp}
-                  disabled={otpLoading || !phone || phone.length < 10}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer mt-2"
-                >
-                  {otpLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>Generate OTP</span>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">
-                    Enter 6-digit OTP
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={otpValue}
-                    onChange={(e) => setOtpValue(e.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder="• • • • • •"
-                    className="w-full text-center text-2xl tracking-[1em] font-extrabold bg-slate-50 border border-slate-200 rounded-xl py-3 text-slate-900 outline-none focus:border-emerald-500 focus:bg-white"
-                  />
-                </div>
-
-                {bookingError && (
-                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleVerifyOtp}
-                  disabled={otpLoading || bookingSubmitting || otpValue.length < 6}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
-                >
-                  {(otpLoading || bookingSubmitting) && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{bookingSubmitting ? "Confirming booking..." : otpLoading ? "Verifying..." : "Verify & Confirm Booking"}</span>
-                </button>
-
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => setOtpStep(false)}
-                    className="text-xs text-slate-500 hover:text-emerald-600 font-semibold cursor-pointer"
-                  >
-                    &larr; Change Mobile Number
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -2790,7 +2629,10 @@ export function PackersMoversBookingHosurPage() {
         <CustomerEntryFlowModal
           isOpen={showCustomerEntryModal}
           onClose={() => setShowCustomerEntryModal(false)}
-          onSuccess={() => setShowCustomerEntryModal(false)}
+          onComplete={() => {
+            setShowCustomerEntryModal(false)
+            submitBooking()
+          }}
         />
       )}
     </div>

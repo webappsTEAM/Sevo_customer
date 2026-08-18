@@ -187,16 +187,16 @@ class LoginView(TokenObtainPairView):
             except Exception:
                 user = None
 
-            if user and getattr(user, "two_fa_enabled", False):
-                # Store pending user in session — don't issue cookies yet
-                request.session["pending_2fa_user"] = str(user.pk)
-                request.session.save()
-                return Response(
-                    {"success": True, "requires_2fa": True, "message": "2FA verification required."},
-                    status=200,
-                )
+            # 2FA disabled for now — proceed with direct cookie issuance
+            # if user and getattr(user, "two_fa_enabled", False):
+            #     request.session["pending_2fa_user"] = str(user.pk)
+            #     request.session.save()
+            #     return Response(
+            #         {"success": True, "requires_2fa": True, "message": "2FA verification required."},
+            #         status=200,
+            #     )
 
-            # No 2FA — proceed with cookie issuance as normal
+            # Proceed with cookie issuance as normal
             _set_auth_cookies(response, access, refresh)
 
             # ── Mark employee online & broadcast live presence to Admin WebSockets ──

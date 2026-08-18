@@ -13,8 +13,6 @@ from .views import (
     ApprovedEmployeesListView, DeleteAccountView, SendEmailOTPView, PasswordResetWithOTPView
 )
 from .customer_auth import (
-    CustomerEmailOTPRequestView, CustomerEmailOTPVerifyView,
-    CustomerPhoneOTPRequestView, CustomerPhoneOTPVerifyView,
     CustomerGoogleLoginView,
     CustomerOTPRequestAPIView, CustomerOTPVerifyAPIView,
     CustomerProfileCompleteAPIView
@@ -54,10 +52,6 @@ urlpatterns = [
     path("password/reset-with-otp/", PasswordResetWithOTPView.as_view(), name="password-reset-with-otp"),
     path("approved-employees/", ApprovedEmployeesListView.as_view(), name="approved-employees"),
     path("delete-account/", DeleteAccountView.as_view(), name="delete-account"),
-    path("customer/email/request-otp/", CustomerEmailOTPRequestView.as_view(), name="customer-email-otp-request"),
-    path("customer/email/verify-otp/", CustomerEmailOTPVerifyView.as_view(), name="customer-email-otp-verify"),
-    path("customer/phone/request-otp/", CustomerPhoneOTPRequestView.as_view(), name="customer-phone-otp-request"),
-    path("customer/phone/verify-otp/", CustomerPhoneOTPVerifyView.as_view(), name="customer-phone-otp-verify"),
     path("customer/otp/request/",       CustomerOTPRequestAPIView.as_view(),     name="customer-otp-request"),
     path("customer/otp/verify/",        CustomerOTPVerifyAPIView.as_view(),      name="customer-otp-verify"),
     path("customer/profile/complete/", CustomerProfileCompleteAPIView.as_view(), name="customer-profile-complete"),

@@ -490,7 +490,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : item.includes;
             item.tools = dbMatch.tools;
             item.ready = dbMatch.ready;
-            item.reviews = dbMatch.reviews;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
             item.faqs = dbMatch.faqs;
             item.image = dbMatch.image || item.image;
             item.badge = dbMatch.tag || item.badge;
@@ -796,7 +796,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-2">
                   <Star className="text-yellow-500 fill-yellow-500" size={12} />
                   <span className="text-slate-800">{selectedServiceDetails.rating || "4.82"}</span>
-                  <span className="text-slate-400 font-normal underline">({selectedServiceDetails.reviews || "1.5M reviews"})</span>
+                  <span className="text-slate-400 font-normal underline">({typeof selectedServiceDetails.reviews === 'string' ? selectedServiceDetails.reviews : (Array.isArray(selectedServiceDetails.reviews) ? `${selectedServiceDetails.reviews.length} reviews` : "1.5M reviews")})</span>
                 </div>
                 <p className="text-xs text-slate-500 font-bold">Starts at ₹{selectedServiceDetails.price} • {selectedServiceDetails.duration}</p>
               </div>
