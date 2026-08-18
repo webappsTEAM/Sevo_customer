@@ -90,34 +90,34 @@ const ReferralsPage = lazy(() =>
 )
 
 const ServiceRequestsPage = lazy(() =>
-  import("./pages/ServiceRequestsPage.jsx").then(m => ({ default: m.ServiceRequestsPage }))
+  import("./pages/ServiceRequestsPage.jsx").then(m => ({ default: m.ServiceRequestsPage || m.default }))
 )
 
 const FeedbackManagementPage = lazy(() =>
-  import("./pages/FeedbackManagementPage.jsx").then(m => ({ default: m.FeedbackManagementPage }))
+  import("./pages/FeedbackManagementPage.jsx").then(m => ({ default: m.FeedbackManagementPage || m.default }))
 )
 
 const BookingPage = lazy(() =>
-  import("./pages/BookingPage.jsx").then(m => ({ default: m.BookingPage }))
+  import("./pages/BookingPage.jsx").then(m => ({ default: m.BookingPage || m.default }))
 )
 const MiniTruckBookingHosurPage = lazy(() =>
-  import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage }))
+  import("./pages/MiniTruckBookingHosurPage.jsx").then(m => ({ default: m.MiniTruckBookingHosurPage || m.default }))
 )
 const TwoWheelerBookingHosurPage = lazy(() =>
-  import("./pages/TwoWheelerBookingHosurPage.jsx").then(m => ({ default: m.TwoWheelerBookingHosurPage }))
+  import("./pages/TwoWheelerBookingHosurPage.jsx").then(m => ({ default: m.TwoWheelerBookingHosurPage || m.default }))
 )
 const PackersMoversBookingHosurPage = lazy(() =>
-  import("./pages/PackersMoversBookingHosurPage.jsx").then(m => ({ default: m.PackersMoversBookingHosurPage }))
+  import("./pages/PackersMoversBookingHosurPage.jsx").then(m => ({ default: m.PackersMoversBookingHosurPage || m.default }))
 )
 const FeedbackPage = lazy(() =>
-  import("./pages/FeedbackPage.jsx").then(m => ({ default: m.FeedbackPage }))
+  import("./pages/FeedbackPage.jsx").then(m => ({ default: m.FeedbackPage || m.default }))
 )
 const CustomerDecisionPage = lazy(() =>
-  import("./pages/CustomerDecisionPage.jsx").then(m => ({ default: m.CustomerDecisionPage }))
+  import("./pages/CustomerDecisionPage.jsx").then(m => ({ default: m.CustomerDecisionPage || m.default }))
 )
 
 const LiveTrackingPage = lazy(() =>
-  import("./pages/LiveTrackingPage.jsx").then(m => ({ default: m.LiveTrackingPage }))
+  import("./pages/LiveTrackingPage.jsx").then(m => ({ default: m.LiveTrackingPage || m.default }))
 )
 
 function RequireAdmin() {
@@ -279,7 +279,16 @@ export function App() {
           <Route path={routes.packers_movers_booking_hosur} element={<PackersMoversBookingHosurPage />} />
           <Route path="/packers-and-movers/hosur" element={<PackersMoversBookingHosurPage />} />
           <Route path="/packers-and-movers" element={<PackersMoversBookingHosurPage />} />
+          <Route path="/packers-movers/hosur" element={<Navigate to="/packers-and-movers/hosur" replace />} />
+          <Route path="/packers-movers" element={<Navigate to="/packers-and-movers" replace />} />
           <Route path="/booking/packers-and-movers" element={<PackersMoversBookingHosurPage />} />
+          <Route path="/goods" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
+          <Route path="/transport" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
+          <Route path="/goods-and-transport" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
+          <Route path="/goods-and-transports" element={<Navigate to="/home" state={{ openGoodsModal: true }} replace />} />
+          <Route path="/courier/two-wheeler" element={<Navigate to="/two-wheelers/hosur" replace />} />
+          <Route path="/courier/twowheeler" element={<Navigate to="/two-wheelers/hosur" replace />} />
+          <Route path="/courier" element={<Navigate to="/two-wheelers/hosur" replace />} />
           <Route path={routes.feedback} element={<FeedbackPage />} />
           <Route path={routes.customer_work_extension} element={<CustomerDecisionPage />} />
           <Route path="/customer/decision/:token" element={<CustomerDecisionPage />} />
