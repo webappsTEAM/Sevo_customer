@@ -1259,14 +1259,42 @@ class DeleteAccountView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check password
-        if not target_user.check_password(password):
-            return Response(
-                {"success": False, "message": "Incorrect password. Account deletion aborted."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Perform anonymization instead of cascade delete (Phase 5 compliance)
+        from django.db import transaction
+        from customer_analytics.models import CustomerLoginEvent, CustomerIdentity
+        from service_requests.models import ServiceRequest
 
-        target_user.delete()
+        with transaction.atomic():
+            # 1. Null/clear CustomerIdentity details
+            if hasattr(target_user, "customer_identity"):
+                ident = target_user.customer_identity
+                ident.phone_normalized = ""
+                ident.email_normalized = ""
+                ident.save()
+            
+            # 2. Null IP and user agent logs
+            CustomerLoginEvent.objects.filter(customer=target_user).update(
+                ip_address=None,
+                user_agent=""
+            )
+            
+            # 3. Clear booking customer info
+            ServiceRequest.objects.filter(customer=target_user).update(
+                customer_name="Anonymized Customer",
+                phone="",
+                email=""
+            )
+            
+            # 4. Anonymize User account fields
+            target_user.first_name = "Anonymized"
+            target_user.last_name = "Customer"
+            target_user.email = None
+            target_user.phone = None
+            target_user.mobile_number = None
+            target_user.is_active = False
+            target_user.username = f"deleted_user_{target_user.id}"
+            target_user.set_unusable_password()
+            target_user.save()
 
         response_data = {"success": True, "message": "Account successfully deleted."}
 

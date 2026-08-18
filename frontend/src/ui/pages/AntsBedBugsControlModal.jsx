@@ -760,23 +760,7 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                 <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Starts at ₹{selectedServiceDetails.price} • {selectedServiceDetails.duration}</p>
               </div>
 
-              {/* Inclusions Box */}
-              {selectedServiceDetails.includes && selectedServiceDetails.includes.length > 0 && (
-                <div className="bg-emerald-50/40 border border-emerald-100/80 rounded-2xl p-4 text-left">
-                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    What's included
-                  </h4>
-                  <ul className="space-y-1 text-xs text-slate-600 font-medium">
-                    {selectedServiceDetails.includes.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-1.5">
-                        <span className="text-emerald-500 font-bold">✓</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+
 
               {/* Requirements / Sizes list */}
               {(() => {

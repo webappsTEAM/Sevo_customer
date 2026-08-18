@@ -203,36 +203,36 @@ const FULL_HOUSE_SERVICES = {
     },
     {
       id: "quick-dining-table",
-      name: "Dining Table & chairs cleaning",
-      description: "Intensive sanitization of table surfaces, legs wiping and matching dining chairs cleaning.",
+      name: "Dining Table & Chairs Cleaning",
+      description: "Detailed dining table surface cleaning and grease removal.",
       rating: "4.81",
       reviews: "1.7M bookings",
       price: 449,
       duration: "30 mins",
       image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=600&q=80&fit=crop",
       includes: [
-        "Polishing and sanitizing of wooden/glass tabletop",
-        "Wiping and dust clearance of up to 6 dining chairs"
+        "Surface cleaning, sanitation, and wood/glass polishing"
       ]
     },
     {
       id: "kitchen-microwave-clean",
-      name: "Microwave Cleaning",
-      description: "Deep food-grease removal, interior stain scrubbing and exterior sanitization.",
+      name: "Microwave cleaning",
+      description: "Complete interior grease removal and sanitization of turntable.",
       rating: "4.81",
       reviews: "1.7M bookings",
       price: 199,
       duration: "15 mins",
       image: "/mockups/microwave_clean.png",
       includes: [
-        "Internal cavity degreasing and splash stain removal",
-        "Glass door cleaning and control panel sanitization"
+        "Interior & exterior cleaning",
+        "Turntable & glass door cleaning",
+        "Food stain & grease removal"
       ]
     }
   ]
 };
 
-const HOUSE_DETAILS_CONTENT = {
+export const HOUSE_DETAILS_CONTENT = {
   "classic-apt-deep": {
     covered: [
       "Bathroom & kitchen deep cleaning",
@@ -261,6 +261,10 @@ const HOUSE_DETAILS_CONTENT = {
       { q: "Do you clean ceiling fans and light fixtures?", a: "Yes, we wipe and dust all ceiling fans, exhaust fans, and light fixtures." },
       { q: "Does this service remove hard water stains from tiles?", a: "Yes, we scrub tiles and grout to remove hard water stains, though very old scaling may need multiple sessions." },
       { q: "Is wall washing included?", a: "Wall washing is not included. We perform dry dusting of walls and cobweb removal." }
+    ],
+    reviews: [
+      { name: "Ananya S.", rating: 4.8, comment: "Thorough deep cleaning of the entire apartment. Floors are sparkling and bathrooms look brand new!" },
+      { name: "Vikram R.", rating: 4.7, comment: "Great value for a 2 BHK. The team was punctual and very professional." }
     ],
     apartmentSizes: [
       { label: "1 BHK", price: 3409 },
@@ -296,6 +300,10 @@ const HOUSE_DETAILS_CONTENT = {
       { q: "How often should I book a Gold deep cleaning?", a: "We recommend booking a Gold deep cleaning once every 3 to 6 months to maintain high hygiene standards." },
       { q: "What preparation is needed from my end?", a: "Ensure continuous water and electricity supply so our scrubbing machines and vacuums can run without interruption." }
     ],
+    reviews: [
+      { name: "Meera K.", rating: 4.9, comment: "Gold plan was absolutely worth it. Cupboard interiors are spotless and kitchen cabinets look brand new!" },
+      { name: "Rajesh D.", rating: 4.8, comment: "Very detailed cleaning. The team even rearranged utensils neatly after cabinet cleaning." }
+    ],
     apartmentSizes: [
       { label: "1 BHK", price: 3759 },
       { label: "2 BHK", price: 4859 },
@@ -328,6 +336,10 @@ const HOUSE_DETAILS_CONTENT = {
       { q: "Is this package suitable for move-in cleaning?", a: "Yes, this is our most comprehensive premium package, perfect for both move-in and deep annual cleanups." },
       { q: "Are your chemicals safe for pets and infants?", a: "Yes, we use safe, non-toxic, eco-certified cleaning solutions that leave no hazardous residues." }
     ],
+    reviews: [
+      { name: "Sneha T.", rating: 5.0, comment: "Diamond plan is premium! Sofas and mattresses feel fresh after shampooing. Highly recommend!" },
+      { name: "Arjun V.", rating: 4.9, comment: "Best deep cleaning experience. The team was very thorough with every corner of the apartment." }
+    ],
     apartmentSizes: [
       { label: "1 BHK", price: 4579 },
       { label: "2 BHK", price: 5879 },
@@ -356,6 +368,10 @@ const HOUSE_DETAILS_CONTENT = {
       "Ensure running water & electricity are available",
       "Store fragile items and valuables safely away",
       "Remove toiletries and clothes from areas to clean"
+    ],
+    reviews: [
+      { name: "Pooja N.", rating: 4.8, comment: "Great service for furnished apartments. They were careful with furniture and cleaned everything nicely." },
+      { name: "Aakash G.", rating: 4.7, comment: "Customizable options are a bonus. Got the kitchen interior cleaning and it was spotless!" }
     ],
     faqs: [
       { q: "Does this include inside cabinet cleaning?", a: "Standard furnished cleaning includes exterior cabinet cleaning. You can add interior cabinet cleaning under requirements." },
@@ -402,6 +418,10 @@ const HOUSE_DETAILS_CONTENT = {
       "Ensure continuous water and power supply",
       "Provide access to all rooms and balconies"
     ],
+    reviews: [
+      { name: "Deepak J.", rating: 4.9, comment: "Perfect for our new apartment move-in. All the construction dust was cleaned thoroughly." },
+      { name: "Sunita L.", rating: 4.8, comment: "Cupboard interiors were spotless after cleaning. Great job by the team!" }
+    ],
     faqs: [
       { q: "Is this service for empty apartments only?", a: "Yes, it is designed specifically for unoccupied or unfurnished apartments before moving in or after moving out." },
       { q: "What areas are cleaned under Unoccupied Apartment deep cleaning?", a: "We clean floors, windows, tracks, kitchen cabinets (interior/exterior), bathrooms, and balconies." },
@@ -435,6 +455,10 @@ const HOUSE_DETAILS_CONTENT = {
     ready: [
       "Keep all cupboards and wardrobes empty",
       "Ensure water and power supply"
+    ],
+    reviews: [
+      { name: "Mahesh B.", rating: 4.9, comment: "Amazing post-construction cleanup for our new bungalow. Every room was spotless!" },
+      { name: "Kavitha R.", rating: 4.8, comment: "Heavy-duty machines made a real difference. Cement marks on tiles are completely gone." }
     ],
     faqs: [
       { q: "Is this suitable for a newly built bungalow?", a: "Yes, it is designed for empty or newly constructed bungalows before move-in, focusing on heavy post-construction dust removal." },
@@ -471,6 +495,10 @@ const HOUSE_DETAILS_CONTENT = {
       "Keep fragile items secured",
       "Ensure continuous water and power supply"
     ],
+    reviews: [
+      { name: "Ramesh P.", rating: 4.8, comment: "Excellent cleaning for our 3 BHK bungalow. Staircases and hallways are sparkling clean!" },
+      { name: "Shalini M.", rating: 4.7, comment: "Very professional team. They covered all bathrooms and the kitchen area thoroughly." }
+    ],
     faqs: [
       { q: "How long does a Classic bungalow deep cleaning take?", a: "It typically takes 5 to 6 hours due to multi-level structures, staircases, and larger areas." },
       { q: "Are staircases and railings included?", a: "Yes, we perform machine scrubbing on stairs and wet wipe all railings and banisters." },
@@ -502,6 +530,10 @@ const HOUSE_DETAILS_CONTENT = {
     ],
     ready: [
       "Keep wardrobes empty for interior clean"
+    ],
+    reviews: [
+      { name: "Suresh K.", rating: 4.9, comment: "Gold plan for our bungalow was superb. Cupboard interiors were sanitized perfectly." },
+      { name: "Nandini V.", rating: 4.8, comment: "Loved the kitchen cabinet cleaning. Utensils were neatly rearranged after service." }
     ],
     faqs: [
       { q: "What makes the Gold plan different for bungalows?", a: "It includes everything in the Classic plan plus deep interior cupboard cleaning, cabinet sanitization, and kitchen drawer utensil rearrangement." },
@@ -536,6 +568,10 @@ const HOUSE_DETAILS_CONTENT = {
     ready: [
       "Clear access around patio and facade walls"
     ],
+    reviews: [
+      { name: "Pradeep S.", rating: 5.0, comment: "Diamond plan for our villa was outstanding. Sofas feel brand new and the facade looks amazing!" },
+      { name: "Lakshmi N.", rating: 4.9, comment: "The high-pressure wash of patio and stairs made a huge difference. Premium service!" }
+    ],
     faqs: [
       { q: "What premium services are included in the Diamond bungalow plan?", a: "It includes Gold plan services plus complete wet shampoo wash of sofas/mattresses and high-pressure washing of patio, stairs, and outer facade walls." },
       { q: "How is facade cleaning performed?", a: "We use high-pressure water jet wash machines to clean reachable exterior walls, entry pathways, and gates." },
@@ -568,6 +604,10 @@ const HOUSE_DETAILS_CONTENT = {
     ready: [
       "Keep selected rooms/balconies accessible",
       "Ensure water supply is available"
+    ],
+    reviews: [
+      { name: "Divya H.", rating: 4.8, comment: "Booked partial cleaning for kitchen and 2 bathrooms. Both were cleaned very well!" },
+      { name: "Mohan T.", rating: 4.7, comment: "Great option when you don't need full house cleaning. Quick and efficient service." }
     ],
     faqs: [
       { q: "What is a quick extra service?", a: "It is a targeted room or area cleaning service, ideal when you don't need the entire house deep cleaned." },
@@ -603,6 +643,10 @@ const HOUSE_DETAILS_CONTENT = {
     covered: ["Scrubbing of balcony floor", "Wiping of balcony railings", "Cleaning of drainage outlet"],
     tools: ["Scrubbing brush", "Eco-friendly cleaning agents", "Microfiber cloth"],
     ready: ["Clear any plants or furniture from the balcony", "Ensure access to water and power outlets"],
+    reviews: [
+      { name: "Rashmi A.", rating: 4.8, comment: "Small balcony looks spotless now. Quick and efficient service in just 25 minutes!" },
+      { name: "Harish G.", rating: 4.7, comment: "Great job removing pigeon droppings and dirt. Railings are shining." }
+    ],
     faqs: [
       { q: "How long does a small balcony clean take?", a: "It typically takes 20-30 minutes." },
       { q: "Do you clean the sliding door frame too?", a: "Yes, we wipe down the door frames bordering the balcony." },
@@ -618,6 +662,10 @@ const HOUSE_DETAILS_CONTENT = {
     covered: ["Deep scrubbing of large balcony floor", "Wiping of railings and glass partitions", "Drainage mesh cleaning"],
     tools: ["Scrubbing brush & wipers", "Eco-friendly surface cleaner", "Microfiber cloth"],
     ready: ["Clear all balcony furniture and plants", "Provide water and power access"],
+    reviews: [
+      { name: "Neeta S.", rating: 4.9, comment: "Large balcony cleaned perfectly. Glass railings look crystal clear now!" },
+      { name: "Sanjay D.", rating: 4.7, comment: "Tile stains and drainage area cleaned well. Very happy with the result." }
+    ],
     faqs: [
       { q: "How long does it take?", a: "It takes about 35-45 minutes depending on total length." },
       { q: "Do you clean glass railings?", a: "Yes, glass balustrades and frames are polished on both sides." },
@@ -633,6 +681,10 @@ const HOUSE_DETAILS_CONTENT = {
     covered: ["Streak-free washing of window panes", "Vacuuming of sliding tracks", "Wiping of window frame & grilles"],
     tools: ["Glass cleaner spray", "Window wiper & squeeze", "Crevice vacuum nozzle"],
     ready: ["Ensure clear access to the window areas", "Open curtains/blinds beforehand"],
+    reviews: [
+      { name: "Aditi B.", rating: 4.8, comment: "Windows are streak-free and tracks are completely clean. Great attention to detail!" },
+      { name: "Prasad K.", rating: 4.7, comment: "Quick and neat service. Mosquito mesh was cleaned well too." }
+    ],
     faqs: [
       { q: "How long does it take?", a: "It takes around 20-30 minutes per window." },
       { q: "Is track cleaning included?", a: "Yes, we vacuum and scrub sliding window tracks thoroughly." },
@@ -648,6 +700,10 @@ const HOUSE_DETAILS_CONTENT = {
     covered: ["Deep cleaning of large window panes", "Vacuuming & washing of tracks", "Grille & frame dusting & wet wipe"],
     tools: ["Glass cleaner & squeeze", "Track cleaning brush", "Microfiber cloths"],
     ready: ["Clear nearby items & open blinds/curtains", "Ensure water access is available"],
+    reviews: [
+      { name: "Geeta M.", rating: 4.9, comment: "Large windows cleaned beautifully. Mud in the tracks is completely gone!" },
+      { name: "Vikrant J.", rating: 4.8, comment: "Professional and thorough cleaning. Meshes were washed and dried properly." }
+    ],
     faqs: [
       { q: "How long does a large window take?", a: "It typically takes about 45 to 60 minutes." },
       { q: "Do you clean high-rise external glass?", a: "Only the panes reachable safely from inside. We do not do harness-based external washing." },
@@ -660,33 +716,49 @@ const HOUSE_DETAILS_CONTENT = {
     ]
   },
   "quick-dining-table": {
-    covered: ["Sanitization of tabletop surface", "Wiping of table legs and framework", "Dusting and wiping of up to 6 dining chairs"],
-    tools: ["Surface sanitizer", "Microfiber cloths"],
-    ready: ["Remove all plates, utensils, and table mats before cleaning"],
+    covered: ["Surface cleaning, sanitation, and wood/glass polishing"],
+    tools: [
+      "Premium wood polish",
+      "Sanitizing sprays",
+      "Soft microfiber cloths"
+    ],
+    ready: [
+      "Clear all plates, cutlery, and table runners from the dining table"
+    ],
+    reviews: [
+      { name: "Rohit P.", rating: 4.9, comment: "Very detailed cleaning of the dining chairs as well. Stains are completely gone!" },
+      { name: "Kunal M.", rating: 4.8, comment: "Cleaned the glass table top spotless. The wooden chairs look polished." }
+    ],
     faqs: [
-      { q: "How long does it take?", a: "It takes about 30 minutes." },
-      { q: "Do you polish wooden tables?", a: "We perform deep sanitization and wipe. Wood polishing lacquer is not included." },
-      { q: "Are chairs cleaned inside this?", a: "Yes, wiping of up to 6 chairs is included in this plan." },
-      { q: "Is fabric chair shampooing included?", a: "Fabric upholstery shampoo wash is not included, only dry vacuuming/wiping." },
-      { q: "Do you clean glass tabletops?", a: "Yes, glass tabletops are cleaned with streak-free glass spray." },
-      { q: "Do you clean table runners or cloths?", a: "No, we only wipe down the hard surfaces." },
-      { q: "Is leather chair polishing included?", a: "No, we wipe leatherette chairs with a damp cloth, no chemical polish is applied." },
-      { q: "Do you clean dining table extensions?", a: "Yes, extensions are wiped if opened by the customer." }
+      { q: "Do you clean chair cushions?", a: "Yes, we dry dust and wipe the chairs. Complete fabric shampooing of chair cushions is not included." },
+      { q: "What types of table materials do you clean?", a: "We clean all common table surfaces including wood, glass, marble, metal, and laminates." },
+      { q: "Do you apply polish to wooden tables?", a: "Yes, we use a premium wood polish to restore the natural shine and protect wooden surfaces." },
+      { q: "Will this remove food stains from marble?", a: "We clean and sanitize marble tops; however, deep acidic stains or etching in marble may require professional polishing." },
+      { q: "How long does table and chair cleaning take?", a: "It typically takes 30 to 40 minutes depending on the table size and chair setup." },
+      { q: "Do you clean under the table?", a: "Yes, we clean the table legs and the floor space immediately underneath the dining table." }
     ]
   },
   "kitchen-microwave-clean": {
-    covered: ["Deep degreasing of microwave interior", "Wiping of glass door (inside & out)", "Sanitization of exterior body and buttons"],
-    tools: ["Food-safe degreasing spray", "Scrubbing sponges"],
-    ready: ["Ensure microwave is plugged out and cool before cleaning"],
+    covered: ["Interior & exterior cleaning", "Turntable & glass door cleaning", "Food stain & grease removal"],
+    tools: [
+      "Appliance-safe cleaning products",
+      "Microfiber cloths",
+      "Soft scrubbers",
+      "Small cleaning brushes"
+    ],
+    ready: [
+      "Remove food and containers",
+      "Keep the microwave accessible",
+      "Ensure the appliance is switched off"
+    ],
+    reviews: [
+      { name: "Priya R.", rating: 5.0, comment: "The inside of my microwave was cleaned really well." },
+      { name: "Karthik M.", rating: 4.9, comment: "Quick and neat service. The food stains were removed properly." }
+    ],
     faqs: [
-      { q: "How long does a microwave clean take?", a: "It takes about 15 to 20 minutes." },
-      { q: "Are food-safe chemicals used?", a: "Yes, we use non-toxic, food-grade degreasers inside the cavity." },
-      { q: "Do you clean the turntable glass plate?", a: "Yes, the glass tray is removed, washed, and dried." },
-      { q: "Is convection oven cleaning covered?", a: "Yes, this covers solo, grill, and convection microwave ovens." },
-      { q: "Does it remove old burnt smells?", a: "Our cleaning removes grease which causes smells, helping refresh the unit." },
-      { q: "Is OTG cleaning covered?", a: "OTG ovens are not covered under this, only standard microwave ovens." },
-      { q: "Are heating elements cleaned?", a: "We wipe around heating elements gently to avoid any component damage." },
-      { q: "What if the microwave is not working?", a: "We only clean units that are in working condition." }
+      { q: "Will you clean the inside of the microwave?", a: "Yes, complete deep cleaning of the internal cavity, including grease and food stain removal, is covered." },
+      { q: "Do I need to remove everything before cleaning?", a: "Yes, please remove all food items, containers, and utensils from the microwave before the professional arrives." },
+      { q: "Can you remove burnt food stains?", a: "Yes, our appliance-safe cleaning agents are highly effective in breaking down and removing stubborn burnt-on food stains." }
     ]
   }
 };
@@ -751,6 +823,24 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
     let list = FULL_HOUSE_SERVICES[activeTab] || [];
     list = JSON.parse(JSON.stringify(list));
 
+    const applyStaticDetails = (item) => {
+      const staticDetails = HOUSE_DETAILS_CONTENT[item.id] || {};
+      item.tools = item.tools || staticDetails.tools || [];
+      item.ready = item.ready || staticDetails.ready || [];
+      item.reviews_list = item.reviews_list || staticDetails.reviews || [];
+      item.faqs = item.faqs || staticDetails.faqs || [];
+      return item;
+    };
+
+    list = list.map(item => {
+      if (Array.isArray(item.subOptions)) {
+        item.subOptions = item.subOptions.map(subOpt => applyStaticDetails(subOpt));
+      } else {
+        item = applyStaticDetails(item);
+      }
+      return item;
+    });
+
     if (dbPackages.length > 0) {
       list = list.map(item => {
         if (Array.isArray(item.subOptions)) {
@@ -763,12 +853,14 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 duration: dbMatch.duration || subOpt.duration,
-                includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : subOpt.includes,
-                tools: dbMatch.tools,
-                ready: dbMatch.ready,
+                includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : { text: inc.text || '', checked: inc.checked !== false }) : subOpt.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : inc),
+                tools: (dbMatch.tools && dbMatch.tools.length > 0) ? dbMatch.tools : subOpt.tools,
+                ready: (dbMatch.ready && dbMatch.ready.length > 0) ? dbMatch.ready : subOpt.ready,
                 reviews: subOpt.reviews || "1.7M bookings",
-                reviews_list: dbMatch.reviews,
-                faqs: dbMatch.faqs,
+                reviews_list: (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0)
+                  ? dbMatch.reviews.map(r => ({ ...r, comment: r.comment || r.text || "" }))
+                  : subOpt.reviews_list,
+                faqs: (dbMatch.faqs && dbMatch.faqs.length > 0) ? dbMatch.faqs : subOpt.faqs,
                 image: dbMatch.image || subOpt.image,
               };
             }
@@ -784,11 +876,13 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : item.includes;
-            item.tools = dbMatch.tools;
-            item.ready = dbMatch.ready;
-            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
-            item.faqs = dbMatch.faqs;
+            item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : { text: inc.text || '', checked: inc.checked !== false }) : item.includes.map(inc => typeof inc === 'string' ? { text: inc, checked: true } : inc);
+            item.tools = (dbMatch.tools && dbMatch.tools.length > 0) ? dbMatch.tools : item.tools;
+            item.ready = (dbMatch.ready && dbMatch.ready.length > 0) ? dbMatch.ready : item.ready;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) {
+              item.reviews_list = dbMatch.reviews.map(r => ({ ...r, comment: r.comment || r.text || "" }));
+            }
+            item.faqs = (dbMatch.faqs && dbMatch.faqs.length > 0) ? dbMatch.faqs : item.faqs;
             item.image = dbMatch.image || item.image;
             item.badge = dbMatch.tag || item.badge;
           }
@@ -798,7 +892,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
     }
 
     if (!searchQuery) return list;
-    return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()) || a.includes.some(inc => inc.toLowerCase().includes(searchQuery.toLowerCase())));
+    return list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()) || (a.includes || []).some(inc => (typeof inc === 'string' ? inc : (inc.text || '')).toLowerCase().includes(searchQuery.toLowerCase())));
   };
 
   const activeServices = getActiveServices();
@@ -971,12 +1065,12 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                         <span className="text-slate-500 font-semibold">{service.duration}</span>
                       </div>
 
-                      {service.includes && service.includes.length > 0 && (
+                      {service.includes && service.includes.length > 0 && service.includes.some(item => typeof item === 'string' || item.checked !== false) && (
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
-                          {service.includes.map((item, i) => (
+                          {service.includes.filter(item => typeof item === 'string' || item.checked !== false).map((item, i) => (
                             <li key={i} className="flex items-start gap-2">
                               <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                              <span>{item}</span>
+                              <span>{typeof item === 'string' ? item : (item.text || '')}</span>
                             </li>
                           ))}
                         </ul>
@@ -1115,27 +1209,11 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 </p>
               </div>
 
-              {/* Inclusions Box */}
-              {selectedServiceDetails.includes && selectedServiceDetails.includes.length > 0 && (
-                <div className="bg-emerald-50/40 border border-emerald-100/80 rounded-2xl p-4 text-left">
-                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    What's included
-                  </h4>
-                  <ul className="space-y-1 text-xs text-slate-600 font-medium">
-                    {selectedServiceDetails.includes.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-1.5">
-                        <span className="text-emerald-500 font-bold">✓</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
               {/* Requirements selection section */}
               {(() => {
                 const details = HOUSE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+                const hasRequirements = !!(details.apartmentSizes || details.bungalowSizes || details.floorOptions || details.kitchenOptions || details.sofaOptions || details.cupboardOptions || details.extraOptions || selectedServiceDetails.id === "partial-home-clean");
+                if (!hasRequirements) return null;
                 return (
                   <div className="space-y-6">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">Select Requirements</h4>
@@ -1446,30 +1524,9 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 );
               })()}
 
-              {/* What is Covered */}
-              {(() => {
-                const details = HOUSE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const covered = details.covered || [];
-                if (covered.length === 0) return null;
-                return (
-                  <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
-                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What Is Covered</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {covered.map((item, i) => (
-                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                          <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
-                          <span>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-
               {/* Tools & Products We Use */}
               {(() => {
-                const details = HOUSE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const tools = details.tools || [];
+                const tools = (selectedServiceDetails.tools || []).filter(t => typeof t === 'string' || t.enabled !== false).map(t => typeof t === 'string' ? t : (t.text || ''));
                 if (tools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -1488,8 +1545,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
 
               {/* What You Need to Keep Ready */}
               {(() => {
-                const details = HOUSE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const ready = details.ready || [];
+                const ready = (selectedServiceDetails.ready || []).filter(r => typeof r === 'string' || r.enabled !== false).map(r => typeof r === 'string' ? r : (r.text || ''));
                 if (ready.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -1506,10 +1562,34 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                 );
               })()}
 
+              {/* Customer Reviews Section */}
+              {(() => {
+                const reviews = (selectedServiceDetails.reviews_list || []).filter(r => r.enabled !== false);
+                if (reviews.length === 0) return null;
+                return (
+                  <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
+                    <div className="space-y-3">
+                      {reviews.map((rev, i) => (
+                        <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <div className="text-[11px] font-bold text-slate-700">{rev.name}</div>
+                            <div className="text-[11px] text-violet-600 font-extrabold flex items-center gap-1">
+                              <Star size={12} className="fill-violet-600 text-violet-600" />
+                              <span>{rev.rating}</span>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">{rev.comment}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Frequently Asked Questions */}
               {(() => {
-                const details = HOUSE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const faqs = details.faqs || [];
+                const faqs = (selectedServiceDetails.faqs || []).filter(f => f.enabled !== false);
                 if (faqs.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">

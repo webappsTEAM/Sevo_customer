@@ -34,6 +34,16 @@ class Migration(migrations.Migration):
                     name='tracking_token',
                     field=models.UUIDField(blank=True, db_index=True, null=True, unique=True),
                 ),
+                migrations.AddField(
+                    model_name='servicerequest',
+                    name='otp_verified',
+                    field=models.BooleanField(default=False),
+                ),
+                migrations.AddField(
+                    model_name='servicerequest',
+                    name='start_otp',
+                    field=models.CharField(blank=True, default='', max_length=10),
+                ),
             ],
         ),
     ]

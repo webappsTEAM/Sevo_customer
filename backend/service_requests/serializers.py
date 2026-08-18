@@ -277,9 +277,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     def get_technician_name(self, obj):
         if obj.technician_name:
             return obj.technician_name
-        assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp:
-            return assigned_emp.full_name or (assigned_emp.user.get_full_name() if getattr(assigned_emp, 'user', None) else None)
+        assigned_employee = getattr(obj, "assigned_employee", None)
+        if assigned_employee:
+            return assigned_employee.full_name or (assigned_employee.user.get_full_name() if getattr(assigned_employee, 'user', None) else None)
         if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
             return "Suresh Kumar"
         return ""
@@ -287,9 +287,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     def get_technician_phone(self, obj):
         if obj.technician_phone:
             return obj.technician_phone
-        assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and getattr(assigned_emp, "phone", None):
-            return assigned_emp.phone
+        assigned_employee = getattr(obj, "assigned_employee", None)
+        if assigned_employee and getattr(assigned_employee, "phone", None):
+            return assigned_employee.phone
         if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
             return "9845012345"
         return ""
@@ -297,9 +297,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     def get_technician_photo(self, obj):
         if obj.technician_photo:
             return obj.technician_photo
-        assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and getattr(assigned_emp, "photo", None):
-            return assigned_emp.photo
+        assigned_employee = getattr(obj, "assigned_employee", None)
+        if assigned_employee and getattr(assigned_employee, "photo", None):
+            return assigned_employee.photo
         if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
             return "/mockups/service_plumbing.png"
         return ""
@@ -307,9 +307,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     def get_technician_rating(self, obj):
         if obj.technician_rating:
             return float(obj.technician_rating)
-        assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and getattr(assigned_emp, "rating", None):
-            return float(assigned_emp.rating)
+        assigned_employee = getattr(obj, "assigned_employee", None)
+        if assigned_employee and getattr(assigned_employee, "rating", None):
+            return float(assigned_employee.rating)
         if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
             return 4.9
         return None

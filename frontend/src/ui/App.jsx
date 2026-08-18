@@ -79,6 +79,12 @@ const CatalogChangeLogPage = lazy(() =>
   import("./pages/catalog/CatalogChangeLogPage.jsx").then(m => ({ default: m.CatalogChangeLogPage || m.default }))
 )
 
+const CustomersDashboardPage = lazy(() => import("./pages/CustomersDashboardPage.jsx").then(m => ({ default: m.CustomersDashboardPage })))
+const CustomersListPage = lazy(() => import("./pages/CustomersListPage.jsx").then(m => ({ default: m.CustomersListPage })))
+const CustomerDetailPage = lazy(() => import("./pages/CustomerDetailPage.jsx").then(m => ({ default: m.CustomerDetailPage })))
+const CustomersPaymentsPage = lazy(() => import("./pages/CustomersPaymentsPage.jsx").then(m => ({ default: m.CustomersPaymentsPage })))
+const CustomerMergesPage = lazy(() => import("./pages/CustomerMergesPage.jsx").then(m => ({ default: m.CustomerMergesPage })))
+
 const CouponsPage = lazy(() =>
   import("./pages/marketing/CouponsPage.jsx").then(m => ({ default: m.CouponsPage || m.default }))
 )
@@ -352,11 +358,18 @@ export function App() {
               <Route path={routes.homepage_customizer} element={<HomePageCustomizerPage />} />
               <Route path={routes.admin_service_requests} element={<ServiceRequestsPage />} />
               <Route path={routes.admin_feedback} element={<FeedbackManagementPage />} />
-              <Route path="/customers/list" element={<ServiceRequestsPage />} />
+            </Route>
+
+            {/* ── Customer module — accessible by Admins AND Care Agents ── */}
+            <Route element={<RequireCareAgentOrAdmin />}>
+              <Route path={routes.customers_dashboard} element={<CustomersDashboardPage />} />
+              <Route path={routes.customers_list} element={<CustomersListPage />} />
+              <Route path={routes.customers_detail} element={<CustomerDetailPage />} />
+              <Route path={routes.customers_payments} element={<CustomersPaymentsPage />} />
+              <Route path={routes.customers_merges} element={<CustomerMergesPage />} />
               <Route path="/customers/bookings" element={<ServiceRequestsPage />} />
               <Route path="/customers/reschedules" element={<ServiceRequestsPage />} />
               <Route path="/customers/refunds" element={<ServiceRequestsPage />} />
-              <Route path="/customers/payments" element={<ServiceRequestsPage />} />
               <Route path="/customers/documents" element={<ServiceRequestsPage />} />
               <Route path="/customers/complaints" element={<AdminComplaintsPage />} />
               <Route path="/customers/reviews" element={<FeedbackManagementPage />} />
