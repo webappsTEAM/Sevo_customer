@@ -13,7 +13,7 @@ User = get_user_model()
 
 class CustomerCareTestCase(TestCase):
     def setUp(self):
-        self.company = Company.objects.create(name="Care Corp", slug="care-corp")
+        self.company = Company.objects.create(company_name="Care Corp", slug="care-corp")
 
         self.admin_user = User.objects.create_user(
             username="admin_user",
@@ -146,6 +146,7 @@ class CustomerCareTestCase(TestCase):
             preferred_date=timezone.now().date() + timedelta(days=2),
             status="confirmed",
             payment_status="paid",
+            total_amount=Decimal("150.00"),
             final_amount=Decimal("150.00")
         )
         
@@ -192,6 +193,7 @@ class CustomerCareTestCase(TestCase):
             preferred_date=timezone.now().date(),
             status="confirmed",
             payment_status="paid",
+            total_amount=Decimal("1000.00"),
             final_amount=Decimal("1000.00")
         )
         
@@ -259,7 +261,6 @@ class CustomerCareTestCase(TestCase):
         )
         
         feedback = ServiceFeedback.objects.create(
-            company=self.company,
             service_request=booking,
             rating=2,
             is_submitted=True,
@@ -267,7 +268,7 @@ class CustomerCareTestCase(TestCase):
         )
         
         from customer_care.models import CustomerCareTicket
-        ticket = CustomerCareTicket.objects.filter(booking=booking, category="feedback").first()
+        ticket = CustomerCareTicket.objects.filter(booking=booking, category="service_quality").first()
         self.assertIsNotNone(ticket)
         self.assertEqual(ticket.priority, "high")
         self.assertEqual(ticket.customer, self.admin_user)

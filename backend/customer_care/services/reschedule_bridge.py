@@ -71,6 +71,8 @@ def create_reschedule_via_ticket(ticket, actor, new_date, new_time_slot, reason,
                 rr.proposed_technician = new_emp
                 rr.save()
                 available = True
+    else:
+        available = True
 
     # Auto-approval decision
     if hours_diff is not None and hours_diff >= 24.0 and available:

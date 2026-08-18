@@ -128,11 +128,19 @@ class CatalogCategoryListView(APIView):
         from .models import CatalogCategory
         from .serializers import CatalogCategorySerializer
         from django.core.cache import cache
+        from django.conf import settings
 
-        data = cache.get("catalog_categories_list")
-        if data is None:
-            cats = CatalogCategory.objects.all().order_by('name')
-            data = CatalogCategorySerializer(cats, many=True).data
+        use_cache = not getattr(settings, 'DEBUG', False)
+        
+        if use_cache:
+            data = cache.get("catalog_categories_list")
+            if data is not None:
+                return Response({"success": True, "data": data})
+
+        cats = CatalogCategory.objects.all().order_by('name')
+        data = CatalogCategorySerializer(cats, many=True).data
+        
+        if use_cache:
             try:
                 cache.set("catalog_categories_list", data, timeout=600)
             except Exception:
@@ -150,17 +158,21 @@ class CatalogServiceListView(APIView):
         from .serializers import CatalogServiceSerializer
         from django.db import connection
         from django.core.cache import cache
+        from django.conf import settings
 
         cat_id = request.GET.get('category_id') or ''
         service_slug = request.GET.get('service_slug') or ''
         status_filter = request.GET.get('status') or ''
         
+        use_cache = not getattr(settings, 'DEBUG', False)
         cache_key = f"catalog_services_list_{cat_id}_{service_slug}_{status_filter}"
-        cached_res = cache.get(cache_key)
-        if cached_res is not None:
-            return Response(cached_res)
+        
+        if use_cache:
+            cached_res = cache.get(cache_key)
+            if cached_res is not None:
+                return Response(cached_res)
 
-        qs = Package.objects.select_related("service").all().order_by('name')
+        qs = Package.objects.select_related("service", "service__category").all().order_by('name')
         if cat_id:
             qs = qs.filter(service__category_id=cat_id)
         if service_slug:
@@ -182,10 +194,12 @@ class CatalogServiceListView(APIView):
             "currency": currency,
             "currency_symbol": currency_symbol
         }
-        try:
-            cache.set(cache_key, res_payload, timeout=600)
-        except Exception:
-            pass
+        
+        if use_cache:
+            try:
+                cache.set(cache_key, res_payload, timeout=600)
+            except Exception:
+                pass
         return Response(res_payload)
 
 class CatalogSubServiceListView(APIView):

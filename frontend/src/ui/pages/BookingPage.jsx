@@ -7798,7 +7798,7 @@ export function BookingPage() {
   }
 
   const [categoriesData, setCategoriesData] = useState([])
-  const [packagesData, setPackagesData] = useState({})
+  const [packagesData, setPackagesData] = useState(null)
 
   useEffect(() => {
     async function loadCatalog() {
@@ -7825,8 +7825,9 @@ export function BookingPage() {
             const cid = s.category.toString()
             if (!pkgs[cid]) pkgs[cid] = []
             pkgs[cid].push({
+              ...s,
               id: s.id.toString(),
-              name: s.name,
+              category: s.category.toString(),
               price: parseFloat(s.price),
               priceStr: BOOKING_CURRENCY_SYMBOL + s.price,
               duration: s.duration || "1 hr",
@@ -8357,33 +8358,60 @@ export function BookingPage() {
       {/* Package Selection Modal Overlay */}
       <AnimatePresence>
         {step < 3 && showPackageModal && category && (
-          (category.id === "painting" || category.slug === "painting" || String(category.id) === "painting" || category.name?.toLowerCase() === "painting") ? (
-            <PaintingPackageModal
-              category={category}
-              cart={cart}
-              setCart={setCart}
-              onClose={() => {
-                setShowPackageModal(false);
-                navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
-              }}
-              onCheckout={() => { setShowPackageModal(false); setStep(3); }}
-              onGetEstimate={() => {
-                setShowLocPicker(true);
-              }}
-            />
-          ) : (
-            <PackageModal
-              category={category}
-              cart={cart}
-              setCart={setCart}
-              packagesData={packagesData}
-              onClose={() => {
-                setShowPackageModal(false);
-                navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
-              }}
-              onCheckout={() => { setShowPackageModal(false); setStep(3); }}
-            />
-          )
+          (() => {
+            const isPainting = category.id === "painting" || category.slug === "painting" || category.slug === "paintings" || String(category.id) === "17" || category.name?.toLowerCase() === "painting" || category.name?.toLowerCase() === "paintings";
+            const isMason = category.id === "mason" || category.slug === "mason" || category.slug === "masons" || String(category.id) === "11" || category.name?.toLowerCase() === "mason" || category.name?.toLowerCase() === "masonry";
+            
+            if (isPainting) {
+              return (
+                <PaintingPackageModal
+                  category={category}
+                  cart={cart}
+                  setCart={setCart}
+                  packagesData={packagesData}
+                  onClose={() => {
+                    setShowPackageModal(false);
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                  }}
+                  onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+                  onGetEstimate={() => {
+                    setShowLocPicker(true);
+                  }}
+                />
+              );
+            } else if (isMason) {
+              return (
+                <MasonPackageModal
+                  category={category}
+                  cart={cart}
+                  setCart={setCart}
+                  packagesData={packagesData}
+                  onClose={() => {
+                    setShowPackageModal(false);
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                  }}
+                  onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+                  onGetEstimate={() => {
+                    setShowLocPicker(true);
+                  }}
+                />
+              );
+            } else {
+              return (
+                <PackageModal
+                  category={category}
+                  cart={cart}
+                  setCart={setCart}
+                  packagesData={packagesData}
+                  onClose={() => {
+                    setShowPackageModal(false);
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                  }}
+                  onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+                />
+              );
+            }
+          })()
         )}
       </AnimatePresence>
 
@@ -8728,7 +8756,7 @@ const PAINTING_DETAILS_EXTRA = {
   }
 };
 
-export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate }) {
+export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, packagesData }) {
   const [showPriceList, setShowPriceList] = React.useState(false);
   const [selectedPaintType, setSelectedPaintType] = React.useState('premium-emulsion');
   const [searchQuery, setSearchQuery] = useState("")
@@ -8784,137 +8812,168 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     }
   }
 
-  const PAINTING_SERVICES = [
-    {
-      id: "paint-interior",
-      name: "Interior Painting",
-      rating: "4.8",
-      reviews: "18K",
-      image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
-      points: [
-        "Complete wall prep & putty application",
-        "Double coat premium emulsion paint",
-        "Detailed masking & post-cleanup protection",
-        "1-Year Service Warranty"
-      ],
-      benefits: ["Premium Quality", "Verified Painters", "Clean Post-Service", "1-Year Warranty"],
-      includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
-      excludes: ["Major plastering work", "Dampness treatment (available separately)", "Electrical/re-wiring work"],
-      inspectionHighlights: ["Digital Wall Measurement", "Moisture Meter Inspection", "Wall Putty/Paint Damage Assessment"],
-      steps: ["Select Areas", "Free Inspection", "Detailed Quote", "Design Approval", "Expert Painting"],
-      subOptions: [
-        { id: "int-single-wall", name: "Single Wall", price: 0 },
-        { id: "int-one-room", name: "One Room", price: 0 },
-        { id: "int-multi-room", name: "Two or More Rooms", price: 0 },
-        { id: "int-full-home", name: "Full Home", price: 0 },
-        { id: "int-ceiling", name: "Ceiling", price: 0 }
-      ]
-    },
-    {
-      id: "paint-exterior",
-      name: "Exterior Painting",
-      rating: "4.7",
-      reviews: "15K",
-      image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&fit=crop",
-      points: [
-        "Pressure washing & crack filling",
-        "Anti-fungal primer coat",
-        "Double coat weather-defense paint",
-        "Dust and dirt resistant finish"
-      ],
-      benefits: ["Weatherproof Shield", "Scaffolding Safety", "Crack Treatment", "3-Year Warranty"],
-      includes: ["High Pressure Washing", "Sanding & Crack Filling", "Anti-Algae Exterior Primer", "2 Coats Weatherproof Paint", "Grill & Pipe Protective Coating", "Post-Service Cleaning"],
-      excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)", "Structural masonry / re-plastering"],
-      inspectionHighlights: ["Façade Crack Audit", "Moisture Meter Checking", "Safety & Scaffolding Planning"],
-      steps: ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
-      subOptions: [
-        { id: "ext-wall", name: "Exterior Wall", price: 0 },
-        { id: "ext-building", name: "Building Exterior", price: 0 },
-        { id: "ext-compound", name: "Compound Wall", price: 0 },
-        { id: "ext-terrace", name: "Terrace", price: 0 }
-      ]
-    },
-    {
-      id: "paint-waterproofing",
-      name: "Waterproofing",
-      rating: "4.6",
-      reviews: "12K",
-      image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800&q=80&fit=crop",
-      points: [
-        "Expert Leakage Detection & Dampness Solutions",
-        "Terrace, Bathroom & External Wall Waterproofing",
-        "We diagnose the cause. Fix it right. Waterproofing that lasts."
-      ],
-      benefits: ["Leakage Proof", "Damp & Mold Proof", "Advanced Chemicals", "3-Year Warranty"],
-      includes: ["Thermal Moisture Inspection", "Leakage Source Detection", "Terrace Joint Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Structural Crack Filling"],
-      excludes: ["Re-tiling charges (if floor tile needs to be broken)", "Major concrete reconstruction", "Plumbing piping re-routing"],
-      inspectionHighlights: ["Moisture Meter Scan", "Leakage Trace Mapping", "Wall/Ceiling Dampness Audit"],
-      steps: ["Inspect & Scan", "Detect Leakage Source", "Seal Cracks & Grout", "Apply Waterproof Barrier", "Water Tightness Test"],
-      subOptions: [
-        { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
-        { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
-        { id: "wp-wall", name: "Wall Waterproofing", price: 0 },
-        { id: "wp-roof", name: "Roof Waterproofing", price: 0 },
-        { id: "wp-crack", name: "Crack Filling", price: 0 }
-      ]
-    },
-    {
-      id: "paint-wood-metal",
-      name: "Wood & Metal Painting",
-      rating: "4.7",
-      reviews: "9K",
-      image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=800&q=80&fit=crop",
-      points: [
-        "Rust removal & sanding treatment",
-        "Specialized wood/metal primer application",
-        "PU coating or premium enamel paint",
-        "High gloss or sophisticated matte finish"
-      ],
-      benefits: ["Anti-Rust Shield", "Premium Wood Polish", "High Gloss Spray Finish", "Durability Guarantee"],
-      includes: ["Rust Scraping & Mechanical Sanding", "Wood Sanding & Filler", "Metal Anti-Corrosion Primer", "Wood Base Primer", "2 Coats PU or Enamel Paint", "Finishing Selection (Gloss/Matte)"],
-      excludes: ["New wood carving or carpentry repairs", "Replacement of broken wood sections", "Glass frame replacements"],
-      inspectionHighlights: ["Rust Depth Measurement", "Wood Termite/Rot Inspection", "Measurement of Grills/Doors"],
-      steps: ["Select Items", "Sanding & Scraping", "Apply Protection Primer", "PU Polish / Enamel Paint", "Final Quality Polish"],
-      subOptions: [
-        { id: "wm-doors", name: "Doors", price: 0 },
-        { id: "wm-windows", name: "Windows", price: 0 },
-        { id: "wm-grills", name: "Grills", price: 0 },
-        { id: "wm-cabinets", name: "Cabinets", price: 0 },
-        { id: "wm-gates", name: "Gates", price: 0 }
-      ]
-    },
-    {
-      id: "paint-texture",
-      name: "Texture & Decorative Painting",
-      rating: "4.8",
-      reviews: "8K",
-      image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&q=80&fit=crop",
-      points: [
-        "Specialty textured finishes & stencils",
-        "Premium metallic & non-metallic glazes",
-        "Vibrant accent wall styling consultation"
-      ],
-      benefits: ["Accent Metallic Wall", "Custom Stencil Designs", "Textured Accent Finish", "Designer Showcase"],
-      includes: ["Texture / Pattern Consultation", "Accent Wall Preparation", "Premium Metallic Pattern Painting", "Custom Stencil Painting", "Post-Service Clean-up"],
-      excludes: ["Full room plain painting (available separately)", "Wallpaper scraping/removal", "Plaster board reconstruction"],
-      inspectionHighlights: ["Texture Catalog Consultation", "Accent Wall Surface Suitability Check", "Wall Size & Lighting Review"],
-      steps: ["Select Designer Theme", "Wall Surface Preparation", "Apply Base Coating", "Create Textured Finish", "Accent Highlights Finish"],
-      subOptions: [
-        { id: "td-texture", name: "Texture Finish", price: 0 },
-        { id: "td-designer", name: "Designer Finish", price: 0 },
-        { id: "td-stencil", name: "Stencil Decor", price: 0 },
-        { id: "td-accent", name: "Accent Wall Painting", price: 0 }
-      ]
-    }
-  ];
+  const paintingKey = React.useMemo(() => {
+    if (!packagesData) return null;
+    return Object.keys(packagesData).find(key => 
+      packagesData[key] && packagesData[key].some(p => p.category_slug === "painting" || p.category_slug === "paintings" || String(p.category) === "paintings" || String(p.category) === "17")
+    ) || null;
+  }, [packagesData]);
 
-  const cardRefs = {
-    "paint-interior": useRef(null),
-    "paint-exterior": useRef(null),
-    "paint-waterproofing": useRef(null),
-    "paint-wood-metal": useRef(null),
-    "paint-texture": useRef(null),
-  }
+  const dbPackages = React.useMemo(() => {
+    return paintingKey ? packagesData[paintingKey] : [];
+  }, [packagesData, paintingKey]);
+
+  const PAINTING_SERVICES = React.useMemo(() => {
+    const staticServices = [
+      {
+        id: "paint-interior",
+        serviceSlug: "interior-painting",
+        name: "Interior Painting",
+        rating: "4.8",
+        reviews: "18K",
+        image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
+        points: [
+          "Complete wall prep & putty application",
+          "Double coat premium emulsion paint",
+          "Detailed masking & post-cleanup protection",
+          "1-Year Service Warranty"
+        ],
+        benefits: ["Premium Quality", "Verified Painters", "Clean Post-Service", "1-Year Warranty"],
+        includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
+        excludes: ["Major plastering work", "Dampness treatment (available separately)", "Electrical/re-wiring work"],
+        inspectionHighlights: ["Digital Wall Measurement", "Moisture Meter Inspection", "Wall Putty/Paint Damage Assessment"],
+        steps: ["Select Areas", "Free Inspection", "Detailed Quote", "Design Approval", "Expert Painting"],
+        subOptions: [
+          { id: "int-single-wall", name: "Single Wall", price: 0 },
+          { id: "int-one-room", name: "One Room", price: 0 },
+          { id: "int-multi-room", name: "Two or More Rooms", price: 0 },
+          { id: "int-full-home", name: "Full House painting", price: 0 },
+          { id: "int-ceiling", name: "Ceiling", price: 0 }
+        ]
+      },
+      {
+        id: "paint-exterior",
+        serviceSlug: "exterior-painting",
+        name: "Exterior Painting",
+        rating: "4.7",
+        reviews: "15K",
+        image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&fit=crop",
+        points: [
+          "Pressure washing & crack filling",
+          "Anti-fungal primer coat",
+          "Double coat weather-defense paint",
+          "Dust and dirt resistant finish"
+        ],
+        benefits: ["Weatherproof Shield", "Scaffolding Safety", "Crack Treatment", "3-Year Warranty"],
+        includes: ["High Pressure Washing", "Sanding & Crack Filling", "Anti-Algae Exterior Primer", "2 Coats Weatherproof Paint", "Grill & Pipe Protective Coating", "Post-Service Cleaning"],
+        excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)", "Structural masonry / re-plastering"],
+        inspectionHighlights: ["Façade Crack Audit", "Moisture Meter Checking", "Safety & Scaffolding Planning"],
+        steps: ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
+        subOptions: [
+          { id: "ext-wall", name: "Exterior Wall", price: 0 },
+          { id: "ext-building", name: "Building Exterior", price: 0 },
+          { id: "ext-compound", name: "Compound Wall", price: 0 },
+          { id: "ext-terrace", name: "Terrace", price: 0 }
+        ]
+      },
+      {
+        id: "paint-waterproofing",
+        serviceSlug: "waterproofing",
+        name: "Waterproofing Solutions",
+        rating: "4.6",
+        reviews: "12K",
+        image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800&q=80&fit=crop",
+        points: [
+          "Expert Leakage Detection & Dampness Solutions",
+          "Terrace, Bathroom & External Wall Waterproofing",
+          "We diagnose the cause. Fix it right. Waterproofing that lasts."
+        ],
+        benefits: ["Leakage Proof", "Damp & Mold Proof", "Advanced Chemicals", "3-Year Warranty"],
+        includes: ["Thermal Moisture Inspection", "Leakage Source Detection", "Terrace Joint Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Structural Crack Filling"],
+        excludes: ["Re-tiling charges (if floor tile needs to be broken)", "Major concrete reconstruction", "Plumbing piping re-routing"],
+        inspectionHighlights: ["Moisture Meter Scan", "Leakage Trace Mapping", "Wall/Ceiling Dampness Audit"],
+        steps: ["Inspect & Scan", "Detect Leakage Source", "Seal Cracks & Grout", "Apply Waterproof Barrier", "Water Tightness Test"],
+        subOptions: [
+          { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
+          { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
+          { id: "wp-wall", name: "Wall Waterproofing", price: 0 },
+          { id: "wp-roof", name: "Roof Waterproofing", price: 0 },
+          { id: "wp-crack", name: "Crack Filling", price: 0 }
+        ]
+      },
+      {
+        id: "paint-wood-metal",
+        serviceSlug: "wood-metal",
+        name: "Wood & Metal Painting",
+        rating: "4.7",
+        reviews: "9K",
+        image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=800&q=80&fit=crop",
+        points: [
+          "Rust removal & sanding treatment",
+          "Specialized wood/metal primer application",
+          "PU coating or premium enamel paint",
+          "High gloss or sophisticated matte finish"
+        ],
+        benefits: ["Anti-Rust Shield", "Premium Wood Polish", "High Gloss Spray Finish", "Durability Guarantee"],
+        includes: ["Rust Scraping & Mechanical Sanding", "Wood Sanding & Filler", "Metal Anti-Corrosion Primer", "Wood Base Primer", "2 Coats PU or Enamel Paint", "Finishing Selection (Gloss/Matte)"],
+        excludes: ["New wood carving or carpentry repairs", "Replacement of broken wood sections", "Glass frame replacements"],
+        inspectionHighlights: ["Rust Depth Measurement", "Wood Termite/Rot Inspection", "Measurement of Grills/Doors"],
+        steps: ["Select Items", "Sanding & Scraping", "Apply Protection Primer", "PU Polish / Enamel Paint", "Final Quality Polish"],
+        subOptions: [
+          { id: "wm-doors", name: "Doors", price: 0 },
+          { id: "wm-windows", name: "Windows", price: 0 },
+          { id: "wm-grills", name: "Grills", price: 0 },
+          { id: "wm-cabinets", name: "Cabinets", price: 0 },
+          { id: "wm-gates", name: "Gates", price: 0 }
+        ]
+      },
+      {
+        id: "paint-texture",
+        serviceSlug: "texture-decor",
+        name: "Texture & Decorative Painting",
+        rating: "4.8",
+        reviews: "8K",
+        image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&q=80&fit=crop",
+        points: [
+          "Specialty textured finishes & stencils",
+          "Premium metallic & non-metallic glazes",
+          "Vibrant accent wall styling consultation"
+        ],
+        benefits: ["Accent Metallic Wall", "Custom Stencil Designs", "Textured Accent Finish", "Designer Showcase"],
+        includes: ["Texture / Pattern Consultation", "Accent Wall Preparation", "Premium Metallic Pattern Painting", "Custom Stencil Painting", "Post-Service Clean-up"],
+        excludes: ["Full room plain painting (available separately)", "Wallpaper scraping/removal", "Plaster board reconstruction"],
+        inspectionHighlights: ["Texture Catalog Consultation", "Accent Wall Surface Suitability Check", "Wall Size & Lighting Review"],
+        steps: ["Select Designer Theme", "Wall Surface Preparation", "Apply Base Coating", "Create Textured Finish", "Accent Highlights Finish"],
+        subOptions: [
+          { id: "td-texture", name: "Texture Finish", price: 0 },
+          { id: "td-designer", name: "Designer Finish", price: 0 },
+          { id: "td-stencil", name: "Stencil Decor", price: 0 },
+          { id: "td-accent", name: "Accent Wall Painting", price: 0 }
+        ]
+      }
+    ];
+
+    if (dbPackages && dbPackages.length > 0) {
+      return staticServices.map(service => {
+        const relevantPkgs = dbPackages.filter(p => p.service_slug === service.serviceSlug);
+        if (relevantPkgs.length > 0) {
+          const dynamicSubOptions = relevantPkgs.map(p => ({
+            id: p.slug || p.id.toString(),
+            name: p.slug === "int-full-home" ? "Full House painting" : p.name,
+            price: parseFloat(p.price) || 0
+          }));
+          return {
+            ...service,
+            subOptions: dynamicSubOptions
+          };
+        }
+        return service;
+      });
+    }
+    return staticServices;
+  }, [dbPackages]);
+
+  const cardRefs = useRef({});
 
   const contentRef = useRef(null);
 
@@ -8925,7 +8984,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   }, [searchQuery]);
 
   const scrollToCard = (id) => {
-    const card = cardRefs[id]?.current;
+    const card = cardRefs.current[id];
     if (!card) return;
     const container = contentRef.current;
     if (!container) {
@@ -9054,6 +9113,32 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  if (packagesData === null) {
+    return (
+      <div className="uc-paint-overlay" onClick={onClose}>
+        <motion.div
+          className="uc-paint-modal"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "350px" }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+            <div style={{ width: "35px", height: "35px", border: "4px solid #f3f3f3", borderTop: "4px solid #7c3aed", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+            <span style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.03em" }}>LOADING CATALOG DETAILS...</span>
+          </div>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="uc-paint-overlay" onClick={onClose}>
@@ -9266,7 +9351,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                       const isExpanded = !!expanded[service.id];
                       const count = getCartCount(service.id);
                       return (
-                        <div key={service.id} className="uc-paint-card" ref={cardRefs[service.id]}>
+                        <div key={service.id} className="uc-paint-card" ref={el => { cardRefs.current[service.id] = el; }}>
                           <div className="uc-paint-card-img-box">
                             <img
                               src={service.image}
@@ -10678,7 +10763,7 @@ const MASON_DETAILS_EXTRA = {
   }
 };
 
-export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, setPhotoFile, setPhotoPreview }) {
+export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, setPhotoFile, setPhotoPreview, packagesData }) {
   const [activeTab, setActiveTab] = useState("brick");
   const [searchQuery, setSearchQuery] = useState("");
   const [expanded, setExpanded] = useState({});
@@ -10715,14 +10800,14 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     }
   };
 
-  const MASON_CATEGORIES = [
+  const STATIC_MASON_CATEGORIES = [
     { id: "brick", name: "Brick & Block Work", icon: "🧱" },
     { id: "plastering", name: "Plastering & Wall Repair", icon: "🪣" },
     { id: "partition", name: "Wall & Partition Construction", icon: "📐" },
     { id: "demolition", name: "Wall Breaking & Demolition", icon: "🔨" }
   ];
 
-  const MASON_SERVICES = [
+  const STATIC_MASON_SERVICES = [
     // 1. Brick & Block Work
     {
       id: "brick-new",
@@ -10942,15 +11027,114 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     }
   ];
 
-  const cardRefs = {
-    "brick-new": useRef(null), "brick-block": useRef(null), "brick-ext": useRef(null), "brick-repair": useRef(null), "brick-small": useRef(null),
-    "plaster-new": useRef(null), "plaster-re": useRef(null), "plaster-crack": useRef(null), "plaster-dmg": useRef(null), "plaster-ceil": useRef(null),
-    "part-room": useRef(null), "part-office": useRef(null), "part-kitchen": useRef(null), "part-internal": useRef(null), "part-ext": useRef(null),
-    "house-comp": useRef(null), "house-found": useRef(null), "house-struct": useRef(null), "house-brick": useRef(null), "house-finish": useRef(null), "house-renov": useRef(null), "house-room": useRef(null),
-    "office-comp": useRef(null), "office-new": useRef(null), "office-renov": useRef(null), "office-comm": useRef(null), "office-part": useRef(null), "office-struct": useRef(null), "office-floor": useRef(null),
-    "dem-part": useRef(null), "dem-rem": useRef(null), "dem-door": useRef(null), "dem-window": useRef(null), "dem-wall": useRef(null), "dem-small": useRef(null)
+  const masonKey = React.useMemo(() => {
+    if (!packagesData) return null;
+    const foundKey = Object.keys(packagesData).find(key => 
+      packagesData[key] && packagesData[key].some(p => p.category_slug === "mason" || p.category_slug === "masons" || String(p.category) === "mason" || String(p.category) === "11")
+    );
+    return foundKey || null;
+  }, [packagesData]);
+
+  const dbPackages = React.useMemo(() => {
+    return masonKey ? packagesData[masonKey] : [];
+  }, [packagesData, masonKey]);
+
+  const MASON_CATEGORIES = React.useMemo(() => {
+    if (dbPackages && dbPackages.length > 0) {
+      const distinct = [];
+      dbPackages.forEach(pkg => {
+        const rawSlug = pkg.service_slug || "brick-block-work";
+        let cId = rawSlug;
+        if (rawSlug === "brick-block-work") cId = "brick";
+        else if (rawSlug === "plastering-wall-repair") cId = "plastering";
+        else if (rawSlug === "wall-partition-construction") cId = "partition";
+        else if (rawSlug === "wall-breaking-demolition") cId = "demolition";
+        else if (rawSlug.startsWith("mason-")) cId = rawSlug.replace("mason-", "");
+        
+        const sName = pkg.service_name || pkg.service?.name || "Masonry Work";
+        if (!distinct.some(c => c.id === cId)) {
+          let icon = "🧱";
+          if (cId === "plastering") icon = "🪣";
+          else if (cId === "partition") icon = "📐";
+          else if (cId === "demolition") icon = "🔨";
+          else if (cId.includes("construction") || cId.includes("house")) icon = "🏗️";
+          
+          distinct.push({
+            id: cId,
+            name: sName,
+            icon: icon
+          });
+        }
+      });
+      return distinct;
+    }
+    return STATIC_MASON_CATEGORIES;
+  }, [dbPackages]);
+
+  React.useEffect(() => {
+    if (MASON_CATEGORIES && MASON_CATEGORIES.length > 0) {
+      if (!MASON_CATEGORIES.some(c => c.id === activeTab)) {
+        setActiveTab(MASON_CATEGORIES[0].id);
+      }
+    }
+  }, [MASON_CATEGORIES]);
+
+  const getMasonDefaultFaqs = (serviceName) => {
+    const name = serviceName ? serviceName.toLowerCase() : "masonry";
+    return [
+      {
+        q: `What materials are included in the ${name} service?`,
+        a: `All standard tools, machinery, and equipment required are included. Raw materials (cement, sand, bricks, aggregates) can be supplied by us or procured by you based on the site inspection.`
+      },
+      {
+        q: `How long does the site inspection take?`,
+        a: `A professional site inspection takes approximately 30 to 45 minutes, during which our structural expert measures the area and provides an itemized material and labor estimate.`
+      },
+      {
+        q: `Is there a warranty on the structural masonry work?`,
+        a: "Yes! CalServices provides a 1-year service warranty covering workmanship, joint stability, and alignment protection for all civil works."
+      }
+    ];
   };
 
+  const MASON_SERVICES = React.useMemo(() => {
+    if (dbPackages && dbPackages.length > 0) {
+      return dbPackages.map(pkg => {
+        const rawSlug = pkg.service_slug || "brick-block-work";
+        let cId = rawSlug;
+        if (rawSlug === "brick-block-work") cId = "brick";
+        else if (rawSlug === "plastering-wall-repair") cId = "plastering";
+        else if (rawSlug === "wall-partition-construction") cId = "partition";
+        else if (rawSlug === "wall-breaking-demolition") cId = "demolition";
+        else if (rawSlug.startsWith("mason-")) cId = rawSlug.replace("mason-", "");
+
+        const staticTemplate = STATIC_MASON_SERVICES.find(s => s.id === pkg.slug || s.name === pkg.name);
+
+        return {
+          id: pkg.slug || pkg.id.toString(),
+          catId: cId,
+          name: pkg.name,
+          price: parseFloat(pkg.price) || 0,
+          priceStr: pkg.priceStr || `Starts at ₹${pkg.price}`,
+          badge: pkg.tag || staticTemplate?.badge || "",
+          badgeColor: staticTemplate?.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100",
+          duration: pkg.duration || staticTemplate?.duration || "Flexible",
+          rating: pkg.service_customization?.rating || staticTemplate?.rating || "4.8",
+          reviews: pkg.service_customization?.reviews || staticTemplate?.reviews || "100+",
+          image: pkg.image || staticTemplate?.image || "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
+          includes: Array.isArray(pkg.includes) && pkg.includes.length > 0 ? pkg.includes : (staticTemplate?.includes || ["Quality masonry work", "CalServices warranty"]),
+          excludes: Array.isArray(pkg.excludes) ? pkg.excludes : (staticTemplate?.excludes || []),
+          inspectionHighlights: staticTemplate?.inspectionHighlights || ["Visual inspection", "Measurement scan"],
+          steps: staticTemplate?.steps || ["Site prep", "Execution", "Clean-up"],
+          desc: pkg.description || staticTemplate?.desc || `Professional masonry service for ${pkg.name.toLowerCase()}.`,
+          faqs: Array.isArray(pkg.faqs) && pkg.faqs.length > 0 ? pkg.faqs : (staticTemplate?.faqs || getMasonDefaultFaqs(pkg.name))
+        };
+      });
+    }
+    return STATIC_MASON_SERVICES;
+  }, [dbPackages]);
+
+  const cardRefs = useRef({});
   const contentRef = useRef(null);
 
   useEffect(() => {
@@ -10960,7 +11144,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   }, [searchQuery, activeTab]);
 
   const scrollToCard = (id) => {
-    const card = cardRefs[id]?.current;
+    const card = cardRefs.current[id];
     if (!card) return;
     const container = contentRef.current;
     if (!container) {
@@ -11047,6 +11231,32 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
   const totalQuantity = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  if (packagesData === null) {
+    return (
+      <div className="uc-paint-overlay" onClick={onClose}>
+        <motion.div
+          className="uc-paint-modal"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "350px" }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+            <div style={{ width: "35px", height: "35px", border: "4px solid #f3f3f3", borderTop: "4px solid #7c3aed", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+            <span style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.03em" }}>LOADING CATALOG DETAILS...</span>
+          </div>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="uc-paint-overlay" onClick={onClose}>
@@ -11258,7 +11468,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                       return (
                         <div
                           key={service.id}
-                          ref={cardRefs[service.id]}
+                          ref={el => { cardRefs.current[service.id] = el; }}
                           style={{
                             border: "1px solid #e2e8f0",
                             borderRadius: "20px",
@@ -12078,13 +12288,13 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
                   {/* FREQUENTLY ASKED QUESTIONS */}
                   {(() => {
-                    const extra = MASON_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
-                    if (extra.faqs.length === 0) return null;
+                    const faqs = activeDetailService.faqs || [];
+                    if (faqs.length === 0) return null;
                     return (
                       <div style={{ textAlign: 'left', marginTop: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                         <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Frequently Asked Questions</h4>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {extra.faqs.map((faq, idx) => {
+                          {faqs.map((faq, idx) => {
                             const isExpanded = expandedFaq === idx;
                             return (
                               <div key={idx} style={{ border: '1.5px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
