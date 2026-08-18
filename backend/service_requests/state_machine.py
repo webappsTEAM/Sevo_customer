@@ -74,6 +74,36 @@ STATUS_COMBINATION_RULES = {
 }
 
 
+def record_transition(service_request, from_status: str, to_status: str, actor=None, reason_code: str = "", reason_note: str = "") -> None:
+    """
+    Creates an append-only BookingStatusEvent record to track the transition.
+    """
+    from customer_analytics.models import BookingStatusEvent
+    from django.utils import timezone
+    
+    if actor is None:
+        persona = BookingStatusEvent.ActorPersona.SYSTEM
+    elif getattr(actor, "role", "") == "customer":
+        persona = BookingStatusEvent.ActorPersona.CUSTOMER
+    elif getattr(actor, "role", "") == "admin":
+        persona = BookingStatusEvent.ActorPersona.ADMIN
+    else:
+        persona = BookingStatusEvent.ActorPersona.EMPLOYEE
+
+    BookingStatusEvent.objects.create(
+        service_request=service_request,
+        customer=service_request.customer,
+        company=service_request.company,
+        from_status=from_status,
+        to_status=to_status,
+        actor=actor,
+        actor_persona=persona,
+        reason_code=reason_code,
+        reason_note=reason_note,
+        occurred_at=timezone.now(),
+    )
+
+
 def apply_transition(service_request, new_status: str, new_payment_status: str = None, actor=None) -> None:
     """
     Validate and apply a status transition for both booking_status and payment_status.
@@ -119,6 +149,9 @@ def apply_transition(service_request, new_status: str, new_payment_status: str =
     service_request.status = new_status
     if new_payment_status:
         service_request.payment_status = new_payment_status
+    
+    # Store temporary actor for save() transition hook
+    service_request._status_actor = actor
 
 
 def get_allowed_transitions(service_request) -> list:

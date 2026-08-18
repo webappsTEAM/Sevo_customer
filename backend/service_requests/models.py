@@ -85,6 +85,14 @@ class ServiceRequest(models.Model):
         REFUNDED           = "refunded",           "Refunded"
         PARTIALLY_REFUNDED = "partially_refunded", "Partially Refunded"
 
+    class CancellationReason(models.TextChoices):
+        CHANGE_OF_PLANS   = "CHANGE_OF_PLANS",   "Change of plans / Booked by mistake"
+        EXPECTED_FASTER    = "EXPECTED_FASTER",    "Expected faster service / Partner too far"
+        WRONG_SERVICE      = "WRONG_SERVICE",      "Selected wrong service, date, or address"
+        FOUND_ALTERNATIVE  = "FOUND_ALTERNATIVE",  "Found alternative service / Solved myself"
+        PRICE_OR_PAYMENT   = "PRICE_OR_PAYMENT",   "Price or payment issue"
+        OTHER              = "OTHER",              "Other reason"
+
     # Human-readable ID (SR-0001, SR-0002, ...)
     request_id = models.CharField(max_length=20, unique=True, blank=True)
 
@@ -190,13 +198,32 @@ class ServiceRequest(models.Model):
     subtotal_amount      = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     final_amount         = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
+    # Cancellation fields
+    cancelled_at         = models.DateTimeField(null=True, blank=True, db_index=True)
+    cancelled_by         = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="cancelled_bookings")
+    cancelled_by_persona = models.CharField(max_length=30, blank=True, choices=[("customer", "Customer"), ("admin", "Admin"), ("employee", "Employee")])
+    cancellation_reason  = models.CharField(max_length=50, blank=True, choices=CancellationReason.choices)
+    cancellation_note    = models.TextField(blank=True)
+    cancelled_at_status  = models.CharField(max_length=30, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["company", "status", "created_at"]),
+            models.Index(fields=["company", "payment_status", "created_at"]),
+            models.Index(fields=["customer", "created_at"]),
+            models.Index(fields=["phone"]),
+        ]
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        old_status = ""
+        if not is_new:
+            old_status = ServiceRequest.objects.filter(pk=self.pk).values_list("status", flat=True).first() or ""
+
         if not self.request_id:
             self.request_id = _generate_request_id()
         if not self.start_otp:
@@ -207,6 +234,20 @@ class ServiceRequest(models.Model):
             import uuid
             self.tracking_token = uuid.uuid4()
         super().save(*args, **kwargs)
+
+        if is_new or old_status != self.status:
+            from service_requests.state_machine import record_transition
+            actor = getattr(self, "_status_actor", None)
+            reason_code = getattr(self, "_status_reason_code", "BOOKING_CREATED" if is_new else "")
+            reason_note = getattr(self, "_status_reason_note", "Booking created" if is_new else "")
+            record_transition(
+                service_request=self,
+                from_status=old_status,
+                to_status=self.status,
+                actor=actor,
+                reason_code=reason_code,
+                reason_note=reason_note
+            )
 
     def is_ready_to_complete(self):
         """

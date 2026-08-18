@@ -425,9 +425,40 @@ class CustomerBookingCancelView(APIView):
         except ServiceRequest.DoesNotExist:
             return _error("Booking not found.", 404)
         reason = request.data.get("reason", "Customer requested cancellation")
+        previous_status = sr.status
+        
+        import django.utils.timezone as django_timezone
+        actor = request.user if request.user.is_authenticated else None
+        if actor:
+            persona = "customer" if actor.role == "customer" else ("admin" if actor.role == "admin" else "employee")
+            cancelled_by_user = actor
+        else:
+            persona = "customer"
+            cancelled_by_user = sr.customer
+
+        MAP_REASON = {
+            "Change of plans / Booked by mistake": ServiceRequest.CancellationReason.CHANGE_OF_PLANS,
+            "Expected faster service / Partner too far": ServiceRequest.CancellationReason.EXPECTED_FASTER,
+            "Selected wrong service, date, or address": ServiceRequest.CancellationReason.WRONG_SERVICE,
+            "Found alternative service / Solved myself": ServiceRequest.CancellationReason.FOUND_ALTERNATIVE,
+            "Price or payment issue": ServiceRequest.CancellationReason.PRICE_OR_PAYMENT,
+        }
+        normalized_reason = MAP_REASON.get(reason, ServiceRequest.CancellationReason.OTHER)
+
         with transaction.atomic():
-            apply_transition(sr, ServiceRequest.Status.CANCELLED, actor=request.user if request.user.is_authenticated else None)
-            sr.save(update_fields=["status", "updated_at"])
+            apply_transition(sr, ServiceRequest.Status.CANCELLED, actor=actor)
+            sr.cancelled_at = django_timezone.now()
+            sr.cancelled_by = cancelled_by_user
+            sr.cancelled_by_persona = persona
+            sr.cancellation_reason = normalized_reason
+            sr.cancellation_note = reason if normalized_reason == ServiceRequest.CancellationReason.OTHER else ""
+            sr.cancelled_at_status = previous_status
+            
+            # Pass details to status log save hook
+            sr._status_reason_code = normalized_reason.value if hasattr(normalized_reason, 'value') else normalized_reason
+            sr._status_reason_note = reason
+            
+            sr.save()
             # Cancel job in workforce system
             WorkforceIntegrationService.cancel_workforce_job(sr.id, reason=reason)
 

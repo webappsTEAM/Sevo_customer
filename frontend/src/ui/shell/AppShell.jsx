@@ -38,14 +38,17 @@ const ADMIN_NAV_ITEMS = [
   },
   {
     label: "Customers & Bookings",
-    to: "/customers/bookings",
+    to: "/customers/dashboard",
     icon: <MessageSquare size={20} />,
     color: "#6366F1",
     children: [
+      { label: "Dashboard", to: "/customers/dashboard", icon: <BarChart3 size={16} />, color: "#6366F1" },
+      { label: "Customers", to: "/customers/list", icon: <Users size={16} />, color: "#4F46E5" },
       { label: "Bookings", to: "/customers/bookings", icon: <CalendarDays size={16} />, color: "#38BDF8" },
       { label: "Reschedule Requests", to: "/customers/reschedules", icon: <Repeat2 size={16} />, color: "#F59E0B" },
       { label: "Refund Requests", to: "/customers/refunds", icon: <Banknote size={16} />, color: "#10B981" },
       { label: "Payments", to: "/customers/payments", icon: <Banknote size={16} />, color: "#10B981" },
+      { label: "Merge Queue", to: "/customers/merges", icon: <UserCheck size={16} />, color: "#8B5CF6" },
       { label: "Complaints", to: "/customers/complaints", icon: <ShieldAlert size={16} />, color: "#EF4444" },
       { label: "Customer Reviews", to: "/customers/reviews", icon: <Award size={16} />, color: "#F59E0B" },
     ]
@@ -280,7 +283,19 @@ export function AppShell() {
     
     if (user.isCareAgent && !isAdminUser) {
       return [
-        { label: "Customer Care", to: "/support/tickets", icon: <Headset size={20} />, color: "#0EA5E9" }
+        {
+          label: "Customers & Bookings",
+          to: "/customers/dashboard",
+          icon: <MessageSquare size={20} />,
+          color: "#6366F1",
+          children: [
+            { label: "Dashboard", to: "/customers/dashboard", icon: <BarChart3 size={16} />, color: "#6366F1" },
+            { label: "Customers", to: "/customers/list", icon: <Users size={16} />, color: "#4F46E5" },
+            { label: "Complaints", to: "/customers/complaints", icon: <ShieldAlert size={16} />, color: "#EF4444" },
+            { label: "Payments", to: "/customers/payments", icon: <Banknote size={16} />, color: "#10B981" },
+          ]
+        },
+        { label: "Customer Care", to: "/support/tickets", icon: <Headset size={20} />, color: "#0EA5E9" },
       ]
     }
 
@@ -304,7 +319,7 @@ export function AppShell() {
       if (item.to === "/") {
         return location.pathname === "/"
       }
-      if (item.to === "/customers/bookings") {
+      if (item.to === "/customers/dashboard") {
         return location.pathname.startsWith("/customers")
       }
       return location.pathname.startsWith(item.to)

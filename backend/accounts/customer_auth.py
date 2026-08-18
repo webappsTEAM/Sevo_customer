@@ -7,6 +7,56 @@ from .views import _set_auth_cookies
 
 User = get_user_model()
 
+
+def log_login_event(user, status_str: str, method: str, request) -> None:
+    """
+    Helper to log customer login events.
+    """
+    if not user:
+        return
+    try:
+        from customer_analytics.models import CustomerLoginEvent
+        from django.utils import timezone
+
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+
+        if method == "google":
+            method_choice = CustomerLoginEvent.LoginMethod.GOOGLE
+        elif "email" in str(method).lower():
+            method_choice = CustomerLoginEvent.LoginMethod.OTP_EMAIL
+        elif "phone" in str(method).lower():
+            method_choice = CustomerLoginEvent.LoginMethod.OTP_PHONE
+        else:
+            method_choice = CustomerLoginEvent.LoginMethod.GENERIC
+
+        status_choice = (
+            CustomerLoginEvent.LoginStatus.SUCCESS 
+            if status_str == "success" 
+            else CustomerLoginEvent.LoginStatus.FAILED
+        )
+
+        CustomerLoginEvent.objects.create(
+            customer=user,
+            company=getattr(user, "company", None),
+            method=method_choice,
+            ip_address=ip or None,
+            user_agent=user_agent or "",
+            status=status_choice,
+            occurred_at=timezone.now()
+        )
+
+        if status_str == "success":
+            user.last_login = timezone.now()
+            user.save(update_fields=["last_login"])
+    except Exception as e:
+        print(f"[log_login_event] Failed to write login event: {e}")
+
 # NOTE: this file used to also contain CustomerEmailOTPRequestView /
 # CustomerEmailOTPVerifyView / CustomerPhoneOTPRequestView /
 # CustomerPhoneOTPVerifyView — a second, independent OTP implementation
@@ -133,6 +183,7 @@ class CustomerGoogleLoginView(APIView):
                     "role": user.role
                 }
             })
+            log_login_event(user, "success", "google", request)
             return _set_auth_cookies(response, tokens["access"], tokens["refresh"])
         except Exception as e:
             import traceback
@@ -206,25 +257,42 @@ class CustomerOTPVerifyAPIView(APIView):
                 {"success": False, "error": {"code": "INVALID_INPUT", "message": "identifier, channel and otp_code are required."}},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        from django.db import models
+        from accounts.models import User, OTPChannel
+        if channel == OTPChannel.EMAIL:
+            lookup = models.Q(email=identifier)
+        else:
+            lookup = models.Q(mobile_number=identifier) | models.Q(phone=identifier)
+        user = User.objects.filter(lookup).first()
+
         try:
             res = verify_otp(identifier, otp_code, channel)
             response = Response(res, status=status.HTTP_200_OK)
             if "auth_token" in res.get("data", {}):
                 access_token = res["data"]["auth_token"]
                 refresh_token = res["data"].get("refresh_token")
+                logged_user = user or User.objects.filter(pk=res["data"]["customer_id"]).first()
+                log_login_event(logged_user, "success", "otp_email" if channel == OTPChannel.EMAIL else "otp_phone", request)
                 return _set_auth_cookies(response, access_token, refresh_token)
             return response
         except InvalidOTPError as e:
+            if user:
+                log_login_event(user, "failed", "otp_email" if channel == OTPChannel.EMAIL else "otp_phone", request)
             return Response(
                 {"success": False, "error": {"code": e.code, "message": e.message, **e.extra}},
                 status=status.HTTP_400_BAD_REQUEST
             )
         except (ValueError, ValidationError) as e:
+            if user:
+                log_login_event(user, "failed", "otp_email" if channel == OTPChannel.EMAIL else "otp_phone", request)
             return Response(
                 {"success": False, "error": {"code": "INVALID_INPUT", "message": str(e)}},
                 status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
+            if user:
+                log_login_event(user, "failed", "otp_email" if channel == OTPChannel.EMAIL else "otp_phone", request)
             return Response(
                 {"success": False, "error": {"code": "SERVER_ERROR", "message": str(e)}},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

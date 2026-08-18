@@ -51,4 +51,9 @@ export const routes = {
   // Public customer live tracking page — accessible at /track/:bookingId?token=<uuid>
   // The tracking_token query param is the authorization credential (not in the path).
   live_tracking: "/track/:bookingId",
+  customers_dashboard: "/customers/dashboard",
+  customers_list: "/customers/list",
+  customers_detail: "/customers/:id",
+  customers_payments: "/customers/payments",
+  customers_merges: "/customers/merges",
 }
