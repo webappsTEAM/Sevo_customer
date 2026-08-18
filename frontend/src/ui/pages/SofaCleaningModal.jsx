@@ -317,7 +317,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
             item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
             if (Array.isArray(parentDbMatch.tools) && parentDbMatch.tools.length > 0) item.tools = parentDbMatch.tools;
             if (Array.isArray(parentDbMatch.ready) && parentDbMatch.ready.length > 0) item.ready = parentDbMatch.ready;
-            if (Array.isArray(parentDbMatch.reviews) && parentDbMatch.reviews.length > 0) item.reviews = parentDbMatch.reviews;
+            if (Array.isArray(parentDbMatch.reviews) && parentDbMatch.reviews.length > 0) item.reviews_list = parentDbMatch.reviews;
             if (Array.isArray(parentDbMatch.faqs) && parentDbMatch.faqs.length > 0) item.faqs = parentDbMatch.faqs;
           }
 
@@ -333,7 +333,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
               };
               if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) updatedSub.tools = dbMatch.tools;
               if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) updatedSub.ready = dbMatch.ready;
-              if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) updatedSub.reviews = dbMatch.reviews;
+              if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) updatedSub.reviews_list = dbMatch.reviews;
               if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) updatedSub.faqs = dbMatch.faqs;
               return updatedSub;
             }
@@ -352,7 +352,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
             item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
             if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
             if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
-            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews = dbMatch.reviews;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
             if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
           }
         }
@@ -747,9 +747,11 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
                 {(() => {
                   const id = selectedServiceDetails.id;
-                  const rawReviews = (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0 && (!SOFA_DETAIL_DATA[id]?.reviews || selectedServiceDetails.reviews.length >= SOFA_DETAIL_DATA[id].reviews.length))
-                    ? selectedServiceDetails.reviews
-                    : (SOFA_DETAIL_DATA[id]?.reviews || []);
+                  const rawReviews = (Array.isArray(selectedServiceDetails.reviews_list) && selectedServiceDetails.reviews_list.length > 0)
+                    ? selectedServiceDetails.reviews_list
+                    : (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0 && (!SOFA_DETAIL_DATA[id]?.reviews || selectedServiceDetails.reviews.length >= SOFA_DETAIL_DATA[id].reviews.length))
+                      ? selectedServiceDetails.reviews
+                      : (SOFA_DETAIL_DATA[id]?.reviews || []);
                   const reviews = rawReviews.filter(r => r.enabled !== false);
                   return reviews.map((rev, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">

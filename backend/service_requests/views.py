@@ -268,9 +268,9 @@ class BookingCreateView(APIView):
             phone_clean = str(request.data.get("phone") or "").strip()
             email_clean = str(request.data.get("email") or "").strip().lower()
             if phone_clean:
-                customer_user = User.objects.filter(phone=phone_clean, role=User.Role.CUSTOMER).first()
+                customer_user = User.objects.filter(phone=phone_clean).first()
             if not customer_user and email_clean:
-                customer_user = User.objects.filter(email__iexact=email_clean, role=User.Role.CUSTOMER).first()
+                customer_user = User.objects.filter(email__iexact=email_clean).first()
 
             if not customer_user and (phone_clean or email_clean):
                 cust_name = str(request.data.get("customer_name") or "").strip()
@@ -286,14 +286,20 @@ class BookingCreateView(APIView):
                 if User.objects.filter(username=uname).exists():
                     uname = f"{uname_base}_{uuid.uuid4().hex[:6]}"
 
-                customer_user = User.objects.create(
-                    username=uname,
-                    phone=phone_clean,
-                    email=email_clean,
-                    first_name=first_name,
-                    last_name=last_name,
-                    role=User.Role.CUSTOMER
-                )
+                try:
+                    customer_user = User.objects.create(
+                        username=uname,
+                        phone=phone_clean or None,
+                        email=email_clean or "",
+                        first_name=first_name,
+                        last_name=last_name,
+                        role=getattr(User.Role, 'CUSTOMER', 'CUSTOMER')
+                    )
+                except Exception:
+                    if phone_clean:
+                        customer_user = User.objects.filter(phone=phone_clean).first()
+                    if not customer_user and email_clean:
+                        customer_user = User.objects.filter(email__iexact=email_clean).first()
 
         sr = serializer.save(
             company=company,

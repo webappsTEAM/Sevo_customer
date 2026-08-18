@@ -15,7 +15,6 @@ import { SOFA_DETAIL_DATA } from "./sofaDetailData.js"
 const DEFAULT_SUITABLE_PRESETS = {
   "2-wheeler-electric-express": [
     "Small parcels & packages",
-    "Documents & files",
     "Clothing & accessories",
     "Food & grocery orders",
     "Medicines & essentials",
@@ -1559,37 +1558,30 @@ export function CatalogPackagesPage() {
     const items = []
     const seen = new Set()
 
-    // Normalize existingIncludes into lowercase set for quick lookup
-    const existingIncludesLower = new Set(
-      existingIncludes.map(inc => {
+    // 1. If package has saved includes, add them first in their exact saved order
+    if (existingIncludes.length > 0) {
+      existingIncludes.forEach((inc, idx) => {
         const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
-        return text.toLowerCase()
-      }).filter(Boolean)
-    )
+        if (text && !seen.has(text.toLowerCase())) {
+          seen.add(text.toLowerCase())
+          items.push({
+            id: `inc-${idx}-${Date.now()}`,
+            text,
+            checked: true,
+          })
+        }
+      })
+    }
 
-    // 1. Process preset items first, maintaining their original order
+    // 2. Add preset items (checked if existingIncludes is empty, unchecked if not in existingIncludes)
     presets.forEach((preset, idx) => {
       const text = preset.trim()
       if (text && !seen.has(text.toLowerCase())) {
         seen.add(text.toLowerCase())
-        const isIncluded = existingIncludesLower.has(text.toLowerCase())
         items.push({
           id: `preset-${idx}-${Date.now()}`,
           text,
-          checked: existingIncludes.length === 0 ? true : isIncluded,
-        })
-      }
-    })
-
-    // 2. Add any custom items from existingIncludes that are not in presets
-    existingIncludes.forEach((inc, idx) => {
-      const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
-      if (text && !seen.has(text.toLowerCase())) {
-        seen.add(text.toLowerCase())
-        items.push({
-          id: `inc-${idx}-${Date.now()}`,
-          text,
-          checked: true,
+          checked: existingIncludes.length === 0,
         })
       }
     })
@@ -3297,7 +3289,7 @@ export function CatalogPackagesPage() {
               </div>
 
               {/* Items List */}
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1 scrollbar-thin">
                 {quickPriceEditing.checklist && quickPriceEditing.checklist.length > 0 ? (
                   quickPriceEditing.checklist.map((item, idx) => (
                     <div
@@ -3589,8 +3581,14 @@ export function CatalogPackagesPage() {
               </div>
             </div>
 
-            {/* ── View Details Content Section (only for non goods transport) ── */}
-            {activePillar?.key !== "goods_transports" && (() => {
+            {/* ── View Details Content Section (only for home/technician services — excluded for fresh vegetables, groceries, and transport) ── */}
+            {activeCategoryKey !== "goods_transports" &&
+             activeCategoryKey !== "food_health" &&
+             activeCategoryKey !== "vegetables" &&
+             activeCategoryKey !== "groceries" &&
+             quickPriceEditing?.category_slug !== "food_health" &&
+             quickPriceEditing?.category_slug !== "goods_transports" &&
+             !/vegetable|grocery|food|transport|wheeler|truck|packers/i.test(quickPriceEditing?.service_name || quickPriceEditing?.serviceSlug || quickPriceEditing?.categoryName || "") && (() => {
               const vd = quickPriceEditing.viewDetails || { tools: [], ready: [], reviews: [], faqs: [] }
               const setVd = (updates) => setQuickPriceEditing({ ...quickPriceEditing, viewDetails: { ...vd, ...updates } })
               return (
@@ -3746,71 +3744,6 @@ export function CatalogPackagesPage() {
               )
             })()}
 
-            {/* ── Image Customization Section ── */}
-            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3 mt-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <span className="text-xs font-bold text-slate-800">
-                    Package Image
-                  </span>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                {quickPriceEditing.image ? (
-                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
-                    <img src={quickPriceEditing.image} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setQuickPriceEditing((prev) => ({ ...prev, image: "" }))}
-                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
-                    No Image
-                  </div>
-                )}
-                <div className="flex-1 w-full space-y-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        const formData = new FormData()
-                        formData.append("image", file)
-                        try {
-                          const res = await apiRequest("/settings/catalog/upload-image/", {
-                            method: "POST",
-                            body: formData,
-                          })
-                          if (res.success && res.url) {
-                            setQuickPriceEditing((prev) => ({ ...prev, image: res.url }))
-                            showToast("Image uploaded successfully!")
-                          } else {
-                            showToast(res.message || "Upload failed", "error")
-                          }
-                        } catch (err) {
-                          showToast("Upload failed", "error")
-                        }
-                      }
-                    }}
-                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                  />
-                  <Input
-                    label="Or Image URL"
-                    placeholder="https://images.unsplash.com/..."
-                    value={quickPriceEditing.image || ""}
-                    onChange={(e) => setQuickPriceEditing({ ...quickPriceEditing, image: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
 
             <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-slate-100">
               <button

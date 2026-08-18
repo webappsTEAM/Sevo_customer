@@ -13,11 +13,9 @@ import {
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
   Calculator, PaintRoller, Smartphone, MoreVertical, Truck, Copy, Radio,
-  ShieldAlert, Ban, AlertTriangle
+  ShieldAlert, Ban, AlertTriangle, ShoppingBag
 } from "lucide-react"
 import {
-  apiRequestCustomerEmailOTP, apiVerifyCustomerEmailOTP,
-  apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP,
   apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError,
   apiUpdateCustomerLastLocation, apiDetectCustomerLocation
 } from "../../api/authService.js"
@@ -84,72 +82,6 @@ function TwitterMark(props) {
 
 
 // CATEGORIES imported from categoriesData.js above
-
-function openGoogleSignInPopup(onSuccess, onError) {
-  const runSignIn = () => {
-    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
-      if (typeof onError === 'function') onError("Google login service is not available. Please refresh the page.");
-      return;
-    }
-
-    try {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: "628867483502-e7snj6l150js2vpvkv70opo5h4aacgus.apps.googleusercontent.com",
-        scope: "email profile openid",
-        callback: (response) => {
-          try {
-            if (response && response.access_token) {
-              if (typeof onSuccess === 'function') {
-                Promise.resolve(onSuccess(response.access_token)).catch(err => {
-                  if (typeof onError === 'function') onError(err?.message || "Google login failed.");
-                });
-              }
-            } else if (response && response.error) {
-              if (typeof onError === 'function') onError(response.error_description || "Google login cancelled or failed.");
-            } else {
-              if (typeof onError === 'function') onError("Google login cancelled.");
-            }
-          } catch (e) {
-            if (typeof onError === 'function') onError("Failed to process Google sign-in token.");
-          }
-        },
-        error_callback: (err) => {
-          if (typeof onError === 'function') onError(err?.message || "Google login error");
-        }
-      });
-      if (client && typeof client.requestAccessToken === 'function') {
-        try {
-          client.requestAccessToken();
-        } catch (reqErr) {
-          if (typeof onError === 'function') onError("Browser blocked the Google login popup.");
-        }
-      }
-    } catch (err) {
-      if (typeof onError === 'function') onError(err?.message || "Failed to initialize Google login");
-    }
-  };
-
-  if (!window.google?.accounts?.oauth2) {
-    let script = document.getElementById("google-gsi-client");
-    if (!script) {
-      script = document.createElement("script");
-      script.id = "google-gsi-client";
-      script.src = "https://accounts.google.com/gsi/client";
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
-    script.onload = () => runSignIn();
-    script.onerror = () => {
-      if (typeof onError === 'function') onError("Failed to load Google Sign-In SDK.");
-    };
-    if (window.google?.accounts?.oauth2) {
-      runSignIn();
-    }
-  } else {
-    runSignIn();
-  }
-}
 
 const PACKAGES = {
   cleaning: [
@@ -233,8 +165,6 @@ function generateAvatarUrl(name) {
   const n = name || "C";
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random&color=fff&size=150`;
 }
-
-const OTP_SESSION_KEY = "bk_cust_verified"
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    HELPERS
@@ -1354,2031 +1284,6 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
   )
 }
 
-function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicReviews, user }) {
-  const [rotIdx, setRotIdx] = useState(0)
-  const safeCats = categories && categories.length > 0 ? categories : CATEGORIES;
-  const featured = safeCats.slice(0, 6)
-  const rotWords = featured.map(c => c.name)
-
-  const displayName = user?.firstName || user?.first_name || user?.full_name || user?.username
-  const greeting = displayName || "Guest"
-
-  useEffect(() => {
-    const t = setInterval(() => setRotIdx(i => (i + 1) % rotWords.length), 4500)
-    return () => clearInterval(t)
-  }, [rotWords.length])
-
-  const filtered = searchQuery
-    ? safeCats.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.desc.toLowerCase().includes(searchQuery.toLowerCase()))
-    : safeCats
-
-  return (
-    <>
-      <div className="uc-home-wrapper">
-        <div className="uc-home-left">
-          {/* Hero */}
-          <div className="uc-hero">
-            <div className="uc-hero-inner">
-              <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                <p className="uc-hero-tag">•­  India's #1 Home Services Platform</p>
-                <h1 className="uc-hero-h1">
-                  Professional
-                  <br />
-                  <AnimatePresence mode="wait">
-                    <motion.span
-                      key={rotIdx}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.8 }}
-                      className="uc-hero-rotate"
-                    >
-                      {rotWords[rotIdx]}
-                    </motion.span>
-                  </AnimatePresence>
-                  <br />
-                  at your doorstep
-                </h1>
-                <p className="uc-hero-sub">Trained & verified experts Â· Transparent pricing Â· Real-time tracking</p>
-              </motion.div>
-
-              {/* Search Bar */}
-              <motion.div className="uc-search-bar" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                <Search size={18} className="uc-search-icon" />
-                <input
-                  className="uc-search-input"
-                  placeholder="Search for services (e.g. AC repair, deep cleaning•¦)"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button className="uc-search-clear" onClick={() => setSearchQuery("")}>
-                    <X size={14} />
-                  </button>
-                )}
-              </motion.div>
-
-              {/* Trust pills */}
-              <motion.div className="uc-trust-row" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
-                <span><ShieldCheck size={13} /> Verified Pros</span>
-                <span><Star size={13} style={{ fill: "#fbbf24", color: "#fbbf24" }} /> 4.8•˜… Rated</span>
-                <span><Users size={13} /> 1M+ Happy Homes</span>
-                <span><Award size={13} /> 30-Day Guarantee</span>
-              </motion.div>
-            </div>
-          </div>
-        </div>
-        <div className="uc-home-right">
-          <div className="uc-feature-carousel">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={featured[rotIdx].id}
-                initial={{ opacity: 0, scale: 1.05 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 1.2 }}
-                className="uc-feature-slide"
-              >
-                <img src={featured[rotIdx].image} alt={featured[rotIdx].name} className="uc-feature-img" />
-                <div className="uc-feature-overlay">
-                  <div className="uc-feature-text">
-                    <h3>{featured[rotIdx].name}</h3>
-                    <p>{featured[rotIdx].desc}</p>
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '12px', fontSize: '0.95rem', color: '#f1f5f9', fontWeight: 600 }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Star size={14} style={{ fill: "#fbbf24", color: "#fbbf24" }} /> {featured[rotIdx].rating} Rated</span>
-                      <span>•</span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle2 size={14} /> {featured[rotIdx].jobs} Bookings</span>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
-
-      {/* Services Grid */}
-      <div className="uc-section">
-        <div className="uc-section-header">
-          <h2 className="uc-section-title">Our Services</h2>
-          <p className="uc-section-sub">Pick a category to get started</p>
-        </div>
-
-        <div className="uc-cat-grid">
-          {filtered.map((cat, i) => (
-            <motion.button
-              key={cat.id}
-              id={`cat-card-${cat.id}`}
-              data-cat-id={cat.id}
-              className="uc-cat-card"
-              onClick={() => onSelect(cat)}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-            >
-              <div className="uc-cat-img-wrap">
-                <img src={cat.image} alt={cat.name} className="uc-cat-image" />
-                <div className="uc-cat-overlay">
-                  <span className="uc-cat-btn">Book Now</span>
-                </div>
-              </div>
-              <div className="uc-cat-body">
-                <div className="uc-cat-name">{cat.name}</div>
-                <div className="uc-cat-desc">{cat.desc}</div>
-                <div className="uc-cat-meta">
-                  <StarRow rating={cat.rating} size={11} />
-                  <span className="uc-cat-jobs">{cat.jobs} bookings</span>
-                </div>
-              </div>
-            </motion.button>
-          ))}
-        </div>
-
-        {filtered.length === 0 && (
-          <div style={{ textAlign: "center", padding: "3rem", color: "#94a3b8" }}>
-            <Search size={32} style={{ margin: "0 auto 0.75rem" }} />
-            <p style={{ fontWeight: 600, fontSize: "0.9rem" }}>No services found for "{searchQuery}"</p>
-          </div>
-        )}
-      </div>
-
-      <div>
-        {/* How it Works */}
-        <div className="uc-how">
-          <h2 className="uc-section-title" style={{ textAlign: "center" }}>How it works</h2>
-          <p className="uc-section-sub" style={{ textAlign: "center" }}>Book a service in 3 simple steps</p>
-          <div className="uc-how-grid">
-            {[
-              { n: "1", icon: <Search size={28} className="uc-how-svg" strokeWidth={1.5} />, title: "Choose Service", desc: "Pick from 10+ categories and select your preferred package" },
-              { n: "2", icon: <Calendar size={28} className="uc-how-svg" strokeWidth={1.5} />, title: "Pick Date & Time", desc: "Choose a convenient slot from our available timings" },
-              { n: "3", icon: <Star size={28} className="uc-how-svg" strokeWidth={1.5} />, title: "Expert at Door", desc: "A verified professional arrives and gets the job done" },
-            ].map((step, i) => (
-              <div key={i} className="uc-how-card">
-                <div className="uc-how-number">{step.n}</div>
-                <div className="uc-how-icon-wrapper">{step.icon}</div>
-                <div className="uc-how-title">{step.title}</div>
-                <div className="uc-how-desc">{step.desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Reviews */}
-        {dynamicReviews && dynamicReviews.length > 0 && (
-          <div className="uc-reviews-section">
-            <h2 className="uc-section-title" style={{ textAlign: "center" }}>What our customers say</h2>
-            <div className="uc-reviews-grid">
-              {dynamicReviews.map((r, i) => (
-                <motion.div key={i} className="uc-review-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}>
-                  <div className="uc-review-top">
-                    <img src={r.avatar} alt={r.name} className="uc-review-avatar-img" />
-                    <div>
-                      <div className="uc-review-name">{r.name}</div>
-                      <div className="uc-review-ago">{r.ago}</div>
-                    </div>
-                    <div style={{ marginLeft: 'auto' }}>
-                      <StarRow rating={r.rating} size={14} />
-                    </div>
-                  </div>
-                  <p className="uc-review-text">"{r.text}"</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </>
-  )
-}
-
-/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
-   STEP 2 •” PACKAGE SELECTION
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
-
-function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, packagesData }) {
-  const packages = ((packagesData && packagesData[category?.id]) || PACKAGES[category?.id] || []).map(p => ({ ...p, priceStr: BOOKING_CURRENCY_SYMBOL + p.price }))
-
-  return (
-    <div className="uc-step-page">
-      <div className="uc-step-back" onClick={onBack}><ArrowLeft size={16} /> Back</div>
-
-      <div className="uc-step-hero-bar" style={{ background: `linear-gradient(135deg,${category?.grad?.[0]},${category?.grad?.[1]})` }}>
-        <span style={{ fontSize: "2.5rem" }}>{category?.emoji}</span>
-        <div>
-          <div className="uc-step-hero-name">{category?.name}</div>
-          <StarRow rating={category?.rating} size={13} />
-          <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.8)", marginTop: 2 }}>{category?.desc}</div>
-        </div>
-      </div>
-
-      <h2 className="uc-step-h2">Choose your package</h2>
-      <p className="uc-step-sub">Transparent pricing Â· No hidden charges</p>
-
-      <div className="uc-pkg-grid">
-        {packages.map(pkg => {
-          const sel = selectedPackage?.id === pkg.id
-          return (
-            <motion.div
-              key={pkg.id}
-              className={`uc-pkg-card ${sel ? "uc-pkg-card--sel" : ""} ${pkg.popular ? "uc-pkg-card--pop" : ""}`}
-              onClick={() => onSelect(pkg)}
-              whileHover={{ y: -2 }}
-              layout
-            >
-              {pkg.tag && (
-                <div className="uc-pkg-tag" style={{ background: pkg.popular ? "#7C3AED" : "#059669" }}>
-                  {pkg.popular ? "•­  " : "•œ… "}{pkg.tag}
-                </div>
-              )}
-
-              {pkg.image && (
-                <div style={{ marginBottom: 12, borderRadius: 8, overflow: 'hidden', height: 140 }}>
-                  <img src={pkg.image} alt={pkg.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-              )}
-              <div className="uc-pkg-top">
-                <div>
-                  <div className="uc-pkg-name">{pkg.name}</div>
-                  <div className="uc-pkg-dur"><Clock size={12} /> {pkg.duration} service</div>
-                </div>
-                <div className="uc-pkg-price-col">
-                  <div className="uc-pkg-price">{pkg.priceStr}</div>
-                  <div className="uc-pkg-price-note">all inclusive</div>
-                </div>
-              </div>
-
-              <div className="uc-pkg-divider" />
-
-              <div className="uc-pkg-list">
-                {pkg.includes.map(item => (
-                  <div key={item} className="uc-pkg-item uc-pkg-yes">
-                    <CheckCircle2 size={13} /> {item}
-                  </div>
-                ))}
-                {pkg.excludes.map(item => (
-                  <div key={item} className="uc-pkg-item uc-pkg-no">
-                    <X size={12} /> {item}
-                  </div>
-                ))}
-              </div>
-
-              <div className={`uc-pkg-radio ${sel ? "uc-pkg-radio--sel" : ""}`}>
-                {sel && <div className="uc-pkg-radio-dot" />}
-              </div>
-            </motion.div>
-          )
-        })}
-      </div>
-
-      <div className="uc-step-footer">
-        <button className="uc-btn-primary" onClick={onNext} disabled={!selectedPackage}>
-          Continue <ChevronRight size={16} />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
-   STEP 3 •” SCHEDULE
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
-
-function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTimeChange, onNext, onBack, cart }) {
-  const dateScrollRef = useRef()
-  const canContinue = selectedDate && selectedTime
-  const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const taxFee = totalPrice === 0 ? 49 : (totalPrice === 49 || (cart && cart.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
-  const grandTotal = totalPrice + taxFee
-
-  // Urban time slots: Morning / Afternoon / Evening
-  const UC_TIME_SLOTS = [
-    { period: 'Morning', icon: '🌅', slots: ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00'] },
-    { period: 'Afternoon', icon: '☀️', slots: ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'] },
-    { period: 'Evening', icon: '🌙', slots: ['17:00', '18:00', '19:00', '20:00', '21:00'] },
-  ]
-  const formatSlot = t => {
-    const [h] = t.split(':').map(Number)
-    const ampm = h < 12 ? 'AM' : 'PM'
-    const h12 = h % 12 === 0 ? 12 : h % 12
-    return `${h12}:00 ${ampm}`
-  }
-
-  return (
-    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 960, margin: '0 auto', padding: '0 0 80px' }}>
-      {/* LEFT: Slot Picker */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 99, border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem', color: '#64748b', transition: 'all 0.18s' }}>
-            <ArrowLeft size={14} /> Back
-          </button>
-        </div>
-
-        {/* Service info row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc', borderRadius: 14, padding: '14px 16px', marginBottom: 22, border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '1.8rem' }}>{category?.emoji || '🔧'}</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{category?.name || 'Service'}</div>
-            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>
-              {cart && cart.length > 0 ? cart.map(c => `${c.quantity}x ${c.name}`).join(' · ') : 'Selected services'}
-            </div>
-          </div>
-          <div style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.1rem' }}>₹{totalPrice.toLocaleString()}</div>
-        </div>
-
-        {/* Date Section */}
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Calendar size={15} color="#7C3AED" /> Select Date
-          </div>
-          <div ref={dateScrollRef} style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8, scrollbarWidth: 'none' }}>
-            {DAYS_LIST.map(d => (
-              <button
-                key={d.iso}
-                onClick={() => onDateChange(d.iso)}
-                style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  minWidth: 62, padding: '10px 8px', borderRadius: 14, border: `2px solid ${selectedDate === d.iso ? '#7C3AED' : '#e2e8f0'}`,
-                  background: selectedDate === d.iso ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : 'white',
-                  cursor: 'pointer', transition: 'all 0.18s', flexShrink: 0, position: 'relative'
-                }}
-              >
-                {d.today && (
-                  <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: '#7C3AED', color: 'white', fontSize: '0.52rem', fontWeight: 800, padding: '2px 7px', borderRadius: 99, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>TODAY</div>
-                )}
-                <div style={{ fontSize: '0.68rem', fontWeight: 700, color: selectedDate === d.iso ? 'rgba(255,255,255,0.85)' : '#94a3b8', marginBottom: 4 }}>{d.day}</div>
-                <div style={{ fontSize: '1.3rem', fontWeight: 900, color: selectedDate === d.iso ? 'white' : '#0f172a', lineHeight: 1 }}>{d.date}</div>
-                <div style={{ fontSize: '0.62rem', fontWeight: 700, color: selectedDate === d.iso ? 'rgba(255,255,255,0.8)' : '#94a3b8', marginTop: 3 }}>{d.month}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Time Section */}
-        <div>
-          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#374151', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Clock size={15} color="#7C3AED" /> Select Time Slot
-          </div>
-          {UC_TIME_SLOTS.map(group => (
-            <div key={group.period} style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {group.icon} {group.period}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {group.slots.map(t => (
-                  <button
-                    key={`${group.period}-${t}`}
-                    onClick={() => onTimeChange(t)}
-                    style={{
-                      padding: '8px 18px', borderRadius: 99,
-                      border: `2px solid ${selectedTime === t ? '#7C3AED' : '#e2e8f0'}`,
-                      background: selectedTime === t ? '#7C3AED' : 'white',
-                      color: selectedTime === t ? 'white' : '#374151',
-                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.18s'
-                    }}
-                  >
-                    {formatSlot(t)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* CTA */}
-        <div style={{ position: 'sticky', bottom: 0, background: 'white', padding: '16px 0', borderTop: '1px solid #e2e8f0', marginTop: 8 }}>
-          <button
-            onClick={onNext}
-            disabled={!canContinue}
-            style={{
-              width: '100%', padding: '14px', borderRadius: 14,
-              background: canContinue ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#e2e8f0',
-              color: canContinue ? 'white' : '#94a3b8',
-              fontWeight: 800, fontSize: '1rem', border: 'none', cursor: canContinue ? 'pointer' : 'not-allowed',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              boxShadow: canContinue ? '0 4px 20px rgba(124,58,237,0.3)' : 'none', transition: 'all 0.18s'
-            }}
-          >
-            <Calendar size={17} /> Select {selectedDate && selectedTime ? `${selectedDate} at ${formatSlot(selectedTime)}` : 'Date & Time'}
-            <ChevronRight size={17} />
-          </button>
-        </div>
-      </div>
-
-      {/* RIGHT: Order Summary */}
-      <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 24 }}>
-        <div style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 20px rgba(0,0,0,0.06)' }}>
-          <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>Order Summary</div>
-          {cart && cart.map((c, i) => (
-            <div key={i} style={{ padding: '12px 18px', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b' }}>{c.name}</div>
-                <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 2 }}>Qty: {c.quantity}</div>
-              </div>
-              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.85rem' }}>₹{(c.price * c.quantity).toLocaleString()}</div>
-            </div>
-          ))}
-          <div style={{ padding: '12px 18px', borderBottom: '1px solid #f1f5f9' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}>
-              <span>Item total</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{totalPrice.toLocaleString()}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}>
-              <span>Taxes & Fee (incl. GST)</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span>
-            </div>
-          </div>
-          <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>Total Amount</span>
-            <span style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.05rem' }}>₹{grandTotal.toLocaleString()}</span>
-          </div>
-          <div style={{ padding: '0 18px 14px', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Shield size={11} /> SSL Secured · Pay at doorstep
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-
-/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
-   STEP 4 •” PHONE OTP IDENTITY
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
-
-function StepLogin({ category, onVerified, onBack }) {
-  const { user, refreshMe } = useAuth()
-  const [mode, setMode] = useState("phone")
-  const [name, setName] = useState("")
-  const [phone, setPhone] = useState("")
-  const [email, setEmail] = useState("")
-  const [otp, setOtp] = useState(["", "", "", ""])
-  const [loading, setLoading] = useState(false)
-  const [cooldown, setCooldown] = useState(0)
-  const [error, setError] = useState("")
-  const [devCode, setDevCode] = useState("")
-  const refs = [useRef(), useRef(), useRef(), useRef()]
-
-  // Restore session
-  useEffect(() => {
-    if (user) {
-      onVerified({
-        verified: true,
-        name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (user.username || 'Customer'),
-        phone: user.phone || '',
-        email: user.email || ''
-      })
-      return
-    }
-    try {
-      const s = JSON.parse(sessionStorage.getItem(OTP_SESSION_KEY) || "null")
-      if (s?.verified && s?.name && s?.phone) onVerified(s)
-    } catch { }
-  }, [user, onVerified])
-
-  // Cooldown timer
-  useEffect(() => {
-    if (cooldown <= 0) return
-    const t = setTimeout(() => setCooldown(c => c - 1), 1000)
-    return () => clearTimeout(t)
-  }, [cooldown])
-
-  const googleLoginHandler = useGoogleLogin({
-    flow: "implicit",
-    onSuccess: async (tr) => {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await apiCustomerGoogleLogin(tr.access_token);
-        if (res?.success) {
-          await refreshMe();
-          const data = {
-            verified: true,
-            name: res.user?.name || "",
-            phone: res.user?.phone || "",
-            email: res.user?.email || ""
-          };
-          sessionStorage.setItem(OTP_SESSION_KEY, JSON.stringify(data));
-          onVerified(data);
-        } else {
-          setError(res?.detail || "Google login failed");
-        }
-      } catch (err) {
-        setError(extractAuthError(err, "Google login failed"));
-      } finally {
-        setLoading(false);
-      }
-    },
-    onError: (err) => {
-      console.error("Google OAuth error:", err);
-      setError(err?.error_description || err?.error || "Google login failed");
-    }
-  });
-
-  const nameOk = name.trim().length >= 2
-  const phoneOk = phone.replace(/[\s\-\(\)\+]/g, "").length >= 7
-
-  const sendOtp = async () => {
-    if (!nameOk || !phoneOk) return
-    setLoading(true); setError(""); setDevCode("")
-    try {
-      const res = await apiRequest("/auth/send-otp/", { method: "POST", json: { phone } })
-      if (res?.success) {
-        setMode("otp"); setCooldown(30)
-        if (res.code) {
-          const digits = String(res.code).split("")
-          setOtp(digits); setDevCode(String(res.code))
-          setTimeout(() => refs[3]?.current?.focus(), 100)
-        }
-      } else setError(res?.detail || res?.message || "Failed to send OTP")
-    } catch (e) { setError(e?.body?.detail || "Could not send OTP") }
-    finally { setLoading(false) }
-  }
-
-  const verifyOtp = async () => {
-    const code = otp.join("")
-    if (code.length < 4) { setError("Enter all 4 digits"); return }
-    setLoading(true); setError("")
-    try {
-      const res = await apiRequest("/auth/verify-otp/", { method: "POST", json: { phone, code } })
-      if (res?.success) {
-        await refreshMe()
-        const data = { verified: true, name: name.trim(), phone, email: email.trim() }
-        sessionStorage.setItem(OTP_SESSION_KEY, JSON.stringify(data))
-        setMode("done")
-        setTimeout(() => onVerified(data), 700)
-      } else setError(res?.detail || "Invalid code")
-    } catch (e) { setError(e?.body?.detail || "Verification failed") }
-    finally { setLoading(false) }
-  }
-
-  const handleDigit = (i, val) => {
-    const d = val.replace(/\D/g, "").slice(-1)
-    const next = [...otp]; next[i] = d; setOtp(next)
-    if (d && i < 3) refs[i + 1]?.current?.focus()
-  }
-  const handleKey = (i, e) => { if (e.key === "Backspace" && !otp[i] && i > 0) refs[i - 1]?.current?.focus() }
-  const handlePaste = e => {
-    const p = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 4)
-    if (p.length === 4) { setOtp(p.split("")); refs[3]?.current?.focus() }
-  }
-
-  return (
-    <div className="uc-step-page uc-login-page">
-      <div className="uc-step-back" onClick={onBack}><ArrowLeft size={16} /> Back</div>
-
-      {/* PHONE MODE */}
-      {mode === "phone" && (
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="uc-login-center">
-            <div className="uc-login-shield">
-              <ShieldCheck size={32} style={{ color: "#7C3AED" }} />
-            </div>
-            <h2 className="uc-step-h2">Verify your identity</h2>
-            <p className="uc-step-sub">We'll send a 4-digit OTP to confirm your phone number before booking</p>
-          </div>
-
-          <div className="uc-login-trust-row">
-            <span><Shield size={11} /> SSL Secured</span>
-            <span><Lock size={11} /> No password needed</span>
-            <span><ShieldCheck size={11} /> 5 min OTP expiry</span>
-          </div>
-
-          <div className="uc-form">
-            <div className="uc-field">
-              <label className="uc-label">Full Name <span style={{ color: "#ef4444" }}>*</span></label>
-              <div className="uc-input-wrap">
-                <User size={15} className="uc-field-icon" />
-                <input className="uc-input" placeholder="Enter your full name" value={name} onChange={e => setName(e.target.value)} autoFocus />
-              </div>
-            </div>
-            <div className="uc-field">
-              <label className="uc-label">Mobile Number <span style={{ color: "#ef4444" }}>*</span></label>
-              <div className="uc-input-wrap">
-                <Phone size={15} className="uc-field-icon" />
-                <input className="uc-input" placeholder="+91 9876 543 210" value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && nameOk && phoneOk && sendOtp()}
-                />
-              </div>
-            </div>
-            <div className="uc-field">
-              <label className="uc-label">Email <span style={{ color: "#94a3b8", fontWeight: 500 }}>(optional)</span></label>
-              <div className="uc-input-wrap">
-                <Mail size={15} className="uc-field-icon" />
-                <input className="uc-input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
-
-          <button className="uc-btn-primary uc-btn-full" onClick={sendOtp} disabled={!nameOk || !phoneOk || loading}>
-            {loading ? <><RefreshCw size={15} className="spin-icon" /> Sending•¦</> : <><MessageSquare size={15} /> Send OTP</>}
-          </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
-            <span style={{ padding: '0 10px' }}>or</span>
-            <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => googleLoginHandler()}
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '12px',
-              background: 'white',
-              color: '#1e293b',
-              border: '1px solid #cbd5e1',
-              borderRadius: 12,
-              fontWeight: 700,
-              fontSize: '0.9rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-              opacity: loading ? 0.7 : 1
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18">
-              <path fill="#4285F4" d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84c-.21 1.12-.84 2.07-1.79 2.7l2.8 2.17c1.64-1.51 2.59-3.74 2.59-6.5z" />
-              <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.8-2.17c-.78.52-1.78.83-2.8.83-2.34 0-4.32-1.58-5.03-3.7L1.47 13.07C2.95 16 6.01 18 9 18z" />
-              <path fill="#FBBC05" d="M3.97 10.78c-.18-.52-.28-1.09-.28-1.68s.1-1.16.28-1.68L1.47 5.12C.53 7 0 9.08 0 11.2s.53 4.2 1.47 6.08l2.5-1.9c-.71-2.12-.71-4.4 0-6.5z" />
-              <path fill="#EA4335" d="M9 3.58c1.32-.03 2.59.48 3.51 1.4l2.63-2.63C13.48.88 11.3.02 9 0 6.01 0 2.95 2 1.47 4.93l2.5 1.9C4.68 5.16 6.66 3.58 9 3.58z" />
-            </svg>
-            Continue with Google
-          </button>
-        </motion.div>
-      )}
-
-      {/* OTP MODE */}
-      {mode === "otp" && (
-        <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}>
-          <div className="uc-login-center">
-            <div className="uc-login-shield" style={{ background: "#ecfdf520" }}>
-              <KeyRound size={32} style={{ color: "#10B981" }} />
-            </div>
-            <h2 className="uc-step-h2">Enter OTP</h2>
-            <p className="uc-step-sub">
-              4-digit code sent to <strong>{phone}</strong> &nbsp;
-              <button className="uc-link" onClick={() => { setMode("phone"); setOtp(["", "", "", ""]); setError("") }}>Change</button>
-            </p>
-          </div>
-
-          {devCode && (
-            <div className="uc-dev-banner">
-              <Zap size={13} /> Dev mode •” code: <strong>{devCode}</strong> (auto-filled)
-            </div>
-          )}
-
-          <div className="uc-otp-row" onPaste={handlePaste}>
-            {otp.map((d, i) => (
-              <input key={i} ref={refs[i]}
-                className={`uc-otp-box ${d ? "uc-otp-filled" : ""}`}
-                value={d} maxLength={1} inputMode="numeric"
-                onChange={e => handleDigit(i, e.target.value)}
-                onKeyDown={e => handleKey(i, e)}
-              />
-            ))}
-          </div>
-
-          {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
-
-          <button className="uc-btn-primary uc-btn-full" onClick={verifyOtp} disabled={otp.join("").length < 4 || loading}>
-            {loading ? <><RefreshCw size={15} className="spin-icon" /> Verifying•¦</> : <><ShieldCheck size={15} /> Verify &amp; Continue</>}
-          </button>
-
-          <div className="uc-resend">
-            {cooldown > 0
-              ? <span style={{ color: "#94a3b8", fontSize: "0.78rem", fontWeight: 600 }}>Resend in {cooldown}s</span>
-              : <button className="uc-link" onClick={sendOtp} disabled={loading}>Resend OTP</button>
-            }
-          </div>
-        </motion.div>
-      )}
-
-      {/* SUCCESS */}
-      {mode === "done" && (
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="uc-login-success">
-          <motion.div className="uc-success-check" animate={{ scale: [1, 1.15, 1] }} transition={{ repeat: 2, duration: 0.4 }}>
-            <CheckCircle2 size={48} style={{ color: "#10B981" }} />
-          </motion.div>
-          <div className="uc-success-title">Identity Verified!</div>
-          <div className="uc-success-sub">Welcome, {name} ðŸ‘‹</div>
-          <div className="uc-success-sub" style={{ color: "#94a3b8", fontSize: "0.78rem" }}>Loading your booking form•¦</div>
-        </motion.div>
-      )}
-    </div>
-  )
-}
-
-/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
-   STEP 5 •” CUSTOMER DETAILS
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
-
-function StepDetails({ category, cart, formData, onChange, photoFile, onPhotoChange, photoPreview, onNext, onBack, globalLocation, onOpenMap }) {
-  const fileRef = useRef()
-  const { user } = useAuth()
-  const phoneClean = (formData.phone || "").replace(/[\s\-\(\)\+]/g, "")
-
-  const phoneValid = phoneClean.length >= 7 && /^\d+$/.test(phoneClean)
-  const ok = formData.customer_name && phoneValid && formData.address && formData.issue_title
-
-  useEffect(() => {
-    if (globalLocation && !formData.address) {
-      onChange({ target: { name: 'address', value: globalLocation } })
-    }
-  }, [globalLocation, formData.address])
-
-  useEffect(() => {
-    if (cart && cart.length > 0) {
-      const firstName = cart[0].name || category?.name || "Service Item";
-      const defaultTitle = cart.length === 1
-        ? firstName
-        : `${firstName} (+${cart.length - 1} other item${cart.length - 1 > 1 ? 's' : ''})`;
-      if (!formData.issue_title) {
-        onChange({ target: { name: 'issue_title', value: defaultTitle } })
-      }
-    }
-  }, [cart, category, formData.issue_title])
-
-  useEffect(() => {
-    if (user) {
-      if (!formData.customer_name && user.firstName) {
-        onChange({ target: { name: 'customer_name', value: `${user.firstName} ${user.lastName || ''}`.trim() } })
-      }
-      if (!formData.phone && user.phone) {
-        onChange({ target: { name: 'phone', value: user.phone } })
-      }
-      if (!formData.email && user.email) {
-        onChange({ target: { name: 'email', value: user.email } })
-      }
-    }
-  }, [user, formData.customer_name, formData.phone, formData.email])
-
-  return (
-    <div className="uc-step-page">
-      <div className="uc-step-back" onClick={onBack}><ArrowLeft size={16} /> Back</div>
-      <h2 className="uc-step-h2">Service details</h2>
-      <p className="uc-step-sub">Tell us where to send our expert and describe the issue</p>
-
-      <div className="uc-form">
-        <div className="uc-field-row">
-          <div className="uc-field">
-            <label className="uc-label">Full Name <span style={{ color: "#ef4444" }}>*</span></label>
-            <div className="uc-input-wrap">
-              <User size={15} className="uc-field-icon" />
-              <input className="uc-input" name="customer_name" placeholder="Your full name" value={formData.customer_name} onChange={onChange} />
-            </div>
-          </div>
-          <div className="uc-field">
-            <label className="uc-label">Mobile Number <span style={{ color: "#ef4444" }}>*</span></label>
-            <div className="uc-input-wrap">
-              <Phone size={15} className="uc-field-icon" />
-              <input className="uc-input" name="phone" placeholder="+91 9876 543 210" value={formData.phone} onChange={onChange} />
-            </div>
-          </div>
-        </div>
-
-        <div className="uc-field">
-          <label className="uc-label">Email Address</label>
-          <div className="uc-input-wrap">
-            <Mail size={15} className="uc-field-icon" />
-            <input className="uc-input" name="email" type="email" placeholder="you@example.com" value={formData.email} onChange={onChange} />
-          </div>
-        </div>
-
-        <div className="uc-field">
-          <label className="uc-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Full Address <span style={{ color: "#ef4444" }}>*</span></span>
-            <span onClick={onOpenMap} style={{ color: '#7C3AED', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={12} /> Pick on Map</span>
-          </label>
-          <div className="uc-input-wrap" onClick={onOpenMap} style={{ cursor: 'pointer' }}>
-            <MapPin size={15} className="uc-field-icon" />
-            <input className="uc-input" name="address" placeholder="Tap to pick location from map..." value={formData.address} readOnly style={{ cursor: 'pointer' }} />
-          </div>
-        </div>
-
-        <div className="uc-field">
-          <label className="uc-label">House/Flat No, Landmark (optional)</label>
-          <div className="uc-input-wrap">
-            <Home size={15} className="uc-field-icon" />
-            <input className="uc-input" name="landmark" placeholder="e.g. Flat 402, Near Metro Station" value={formData.landmark || ""} onChange={onChange} />
-          </div>
-        </div>
-
-        <div className="uc-field">
-          <label className="uc-label">Issue Title <span style={{ color: "#ef4444" }}>*</span></label>
-          <div className="uc-input-wrap">
-            <FileText size={15} className="uc-field-icon" />
-            <input className="uc-input" name="issue_title" placeholder={`e.g. ${category?.name} - brief description`} value={formData.issue_title} onChange={onChange} />
-          </div>
-        </div>
-
-        <div className="uc-field">
-          <label className="uc-label">Describe the problem (optional)</label>
-          <textarea
-            className="uc-textarea"
-            name="description"
-            rows={3}
-            placeholder="Any specific issues, brand of appliance, how long the problem has been occurring•¦"
-            value={formData.description}
-            onChange={onChange}
-          />
-        </div>
-
-        {/* Photo Upload */}
-        <div className="uc-field">
-          <label className="uc-label">Attach a photo (optional)</label>
-          <div
-            className="uc-photo-zone"
-            onClick={() => fileRef.current?.click()}
-          >
-            {photoPreview ? (
-              <div className="uc-photo-preview">
-                <img src={photoPreview} alt="preview" />
-                <div className="uc-photo-change"><Camera size={14} /> Change photo</div>
-              </div>
-            ) : (
-              <>
-                <Camera size={24} style={{ color: "#94a3b8" }} />
-                <div className="uc-photo-text">Click to attach a photo of the issue</div>
-                <div className="uc-photo-hint">JPG, PNG •” helps our expert prepare</div>
-              </>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onPhotoChange} />
-          </div>
-        </div>
-      </div>
-
-      <div className="uc-step-footer">
-        <button className="uc-btn-primary" onClick={onNext} disabled={!ok}>
-          Review Booking <ChevronRight size={16} />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
-   STEP 6 •” CONFIRM
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
-
-function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, onBack, onSubmit, loading, error }) {
-  const [agreed, setAgreed] = useState(false)
-  const [payMethod, setPayMethod] = useState('cash') // 'cash' | 'online'
-  const [couponCode, setCouponCode] = useState('')
-  const [couponApplied, setCouponApplied] = useState(false)
-  const [tip, setTip] = useState(null) // null | 50 | 75 | 100 | 'custom'
-  const [customTip, setCustomTip] = useState('')
-  const [showPayment, setShowPayment] = useState(false)
-
-  const displayDate = date ? new Date(date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" }) : ""
-  const UC_TIME_FORMATS = (t) => { if (!t) return ''; const [h] = t.split(':').map(Number); const ampm = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:00 ${ampm}` }
-  const displayTime = UC_TIME_FORMATS(time)
-  const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (pkg?.price || 0)
-  const taxFee = totalPrice === 0 ? 49 : (totalPrice === 49 || (cart && cart.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
-  const discount = couponApplied ? Math.floor(totalPrice * 0.1) : 0
-  const tipAmount = tip === 'custom' ? (parseInt(customTip) || 0) : (tip || 0)
-  const grandTotal = totalPrice + taxFee - discount + tipAmount
-
-  // Gather service/package info
-  const serviceItems = cart && cart.length > 0 ? cart : (pkg ? [pkg] : [])
-
-  return (
-    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 960, margin: '0 auto', padding: '0 0 80px', flexWrap: 'wrap' }}>
-
-      {/* LEFT: Payment Method + Details */}
-      <div style={{ flex: 1, minWidth: 280 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 99, border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem', color: '#64748b' }}>
-            <ArrowLeft size={14} /> Back
-          </button>
-          <div style={{ fontWeight: 900, fontSize: '1.15rem', color: '#0f172a' }}>Payment</div>
-        </div>
-
-        {/* Booking Summary Chips */}
-        <div style={{ background: '#f8fafc', borderRadius: 14, padding: '14px 16px', marginBottom: 18, border: '1px solid #e2e8f0' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-            {serviceItems.slice(0, 3).map((item, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'white', border: '1px solid #e2e8f0', borderRadius: 99, padding: '4px 10px', fontSize: '0.72rem', fontWeight: 700, color: '#1e293b' }}>
-                <CheckCircle2 size={11} color="#10B981" />{item.name}
-              </div>
-            ))}
-            {serviceItems.length > 3 && <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#7C3AED', padding: '4px 10px' }}>+{serviceItems.length - 3} more</div>}
-          </div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            {displayDate && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}><Calendar size={13} color="#7C3AED" /> {displayDate}</div>}
-            {displayTime && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}><Clock size={13} color="#7C3AED" /> {displayTime}</div>}
-            {formData.address && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}><MapPin size={13} color="#7C3AED" /> {formData.address.slice(0, 40)}{formData.address.length > 40 ? '...' : ''}</div>}
-          </div>
-        </div>
-
-        {/* Payment Method */}
-        <div style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 18, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
-          <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 7 }}>
-            <CreditCard size={16} color="#7C3AED" /> Payment Method
-          </div>
-
-          {/* Online */}
-          <div onClick={() => setPayMethod('online')} style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: payMethod === 'online' ? '#faf5ff' : 'white', transition: 'all 0.18s', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, background: payMethod === 'online' ? '#ede9fe' : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>💳</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                Pay Online
-                <span style={{ background: '#ede9fe', color: '#7C3AED', fontSize: '0.58rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #ddd6fe' }}>RECOMMENDED</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 3 }}>UPI / Card / NetBanking</div>
-              {payMethod === 'online' && (
-                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {['Google Pay', 'PhonePe', 'Paytm', 'BHIM', 'Card'].map(app => (
-                    <span key={app} style={{ padding: '4px 12px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: '0.7rem', fontWeight: 700, background: '#faf5ff', color: '#7C3AED' }}>{app}</span>
-                  ))}
-                </motion.div>
-              )}
-            </div>
-            <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${payMethod === 'online' ? '#7C3AED' : '#cbd5e1'}`, background: payMethod === 'online' ? '#7C3AED' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-              {payMethod === 'online' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'white' }} />}
-            </div>
-          </div>
-
-          {/* Cash */}
-          <div onClick={() => setPayMethod('cash')} style={{ padding: '16px 18px', cursor: 'pointer', background: payMethod === 'cash' ? '#faf5ff' : 'white', transition: 'all 0.18s', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 12, background: payMethod === 'cash' ? '#ede9fe' : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>💵</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                Pay After Service
-                <span style={{ background: '#f0fdf4', color: '#10B981', fontSize: '0.58rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: '1px solid #bbf7d0' }}>CASH</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 3 }}>Pay when the service is done</div>
-              {payMethod === 'cash' && (
-                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {['No upfront payment', 'Pay only on completion', 'Any denomination'].map((d, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.72rem', color: '#059669', fontWeight: 600 }}>
-                      <CheckCircle2 size={11} /> {d}
-                    </div>
-                  ))}
-                </motion.div>
-              )}
-            </div>
-            <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${payMethod === 'cash' ? '#7C3AED' : '#cbd5e1'}`, background: payMethod === 'cash' ? '#7C3AED' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-              {payMethod === 'cash' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'white' }} />}
-            </div>
-          </div>
-        </div>
-
-        {/* Coupon */}
-        <div style={{ background: 'white', borderRadius: 14, border: '1px solid #e2e8f0', padding: '14px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: '1.1rem' }}>🏷️</span>
-          {couponApplied ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontWeight: 700, color: '#10B981', fontSize: '0.85rem' }}>✓ SAVE10 applied! You save ₹{discount}</div>
-              <button onClick={() => { setCouponApplied(false); setCouponCode('') }} style={{ fontSize: '0.72rem', color: '#ef4444', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}>Remove</button>
-            </div>
-          ) : (
-            <>
-              <input value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} placeholder="Enter coupon code" style={{ flex: 1, border: 'none', outline: 'none', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', background: 'transparent' }} />
-              <button onClick={() => { if (couponCode === 'SAVE10') setCouponApplied(true) }} style={{ padding: '6px 14px', borderRadius: 99, background: couponCode ? '#7C3AED' : '#e2e8f0', color: couponCode ? 'white' : '#94a3b8', fontWeight: 800, fontSize: '0.75rem', border: 'none', cursor: 'pointer' }}>Apply</button>
-            </>
-          )}
-        </div>
-
-
-        {/* Agreement */}
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 18 }}>
-          <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ accentColor: '#7C3AED', marginTop: 2, flexShrink: 0 }} />
-          <span style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.5 }}>I agree to the <a href="#" className="uc-link">Terms of Service</a> and <a href="#" className="uc-link">Privacy Policy</a>. The technician will arrive at the scheduled time.</span>
-        </label>
-
-        {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
-
-        <button
-          onClick={() => { if (agreed && !loading) { if (payMethod === 'online') setShowPayment(true); else onSubmit('cash') } }}
-          disabled={!agreed || loading}
-          style={{ width: '100%', padding: '15px', borderRadius: 14, background: agreed && !loading ? 'linear-gradient(135deg,#7C3AED,#a855f7)' : '#e2e8f0', color: agreed && !loading ? 'white' : '#94a3b8', fontWeight: 800, fontSize: '1rem', border: 'none', cursor: agreed && !loading ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: agreed && !loading ? '0 4px 20px rgba(124,58,237,0.3)' : 'none', transition: 'all 0.18s' }}
-        >
-          {loading ? <><RefreshCw size={16} className="spin-icon" /> Processing…</> : <><CheckCheck size={16} /> Confirm Booking · ₹{grandTotal.toLocaleString()}</>}
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 10, fontSize: '0.68rem', color: '#94a3b8' }}>
-          <Shield size={11} /> 256-bit SSL · Your info is secure
-        </div>
-      </div>
-
-      {/* RIGHT: Order Summary */}
-      <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 24 }}>
-        <div style={{ background: 'white', borderRadius: 18, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 20px rgba(0,0,0,0.06)' }}>
-          <div style={{ padding: '16px 18px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>Order Summary</div>
-          {serviceItems.map((item, i) => (
-            <div key={i} style={{ padding: '12px 18px', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b' }}>{item.name}</div>
-                {item.quantity > 1 && <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 2 }}>Qty: {item.quantity}</div>}
-              </div>
-              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.85rem' }}>₹{((item.price || 0) * (item.quantity || 1)).toLocaleString()}</div>
-            </div>
-          ))}
-
-          {/* Tip Selector */}
-          <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#374151', marginBottom: 10 }}>
-              💝 Tip for your professional <span style={{ fontSize: '0.58rem', color: '#10B981', fontWeight: 800, background: '#f0fdf4', padding: '2px 6px', borderRadius: 99, border: '1px solid #bbf7d0' }}>POPULAR</span>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {[50, 75, 100].map(amt => (
-                <button key={amt} onClick={() => setTip(tip === amt ? null : amt)} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: `2px solid ${tip === amt ? '#7C3AED' : '#e2e8f0'}`, background: tip === amt ? '#ede9fe' : 'white', color: tip === amt ? '#7C3AED' : '#374151', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.18s' }}>₹{amt}</button>
-              ))}
-              <button onClick={() => setTip(tip === 'custom' ? null : 'custom')} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: `2px solid ${tip === 'custom' ? '#7C3AED' : '#e2e8f0'}`, background: tip === 'custom' ? '#ede9fe' : 'white', color: tip === 'custom' ? '#7C3AED' : '#374151', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer', transition: 'all 0.18s' }}>Custom</button>
-            </div>
-            {tip === 'custom' && <input type="number" value={customTip} onChange={e => setCustomTip(e.target.value)} placeholder="Enter amount" style={{ marginTop: 8, width: '100%', padding: '8px 12px', border: '2px solid #7C3AED', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, outline: 'none', boxSizing: 'border-box' }} />}
-          </div>
-
-          {/* Price Breakdown */}
-          <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}><span>Item total</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{totalPrice.toLocaleString()}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: discount > 0 ? 6 : 0 }}><span>Taxes & Fee (incl. GST)</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span></div>
-            {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#10B981', marginBottom: tipAmount > 0 ? 6 : 0 }}><span>Coupon discount</span><span style={{ fontWeight: 700 }}>-₹{discount}</span></div>}
-            {tipAmount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}><span>Tip</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{tipAmount}</span></div>}
-          </div>
-
-          <div style={{ padding: '14px 18px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontWeight: 900, color: '#0f172a', fontSize: '0.95rem' }}>Amount to Pay</div>
-              <div style={{ fontSize: '0.62rem', color: '#94a3b8', marginTop: 1 }}>Includes all taxes & fees</div>
-            </div>
-            <div style={{ fontWeight: 900, color: '#7C3AED', fontSize: '1.15rem' }}>₹{grandTotal.toLocaleString()}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Online Payment Modal */}
-      <AnimatePresence>
-        {showPayment && (
-          <PaymentModal
-            total={grandTotal}
-            allowedMethods={['online']}
-            onClose={() => setShowPayment(false)}
-            onConfirm={(method) => { setShowPayment(false); onSubmit(method) }}
-          />
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
-
-
-/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
-   PAYMENT MODAL
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
-
-function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onConfirm, bookingId }) {
-  const [selected, setSelected] = useState(allowedMethods.includes('online') && allowedMethods.length === 1 ? 'online' : 'cash')
-  const [confirming, setConfirming] = useState(false)
-  const [showOnlineSheet, setShowOnlineSheet] = useState(false)
-  const [payTab, setPayTab] = useState('upi')
-  const [upiId, setUpiId] = useState('')
-  const [cardNum, setCardNum] = useState('')
-  const [cardName, setCardName] = useState('')
-  const [cardExp, setCardExp] = useState('')
-  const [cardCvv, setCardCvv] = useState('')
-  const [payPhase, setPayPhase] = useState(null) // null | 'processing' | 'success' | 'failed'
-  const [payError, setPayError] = useState('')
-
-  const handleConfirm = async () => {
-    if (selected === 'online') {
-      setShowOnlineSheet(true)
-    } else {
-      setConfirming(true)
-      await new Promise(r => setTimeout(r, 400))
-      onConfirm('cash')
-    }
-  }
-
-  const handleOnlinePayment = async () => {
-    setPayPhase('processing')
-    setPayError('')
-    await new Promise(r => setTimeout(r, 2200))
-    const success = Math.random() > 0.05
-    if (success) {
-      setPayPhase('success')
-      if (bookingId) {
-        try {
-          await apiRequest('/payment/verify/', {
-            method: 'POST',
-            json: { booking_id: bookingId, order_id: `order_mock_${Date.now()}`, payment_id: `PAY_${Date.now().toString(36).toUpperCase()}`, mock_success: true }
-          })
-        } catch (e) { /* non-critical */ }
-      }
-      await new Promise(r => setTimeout(r, 1200))
-      onConfirm('online')
-    } else {
-      setPayPhase('failed')
-      setPayError('Payment failed. Please check your details and try again.')
-    }
-  }
-
-  const options = [
-    { id: "cash", icon: "ðŸ’µ", label: "Cash on Service", sub: "Pay after service is completed", badge: "Most Popular", badgeColor: "#10B981", detail: ["No upfront payment", "Pay only on completion", "Any denomination accepted"] },
-    { id: "online", icon: "ðŸ“±", label: "Pay via UPI", sub: "Google Pay, PhonePe, Paytm, BHIM", badge: "Instant", badgeColor: "#7C3AED", detail: ["100% secure & encrypted", "Instant confirmation", "Invoice emailed immediately"] },
-  ].filter(o => allowedMethods.includes(o.id))
-
-  if (showOnlineSheet) {
-    return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 10020, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-        <motion.div initial={{ y: 400, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-          style={{ background: 'white', borderRadius: '28px 28px 0 0', width: '100%', maxWidth: 540, paddingBottom: '2rem' }}>
-          <div style={{ background: 'linear-gradient(135deg,#7C3AED,#4F46E5)', borderRadius: '28px 28px 0 0', padding: '1.5rem 1.75rem 1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Secure UPI Payment</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'white', marginTop: 2 }}>{BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}</div>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.15)', padding: '4px 12px', borderRadius: 99, fontSize: '0.7rem', fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <Lock size={11} /> SSL Secured
-              </div>
-            </div>
-          </div>
-          <div style={{ padding: '1.5rem 1.75rem' }}>
-            {payPhase === 'processing' && (
-              <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ display: 'inline-block', marginBottom: '1.5rem' }}><RefreshCw size={48} color="#7C3AED" /></motion.div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Processing UPI Payment…</div>
-                <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Please do not close this window</div>
-              </div>
-            )}
-            {payPhase === 'success' && (
-              <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-                  style={{ width: 72, height: 72, borderRadius: '50%', background: 'linear-gradient(135deg,#10B981,#34D399)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem' }}>
-                  <Check size={36} color="white" />
-                </motion.div>
-                <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Payment Successful! 🎉</div>
-                <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Your booking is now confirmed</div>
-                <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.78rem', color: '#166534', fontWeight: 600 }}>✅ Amount {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()} debited successfully</div>
-              </div>
-            )}
-            {payPhase === 'failed' && (
-              <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-                <div style={{ width: 72, height: 72, borderRadius: '50%', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', border: '2px solid #FECACA' }}><X size={36} color="#EF4444" /></div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Payment Failed</div>
-                <div style={{ color: '#EF4444', fontSize: '0.82rem', marginBottom: '1.25rem' }}>{payError}</div>
-                <button onClick={() => setPayPhase(null)} style={{ padding: '0.75rem 2rem', background: 'linear-gradient(135deg,#7C3AED,#4F46E5)', color: 'white', fontWeight: 800, border: 'none', borderRadius: 12, cursor: 'pointer' }}>Try Again</button>
-              </div>
-            )}
-            {payPhase === null && (
-              <>
-                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Enter UPI ID</label>
-                <div style={{ display: 'flex', alignItems: 'center', border: `2px solid ${upiId ? '#7C3AED' : '#e2e8f0'}`, borderRadius: 12, overflow: 'hidden', marginBottom: '0.75rem' }}>
-                  <input value={upiId} onChange={e => setUpiId(e.target.value)} placeholder="yourname@upi"
-                    style={{ flex: 1, border: 'none', outline: 'none', padding: '0.9rem 1rem', fontSize: '0.95rem', color: '#0f172a' }} />
-                  <div style={{ padding: '0 1rem', color: '#7C3AED', fontWeight: 800, fontSize: '0.75rem' }}>VERIFY</div>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
-                  {['PhonePe', 'GPay', 'Paytm', 'BHIM'].map(app => (
-                    <button key={app} onClick={() => setUpiId(app.toLowerCase() + '@ybl')}
-                      style={{ padding: '6px 14px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#374151' }}>{app}</button>
-                  ))}
-                </div>
-                <button onClick={handleOnlinePayment} disabled={!upiId}
-                  style={{ width: '100%', padding: '1rem', background: upiId ? 'linear-gradient(135deg,#7C3AED,#4F46E5)' : '#e2e8f0', color: upiId ? 'white' : '#94a3b8', fontWeight: 800, fontSize: '0.95rem', border: 'none', borderRadius: 14, cursor: upiId ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <Lock size={15} /> Pay {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}
-                </button>
-              </>
-            )}
-            {payPhase === null && (
-              <div style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                <Shield size={11} /> 256-bit SSL · UPI Encryption
-              </div>
-            )}
-          </div>
-        </motion.div>
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 10010, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
-      <motion.div initial={{ y: 300, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 300, opacity: 0 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 300 }} onClick={e => e.stopPropagation()}
-        style={{ background: 'white', borderRadius: '24px 24px 0 0', width: '100%', maxWidth: 520, paddingBottom: '2.5rem' }}>
-        <div style={{ padding: '1.75rem 1.75rem 0' }}>
-          <div style={{ width: 40, height: 4, background: '#e2e8f0', borderRadius: 99, margin: '0 auto 1.5rem' }} />
-          <h3 style={{ margin: '0 0 0.25rem', fontSize: '1.3rem', fontWeight: 900, color: '#0f172a' }}>Choose Payment Method</h3>
-          <p style={{ margin: '0 0 1.25rem', color: '#64748b', fontSize: '0.85rem' }}>Total: <strong style={{ color: '#7C3AED', fontSize: '1.05rem' }}>{BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}</strong></p>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0 1.75rem', marginBottom: '1.25rem' }}>
-          {options.map(opt => (
-            <div key={opt.id} onClick={() => setSelected(opt.id)}
-              style={{ border: `2px solid ${selected === opt.id ? '#7C3AED' : '#e2e8f0'}`, borderRadius: 16, padding: '1rem 1.1rem', cursor: 'pointer', background: selected === opt.id ? '#f5f3ff' : 'white', transition: 'all 0.2s' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-                <div style={{ width: 48, height: 48, borderRadius: 14, background: selected === opt.id ? '#7C3AED18' : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', flexShrink: 0 }}>{opt.icon}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {opt.label}
-                    <span style={{ background: opt.badgeColor + '18', color: opt.badgeColor, fontSize: '0.6rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, border: `1px solid ${opt.badgeColor}30` }}>{opt.badge}</span>
-                  </div>
-                  <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: 3 }}>{opt.sub}</div>
-                  {selected === opt.id && (
-                    <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      {opt.detail.map((d, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.73rem', color: '#059669', fontWeight: 600 }}>
-                          <CheckCircle2 size={12} /> {d}
-                        </div>
-                      ))}
-                    </motion.div>
-                  )}
-                </div>
-                <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${selected === opt.id ? '#7C3AED' : '#cbd5e1'}`, background: selected === opt.id ? '#7C3AED' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                  {selected === opt.id && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'white' }} />}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ padding: '0 1.75rem' }}>
-          <button onClick={handleConfirm} disabled={confirming}
-            style={{ width: '100%', padding: '1rem', background: 'linear-gradient(135deg,#7C3AED,#a855f7)', color: 'white', fontWeight: 800, fontSize: '1rem', border: 'none', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 20px rgba(124,58,237,0.3)' }}>
-            {confirming ? <><RefreshCw size={16} className="spin-icon" /> Processing…</> :
-              selected === 'online' ? <><CreditCard size={16} /> Continue to Pay {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}</> :
-                <><CheckCheck size={16} /> Confirm Booking</>}
-          </button>
-          <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-            <Shield size={11} /> 256-bit SSL encrypted · Your info is safe
-          </div>
-        </div>
-      </motion.div>
-    </div>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   POST-BOOKING ANIMATED FLOW
-   ───────────────────────────────────────────────────────────────────────────── */
-
-function PostBookingFlow({ bookingData, onDone }) {
-  const [phase, setPhase] = useState(0)
-
-  useEffect(() => {
-    const timers = [
-      setTimeout(() => setPhase(1), 1200),
-      setTimeout(() => setPhase(2), 2400),
-      setTimeout(() => onDone && onDone(), 3600),
-    ]
-    return () => timers.forEach(clearTimeout)
-  }, [onDone])
-
-  const phases = [
-    {
-      icon: <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}><RefreshCw size={44} color="#7C3AED" /></motion.div>,
-      title: "Confirming your booking...",
-      sub: "Creating your request on the secure network",
-    },
-    {
-      icon: <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 0.9 }}><Radio size={44} color="#F59E0B" /></motion.div>,
-      title: "Connecting to Hosur Dispatch...",
-      sub: "Broadcasting request to nearby verified partners",
-    },
-    {
-      icon: <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}><CheckCircle2 size={44} color="#10B981" /></motion.div>,
-      title: "Broadcast Active! 📡",
-      sub: "Opening live tracking radar...",
-    },
-  ]
-
-  const cur = phases[phase] || phases[0]
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.92)', zIndex: 10005, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', padding: '2rem', backdropFilter: 'blur(8px)' }}>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={phase}
-          initial={{ opacity: 0, scale: 0.85, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: -20 }}
-          transition={{ duration: 0.35 }}
-          style={{ background: 'white', borderRadius: 24, padding: '2.5rem 2rem', textAlign: 'center', maxWidth: 360, width: '100%', boxShadow: '0 25px 60px rgba(0,0,0,0.45)' }}
-        >
-          <div style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'center' }}>{cur.icon}</div>
-          <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>{cur.title}</h3>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}>{cur.sub}</p>
-        </motion.div>
-      </AnimatePresence>
-    </div>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   RAPIDO-STYLE LIVE TRACKING PAGE (Real-Time WebSockets & Database Dispatch)
-   ───────────────────────────────────────────────────────────────────────────── */
-
-function LiveTrackingPage({ successData, category, cart, formData, selDate, selTime, onBookAgain }) {
-  const rid = successData?.request_id || successData?.id || "SR-0001"
-  const [liveData, setLiveData] = useState(null)
-  const [searchSeconds, setSearchSeconds] = useState(0)
-  const [showMapModal, setShowMapModal] = useState(false)
-  const [showCancelModal, setShowCancelModal] = useState(false)
-  const [copiedOtp, setCopiedOtp] = useState(false)
-
-  const totalPrice = cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const displayDate = selDate ? new Date(selDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : ""
-  const displayTime = selTime ? TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === selTime)?.l : ""
-
-  // Timer counter for searching state
-  useEffect(() => {
-    const t = setInterval(() => setSearchSeconds(s => s + 1), 1000)
-    return () => clearInterval(t)
-  }, [])
-
-  // Real-Time WebSocket Connection + Resilient 3s Polling Backup
-  useEffect(() => {
-    if (!rid) return
-
-    let ws = null
-    let pollTimer = null
-    let isMounted = true
-
-    const fetchStatus = async () => {
-      try {
-        const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/`)
-        if (res?.data && isMounted) {
-          setLiveData(res.data)
-        }
-      } catch (e) { }
-    }
-
-    // 1. Initial immediate fetch
-    fetchStatus()
-
-    // 2. Open WebSocket
-    try {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-      const host = window.location.hostname === "localhost" ? "localhost:8000" : window.location.host
-      const wsUrl = `${protocol}//${host}/ws/live/booking/${encodeURIComponent(rid)}/`
-
-      ws = new WebSocket(wsUrl)
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data)
-          if (msg?.data && isMounted) {
-            setLiveData(msg.data)
-          }
-        } catch (err) { }
-      }
-      ws.onerror = () => {
-        // WS fallback to polling
-      }
-    } catch (err) { }
-
-    // 3. Keep 3-second polling active as reliable backup
-    pollTimer = setInterval(fetchStatus, 3000)
-
-    return () => {
-      isMounted = false
-      if (ws) ws.close()
-      if (pollTimer) clearInterval(pollTimer)
-    }
-  }, [rid])
-
-  const isAccepted = Boolean(liveData?.is_accepted || liveData?.employee_live_location || (liveData?.status && ["assigned", "accepted", "in_progress", "on_the_way", "completed"].includes(liveData.status)))
-  const isCancelled = liveData?.status === "cancelled"
-  const cancellationReason = liveData?.cancellation_reason || (liveData?.description && liveData.description.includes("[Cancellation Reason]:") ? liveData.description.split("[Cancellation Reason]:")[1].trim() : "")
-  const graceSecs = liveData?.cancellation_grace_remaining_seconds ?? (isAccepted ? 300 : 9999)
-  const canCancel = !isCancelled && (liveData?.can_cancel !== false && (!isAccepted || graceSecs > 0))
-
-  const empInfo = liveData?.employee_live_location || liveData?.assigned_employee
-  const techName = empInfo?.employee_name || empInfo?.name || "Assigned Partner"
-  const techPhone = empInfo?.phone || ""
-  const etaMinutes = liveData?.eta_minutes || null
-  const distKm = liveData?.distance_km || null
-  const startOtp = liveData?.start_otp || null
-
-  const trackingBookingObj = {
-    id: liveData?.booking_id || successData?.id,
-    request_id: rid,
-    assigned_employee: {
-      full_name: techName,
-      phone: techPhone,
-    },
-    latitude: liveData?.destination?.latitude || formData?.latitude,
-    longitude: liveData?.destination?.longitude || formData?.longitude,
-    address: liveData?.destination?.address || formData?.address,
-    start_otp: startOtp,
-    status: liveData?.status || (isAccepted ? "assigned" : "confirmed"),
-    can_cancel: canCancel,
-    cancellation_grace_remaining_seconds: graceSecs,
-  }
-
-  const handleCopyOtp = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(startOtp)
-      setCopiedOtp(true)
-      setTimeout(() => setCopiedOtp(false), 2000)
-    }
-  }
-
-  const formatGraceTime = (sec) => {
-    const m = Math.floor(sec / 60)
-    const s = sec % 60
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
-  }
-
-  /* ─────────────────── CASE 0: BOOKING CANCELLED STATE ─────────────────── */
-  if (isCancelled) {
-    return (
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 600, margin: "0 auto", padding: "1.5rem 1rem", textAlign: "center" }}>
-        <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem", boxShadow: "0 6px 20px rgba(220, 38, 38, 0.2)" }}>
-          <Ban size={38} color="#dc2626" />
-        </div>
-        <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", margin: "0 0 0.4rem" }}>
-          Booking Cancelled
-        </h2>
-        <p style={{ color: "#64748b", fontSize: "0.9rem", margin: "0 0 1.25rem" }}>
-          Your booking <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been cancelled.
-        </p>
-
-        <div style={{ background: "white", borderRadius: 20, padding: "1.25rem", marginBottom: "1.5rem", border: "1px solid #e2e8f0", textAlign: "left", boxShadow: "0 4px 16px rgba(0,0,0,0.05)" }}>
-          <div style={{ fontSize: "0.75rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-            Cancellation Details
-          </div>
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
-            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#991b1b", textTransform: "uppercase" }}>Reason for Cancellation</div>
-            <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#7f1d1d", marginTop: 2 }}>{cancellationReason || "Customer requested cancellation"}</div>
-          </div>
-          <div style={{ fontSize: "0.8rem", color: "#475569", lineHeight: 1.5, background: "#f8fafc", padding: "10px 12px", borderRadius: 10 }}>
-            💡 If any advance payment was deducted, your full refund will be credited back within 2-4 business days.
-          </div>
-        </div>
-
-        <button
-          onClick={onBookAgain}
-          style={{
-            width: "100%",
-            padding: "0.95rem",
-            background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
-            color: "white",
-            fontWeight: 800,
-            fontSize: "0.92rem",
-            border: "none",
-            borderRadius: 14,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            boxShadow: "0 4px 14px rgba(124, 58, 237, 0.35)",
-          }}
-        >
-          <Home size={16} /> Book Another Service
-        </button>
-      </motion.div>
-    )
-  }
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 620, margin: '0 auto', padding: '1.25rem 1rem' }}>
-
-      {/* ─────────────────── CASE A: WAITING FOR PARTNER (RAPIDO RADAR SEARCH) ─────────────────── */}
-      {!isAccepted ? (
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-
-          {/* Rapido Pulse Radar Animation */}
-          <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <motion.div
-              animate={{ scale: [1, 1.8, 2.4], opacity: [0.6, 0.25, 0] }}
-              transition={{ repeat: Infinity, duration: 2.4, ease: "easeOut" }}
-              style={{ position: 'absolute', width: 120, height: 120, borderRadius: '50%', background: 'rgba(124, 58, 237, 0.25)' }}
-            />
-            <motion.div
-              animate={{ scale: [1, 1.6, 2.1], opacity: [0.7, 0.35, 0] }}
-              transition={{ repeat: Infinity, duration: 2.4, delay: 0.8, ease: "easeOut" }}
-              style={{ position: 'absolute', width: 100, height: 100, borderRadius: '50%', background: 'rgba(245, 158, 11, 0.3)' }}
-            />
-            <motion.div
-              animate={{ scale: [1, 1.06, 1] }}
-              transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-              style={{
-                width: 76,
-                height: 76,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #7C3AED, #F59E0B)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 8px 25px rgba(124, 58, 237, 0.45)',
-                zIndex: 2,
-              }}
-            >
-              <Radio size={36} color="white" className="animate-pulse" />
-            </motion.div>
-          </div>
-
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f5f3ff', border: '1px solid rgba(124, 58, 237, 0.25)', borderRadius: 99, padding: '4px 14px', marginBottom: 10 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7C3AED' }} className="animate-ping" />
-            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Live Dispatch Active • Hosur
-            </span>
-          </div>
-
-          <h2 style={{ margin: '0 0 0.35rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
-            Finding your service professional...
-          </h2>
-          <p style={{ margin: '0 0 1rem', color: '#64748b', fontSize: '0.88rem' }}>
-            Broadcasting request to nearby verified experts in Hosur
-          </p>
-
-          {/* Live search elapsed counter */}
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: '#475569', fontWeight: 700 }}>
-            <Clock size={14} color="#7C3AED" />
-            <span>Searching for: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '0.88rem' }}>00:{searchSeconds.toString().padStart(2, '0')}</strong></span>
-            <span style={{ color: '#94a3b8' }}>•</span>
-            <span style={{ color: '#10b981' }}>⚡ 4-6 pros notified</span>
-          </div>
-
-          {/* Anytime Cancellation Button (Pre-Acceptance) */}
-          <div style={{ marginTop: '1.25rem' }}>
-            <button
-              onClick={() => setShowCancelModal(true)}
-              style={{
-                padding: '0.55rem 1.1rem',
-                background: 'white',
-                color: '#dc2626',
-                border: '1.5px solid #fecaca',
-                borderRadius: 12,
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)',
-              }}
-            >
-              <Ban size={14} /> Cancel Booking
-            </button>
-            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 5 }}>
-              ⚡ Free cancellation available anytime before partner accepts
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* ─────────────────── CASE B: PARTNER ACCEPTED (REAL DATABASE DATA) ─────────────────── */
-        <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 220, damping: 14 }}
-            style={{ width: 68, height: 68, borderRadius: '50%', background: 'linear-gradient(135deg, #10B981, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem', boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)' }}
-          >
-            <CheckCircle2 size={38} color="white" />
-          </motion.div>
-          <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
-            Partner Confirmed &amp; On The Way! 🎉
-          </h2>
-          <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.88rem' }}>
-            {techName} accepted your booking and is en route
-          </p>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
-            <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0f172a', fontFamily: 'monospace' }}>#{rid}</span>
-          </div>
-        </div>
-      )}
-
-      {/* ─────────────────── REAL ASSIGNED EMPLOYEE CARD (ONLY IF ACCEPTED) ─────────────────── */}
-      {isAccepted && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          style={{
-            background: 'white',
-            borderRadius: 20,
-            padding: '1.2rem',
-            marginBottom: '1rem',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-            border: '1px solid #e2e8f0',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ position: 'relative' }}>
-              <div style={{
-                width: 56,
-                height: 56,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.35rem',
-                fontWeight: 900,
-                color: '#b45309',
-                border: '2px solid #FC8019',
-              }}>
-                {techName.charAt(0).toUpperCase()}
-              </div>
-              <div style={{
-                position: 'absolute',
-                bottom: 0,
-                right: 0,
-                width: 15,
-                height: 15,
-                borderRadius: '50%',
-                background: '#10b981',
-                border: '2px solid white',
-              }} />
-            </div>
-
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName}</span>
-                <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
-                  ✓ Verified
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
-                  <Star size={13} fill="#d97706" /> 4.9
-                </span>
-                <span style={{ fontSize: '0.76rem', color: '#64748b' }}>• 280+ jobs completed</span>
-              </div>
-            </div>
-
-            <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #FC8019, #f97316)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 900 }}>{etaMinutes}</div>
-              <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>MIN ETA</div>
-            </div>
-          </div>
-
-          {/* Action Buttons: Track on Map + Call + WhatsApp */}
-          <div style={{ display: 'flex', gap: 8, marginTop: '1rem' }}>
-            <button
-              onClick={() => setShowMapModal(true)}
-              style={{
-                flex: 1.3,
-                padding: '0.75rem',
-                background: 'linear-gradient(135deg, #FC8019, #f97316)',
-                color: 'white',
-                fontWeight: 800,
-                fontSize: '0.85rem',
-                border: 'none',
-                borderRadius: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                boxShadow: '0 4px 12px rgba(251, 146, 60, 0.3)',
-              }}
-            >
-              <MapPin size={15} /> Track on Live Map
-            </button>
-            <a
-              href={`tel:${techPhone}`}
-              style={{
-                flex: 1,
-                padding: '0.75rem',
-                background: '#f1f5f9',
-                color: '#0f172a',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: 'none',
-                borderRadius: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                textDecoration: 'none',
-              }}
-            >
-              <Phone size={14} color="#0f172a" /> Call Pro
-            </a>
-            <button
-              onClick={() => {
-                const msg = encodeURIComponent(`Hi ${techName}, following up on my CalServices booking #${rid}.`)
-                window.open(`https://wa.me/91${techPhone.replace(/\D/g, '')}?text=${msg}`, '_blank')
-              }}
-              style={{
-                padding: '0.75rem 0.9rem',
-                background: '#ecfdf5',
-                color: '#059669',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: '1px solid #a7f3d0',
-                borderRadius: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-              }}
-            >
-              <MessageSquare size={14} color="#059669" />
-            </button>
-          </div>
-
-          {/* 5-Minute Grace Period Live Status Pill (Post-Acceptance) */}
-          <div
-            style={{
-              marginTop: '0.9rem',
-              padding: '8px 12px',
-              borderRadius: 12,
-              background: canCancel ? '#fffbeb' : '#f8fafc',
-              border: `1px solid ${canCancel ? '#fde68a' : '#e2e8f0'}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Clock size={14} color={canCancel ? '#d97706' : '#94a3b8'} />
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: canCancel ? '#92400e' : '#64748b' }}>
-                {canCancel
-                  ? `Free cancellation available: ${formatGraceTime(graceSecs)}`
-                  : '5-minute free cancellation window expired'}
-              </span>
-            </div>
-            <button
-              onClick={() => setShowCancelModal(true)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: canCancel ? '#dc2626' : '#64748b',
-                fontWeight: 800,
-                fontSize: '0.78rem',
-                cursor: 'pointer',
-                textDecoration: 'underline',
-                padding: 0,
-              }}
-            >
-              {canCancel ? 'Cancel Booking' : 'Cancel Policy'}
-            </button>
-          </div>
-        </motion.div>
-      )}
-
-      {/* ─────────────────── 6-DIGIT SERVICE START OTP CARD (IF ACCEPTED) ─────────────────── */}
-      {isAccepted && (
-        <div style={{
-          background: '#fff7ed',
-          borderRadius: 14,
-          padding: '10px 14px',
-          border: '1px solid rgba(251, 146, 60, 0.4)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '1rem',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <KeyRound size={18} color="#ea580c" />
-            <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#c2410c', textTransform: 'uppercase' }}>
-                Service Start OTP
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#9a3412' }}>Share when partner arrives</div>
-            </div>
-          </div>
-          <div
-            onClick={handleCopyOtp}
-            title="Click to copy OTP"
-            style={{
-              cursor: 'pointer',
-              fontFamily: 'monospace',
-              fontSize: '1.15rem',
-              fontWeight: 900,
-              color: '#c2410c',
-              background: 'white',
-              padding: '3px 10px',
-              borderRadius: 8,
-              border: '1px dashed #f97316',
-              letterSpacing: '1.5px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <span>{startOtp}</span>
-            {copiedOtp ? <Check size={13} color="#10B981" /> : <Copy size={13} color="#ea580c" />}
-          </div>
-        </div>
-      )}
-
-      {/* ─────────────────── REAL BOOKING DETAILS (100% ACCURATE IN ₹) ─────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={{
-          background: 'white',
-          borderRadius: 20,
-          padding: '1.2rem',
-          marginBottom: '1rem',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-          border: '1px solid #e2e8f0',
-        }}
-      >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-          📋 Booking Details
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', fontSize: '0.8rem' }}>
-          {[
-            { label: 'Booking Ref', value: `#${rid}` },
-            { label: 'Service', value: category?.name || 'Home Service' },
-            { label: 'Date', value: displayDate },
-            { label: 'Time', value: displayTime },
-            { label: 'Address', value: liveData?.destination?.address || formData?.address, span: true },
-            { label: 'Total Amount', value: `₹${totalPrice || liveData?.total_amount || 0}`, highlight: true },
-          ].map((r, i) => (
-            <div key={i} style={{ ...(r.span ? { gridColumn: '1/-1' } : {}), background: '#f8fafc', borderRadius: 10, padding: '0.5rem 0.75rem' }}>
-              <div style={{ color: '#94a3b8', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase' }}>{r.label}</div>
-              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2, wordBreak: 'break-word' }}>{r.value || '—'}</div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* ─────────────────── REAL-TIME 4-STAGE TIMELINE ─────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={{
-          background: 'white',
-          borderRadius: 20,
-          padding: '1.2rem',
-          marginBottom: '1.25rem',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-          border: '1px solid #e2e8f0',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
-            🗺️ Live Dispatch Status
-          </div>
-          {isAccepted && (
-            <button onClick={() => setShowMapModal(true)} style={{ background: 'none', border: 'none', color: '#FC8019', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer' }}>
-              Open Fullscreen Map →
-            </button>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {/* Step 1: Booking Confirmed */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#ecfdf5', border: '1.5px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Check size={14} color="#10b981" strokeWidth={3} />
-            </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>
-              Booking Confirmed
-            </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#10b981' }}>Done</span>
-          </div>
-
-          {/* Step 2: Partner Acceptance */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isAccepted ? '#ecfdf5' : '#fff7ed', border: `1.5px solid ${isAccepted ? '#10b981' : '#f59e0b'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isAccepted ? <Check size={14} color="#10b981" strokeWidth={3} /> : <Radio size={14} color="#f59e0b" className="animate-pulse" />}
-            </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>
-              {isAccepted ? `${techName} Accepted Job` : 'Waiting for Partner to Accept'}
-            </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: isAccepted ? '#10b981' : '#f59e0b' }}>
-              {isAccepted ? 'Accepted' : 'Searching...'}
-            </span>
-          </div>
-
-          {/* Step 3: Partner En Route */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isAccepted ? '#fff7ed' : '#f8fafc', border: `1.5px solid ${isAccepted ? '#FC8019' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '0.75rem' }}>🛵</span>
-            </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: isAccepted ? '#0f172a' : '#94a3b8' }}>
-              Partner On The Way
-            </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isAccepted ? '#FC8019' : '#94a3b8' }}>
-              {isAccepted ? `~${etaMinutes} mins` : 'Pending'}
-            </span>
-          </div>
-
-          {/* Step 4: Service Execution */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f8fafc', border: '1.5px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '0.75rem' }}>⚙️</span>
-            </div>
-            <div style={{ flex: 1, fontWeight: 700, fontSize: '0.82rem', color: '#94a3b8' }}>
-              Service Execution &amp; Completion
-            </div>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>Next</span>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Action Footer: Cancel Booking + Book Another Service */}
-      <div style={{ display: 'flex', gap: 10, marginTop: '0.5rem' }}>
-        <button
-          onClick={() => setShowCancelModal(true)}
-          style={{
-            flex: 1,
-            padding: '0.85rem',
-            background: '#fff1f2',
-            color: '#e11d48',
-            fontWeight: 800,
-            fontSize: '0.86rem',
-            border: '1px solid #ffe4e6',
-            borderRadius: 14,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <Ban size={15} /> Cancel Booking
-        </button>
-
-        <button
-          onClick={onBookAgain}
-          style={{
-            flex: 1.2,
-            padding: '0.85rem',
-            background: '#f1f5f9',
-            color: '#0f172a',
-            fontWeight: 800,
-            fontSize: '0.86rem',
-            border: 'none',
-            borderRadius: 14,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <Home size={15} /> Book Another
-        </button>
-      </div>
-
-      {/* Live Map Modal */}
-      <AnimatePresence>
-        {showMapModal && (
-          <CustomerLiveTrackingModal
-            booking={trackingBookingObj}
-            onClose={() => setShowMapModal(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Cancellation Modal (Mandatory Reason + 5-Min Grace Period) */}
-      <AnimatePresence>
-        {showCancelModal && (
-          <BookingCancellationModal
-            bookingId={liveData?.booking_id || successData?.id}
-            requestId={rid}
-            isAccepted={isAccepted}
-            graceSecondsRemaining={graceSecs}
-            onClose={() => setShowCancelModal(false)}
-            onCancelled={(data) => {
-              setLiveData((prev) => ({
-                ...(prev || {}),
-                status: "cancelled",
-                cancellation_reason: data?.cancellation_reason,
-              }))
-            }}
-          />
-        )}
-      </AnimatePresence>
-    </motion.div>
-  )
-}
-
-/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
-   STEP INDICATOR BAR
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
-
-const STEP_LABELS = ["Service", "Package", "Schedule", "Identity", "Details", "Confirm"]
-
-function StepBar({ step, total }) {
-  return (
-    <div className="uc-stepbar">
-      {STEP_LABELS.slice(0, total).map((label, i) => {
-        const n = i + 1
-        const done = n < step
-        const active = n === step
-        return (
-          <React.Fragment key={label}>
-            <div className={`uc-sb-step ${done ? "uc-sb-done" : ""} ${active ? "uc-sb-active" : ""}`}>
-              <div className="uc-sb-dot">
-                {done ? <Check size={10} /> : n}
-              </div>
-              <span className="uc-sb-label">{label}</span>
-            </div>
-            {i < total - 1 && <div className={`uc-sb-line ${done ? "uc-sb-line-done" : ""}`} />}
-          </React.Fragment>
-        )
-      })}
-    </div>
-  )
-}
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    MAIN PAGE
@@ -3388,43 +1293,19 @@ function StepBar({ step, total }) {
    CUSTOMER ACCOUNT MODAL
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
-export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
+export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChangeTab }) {
   const { user, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
+  const [internalTab, setInternalTab] = useState(propActiveTab || "My Profile")
+  const activeTab = propActiveTab || internalTab
+  const setActiveTab = (tab) => {
+    setInternalTab(tab)
+    if (typeof onChangeTab === 'function') {
+      onChangeTab(tab)
+    }
+  }
 
-  const [loginMethod, setLoginMethod] = useState('email')
-  const [loginEmail, setLoginEmail] = useState('')
-  const [loginPhone, setLoginPhone] = useState('')
-  const [otpSent, setOtpSent] = useState(false)
-  const [otpValue, setOtpValue] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
-
-  const handleRequestOTP = async () => {
-    setLoginError('')
-    setLoginLoading(true)
-    try {
-      if (loginMethod === 'email') await apiRequestCustomerEmailOTP(loginEmail)
-      else await apiRequestCustomerPhoneOTP(loginPhone)
-      setOtpSent(true)
-    } catch (e) {
-      setLoginError(e.body?.detail || 'Failed to send OTP')
-    }
-    setLoginLoading(false)
-  }
-
-  const handleVerifyOTP = async () => {
-    setLoginError('')
-    setLoginLoading(true)
-    try {
-      if (loginMethod === 'email') await apiVerifyCustomerEmailOTP(loginEmail, otpValue)
-      else await apiVerifyCustomerPhoneOTP(loginPhone, otpValue)
-      await refreshMe()
-      if (onClose) onClose()
-    } catch (e) {
-      setLoginError(e.body?.detail || 'Invalid OTP')
-    }
-    setLoginLoading(false)
-  }
 
   const handleLogout = async () => {
     await apiLogout()
@@ -5717,96 +3598,13 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     }
   }
 
+  // No bespoke login UI here anymore — CustomerAccountModal is the "My
+  // Account" portal only. Any caller that needs to prompt a logged-out
+  // visitor to sign in should open CustomerEntryFlowModal instead (the one
+  // canonical customer login flow); this modal simply renders nothing until
+  // `user` exists.
   if (!user) {
-    return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(4px)', zIndex: 10050, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={onClose}>
-        <motion.div
-          initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }}
-          onClick={e => e.stopPropagation()}
-          style={{ background: 'white', padding: '3rem', borderRadius: 24, width: '100%', maxWidth: 440, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', position: 'relative' }}
-        >
-          <div onClick={onClose} style={{ position: 'absolute', top: 24, right: 24, cursor: 'pointer', color: '#94a3b8' }}><X size={20} /></div>
-          <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>Welcome Back</h2>
-          <p style={{ color: '#64748b', fontSize: '0.95rem', marginBottom: 32 }}>Log in to view your bookings and manage your profile.</p>
-
-          <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-            <button onClick={() => { setLoginMethod('email'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'email' ? '2px solid #059669' : '1px solid #e2e8f0', background: loginMethod === 'email' ? '#05966910' : 'white', color: loginMethod === 'email' ? '#059669' : '#64748b' }}>Email</button>
-            <button onClick={() => { setLoginMethod('phone'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'phone' ? '2px solid #059669' : '1px solid #e2e8f0', background: loginMethod === 'phone' ? '#05966910' : 'white', color: loginMethod === 'phone' ? '#059669' : '#64748b' }}>Phone</button>
-          </div>
-
-          {loginError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '12px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600, marginBottom: 20 }}>{loginError}</div>}
-
-          {!otpSent ? (
-            <>
-              {loginMethod === 'email' ? (
-                <div style={{ marginBottom: 24 }}>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 8 }}>Email Address</label>
-                  <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="you@example.com" style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '1rem', color: '#0f172a' }} />
-                </div>
-              ) : (
-                <div style={{ marginBottom: 24 }}>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 8 }}>Phone Number</label>
-                  <input type="tel" value={loginPhone} onChange={e => setLoginPhone(e.target.value)} placeholder="+91 98765 43210" style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '1rem', color: '#0f172a' }} />
-                </div>
-              )}
-              <button onClick={handleRequestOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#059669', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
-                {loginLoading ? 'Sending...' : 'Send Login Code'}
-              </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
-                <span style={{ padding: '0 10px' }}>or</span>
-                <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => googleLoginHandler()}
-                disabled={loginLoading}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: 'white',
-                  color: '#1e293b',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: 12,
-                  fontWeight: 700,
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                  opacity: loginLoading ? 0.7 : 1
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 18 18">
-                  <path fill="#4285F4" d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84c-.21 1.12-.84 2.07-1.79 2.7l2.8 2.17c1.64-1.51 2.59-3.74 2.59-6.5z" />
-                  <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.8-2.17c-.78.52-1.78.83-2.8.83-2.34 0-4.32-1.58-5.03-3.7L1.47 13.07C2.95 16 6.01 18 9 18z" />
-                  <path fill="#FBBC05" d="M3.97 10.78c-.18-.52-.28-1.09-.28-1.68s.1-1.16.28-1.68L1.47 5.12C.53 7 0 9.08 0 11.2s.53 4.2 1.47 6.08l2.5-1.9c-.71-2.12-.71-4.4 0-6.5z" />
-                  <path fill="#EA4335" d="M9 3.58c1.32-.03 2.59.48 3.51 1.4l2.63-2.63C13.48.88 11.3.02 9 0 6.01 0 2.95 2 1.47 4.93l2.5 1.9C4.68 5.16 6.66 3.58 9 3.58z" />
-                </svg>
-                Continue with Google
-              </button>
-            </>
-          ) : (
-            <>
-              <div style={{ marginBottom: 24 }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 8 }}>Enter 6-digit OTP</label>
-                <input type="text" value={otpValue} onChange={e => setOtpValue(e.target.value)} placeholder="123456" maxLength={6} style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '1.2rem', letterSpacing: '4px', textAlign: 'center', color: '#0f172a', fontWeight: 700 }} />
-              </div>
-              <button onClick={handleVerifyOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#059669', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
-                {loginLoading ? 'Verifying...' : 'Verify & Login'}
-              </button>
-              <div style={{ textAlign: 'center', marginTop: 16 }}>
-                <button onClick={() => setOtpSent(false)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>Change {loginMethod === 'email' ? 'Email' : 'Phone'}</button>
-              </div>
-            </>
-          )}
-        </motion.div>
-      </div>
-    )
+    return null
   }
 
   return (
@@ -6126,6 +3924,31 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
 /* ─────────────────────────────────────────────────────────────
    ───────────────────────────────────────────────────────────── */
 
+// ── Quick Commerce Pricing Configuration (Blinkit-style affordable tiers) ──
+const QUICK_COMMERCE_PRICING = {
+  FREE_DELIVERY_THRESHOLD: 200,
+  HANDLING_FEE: 2,
+  SMALL_CART_FEE: 5,
+  SMALL_CART_THRESHOLD: 100,
+  SURGE_ACTIVE: false, // Default inactive; true only during active rain/high-demand conditions
+  SURGE_FEE: 0,        // Configurable ₹5–₹10 when SURGE_ACTIVE is true
+  getDeliveryFee: (subtotal) => {
+    if (subtotal <= 0 || subtotal >= 200) return 0
+    if (subtotal >= 100) return 10
+    return 15
+  },
+  getSmallCartFee: (subtotal) => {
+    if (subtotal > 0 && subtotal < 100) return 5
+    return 0
+  },
+  getHandlingFee: (subtotal) => {
+    return subtotal > 0 ? 2 : 0
+  },
+  getSurgeFee: (subtotal, isSurgeActive = false, surgeAmount = 10) => {
+    return isSurgeActive && subtotal > 0 ? surgeAmount : 0
+  }
+}
+
 function QuickCommerceCartCheckout({
   cart,
   setCart,
@@ -6133,6 +3956,13 @@ function QuickCommerceCartCheckout({
   onBack,
   user
 }) {
+  useEffect(() => {
+    document.body.style.overflow = "auto"
+    return () => {
+      document.body.style.overflow = "auto"
+    }
+  }, [])
+
   const [isAddressScreenOpen, setIsAddressScreenOpen] = useState(false)
   const [savedAddresses, setSavedAddresses] = useState([
     {
@@ -6165,12 +3995,16 @@ function QuickCommerceCartCheckout({
   const itemsTotal = cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0)
   const itemsOriginalTotal = cart.reduce((sum, item) => sum + (item.mrp || Math.round((item.price || 0) * 1.2)) * (item.quantity || 1), 0)
   const savings = Math.max(0, itemsOriginalTotal - itemsTotal)
-  const deliveryCharge = itemsTotal >= 199 ? 0 : 30
-  const handlingCharge = itemsTotal > 0 ? 5 : 0
-  const surgeCharge = 15
+
+  // Dynamic Blinkit-style pricing calculations
+  const deliveryCharge = QUICK_COMMERCE_PRICING.getDeliveryFee(itemsTotal)
+  const handlingCharge = QUICK_COMMERCE_PRICING.getHandlingFee(itemsTotal)
+  const smallCartFee = QUICK_COMMERCE_PRICING.getSmallCartFee(itemsTotal)
+  const isSurgeActive = QUICK_COMMERCE_PRICING.SURGE_ACTIVE
+  const surgeCharge = QUICK_COMMERCE_PRICING.getSurgeFee(itemsTotal, isSurgeActive, QUICK_COMMERCE_PRICING.SURGE_FEE)
   const donationAmount = 0
   const tipAmount = selectedTip === "custom" ? (parseInt(customTip) || 0) : (selectedTip || 0)
-  const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + surgeCharge + donationAmount + tipAmount)
+  const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + smallCartFee + surgeCharge + donationAmount + tipAmount)
 
   const handleUpdateQty = (id, delta) => {
     setCart(prev => {
@@ -6452,6 +4286,39 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
               </div>
             </div>
 
+            {/* Free Delivery Incentive Card */}
+            {itemsTotal > 0 && (
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-3xs flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-bold text-slate-800">
+                      {itemsTotal >= QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD ? (
+                        <span className="text-emerald-700 font-extrabold">🎉 You unlocked FREE delivery!</span>
+                      ) : (
+                        <span>
+                          Add <span className="font-extrabold text-emerald-700">₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD - itemsTotal}</span> more to get <span className="font-extrabold text-emerald-700">FREE delivery</span>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {itemsTotal < QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD && (
+                    <span className="text-[11px] font-bold text-slate-400 shrink-0">
+                      ₹{itemsTotal}/₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD}
+                    </span>
+                  )}
+                </div>
+                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-600 h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(100, Math.round((itemsTotal / QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD) * 100))}%`
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Cart Items List */}
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs divide-y divide-slate-100 space-y-4">
               {cart.map((item, idx) => (
@@ -6513,6 +4380,7 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-4">
               <h3 className="text-sm font-bold text-slate-900 tracking-tight pb-1 border-b border-slate-50">Bill Details</h3>
 
+              {/* Items total */}
               <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-650">
                 <div className="flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-slate-400" />
@@ -6531,6 +4399,7 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
                 </div>
               </div>
 
+              {/* Delivery charge */}
               <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Truck className="w-4 h-4 text-slate-400" />
@@ -6542,24 +4411,43 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
                 </span>
               </div>
 
+              {/* Handling & packaging */}
               <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Package className="w-4 h-4 text-slate-400" />
-                  <span>Handling charge</span>
+                  <span>Handling &amp; packaging</span>
                   <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
-                <span className="font-bold text-slate-900">₹{handlingCharge}</span>
+                <span className={`font-bold ${handlingCharge === 0 ? "text-emerald-600" : "text-slate-900"}`}>
+                  {handlingCharge === 0 ? "FREE" : `₹${handlingCharge}`}
+                </span>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
-                <div className="flex items-center gap-1">
-                  <Droplets className="w-4 h-4 text-slate-400" />
-                  <span>Rain surge / High demand charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
+              {/* Small cart fee */}
+              {smallCartFee > 0 && (
+                <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
+                  <div className="flex items-center gap-1">
+                    <ShoppingBag className="w-4 h-4 text-slate-400" />
+                    <span>Small cart fee</span>
+                    <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
+                  </div>
+                  <span className="font-bold text-slate-900">₹{smallCartFee}</span>
                 </div>
-                <span className="font-bold text-slate-900">₹{surgeCharge}</span>
-              </div>
+              )}
 
+              {/* High demand / Rain charge (only show when surgeCharge > 0) */}
+              {surgeCharge > 0 && (
+                <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
+                  <div className="flex items-center gap-1">
+                    <Droplets className="w-4 h-4 text-slate-400" />
+                    <span>High demand / Rain charge</span>
+                    <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
+                  </div>
+                  <span className="font-bold text-slate-900">₹{surgeCharge}</span>
+                </div>
+              )}
+
+              {/* Grand Total */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-900">Grand Total</span>
                 <span className="text-base font-black text-slate-900">₹{grandTotal}</span>
@@ -6664,15 +4552,15 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
             type="button"
             disabled={isSubmitting || cart.length === 0}
             onClick={handleProceedToPay}
-            className="w-full bg-slate-900 hover:bg-slate-950 disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-slate-955/20 cursor-pointer active:scale-98 transition-all duration-200"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-emerald-600/25 cursor-pointer active:scale-98 transition-all duration-200"
           >
             <div className="text-left flex flex-col">
               <span className="text-base sm:text-lg font-black text-white leading-none">₹{grandTotal}</span>
-              <span className="text-[9px] font-black text-emerald-450 uppercase tracking-widest mt-1">TOTAL AMOUNT</span>
+              <span className="text-[9px] font-black text-emerald-100 uppercase tracking-widest mt-1">TOTAL AMOUNT</span>
             </div>
-            <div className="flex items-center gap-1.5 font-bold text-emerald-455 hover:text-white transition-colors">
-              <span className="text-white">{isSubmitting ? "Placing Order..." : "Proceed to Pay"}</span>
-              <ChevronRight className="w-5 h-5 text-emerald-450" />
+            <div className="flex items-center gap-1.5 font-bold text-white transition-colors">
+              <span>{isSubmitting ? "Placing Order..." : "Proceed to Pay"}</span>
+              <ChevronRight className="w-5 h-5 text-white" />
             </div>
           </button>
         </div>
@@ -8046,7 +5934,6 @@ export function BookingPage() {
     setFormData({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "" })
     setPhotoFile(null); setPhotoPreview(null); setSuccessData(null); setError(null)
     setShowPostFlow(false); setAssignedTech(null)
-    sessionStorage.removeItem(OTP_SESSION_KEY)
     sessionStorage.removeItem("calservice_last_booking")
     sessionStorage.removeItem("calservice_active_tracking_id")
     // Return to public home services catalog page (/home)
@@ -8066,7 +5953,24 @@ export function BookingPage() {
         setCart={setCart}
         category={category}
         user={user}
-        onBack={() => navigate(routes.landing || "/home", { replace: true })}
+        onBack={() => {
+          const restoredFoodCart = {}
+          cart.forEach(item => {
+            const key = item.displayName || item.name
+            if (key) {
+              restoredFoodCart[key] = item.quantity || 1
+            }
+          })
+          navigate(routes.landing || "/home", {
+            replace: true,
+            state: {
+              openFoodHealthModal: true,
+              openVegetablesModal: true,
+              openFoodSubModuleId: routerLocation.state?.foodSubModuleId || category?.foodSubModuleId || "vegetables",
+              foodCart: Object.keys(restoredFoodCart).length > 0 ? restoredFoodCart : (routerLocation.state?.foodCart || {}),
+            }
+          })
+        }}
       />
     )
   }
@@ -8435,15 +6339,6 @@ export function BookingPage() {
           }}
         />
       )}
-
-      <CustomerEntryFlowModal
-        isOpen={showCustomerEntryModal}
-        onClose={() => setShowCustomerEntryModal(false)}
-        onComplete={() => {
-          setShowCustomerEntryModal(false)
-          if (typeof refreshMe === "function") refreshMe()
-        }}
-      />
     </div>
   )
 }
@@ -10735,7 +8630,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.2K",
-      image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
+      image: "/mockups/brick_wall_construction_red.jpg",
       includes: ["Red brick supply & laying", "Mortar alignment check", "Curing guidance"],
       excludes: ["Plastering (available separately)", "Painting and structural slab work"],
       inspectionHighlights: ["Site layout measurement", "Load-bearing suitability check"],
@@ -10753,7 +8648,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.7",
       reviews: "950",
-      image: "/mockups/kitchen_cleaning_hero.png",
+      image: "/mockups/aac_block_wall_construction.jpg",
       includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"],
       excludes: ["Foundation excavation", "Plastering"],
       inspectionHighlights: ["Ground leveling check", "Alignment verification"],
@@ -10769,7 +8664,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "1-2 hrs",
       rating: "4.6",
       reviews: "1.1K",
-      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&auto=format&fit=crop&q=80",
       includes: ["Remove damaged bricks", "Mortar repointing", "New brick replacement"],
       excludes: ["Entire wall reconstruction"],
       inspectionHighlights: ["Structural safety audit"],
@@ -10789,7 +8684,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.4K",
-      image: "/tractor-uno.png",
+      image: "/mockups/wall_plastering_masonry.jpg",
       includes: ["Surface wetting", "Cement slurry coat", "Cement-sand plastering", "Screeding & leveling"],
       excludes: ["Wall putty application", "Painting"],
       inspectionHighlights: ["Alignment checks", "Moisture verification"],
@@ -10805,7 +8700,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "1-2 hrs",
       rating: "4.7",
       reviews: "1.8K",
-      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+      image: "/mockups/plaster_repair_patch.jpg",
       includes: ["Chipping loose plaster", "Anti-dampness treatment", "Patch plastering & smoothing"],
       excludes: ["Full room plastering"],
       inspectionHighlights: ["Moisture level checks"],
@@ -10823,7 +8718,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "1 hr",
       rating: "4.6",
       reviews: "3.2K",
-      image: "/premium-emulsion.png",
+      image: "/mockups/wall_crack_repair.jpg",
       includes: ["V-groove crack opening", "Bonding agent application", "Epoxy/cement grout filling"],
       excludes: ["Foundation underpinning"],
       inspectionHighlights: ["Crack depth validation"],
@@ -10843,7 +8738,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "780",
-      image: "/tractor-emulsion.png",
+      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&auto=format&fit=crop&q=80",
       includes: ["Base anchor setup", "Internal brick/block wall building", "Plaster coat finishing"],
       excludes: ["Electrical box carving"],
       inspectionHighlights: ["Vertical alignment verification"],
@@ -10861,7 +8756,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "950",
-      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop&q=80",
       includes: ["Partition plan layout", "Anchor setup", "Brick/block partition walls construction"],
       excludes: ["Painting and electrical wiring"],
       inspectionHighlights: ["Floor load verification", "Alignment checks"],
@@ -10879,7 +8774,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.1K",
-      image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&auto=format&fit=crop&q=80",
       includes: ["Custom brick partitions", "Counter top support construction", "Breakfast counter base"],
       excludes: ["Granite counter top installation"],
       inspectionHighlights: ["Space optimization check"],
@@ -10899,7 +8794,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.7",
       reviews: "1.5K",
-      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=500&auto=format&fit=crop&q=80",
       includes: ["Temporary shoring pillars setup", "Complete wall demolition", "Debris packing & clearing"],
       excludes: ["Permit collection fees"],
       inspectionHighlights: ["Load carrying check"],
@@ -10915,7 +8810,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "1-2 hrs",
       rating: "4.8",
       reviews: "1.3K",
-      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&auto=format&fit=crop&q=80",
       includes: ["Demolishing partition walls", "Debris packing & clearing"],
       excludes: ["Rebuilding walls"],
       inspectionHighlights: ["Utility mapping"],
@@ -10933,7 +8828,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "2 hrs",
       rating: "4.7",
       reviews: "820",
-      image: "/tractor-emulsion.png",
+      image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=500&auto=format&fit=crop&q=80",
       includes: ["Lintel beam installation support", "Opening cutting & edge leveling", "Window frame slot prep"],
       excludes: ["Door frame / Window glass installation"],
       inspectionHighlights: ["Lintel suitability audit", "Wall safety clearance check"],
@@ -13420,7 +11315,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
           description: "High-quality red clay brick masonry work with standard cement-mortar mix.",
           includes: ["Red brick supply & laying", "Mortar alignment check", "Curing guidance"],
-          image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop"
+          image: "/mockups/brick_wall_construction_red.jpg"
         },
         {
           id: "mason-brick-2",
@@ -13431,7 +11326,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
           description: "AAC concrete block laying using thin-bed adhesive mortar for fast execution.",
           includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"],
-          image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop"
+          image: "/mockups/aac_block_wall_construction.jpg"
         },
         {
           id: "mason-brick-3",
@@ -13442,7 +11337,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
           description: "Replacing damaged bricks/blocks, repairing loose mortar joints, and strengthening structure.",
           includes: ["Damaged brick removal", "Mortar joint repointing", "Joint bonding agent application"],
-          image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&auto=format&fit=crop&q=80"
         }
       ],
       "Plastering & Wall Repair": [
@@ -13455,7 +11350,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
           description: "Smooth sand-cement plaster application for internal or external brick walls.",
           includes: ["Surface preparation & wetting", "Base slurry application", "Sponge finish styling"],
-          image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop"
+          image: "/mockups/wall_plastering_masonry.jpg"
         },
         {
           id: "mason-plast-2",
@@ -13466,7 +11361,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
           description: "Patching hollow/peeling plaster surfaces and restoring wall strength.",
           includes: ["Hollow plaster scraping", "Cement paste bonding", "Patch trowel leveling"],
-          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop"
+          image: "/mockups/plaster_repair_patch.jpg"
         },
         {
           id: "mason-plast-3",
@@ -13477,7 +11372,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-rose-50 text-rose-700 border-rose-100",
           description: "V-groove wall cracking repairs using polymer-modified mortar or specialized sealant.",
           includes: ["Crack cleanout chiseling", "Polymer filler injection", "Surface smoothing"],
-          image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop"
+          image: "/mockups/wall_crack_repair.jpg"
         }
       ],
       "Wall & Partition Construction": [
@@ -13490,7 +11385,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
           description: "Heavy brick masonry partition wall built with proper top ceiling anchors.",
           includes: ["Foundation course anchoring", "Brick partition build", "Lintel support casting"],
-          image: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&auto=format&fit=crop&q=80"
         },
         {
           id: "mason-part-2",
@@ -13501,7 +11396,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
           description: "Autoclaved lightweight concrete block partition wall to divide living space.",
           includes: ["Space layout leveling", "Block joint gluing", "Wall perimeter sealing"],
-          image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop&q=80"
         },
         {
           id: "mason-part-3",
@@ -13512,7 +11407,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-teal-50 text-teal-700 border-teal-100",
           description: "Low-height counter/half-brick walls for open kitchen partitions or balcony boundaries.",
           includes: ["Layout leveling scan", "Counter brick layout work", "Top coping concrete slab"],
-          image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&auto=format&fit=crop&q=80"
         }
       ],
       "Wall Breaking & Demolition": [
@@ -13525,7 +11420,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-rose-50 text-rose-700 border-rose-100",
           description: "Controlled brick or concrete block wall demolition using rotary hammer breakers.",
           includes: ["Rotary breaker breaking", "Safety prop supporting", "Debris bagging"],
-          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=500&auto=format&fit=crop&q=80"
         },
         {
           id: "mason-demo-2",
@@ -13536,7 +11431,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
           description: "Disassembling soft or lightweight concrete partitions without structural damage.",
           includes: ["Anchor detaching", "Block breaking", "Debris removal packing"],
-          image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&auto=format&fit=crop&q=80"
         },
         {
           id: "mason-demo-3",
@@ -13547,7 +11442,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
           description: "Chiseling and structural lintel casting to create a door or window opening cutout.",
           includes: ["Lintel support insert", "Controlled wall cutting", "Smooth border plastering"],
-          image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=500&auto=format&fit=crop&q=80"
         }
       ]
     },
@@ -19702,7 +17597,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             item.popular = dbMatch.popular || false;
             if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
             if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
-            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews = dbMatch.reviews;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
             if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
           }
         }
@@ -19806,7 +17701,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
                           <Star className="text-violet-600 fill-violet-600" size={11} />
                           <span className="text-slate-800">{service.rating}</span>
-                          <span className="text-slate-400 font-normal">({service.reviews})</span>
+                          <span className="text-slate-400 font-normal">({typeof service.reviews === 'string' ? service.reviews : (Array.isArray(service.reviews) ? `${service.reviews.length} reviews` : "15K")})</span>
                         </div>
                       )}
 

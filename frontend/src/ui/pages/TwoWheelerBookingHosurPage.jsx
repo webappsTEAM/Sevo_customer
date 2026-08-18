@@ -4,12 +4,11 @@ import {
   MapPin, ChevronDown, ChevronUp, ArrowRight, ShieldCheck,
   Clock, Package, Boxes, X, Sparkles, Navigation, Truck,
   CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed,
-  User, Mail, MessageSquare, AlertCircle, Bike, Check
+  User, Mail, MessageSquare, AlertCircle, Bike, Check, Zap, Calendar
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
 import { createBooking } from "../../api/bookingService.js"
-import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -285,8 +284,40 @@ function filterLocationSuggestions(searchText) {
   return result
 }
 
+/* ── Slots & Dates Helper ── */
+const generateUpcomingDates = () => {
+  const dates = []
+  const today = new Date()
+  for (let i = 1; i <= 7; i++) {
+    const nextDate = new Date(today)
+    nextDate.setDate(today.getDate() + i)
+    
+    let dayName = ""
+    if (i === 1) dayName = "Tomorrow"
+    else dayName = nextDate.toLocaleDateString("en-US", { weekday: "short" })
+    
+    const dateNum = nextDate.getDate().toString().padStart(2, "0")
+    const monthStr = nextDate.toLocaleDateString("en-US", { month: "short" })
+    
+    dates.push({
+      id: `date_${i}`,
+      label: dayName,
+      value: `${dateNum} ${monthStr}`,
+      fullDate: nextDate
+    })
+  }
+  return dates
+}
 
-/* ── Two Wheeler Booking in Hosur Page (Image 2 Uniform Design) ── */
+const DELIVERY_DATES = generateUpcomingDates()
+
+const DELIVERY_SLOTS = {
+  "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
+  "Afternoon": ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"],
+  "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
+}
+
+/* ── Two-Wheeler Booking in Hosur Page ── */
 export function TwoWheelerBookingHosurPage() {
   const navigate = useNavigate()
 
@@ -301,16 +332,14 @@ export function TwoWheelerBookingHosurPage() {
   // Booking Flow State
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState(null)
-  const [loginModalOpen, setLoginModalOpen] = useState(false)
+  const [slotStepperOpen, setSlotStepperOpen] = useState(false)
+  const [stepperStep, setStepperStep] = useState(3)
+  const [selectedDate, setSelectedDate] = useState(DELIVERY_DATES[0])
+  const [selectedSlot, setSelectedSlot] = useState("9AM-10AM")
+  const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
-  const [otpStep, setOtpStep] = useState(false)
-  const [otpValue, setOtpValue] = useState("")
-  const [otpLoading, setOtpLoading] = useState(false)
-  const [otpSent, setOtpSent] = useState(false)
-  const [loginEmail, setLoginEmail] = useState("")
-  const [loginWhatsapp, setLoginWhatsapp] = useState(true)
   const { user } = useAuth()
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
@@ -478,7 +507,6 @@ export function TwoWheelerBookingHosurPage() {
     "2-wheeler-electric-express": {
       suitableFor: [
         "Small parcels & packages",
-        "Documents & files",
         "Clothing & accessories",
         "Food & grocery orders",
         "Medicines & essentials",
@@ -608,9 +636,15 @@ export function TwoWheelerBookingHosurPage() {
     setBookingError("")
     setBookingSubmitting(true)
     try {
-      const today = todayDateString()
       const vehicle = selectedVehicle || TWO_WHEELER_VEHICLES[0]
       const fare = Number(String(vehicle.price).replace(/[^0-9.]/g, "")) || 0
+      
+      let dateString = todayDateString()
+      if (selectedDate && selectedDate.fullDate) {
+        const d = selectedDate.fullDate
+        dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      }
+
       const payload = {
         customer_name: name || "Guest",
         phone,
@@ -619,16 +653,18 @@ export function TwoWheelerBookingHosurPage() {
         description: userType,
         address: pickup || "Hosur",
         drop_address: drop,
-        preferred_date: today,
+        preferred_date: dateString,
+        preferred_time: selectedSlot || "Morning",
         total_amount: fare,
         payment_method: "COD",
-        cart_data: [{ tier: vehicle.name, price: vehicle.price, route: selectedRoute?.to || null }],
+        cart_data: [{ tier: vehicle.name, price: vehicle.price, route: selectedRoute?.to || null, date: selectedDate?.value, slot: selectedSlot }],
       }
       if (vehicle._tierId) payload.logistics_tier = vehicle._tierId
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
 
       const res = await createBooking(payload)
       setLastBookingId(res?.data?.request_id || res?.request_id || null)
+      setSlotStepperOpen(false)
       setBookingSuccessOpen(true)
     } catch (err) {
       setBookingError(err?.body?.message || "Couldn't confirm your booking. Please try again.")
@@ -638,47 +674,10 @@ export function TwoWheelerBookingHosurPage() {
   }
 
   const handleBookNow = () => {
-    if (!isSignedIn) {
-      setVehicleSelectorOpen(false)
-      setLoginModalOpen(true)
-    } else {
-      setVehicleSelectorOpen(false)
-      submitBooking()
-    }
-  }
-
-  const handleSendOtp = async () => {
-    if (!phone || phone.trim().length < 10) return
-    setOtpLoading(true)
-    setBookingError("")
-    try {
-      await apiRequestCustomerPhoneOTP(phone)
-      setOtpSent(true)
-      setOtpStep(true)
-    } catch (err) {
-      setBookingError(err?.body?.detail || "Couldn't send OTP. Please check the number and try again.")
-    } finally {
-      setOtpLoading(false)
-    }
-  }
-
-  const handleVerifyOtp = async () => {
-    if (otpValue.length < 6) return
-    setOtpLoading(true)
-    setBookingError("")
-    try {
-      await apiVerifyCustomerPhoneOTP(phone, otpValue)
-      setLocalIsSignedIn(true)
-      setLoginModalOpen(false)
-      setOtpStep(false)
-      setOtpValue("")
-      setOtpSent(false)
-      await submitBooking()
-    } catch (err) {
-      setBookingError(err?.body?.detail || "Invalid OTP. Please try again.")
-    } finally {
-      setOtpLoading(false)
-    }
+    // Called from vehicle selector modal "Book Now" -> Opens Date & Slot Stepper
+    setVehicleSelectorOpen(false)
+    setStepperStep(3)
+    setSlotStepperOpen(true)
   }
 
   return (
@@ -1473,129 +1472,299 @@ export function TwoWheelerBookingHosurPage() {
         </div>
       )}
 
-      {/* 3. Login & OTP Verification Modal */}
-      {loginModalOpen && (
+      {/* ── 2.5 Delivery Date & Slot Stepper Modal (Matching Image 1 & 2) ── */}
+      {slotStepperOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-extrabold text-slate-900">
-                  {otpStep ? "Enter OTP Verification" : "Sign In to Complete Booking"}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  {otpStep ? `We sent a 6-digit code to +91 ${phone}` : "Quick verification to confirm your booking"}
-                </p>
+          <div className="bg-white rounded-[24px] w-full max-w-[1000px] h-[88vh] flex flex-col shadow-2xl overflow-hidden font-sans antialiased border border-slate-100">
+            {/* Header (Solid Green #0B8860) */}
+            <div className="bg-[#0B8860] text-white pt-5 pb-4 px-6 flex items-center justify-between relative shrink-0">
+              <div className="flex-1 flex justify-center max-w-[600px] mx-auto w-full relative">
+                {/* Progress Line */}
+                <div className="absolute top-[35%] left-[12%] right-[12%] h-[1px] bg-white/30 -z-0"></div>
+                
+                {[
+                  { step: 1, label: "Location" },
+                  { step: 2, label: "Add Items" },
+                  { step: 3, label: "Slots" },
+                  { step: 4, label: "Summary" }
+                ].map((s) => (
+                  <div key={s.step} className="flex-1 flex flex-col items-center justify-center text-center z-10">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold mb-1.5 ${
+                      stepperStep > s.step ? "bg-white text-[#0B8860]" :
+                      stepperStep === s.step ? "bg-[#33a886] text-white" :
+                      "bg-[#0B8860] text-white border border-white/40"
+                    }`}>
+                      {stepperStep > s.step ? <Check className="w-4 h-4" /> : s.step}
+                    </div>
+                    <span className={`text-[11px] font-medium tracking-wide ${stepperStep === s.step ? "text-white font-bold" : "text-white/70"}`}>
+                      {s.label}
+                    </span>
+                  </div>
+                ))}
               </div>
               <button
-                onClick={() => {
-                  setLoginModalOpen(false)
-                  setOtpStep(false)
-                }}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors"
+                type="button"
+                onClick={() => setSlotStepperOpen(false)}
+                className="absolute right-6 top-6 w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {!otpStep ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Mobile Number <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 focus-within:bg-white transition-all">
-                    <span className="text-xs font-bold text-slate-500 mr-2">+91</span>
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))}
-                      placeholder="Enter 10-digit mobile number"
-                      className="w-full bg-transparent text-xs font-semibold text-slate-800 outline-none"
-                    />
+            {/* Body */}
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-[#F4F5F7] p-4 lg:p-6 gap-6">
+              {/* Left Column */}
+              <div className="flex-1 flex flex-col overflow-hidden relative bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100">
+                {stepperStep === 3 ? (
+                  <>
+                    {/* Sub-header for Step 3 */}
+                    <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSlotStepperOpen(false)
+                            setVehicleSelectorOpen(true)
+                          }}
+                          className="text-slate-400 hover:text-[#0B8860] cursor-pointer"
+                        >
+                          <ArrowRight className="w-5 h-5 rotate-180" />
+                        </button>
+                        <h2 className="text-xl font-bold text-slate-800">Confirm your delivery Date & Slot</h2>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-6 pb-28 pt-4">
+                      {/* Date Selector */}
+                      <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Date</p>
+                      <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar pb-2 mb-6">
+                        {DELIVERY_DATES.map((dateObj) => (
+                          <div 
+                            key={dateObj.id}
+                            onClick={() => setSelectedDate(dateObj)}
+                            className={`min-w-[85px] p-3 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all ${
+                              selectedDate?.id === dateObj.id 
+                                ? "border-[#0B8860] bg-[#0B8860]/5 shadow-sm" 
+                                : "border-slate-200 bg-white hover:border-slate-300"
+                            }`}
+                          >
+                            <span className={`text-[11px] font-bold ${selectedDate?.id === dateObj.id ? "text-[#0B8860]" : "text-slate-500"}`}>{dateObj.label}</span>
+                            <span className="text-[13px] font-black text-slate-800 mt-0.5">{dateObj.value}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Warning Banner */}
+                      <div className="bg-[#FFF5E5] border border-orange-200 rounded-xl p-3 flex items-center gap-3 mb-6">
+                        <Zap className="w-4 h-4 text-orange-500 shrink-0 fill-orange-500" />
+                        <span className="text-[12px] font-bold text-orange-600">Slots Filling Fast, Book Now!</span>
+                      </div>
+
+                      {/* Slot Selector */}
+                      <p className="text-[13px] text-slate-600 mb-3 font-semibold">Select Pickup Slot</p>
+                      <div className="space-y-4">
+                        {Object.entries(DELIVERY_SLOTS).map(([timeOfDay, slots]) => {
+                          const isExpanded = expandedSlotCategory === timeOfDay
+                          return (
+                            <div key={timeOfDay} className="border-b border-slate-100 last:border-0 pb-4 last:pb-0">
+                              <div 
+                                className="flex items-center justify-between cursor-pointer mb-2 group"
+                                onClick={() => setExpandedSlotCategory(isExpanded ? null : timeOfDay)}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {timeOfDay === "Morning" && <span className="text-slate-400">⛅</span>}
+                                  {timeOfDay === "Afternoon" && <span className="text-slate-400">☀️</span>}
+                                  {timeOfDay === "Evening" && <span className="text-slate-400">🌅</span>}
+                                  <span className="text-[13px] font-semibold text-slate-600 group-hover:text-slate-800 transition-colors">{timeOfDay}</span>
+                                </div>
+                                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                              </div>
+                              
+                              {isExpanded && (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                                  {slots.map(slot => (
+                                    <div 
+                                      key={slot}
+                                      onClick={() => setSelectedSlot(slot)}
+                                      className={`py-2 px-1 rounded-xl border text-center cursor-pointer transition-all ${
+                                        selectedSlot === slot 
+                                          ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm" 
+                                          : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium"
+                                      }`}
+                                    >
+                                      <span className="text-[12px]">{slot}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Step 3 Footer */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-8px_20px_rgba(0,0,0,0.04)] px-6 py-4 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setStepperStep(4)}
+                        disabled={!selectedDate || !selectedSlot}
+                        className="w-full py-3.5 bg-[#0B8860] hover:bg-[#097754] disabled:bg-[#CBD5E1] text-white text-[14px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 disabled:shadow-none cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  </>
+                ) : stepperStep === 4 ? (
+                  <>
+                    <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <button type="button" onClick={() => setStepperStep(3)} className="text-slate-400 hover:text-[#0B8860] cursor-pointer">
+                          <ArrowRight className="w-5 h-5 rotate-180" />
+                        </button>
+                        <h2 className="text-xl font-bold text-slate-800">Booking Summary</h2>
+                      </div>
+                      <button type="button" onClick={() => setSupportModalOpen(true)} className="text-[11px] font-bold text-[#0B8860] border border-[#0B8860]/30 bg-[#0B8860]/5 px-3 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#0B8860]/10 transition-colors cursor-pointer">
+                        <Phone className="w-3.5 h-3.5" /> Get a call
+                      </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-32">
+                      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-bold text-slate-800 text-base">Movement Details</h3>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSlotStepperOpen(false)
+                              const bar = document.getElementById("estimate-bar")
+                              if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                            }}
+                            className="text-[13px] font-bold text-[#0B8860] hover:underline cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                        <div className="space-y-4 relative ml-1">
+                          <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
+                          
+                          <div className="flex items-start gap-4 relative bg-white">
+                            <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                              <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
+                            </div>
+                            <div className="pt-0.5">
+                              <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{pickup || "Hosur Origin"}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-4 relative bg-white">
+                            <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                              <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                            </div>
+                            <div className="pt-0.5">
+                              <p className="text-[14px] text-slate-800 font-medium leading-relaxed">{drop || (selectedRoute ? selectedRoute.to : "Destination")}</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                              <Calendar className="w-4 h-4 text-indigo-600" />
+                            </div>
+                            <span className="text-[13px] text-slate-700 font-medium">
+                              {selectedDate ? `${selectedDate.value} | ` : ""}{selectedSlot || "Time not selected"}
+                            </span>
+                          </div>
+                          <button type="button" onClick={() => setStepperStep(3)} className="text-[13px] font-bold text-slate-500 border border-slate-200 px-4 py-1.5 rounded-full hover:bg-slate-50 transition-colors cursor-pointer">Explore Slots</button>
+                        </div>
+                      </div>
+
+                      {/* Selected Vehicle Card */}
+                      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-20 h-14 flex items-center justify-center bg-slate-50 rounded-xl p-1">
+                            {selectedVehicle?.diagram}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-900 text-sm">{selectedVehicle?.name || "Two Wheeler"}</h4>
+                            <p className="text-xs text-slate-500 mt-0.5">{selectedVehicle?.capacity || "20 kg capacity"}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSlotStepperOpen(false)
+                            setVehicleSelectorOpen(true)
+                          }}
+                          className="text-[13px] font-bold text-[#0B8860] hover:underline cursor-pointer"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] flex items-center justify-between z-10">
+                      <div>
+                        <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mb-0.5">Estimated Fare</p>
+                        <p className="text-xl font-black text-slate-800">{selectedVehicle?.price || (selectedRoute ? selectedRoute.fare : "₹ 48")}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isSignedIn) {
+                            setShowCustomerEntryModal(true)
+                          } else {
+                            submitBooking()
+                          }
+                        }}
+                        disabled={bookingSubmitting}
+                        className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60"
+                      >
+                        {bookingSubmitting ? "Confirming..." : "Confirm Booking"}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+
+              {/* Right Column (Booking Details) */}
+              <div className="hidden lg:block w-[340px] relative shrink-0">
+                <div className="bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 p-6 sticky top-0">
+                  <h3 className="font-extrabold text-slate-800 text-[14px] mb-5">Booking Details</h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Address</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSlotStepperOpen(false)
+                        const bar = document.getElementById("estimate-bar")
+                        if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                      }}
+                      className="text-[12px] font-bold text-[#0B8860] hover:underline cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-6 relative ml-1">
+                    <div className="absolute left-[7px] top-[14px] bottom-[14px] w-[1px] bg-slate-200 border-l border-dashed border-slate-300"></div>
+                    
+                    <div className="flex items-start gap-4 relative bg-white">
+                      <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                        <MapPin className="w-3.5 h-3.5 text-[#0B8860]" />
+                      </div>
+                      <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{pickup || "Hosur Origin"}</p>
+                    </div>
+                    <div className="flex items-start gap-4 relative bg-white">
+                      <div className="mt-0.5 relative z-10 w-4 h-4 bg-white rounded-full flex items-center justify-center">
+                        <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                      </div>
+                      <p className="text-[12px] text-slate-700 font-medium leading-relaxed pt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Destination")}</p>
+                    </div>
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Email Address (Optional)
-                  </label>
-                  <input
-                    type="email"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="name@example.com for invoice"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="tw-whatsapp"
-                    checked={loginWhatsapp}
-                    onChange={(e) => setLoginWhatsapp(e.target.checked)}
-                    className="rounded text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <label htmlFor="tw-whatsapp" className="text-xs text-slate-600 cursor-pointer">
-                    Receive booking updates &amp; rider tracking link on WhatsApp
-                  </label>
-                </div>
-
-                {bookingError && (
-                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleSendOtp}
-                  disabled={otpLoading || !phone || phone.length < 10}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer mt-2"
-                >
-                  {otpLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>Generate OTP</span>
-                </button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">
-                    Enter 6-digit OTP
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={otpValue}
-                    onChange={(e) => setOtpValue(e.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder="• • • • • •"
-                    className="w-full text-center text-2xl tracking-[1em] font-extrabold bg-slate-50 border border-slate-200 rounded-xl py-3 text-slate-900 outline-none focus:border-emerald-500 focus:bg-white"
-                  />
-                </div>
-
-                {bookingError && (
-                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleVerifyOtp}
-                  disabled={otpLoading || bookingSubmitting || otpValue.length < 6}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
-                >
-                  {(otpLoading || bookingSubmitting) && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{bookingSubmitting ? "Confirming booking..." : otpLoading ? "Verifying..." : "Verify & Confirm Booking"}</span>
-                </button>
-
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => setOtpStep(false)}
-                    className="text-xs text-slate-500 hover:text-emerald-600 font-semibold cursor-pointer"
-                  >
-                    &larr; Change Mobile Number
-                  </button>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       )}
@@ -1675,7 +1844,10 @@ export function TwoWheelerBookingHosurPage() {
         <CustomerEntryFlowModal
           isOpen={showCustomerEntryModal}
           onClose={() => setShowCustomerEntryModal(false)}
-          onSuccess={() => setShowCustomerEntryModal(false)}
+          onComplete={() => {
+            setShowCustomerEntryModal(false)
+            submitBooking()
+          }}
         />
       )}
     </div>

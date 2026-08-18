@@ -1279,6 +1279,10 @@ export function LandingPage() {
       window.removeEventListener("keydown", handleKeyDown)
       document.body.style.overflow = ""
     }
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+      document.body.style.overflow = ""
+    }
   }, [isGoodsModalOpen, isElecModalOpen, isAcModalOpen, isHomePestModalOpen, isForYouModalOpen, isFoodHealthModalOpen, isHomeServicesCombinedModalOpen])
 
   const SEARCH_ROTATING_SERVICES = useMemo(() => [
@@ -3724,6 +3728,8 @@ export function LandingPage() {
 
                       if (itemsList.length === 0) return
 
+                      document.body.style.overflow = ""
+                      setIsFoodHealthModalOpen(false)
                       setSelectedFoodSubModuleId(null)
                       navigate(routes.booking_checkout, {
                         state: {
@@ -3732,9 +3738,12 @@ export function LandingPage() {
                             name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
                             isQuickCommerce: true,
                             deliveryTime: "15-25 mins",
+                            foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
                           },
                           cart: itemsList,
                           isQuickCommerce: true,
+                          foodCart: foodCart,
+                          foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
                         }
                       })
                     }}
