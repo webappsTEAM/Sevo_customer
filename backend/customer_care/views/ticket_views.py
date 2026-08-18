@@ -63,13 +63,22 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
         sla_breached = self.request.query_params.get("sla_breached")
 
         if status_param:
-            qs = qs.filter(status=status_param)
+            if status_param == "open_all":
+                qs = qs.exclude(status__in=["resolved", "closed"])
+            else:
+                qs = qs.filter(status=status_param)
         if priority_param:
-            qs = qs.filter(priority=priority_param)
+            if priority_param == "high_all":
+                qs = qs.filter(priority__in=["high", "critical"])
+            else:
+                qs = qs.filter(priority=priority_param)
         if category_param:
             qs = qs.filter(category=category_param)
         if assigned_agent:
-            qs = qs.filter(assigned_agent_id=assigned_agent)
+            if assigned_agent == "unassigned":
+                qs = qs.filter(assigned_agent__isnull=True)
+            else:
+                qs = qs.filter(assigned_agent_id=assigned_agent)
         if search:
             qs = qs.filter(ticket_number__icontains=search) \
                | qs.filter(customer_name__icontains=search) \
@@ -381,6 +390,7 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
                 "status": booking.status,
                 "payment_status": booking.payment_status,
                 "technician": tech_data,
+                "cart_data": booking.cart_data,
             }
 
         timeline = []

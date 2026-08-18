@@ -13,11 +13,9 @@ import {
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
   Calculator, PaintRoller, Smartphone, MoreVertical, Truck, Copy, Radio,
-  ShieldAlert, Ban, AlertTriangle
+  ShieldAlert, Ban, AlertTriangle, ShoppingBag
 } from "lucide-react"
 import {
-  apiRequestCustomerEmailOTP, apiVerifyCustomerEmailOTP,
-  apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP,
   apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError,
   apiUpdateCustomerLastLocation, apiDetectCustomerLocation
 } from "../../api/authService.js"
@@ -84,72 +82,6 @@ function TwitterMark(props) {
 
 
 // CATEGORIES imported from categoriesData.js above
-
-function openGoogleSignInPopup(onSuccess, onError) {
-  const runSignIn = () => {
-    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
-      if (typeof onError === 'function') onError("Google login service is not available. Please refresh the page.");
-      return;
-    }
-
-    try {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: "628867483502-e7snj6l150js2vpvkv70opo5h4aacgus.apps.googleusercontent.com",
-        scope: "email profile openid",
-        callback: (response) => {
-          try {
-            if (response && response.access_token) {
-              if (typeof onSuccess === 'function') {
-                Promise.resolve(onSuccess(response.access_token)).catch(err => {
-                  if (typeof onError === 'function') onError(err?.message || "Google login failed.");
-                });
-              }
-            } else if (response && response.error) {
-              if (typeof onError === 'function') onError(response.error_description || "Google login cancelled or failed.");
-            } else {
-              if (typeof onError === 'function') onError("Google login cancelled.");
-            }
-          } catch (e) {
-            if (typeof onError === 'function') onError("Failed to process Google sign-in token.");
-          }
-        },
-        error_callback: (err) => {
-          if (typeof onError === 'function') onError(err?.message || "Google login error");
-        }
-      });
-      if (client && typeof client.requestAccessToken === 'function') {
-        try {
-          client.requestAccessToken();
-        } catch (reqErr) {
-          if (typeof onError === 'function') onError("Browser blocked the Google login popup.");
-        }
-      }
-    } catch (err) {
-      if (typeof onError === 'function') onError(err?.message || "Failed to initialize Google login");
-    }
-  };
-
-  if (!window.google?.accounts?.oauth2) {
-    let script = document.getElementById("google-gsi-client");
-    if (!script) {
-      script = document.createElement("script");
-      script.id = "google-gsi-client";
-      script.src = "https://accounts.google.com/gsi/client";
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
-    script.onload = () => runSignIn();
-    script.onerror = () => {
-      if (typeof onError === 'function') onError("Failed to load Google Sign-In SDK.");
-    };
-    if (window.google?.accounts?.oauth2) {
-      runSignIn();
-    }
-  } else {
-    runSignIn();
-  }
-}
 
 const PACKAGES = {
   cleaning: [
@@ -233,8 +165,6 @@ function generateAvatarUrl(name) {
   const n = name || "C";
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(n)}&background=random&color=fff&size=150`;
 }
-
-const OTP_SESSION_KEY = "bk_cust_verified"
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    HELPERS
@@ -1354,6 +1284,7 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
   )
 }
 
+<<<<<<< HEAD
 function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicReviews, user }) {
   const [rotIdx, setRotIdx] = useState(0)
   const safeCats = categories && categories.length > 0 ? categories : CATEGORIES;
@@ -3405,6 +3336,8 @@ function StepBar({ step, total }) {
     </div>
   )
 }
+=======
+>>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    MAIN PAGE
@@ -3414,43 +3347,19 @@ function StepBar({ step, total }) {
    CUSTOMER ACCOUNT MODAL
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
-export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
+export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChangeTab }) {
   const { user, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
+  const [internalTab, setInternalTab] = useState(propActiveTab || "My Profile")
+  const activeTab = propActiveTab || internalTab
+  const setActiveTab = (tab) => {
+    setInternalTab(tab)
+    if (typeof onChangeTab === 'function') {
+      onChangeTab(tab)
+    }
+  }
 
-  const [loginMethod, setLoginMethod] = useState('email')
-  const [loginEmail, setLoginEmail] = useState('')
-  const [loginPhone, setLoginPhone] = useState('')
-  const [otpSent, setOtpSent] = useState(false)
-  const [otpValue, setOtpValue] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
-
-  const handleRequestOTP = async () => {
-    setLoginError('')
-    setLoginLoading(true)
-    try {
-      if (loginMethod === 'email') await apiRequestCustomerEmailOTP(loginEmail)
-      else await apiRequestCustomerPhoneOTP(loginPhone)
-      setOtpSent(true)
-    } catch (e) {
-      setLoginError(e.body?.detail || 'Failed to send OTP')
-    }
-    setLoginLoading(false)
-  }
-
-  const handleVerifyOTP = async () => {
-    setLoginError('')
-    setLoginLoading(true)
-    try {
-      if (loginMethod === 'email') await apiVerifyCustomerEmailOTP(loginEmail, otpValue)
-      else await apiVerifyCustomerPhoneOTP(loginPhone, otpValue)
-      await refreshMe()
-      if (onClose) onClose()
-    } catch (e) {
-      setLoginError(e.body?.detail || 'Invalid OTP')
-    }
-    setLoginLoading(false)
-  }
 
   const handleLogout = async () => {
     await apiLogout()
@@ -5829,96 +5738,13 @@ export function CustomerAccountModal({ activeTab, onClose, onChangeTab }) {
     }
   }
 
+  // No bespoke login UI here anymore — CustomerAccountModal is the "My
+  // Account" portal only. Any caller that needs to prompt a logged-out
+  // visitor to sign in should open CustomerEntryFlowModal instead (the one
+  // canonical customer login flow); this modal simply renders nothing until
+  // `user` exists.
   if (!user) {
-    return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(4px)', zIndex: 10050, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={onClose}>
-        <motion.div
-          initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }}
-          onClick={e => e.stopPropagation()}
-          style={{ background: 'white', padding: '3rem', borderRadius: 24, width: '100%', maxWidth: 440, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', position: 'relative' }}
-        >
-          <div onClick={onClose} style={{ position: 'absolute', top: 24, right: 24, cursor: 'pointer', color: '#94a3b8' }}><X size={20} /></div>
-          <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>Welcome Back</h2>
-          <p style={{ color: '#64748b', fontSize: '0.95rem', marginBottom: 32 }}>Log in to view your bookings and manage your profile.</p>
-
-          <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-            <button onClick={() => { setLoginMethod('email'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'email' ? '2px solid #059669' : '1px solid #e2e8f0', background: loginMethod === 'email' ? '#05966910' : 'white', color: loginMethod === 'email' ? '#059669' : '#64748b' }}>Email</button>
-            <button onClick={() => { setLoginMethod('phone'); setOtpSent(false); setLoginError(''); }} style={{ flex: 1, padding: '10px', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', border: loginMethod === 'phone' ? '2px solid #059669' : '1px solid #e2e8f0', background: loginMethod === 'phone' ? '#05966910' : 'white', color: loginMethod === 'phone' ? '#059669' : '#64748b' }}>Phone</button>
-          </div>
-
-          {loginError && <div style={{ background: '#fef2f2', color: '#ef4444', padding: '12px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 600, marginBottom: 20 }}>{loginError}</div>}
-
-          {!otpSent ? (
-            <>
-              {loginMethod === 'email' ? (
-                <div style={{ marginBottom: 24 }}>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 8 }}>Email Address</label>
-                  <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="you@example.com" style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '1rem', color: '#0f172a' }} />
-                </div>
-              ) : (
-                <div style={{ marginBottom: 24 }}>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 8 }}>Phone Number</label>
-                  <input type="tel" value={loginPhone} onChange={e => setLoginPhone(e.target.value)} placeholder="+91 98765 43210" style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '1rem', color: '#0f172a' }} />
-                </div>
-              )}
-              <button onClick={handleRequestOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#059669', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
-                {loginLoading ? 'Sending...' : 'Send Login Code'}
-              </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
-                <span style={{ padding: '0 10px' }}>or</span>
-                <div style={{ flex: 1, height: 1, background: '#cbd5e1' }} />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => googleLoginHandler()}
-                disabled={loginLoading}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: 'white',
-                  color: '#1e293b',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: 12,
-                  fontWeight: 700,
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                  opacity: loginLoading ? 0.7 : 1
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 18 18">
-                  <path fill="#4285F4" d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84c-.21 1.12-.84 2.07-1.79 2.7l2.8 2.17c1.64-1.51 2.59-3.74 2.59-6.5z" />
-                  <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.8-2.17c-.78.52-1.78.83-2.8.83-2.34 0-4.32-1.58-5.03-3.7L1.47 13.07C2.95 16 6.01 18 9 18z" />
-                  <path fill="#FBBC05" d="M3.97 10.78c-.18-.52-.28-1.09-.28-1.68s.1-1.16.28-1.68L1.47 5.12C.53 7 0 9.08 0 11.2s.53 4.2 1.47 6.08l2.5-1.9c-.71-2.12-.71-4.4 0-6.5z" />
-                  <path fill="#EA4335" d="M9 3.58c1.32-.03 2.59.48 3.51 1.4l2.63-2.63C13.48.88 11.3.02 9 0 6.01 0 2.95 2 1.47 4.93l2.5 1.9C4.68 5.16 6.66 3.58 9 3.58z" />
-                </svg>
-                Continue with Google
-              </button>
-            </>
-          ) : (
-            <>
-              <div style={{ marginBottom: 24 }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: 8 }}>Enter 6-digit OTP</label>
-                <input type="text" value={otpValue} onChange={e => setOtpValue(e.target.value)} placeholder="123456" maxLength={6} style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid #cbd5e1', fontSize: '1.2rem', letterSpacing: '4px', textAlign: 'center', color: '#0f172a', fontWeight: 700 }} />
-              </div>
-              <button onClick={handleVerifyOTP} disabled={loginLoading} style={{ width: '100%', padding: '14px', background: '#059669', color: 'white', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
-                {loginLoading ? 'Verifying...' : 'Verify & Login'}
-              </button>
-              <div style={{ textAlign: 'center', marginTop: 16 }}>
-                <button onClick={() => setOtpSent(false)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>Change {loginMethod === 'email' ? 'Email' : 'Phone'}</button>
-              </div>
-            </>
-          )}
-        </motion.div>
-      </div>
-    )
+    return null
   }
 
   return (
@@ -6238,6 +6064,31 @@ export function PeopleAlsoTake({ category, cart, setCart }) {
 /* ─────────────────────────────────────────────────────────────
    ───────────────────────────────────────────────────────────── */
 
+// ── Quick Commerce Pricing Configuration (Blinkit-style affordable tiers) ──
+const QUICK_COMMERCE_PRICING = {
+  FREE_DELIVERY_THRESHOLD: 200,
+  HANDLING_FEE: 2,
+  SMALL_CART_FEE: 5,
+  SMALL_CART_THRESHOLD: 100,
+  SURGE_ACTIVE: false, // Default inactive; true only during active rain/high-demand conditions
+  SURGE_FEE: 0,        // Configurable ₹5–₹10 when SURGE_ACTIVE is true
+  getDeliveryFee: (subtotal) => {
+    if (subtotal <= 0 || subtotal >= 200) return 0
+    if (subtotal >= 100) return 10
+    return 15
+  },
+  getSmallCartFee: (subtotal) => {
+    if (subtotal > 0 && subtotal < 100) return 5
+    return 0
+  },
+  getHandlingFee: (subtotal) => {
+    return subtotal > 0 ? 2 : 0
+  },
+  getSurgeFee: (subtotal, isSurgeActive = false, surgeAmount = 10) => {
+    return isSurgeActive && subtotal > 0 ? surgeAmount : 0
+  }
+}
+
 function QuickCommerceCartCheckout({
   cart,
   setCart,
@@ -6245,6 +6096,13 @@ function QuickCommerceCartCheckout({
   onBack,
   user
 }) {
+  useEffect(() => {
+    document.body.style.overflow = "auto"
+    return () => {
+      document.body.style.overflow = "auto"
+    }
+  }, [])
+
   const [isAddressScreenOpen, setIsAddressScreenOpen] = useState(false)
   const [savedAddresses, setSavedAddresses] = useState([
     {
@@ -6277,12 +6135,16 @@ function QuickCommerceCartCheckout({
   const itemsTotal = cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0)
   const itemsOriginalTotal = cart.reduce((sum, item) => sum + (item.mrp || Math.round((item.price || 0) * 1.2)) * (item.quantity || 1), 0)
   const savings = Math.max(0, itemsOriginalTotal - itemsTotal)
-  const deliveryCharge = itemsTotal >= 199 ? 0 : 30
-  const handlingCharge = itemsTotal > 0 ? 5 : 0
-  const surgeCharge = 15
+
+  // Dynamic Blinkit-style pricing calculations
+  const deliveryCharge = QUICK_COMMERCE_PRICING.getDeliveryFee(itemsTotal)
+  const handlingCharge = QUICK_COMMERCE_PRICING.getHandlingFee(itemsTotal)
+  const smallCartFee = QUICK_COMMERCE_PRICING.getSmallCartFee(itemsTotal)
+  const isSurgeActive = QUICK_COMMERCE_PRICING.SURGE_ACTIVE
+  const surgeCharge = QUICK_COMMERCE_PRICING.getSurgeFee(itemsTotal, isSurgeActive, QUICK_COMMERCE_PRICING.SURGE_FEE)
   const donationAmount = 0
   const tipAmount = selectedTip === "custom" ? (parseInt(customTip) || 0) : (selectedTip || 0)
-  const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + surgeCharge + donationAmount + tipAmount)
+  const grandTotal = Math.max(0, itemsTotal + deliveryCharge + handlingCharge + smallCartFee + surgeCharge + donationAmount + tipAmount)
 
   const handleUpdateQty = (id, delta) => {
     setCart(prev => {
@@ -6564,6 +6426,39 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
               </div>
             </div>
 
+            {/* Free Delivery Incentive Card */}
+            {itemsTotal > 0 && (
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-3xs flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-bold text-slate-800">
+                      {itemsTotal >= QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD ? (
+                        <span className="text-emerald-700 font-extrabold">🎉 You unlocked FREE delivery!</span>
+                      ) : (
+                        <span>
+                          Add <span className="font-extrabold text-emerald-700">₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD - itemsTotal}</span> more to get <span className="font-extrabold text-emerald-700">FREE delivery</span>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {itemsTotal < QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD && (
+                    <span className="text-[11px] font-bold text-slate-400 shrink-0">
+                      ₹{itemsTotal}/₹{QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD}
+                    </span>
+                  )}
+                </div>
+                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-600 h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(100, Math.round((itemsTotal / QUICK_COMMERCE_PRICING.FREE_DELIVERY_THRESHOLD) * 100))}%`
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Cart Items List */}
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs divide-y divide-slate-100 space-y-4">
               {cart.map((item, idx) => (
@@ -6625,6 +6520,7 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-3xs space-y-4">
               <h3 className="text-sm font-bold text-slate-900 tracking-tight pb-1 border-b border-slate-50">Bill Details</h3>
 
+              {/* Items total */}
               <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-650">
                 <div className="flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-slate-400" />
@@ -6643,6 +6539,7 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
                 </div>
               </div>
 
+              {/* Delivery charge */}
               <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Truck className="w-4 h-4 text-slate-400" />
@@ -6654,24 +6551,43 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
                 </span>
               </div>
 
+              {/* Handling & packaging */}
               <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
                 <div className="flex items-center gap-1">
                   <Package className="w-4 h-4 text-slate-400" />
-                  <span>Handling charge</span>
+                  <span>Handling &amp; packaging</span>
                   <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
                 </div>
-                <span className="font-bold text-slate-900">₹{handlingCharge}</span>
+                <span className={`font-bold ${handlingCharge === 0 ? "text-emerald-600" : "text-slate-900"}`}>
+                  {handlingCharge === 0 ? "FREE" : `₹${handlingCharge}`}
+                </span>
               </div>
 
-              <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
-                <div className="flex items-center gap-1">
-                  <Droplets className="w-4 h-4 text-slate-400" />
-                  <span>Rain surge / High demand charge</span>
-                  <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
+              {/* Small cart fee */}
+              {smallCartFee > 0 && (
+                <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
+                  <div className="flex items-center gap-1">
+                    <ShoppingBag className="w-4 h-4 text-slate-400" />
+                    <span>Small cart fee</span>
+                    <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
+                  </div>
+                  <span className="font-bold text-slate-900">₹{smallCartFee}</span>
                 </div>
-                <span className="font-bold text-slate-900">₹{surgeCharge}</span>
-              </div>
+              )}
 
+              {/* High demand / Rain charge (only show when surgeCharge > 0) */}
+              {surgeCharge > 0 && (
+                <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-655">
+                  <div className="flex items-center gap-1">
+                    <Droplets className="w-4 h-4 text-slate-400" />
+                    <span>High demand / Rain charge</span>
+                    <Info className="w-3.5 h-3.5 text-slate-350 hover:text-slate-500 cursor-help transition-colors" />
+                  </div>
+                  <span className="font-bold text-slate-900">₹{surgeCharge}</span>
+                </div>
+              )}
+
+              {/* Grand Total */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-sm font-bold text-slate-900">Grand Total</span>
                 <span className="text-base font-black text-slate-900">₹{grandTotal}</span>
@@ -6776,15 +6692,15 @@ Delivering to: ${activeAddressObj?.address || "Hosur"}`,
             type="button"
             disabled={isSubmitting || cart.length === 0}
             onClick={handleProceedToPay}
-            className="w-full bg-slate-900 hover:bg-slate-950 disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-slate-955/20 cursor-pointer active:scale-98 transition-all duration-200"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl p-4 flex items-center justify-between font-extrabold text-sm sm:text-base shadow-lg shadow-emerald-600/25 cursor-pointer active:scale-98 transition-all duration-200"
           >
             <div className="text-left flex flex-col">
               <span className="text-base sm:text-lg font-black text-white leading-none">₹{grandTotal}</span>
-              <span className="text-[9px] font-black text-emerald-450 uppercase tracking-widest mt-1">TOTAL AMOUNT</span>
+              <span className="text-[9px] font-black text-emerald-100 uppercase tracking-widest mt-1">TOTAL AMOUNT</span>
             </div>
-            <div className="flex items-center gap-1.5 font-bold text-emerald-455 hover:text-white transition-colors">
-              <span className="text-white">{isSubmitting ? "Placing Order..." : "Proceed to Pay"}</span>
-              <ChevronRight className="w-5 h-5 text-emerald-450" />
+            <div className="flex items-center gap-1.5 font-bold text-white transition-colors">
+              <span>{isSubmitting ? "Placing Order..." : "Proceed to Pay"}</span>
+              <ChevronRight className="w-5 h-5 text-white" />
             </div>
           </button>
         </div>
@@ -7910,7 +7826,7 @@ export function BookingPage() {
   }
 
   const [categoriesData, setCategoriesData] = useState([])
-  const [packagesData, setPackagesData] = useState({})
+  const [packagesData, setPackagesData] = useState(null)
 
   useEffect(() => {
     async function loadCatalog() {
@@ -7937,8 +7853,9 @@ export function BookingPage() {
             const cid = s.category.toString()
             if (!pkgs[cid]) pkgs[cid] = []
             pkgs[cid].push({
+              ...s,
               id: s.id.toString(),
-              name: s.name,
+              category: s.category.toString(),
               price: parseFloat(s.price),
               priceStr: BOOKING_CURRENCY_SYMBOL + s.price,
               duration: s.duration || "1 hr",
@@ -8158,7 +8075,6 @@ export function BookingPage() {
     setFormData({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "" })
     setPhotoFile(null); setPhotoPreview(null); setSuccessData(null); setError(null)
     setShowPostFlow(false); setAssignedTech(null)
-    sessionStorage.removeItem(OTP_SESSION_KEY)
     sessionStorage.removeItem("calservice_last_booking")
     sessionStorage.removeItem("calservice_active_tracking_id")
     // Return to public home services catalog page (/home)
@@ -8178,7 +8094,24 @@ export function BookingPage() {
         setCart={setCart}
         category={category}
         user={user}
-        onBack={() => navigate(routes.landing || "/home", { replace: true })}
+        onBack={() => {
+          const restoredFoodCart = {}
+          cart.forEach(item => {
+            const key = item.displayName || item.name
+            if (key) {
+              restoredFoodCart[key] = item.quantity || 1
+            }
+          })
+          navigate(routes.landing || "/home", {
+            replace: true,
+            state: {
+              openFoodHealthModal: true,
+              openVegetablesModal: true,
+              openFoodSubModuleId: routerLocation.state?.foodSubModuleId || category?.foodSubModuleId || "vegetables",
+              foodCart: Object.keys(restoredFoodCart).length > 0 ? restoredFoodCart : (routerLocation.state?.foodCart || {}),
+            }
+          })
+        }}
       />
     )
   }
@@ -8469,33 +8402,60 @@ export function BookingPage() {
       {/* Package Selection Modal Overlay */}
       <AnimatePresence>
         {step < 3 && showPackageModal && category && (
-          (category.id === "painting" || category.slug === "painting" || String(category.id) === "painting" || category.name?.toLowerCase() === "painting") ? (
-            <PaintingPackageModal
-              category={category}
-              cart={cart}
-              setCart={setCart}
-              onClose={() => {
-                setShowPackageModal(false);
-                navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
-              }}
-              onCheckout={() => { setShowPackageModal(false); setStep(3); }}
-              onGetEstimate={() => {
-                setShowLocPicker(true);
-              }}
-            />
-          ) : (
-            <PackageModal
-              category={category}
-              cart={cart}
-              setCart={setCart}
-              packagesData={packagesData}
-              onClose={() => {
-                setShowPackageModal(false);
-                navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
-              }}
-              onCheckout={() => { setShowPackageModal(false); setStep(3); }}
-            />
-          )
+          (() => {
+            const isPainting = category.id === "painting" || category.slug === "painting" || category.slug === "paintings" || String(category.id) === "17" || category.name?.toLowerCase() === "painting" || category.name?.toLowerCase() === "paintings";
+            const isMason = category.id === "mason" || category.slug === "mason" || category.slug === "masons" || String(category.id) === "11" || category.name?.toLowerCase() === "mason" || category.name?.toLowerCase() === "masonry";
+            
+            if (isPainting) {
+              return (
+                <PaintingPackageModal
+                  category={category}
+                  cart={cart}
+                  setCart={setCart}
+                  packagesData={packagesData}
+                  onClose={() => {
+                    setShowPackageModal(false);
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                  }}
+                  onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+                  onGetEstimate={() => {
+                    setShowLocPicker(true);
+                  }}
+                />
+              );
+            } else if (isMason) {
+              return (
+                <MasonPackageModal
+                  category={category}
+                  cart={cart}
+                  setCart={setCart}
+                  packagesData={packagesData}
+                  onClose={() => {
+                    setShowPackageModal(false);
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                  }}
+                  onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+                  onGetEstimate={() => {
+                    setShowLocPicker(true);
+                  }}
+                />
+              );
+            } else {
+              return (
+                <PackageModal
+                  category={category}
+                  cart={cart}
+                  setCart={setCart}
+                  packagesData={packagesData}
+                  onClose={() => {
+                    setShowPackageModal(false);
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                  }}
+                  onCheckout={() => { setShowPackageModal(false); setStep(3); }}
+                />
+              );
+            }
+          })()
         )}
       </AnimatePresence>
 
@@ -8547,15 +8507,6 @@ export function BookingPage() {
           }}
         />
       )}
-
-      <CustomerEntryFlowModal
-        isOpen={showCustomerEntryModal}
-        onClose={() => setShowCustomerEntryModal(false)}
-        onComplete={() => {
-          setShowCustomerEntryModal(false)
-          if (typeof refreshMe === "function") refreshMe()
-        }}
-      />
     </div>
   )
 }
@@ -8840,7 +8791,7 @@ const PAINTING_DETAILS_EXTRA = {
   }
 };
 
-export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate }) {
+export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, packagesData }) {
   const [showPriceList, setShowPriceList] = React.useState(false);
   const [selectedPaintType, setSelectedPaintType] = React.useState('premium-emulsion');
   const [searchQuery, setSearchQuery] = useState("")
@@ -8896,137 +8847,168 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     }
   }
 
-  const PAINTING_SERVICES = [
-    {
-      id: "paint-interior",
-      name: "Interior Painting",
-      rating: "4.8",
-      reviews: "18K",
-      image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
-      points: [
-        "Complete wall prep & putty application",
-        "Double coat premium emulsion paint",
-        "Detailed masking & post-cleanup protection",
-        "1-Year Service Warranty"
-      ],
-      benefits: ["Premium Quality", "Verified Painters", "Clean Post-Service", "1-Year Warranty"],
-      includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
-      excludes: ["Major plastering work", "Dampness treatment (available separately)", "Electrical/re-wiring work"],
-      inspectionHighlights: ["Digital Wall Measurement", "Moisture Meter Inspection", "Wall Putty/Paint Damage Assessment"],
-      steps: ["Select Areas", "Free Inspection", "Detailed Quote", "Design Approval", "Expert Painting"],
-      subOptions: [
-        { id: "int-single-wall", name: "Single Wall", price: 0 },
-        { id: "int-one-room", name: "One Room", price: 0 },
-        { id: "int-multi-room", name: "Two or More Rooms", price: 0 },
-        { id: "int-full-home", name: "Full Home", price: 0 },
-        { id: "int-ceiling", name: "Ceiling", price: 0 }
-      ]
-    },
-    {
-      id: "paint-exterior",
-      name: "Exterior Painting",
-      rating: "4.7",
-      reviews: "15K",
-      image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&fit=crop",
-      points: [
-        "Pressure washing & crack filling",
-        "Anti-fungal primer coat",
-        "Double coat weather-defense paint",
-        "Dust and dirt resistant finish"
-      ],
-      benefits: ["Weatherproof Shield", "Scaffolding Safety", "Crack Treatment", "3-Year Warranty"],
-      includes: ["High Pressure Washing", "Sanding & Crack Filling", "Anti-Algae Exterior Primer", "2 Coats Weatherproof Paint", "Grill & Pipe Protective Coating", "Post-Service Cleaning"],
-      excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)", "Structural masonry / re-plastering"],
-      inspectionHighlights: ["Façade Crack Audit", "Moisture Meter Checking", "Safety & Scaffolding Planning"],
-      steps: ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
-      subOptions: [
-        { id: "ext-wall", name: "Exterior Wall", price: 0 },
-        { id: "ext-building", name: "Building Exterior", price: 0 },
-        { id: "ext-compound", name: "Compound Wall", price: 0 },
-        { id: "ext-terrace", name: "Terrace", price: 0 }
-      ]
-    },
-    {
-      id: "paint-waterproofing",
-      name: "Waterproofing",
-      rating: "4.6",
-      reviews: "12K",
-      image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800&q=80&fit=crop",
-      points: [
-        "Expert Leakage Detection & Dampness Solutions",
-        "Terrace, Bathroom & External Wall Waterproofing",
-        "We diagnose the cause. Fix it right. Waterproofing that lasts."
-      ],
-      benefits: ["Leakage Proof", "Damp & Mold Proof", "Advanced Chemicals", "3-Year Warranty"],
-      includes: ["Thermal Moisture Inspection", "Leakage Source Detection", "Terrace Joint Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Structural Crack Filling"],
-      excludes: ["Re-tiling charges (if floor tile needs to be broken)", "Major concrete reconstruction", "Plumbing piping re-routing"],
-      inspectionHighlights: ["Moisture Meter Scan", "Leakage Trace Mapping", "Wall/Ceiling Dampness Audit"],
-      steps: ["Inspect & Scan", "Detect Leakage Source", "Seal Cracks & Grout", "Apply Waterproof Barrier", "Water Tightness Test"],
-      subOptions: [
-        { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
-        { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
-        { id: "wp-wall", name: "Wall Waterproofing", price: 0 },
-        { id: "wp-roof", name: "Roof Waterproofing", price: 0 },
-        { id: "wp-crack", name: "Crack Filling", price: 0 }
-      ]
-    },
-    {
-      id: "paint-wood-metal",
-      name: "Wood & Metal Painting",
-      rating: "4.7",
-      reviews: "9K",
-      image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=800&q=80&fit=crop",
-      points: [
-        "Rust removal & sanding treatment",
-        "Specialized wood/metal primer application",
-        "PU coating or premium enamel paint",
-        "High gloss or sophisticated matte finish"
-      ],
-      benefits: ["Anti-Rust Shield", "Premium Wood Polish", "High Gloss Spray Finish", "Durability Guarantee"],
-      includes: ["Rust Scraping & Mechanical Sanding", "Wood Sanding & Filler", "Metal Anti-Corrosion Primer", "Wood Base Primer", "2 Coats PU or Enamel Paint", "Finishing Selection (Gloss/Matte)"],
-      excludes: ["New wood carving or carpentry repairs", "Replacement of broken wood sections", "Glass frame replacements"],
-      inspectionHighlights: ["Rust Depth Measurement", "Wood Termite/Rot Inspection", "Measurement of Grills/Doors"],
-      steps: ["Select Items", "Sanding & Scraping", "Apply Protection Primer", "PU Polish / Enamel Paint", "Final Quality Polish"],
-      subOptions: [
-        { id: "wm-doors", name: "Doors", price: 0 },
-        { id: "wm-windows", name: "Windows", price: 0 },
-        { id: "wm-grills", name: "Grills", price: 0 },
-        { id: "wm-cabinets", name: "Cabinets", price: 0 },
-        { id: "wm-gates", name: "Gates", price: 0 }
-      ]
-    },
-    {
-      id: "paint-texture",
-      name: "Texture & Decorative Painting",
-      rating: "4.8",
-      reviews: "8K",
-      image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&q=80&fit=crop",
-      points: [
-        "Specialty textured finishes & stencils",
-        "Premium metallic & non-metallic glazes",
-        "Vibrant accent wall styling consultation"
-      ],
-      benefits: ["Accent Metallic Wall", "Custom Stencil Designs", "Textured Accent Finish", "Designer Showcase"],
-      includes: ["Texture / Pattern Consultation", "Accent Wall Preparation", "Premium Metallic Pattern Painting", "Custom Stencil Painting", "Post-Service Clean-up"],
-      excludes: ["Full room plain painting (available separately)", "Wallpaper scraping/removal", "Plaster board reconstruction"],
-      inspectionHighlights: ["Texture Catalog Consultation", "Accent Wall Surface Suitability Check", "Wall Size & Lighting Review"],
-      steps: ["Select Designer Theme", "Wall Surface Preparation", "Apply Base Coating", "Create Textured Finish", "Accent Highlights Finish"],
-      subOptions: [
-        { id: "td-texture", name: "Texture Finish", price: 0 },
-        { id: "td-designer", name: "Designer Finish", price: 0 },
-        { id: "td-stencil", name: "Stencil Decor", price: 0 },
-        { id: "td-accent", name: "Accent Wall Painting", price: 0 }
-      ]
-    }
-  ];
+  const paintingKey = React.useMemo(() => {
+    if (!packagesData) return null;
+    return Object.keys(packagesData).find(key => 
+      packagesData[key] && packagesData[key].some(p => p.category_slug === "painting" || p.category_slug === "paintings" || String(p.category) === "paintings" || String(p.category) === "17")
+    ) || null;
+  }, [packagesData]);
 
-  const cardRefs = {
-    "paint-interior": useRef(null),
-    "paint-exterior": useRef(null),
-    "paint-waterproofing": useRef(null),
-    "paint-wood-metal": useRef(null),
-    "paint-texture": useRef(null),
-  }
+  const dbPackages = React.useMemo(() => {
+    return paintingKey ? packagesData[paintingKey] : [];
+  }, [packagesData, paintingKey]);
+
+  const PAINTING_SERVICES = React.useMemo(() => {
+    const staticServices = [
+      {
+        id: "paint-interior",
+        serviceSlug: "interior-painting",
+        name: "Interior Painting",
+        rating: "4.8",
+        reviews: "18K",
+        image: "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop",
+        points: [
+          "Complete wall prep & putty application",
+          "Double coat premium emulsion paint",
+          "Detailed masking & post-cleanup protection",
+          "1-Year Service Warranty"
+        ],
+        benefits: ["Premium Quality", "Verified Painters", "Clean Post-Service", "1-Year Warranty"],
+        includes: ["Wall Putty", "Primer Application", "2 Coats Premium Emulsion Paint", "Masking & Protection", "Post-Service Cleaning", "1-Year Warranty"],
+        excludes: ["Major plastering work", "Dampness treatment (available separately)", "Electrical/re-wiring work"],
+        inspectionHighlights: ["Digital Wall Measurement", "Moisture Meter Inspection", "Wall Putty/Paint Damage Assessment"],
+        steps: ["Select Areas", "Free Inspection", "Detailed Quote", "Design Approval", "Expert Painting"],
+        subOptions: [
+          { id: "int-single-wall", name: "Single Wall", price: 0 },
+          { id: "int-one-room", name: "One Room", price: 0 },
+          { id: "int-multi-room", name: "Two or More Rooms", price: 0 },
+          { id: "int-full-home", name: "Full House painting", price: 0 },
+          { id: "int-ceiling", name: "Ceiling", price: 0 }
+        ]
+      },
+      {
+        id: "paint-exterior",
+        serviceSlug: "exterior-painting",
+        name: "Exterior Painting",
+        rating: "4.7",
+        reviews: "15K",
+        image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&fit=crop",
+        points: [
+          "Pressure washing & crack filling",
+          "Anti-fungal primer coat",
+          "Double coat weather-defense paint",
+          "Dust and dirt resistant finish"
+        ],
+        benefits: ["Weatherproof Shield", "Scaffolding Safety", "Crack Treatment", "3-Year Warranty"],
+        includes: ["High Pressure Washing", "Sanding & Crack Filling", "Anti-Algae Exterior Primer", "2 Coats Weatherproof Paint", "Grill & Pipe Protective Coating", "Post-Service Cleaning"],
+        excludes: ["Scaffolding above 3 floors (extra charges)", "Exterior waterproofing (available separately)", "Structural masonry / re-plastering"],
+        inspectionHighlights: ["Façade Crack Audit", "Moisture Meter Checking", "Safety & Scaffolding Planning"],
+        steps: ["Select Areas", "Free Inspection", "Wash & Crack Prep", "Weathercoat Painting", "Final Inspection"],
+        subOptions: [
+          { id: "ext-wall", name: "Exterior Wall", price: 0 },
+          { id: "ext-building", name: "Building Exterior", price: 0 },
+          { id: "ext-compound", name: "Compound Wall", price: 0 },
+          { id: "ext-terrace", name: "Terrace", price: 0 }
+        ]
+      },
+      {
+        id: "paint-waterproofing",
+        serviceSlug: "waterproofing",
+        name: "Waterproofing Solutions",
+        rating: "4.6",
+        reviews: "12K",
+        image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=800&q=80&fit=crop",
+        points: [
+          "Expert Leakage Detection & Dampness Solutions",
+          "Terrace, Bathroom & External Wall Waterproofing",
+          "We diagnose the cause. Fix it right. Waterproofing that lasts."
+        ],
+        benefits: ["Leakage Proof", "Damp & Mold Proof", "Advanced Chemicals", "3-Year Warranty"],
+        includes: ["Thermal Moisture Inspection", "Leakage Source Detection", "Terrace Joint Waterproofing", "Bathroom Wall Joint Treatment", "Pressure Grouting", "Structural Crack Filling"],
+        excludes: ["Re-tiling charges (if floor tile needs to be broken)", "Major concrete reconstruction", "Plumbing piping re-routing"],
+        inspectionHighlights: ["Moisture Meter Scan", "Leakage Trace Mapping", "Wall/Ceiling Dampness Audit"],
+        steps: ["Inspect & Scan", "Detect Leakage Source", "Seal Cracks & Grout", "Apply Waterproof Barrier", "Water Tightness Test"],
+        subOptions: [
+          { id: "wp-terrace", name: "Terrace Waterproofing", price: 0 },
+          { id: "wp-bathroom", name: "Bathroom Waterproofing", price: 0 },
+          { id: "wp-wall", name: "Wall Waterproofing", price: 0 },
+          { id: "wp-roof", name: "Roof Waterproofing", price: 0 },
+          { id: "wp-crack", name: "Crack Filling", price: 0 }
+        ]
+      },
+      {
+        id: "paint-wood-metal",
+        serviceSlug: "wood-metal",
+        name: "Wood & Metal Painting",
+        rating: "4.7",
+        reviews: "9K",
+        image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=800&q=80&fit=crop",
+        points: [
+          "Rust removal & sanding treatment",
+          "Specialized wood/metal primer application",
+          "PU coating or premium enamel paint",
+          "High gloss or sophisticated matte finish"
+        ],
+        benefits: ["Anti-Rust Shield", "Premium Wood Polish", "High Gloss Spray Finish", "Durability Guarantee"],
+        includes: ["Rust Scraping & Mechanical Sanding", "Wood Sanding & Filler", "Metal Anti-Corrosion Primer", "Wood Base Primer", "2 Coats PU or Enamel Paint", "Finishing Selection (Gloss/Matte)"],
+        excludes: ["New wood carving or carpentry repairs", "Replacement of broken wood sections", "Glass frame replacements"],
+        inspectionHighlights: ["Rust Depth Measurement", "Wood Termite/Rot Inspection", "Measurement of Grills/Doors"],
+        steps: ["Select Items", "Sanding & Scraping", "Apply Protection Primer", "PU Polish / Enamel Paint", "Final Quality Polish"],
+        subOptions: [
+          { id: "wm-doors", name: "Doors", price: 0 },
+          { id: "wm-windows", name: "Windows", price: 0 },
+          { id: "wm-grills", name: "Grills", price: 0 },
+          { id: "wm-cabinets", name: "Cabinets", price: 0 },
+          { id: "wm-gates", name: "Gates", price: 0 }
+        ]
+      },
+      {
+        id: "paint-texture",
+        serviceSlug: "texture-decor",
+        name: "Texture & Decorative Painting",
+        rating: "4.8",
+        reviews: "8K",
+        image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=800&q=80&fit=crop",
+        points: [
+          "Specialty textured finishes & stencils",
+          "Premium metallic & non-metallic glazes",
+          "Vibrant accent wall styling consultation"
+        ],
+        benefits: ["Accent Metallic Wall", "Custom Stencil Designs", "Textured Accent Finish", "Designer Showcase"],
+        includes: ["Texture / Pattern Consultation", "Accent Wall Preparation", "Premium Metallic Pattern Painting", "Custom Stencil Painting", "Post-Service Clean-up"],
+        excludes: ["Full room plain painting (available separately)", "Wallpaper scraping/removal", "Plaster board reconstruction"],
+        inspectionHighlights: ["Texture Catalog Consultation", "Accent Wall Surface Suitability Check", "Wall Size & Lighting Review"],
+        steps: ["Select Designer Theme", "Wall Surface Preparation", "Apply Base Coating", "Create Textured Finish", "Accent Highlights Finish"],
+        subOptions: [
+          { id: "td-texture", name: "Texture Finish", price: 0 },
+          { id: "td-designer", name: "Designer Finish", price: 0 },
+          { id: "td-stencil", name: "Stencil Decor", price: 0 },
+          { id: "td-accent", name: "Accent Wall Painting", price: 0 }
+        ]
+      }
+    ];
+
+    if (dbPackages && dbPackages.length > 0) {
+      return staticServices.map(service => {
+        const relevantPkgs = dbPackages.filter(p => p.service_slug === service.serviceSlug);
+        if (relevantPkgs.length > 0) {
+          const dynamicSubOptions = relevantPkgs.map(p => ({
+            id: p.slug || p.id.toString(),
+            name: p.slug === "int-full-home" ? "Full House painting" : p.name,
+            price: parseFloat(p.price) || 0
+          }));
+          return {
+            ...service,
+            subOptions: dynamicSubOptions
+          };
+        }
+        return service;
+      });
+    }
+    return staticServices;
+  }, [dbPackages]);
+
+  const cardRefs = useRef({});
 
   const contentRef = useRef(null);
 
@@ -9037,7 +9019,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   }, [searchQuery]);
 
   const scrollToCard = (id) => {
-    const card = cardRefs[id]?.current;
+    const card = cardRefs.current[id];
     if (!card) return;
     const container = contentRef.current;
     if (!container) {
@@ -9166,6 +9148,32 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  if (packagesData === null) {
+    return (
+      <div className="uc-paint-overlay" onClick={onClose}>
+        <motion.div
+          className="uc-paint-modal"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "350px" }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+            <div style={{ width: "35px", height: "35px", border: "4px solid #f3f3f3", borderTop: "4px solid #7c3aed", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+            <span style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.03em" }}>LOADING CATALOG DETAILS...</span>
+          </div>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="uc-paint-overlay" onClick={onClose}>
@@ -9378,7 +9386,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                       const isExpanded = !!expanded[service.id];
                       const count = getCartCount(service.id);
                       return (
-                        <div key={service.id} className="uc-paint-card" ref={cardRefs[service.id]}>
+                        <div key={service.id} className="uc-paint-card" ref={el => { cardRefs.current[service.id] = el; }}>
                           <div className="uc-paint-card-img-box">
                             <img
                               src={service.image}
@@ -10790,7 +10798,7 @@ const MASON_DETAILS_EXTRA = {
   }
 };
 
-export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, setPhotoFile, setPhotoPreview }) {
+export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, setPhotoFile, setPhotoPreview, packagesData }) {
   const [activeTab, setActiveTab] = useState("brick");
   const [searchQuery, setSearchQuery] = useState("");
   const [expanded, setExpanded] = useState({});
@@ -10827,14 +10835,14 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     }
   };
 
-  const MASON_CATEGORIES = [
+  const STATIC_MASON_CATEGORIES = [
     { id: "brick", name: "Brick & Block Work", icon: "🧱" },
     { id: "plastering", name: "Plastering & Wall Repair", icon: "🪣" },
     { id: "partition", name: "Wall & Partition Construction", icon: "📐" },
     { id: "demolition", name: "Wall Breaking & Demolition", icon: "🔨" }
   ];
 
-  const MASON_SERVICES = [
+  const STATIC_MASON_SERVICES = [
     // 1. Brick & Block Work
     {
       id: "brick-new",
@@ -10847,7 +10855,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.2K",
-      image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
+      image: "/mockups/brick_wall_construction_red.jpg",
       includes: ["Red brick supply & laying", "Mortar alignment check", "Curing guidance"],
       excludes: ["Plastering (available separately)", "Painting and structural slab work"],
       inspectionHighlights: ["Site layout measurement", "Load-bearing suitability check"],
@@ -10865,7 +10873,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.7",
       reviews: "950",
-      image: "/mockups/kitchen_cleaning_hero.png",
+      image: "/mockups/aac_block_wall_construction.jpg",
       includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"],
       excludes: ["Foundation excavation", "Plastering"],
       inspectionHighlights: ["Ground leveling check", "Alignment verification"],
@@ -10881,7 +10889,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "1-2 hrs",
       rating: "4.6",
       reviews: "1.1K",
-      image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&auto=format&fit=crop&q=80",
       includes: ["Remove damaged bricks", "Mortar repointing", "New brick replacement"],
       excludes: ["Entire wall reconstruction"],
       inspectionHighlights: ["Structural safety audit"],
@@ -10901,7 +10909,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.4K",
-      image: "/tractor-uno.png",
+      image: "/mockups/wall_plastering_masonry.jpg",
       includes: ["Surface wetting", "Cement slurry coat", "Cement-sand plastering", "Screeding & leveling"],
       excludes: ["Wall putty application", "Painting"],
       inspectionHighlights: ["Alignment checks", "Moisture verification"],
@@ -10917,7 +10925,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "1-2 hrs",
       rating: "4.7",
       reviews: "1.8K",
-      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+      image: "/mockups/plaster_repair_patch.jpg",
       includes: ["Chipping loose plaster", "Anti-dampness treatment", "Patch plastering & smoothing"],
       excludes: ["Full room plastering"],
       inspectionHighlights: ["Moisture level checks"],
@@ -10935,7 +10943,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "1 hr",
       rating: "4.6",
       reviews: "3.2K",
-      image: "/premium-emulsion.png",
+      image: "/mockups/wall_crack_repair.jpg",
       includes: ["V-groove crack opening", "Bonding agent application", "Epoxy/cement grout filling"],
       excludes: ["Foundation underpinning"],
       inspectionHighlights: ["Crack depth validation"],
@@ -10955,7 +10963,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "780",
-      image: "/tractor-emulsion.png",
+      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&auto=format&fit=crop&q=80",
       includes: ["Base anchor setup", "Internal brick/block wall building", "Plaster coat finishing"],
       excludes: ["Electrical box carving"],
       inspectionHighlights: ["Vertical alignment verification"],
@@ -10973,7 +10981,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "950",
-      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop&q=80",
       includes: ["Partition plan layout", "Anchor setup", "Brick/block partition walls construction"],
       excludes: ["Painting and electrical wiring"],
       inspectionHighlights: ["Floor load verification", "Alignment checks"],
@@ -10991,7 +10999,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.1K",
-      image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&auto=format&fit=crop&q=80",
       includes: ["Custom brick partitions", "Counter top support construction", "Breakfast counter base"],
       excludes: ["Granite counter top installation"],
       inspectionHighlights: ["Space optimization check"],
@@ -11011,7 +11019,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.7",
       reviews: "1.5K",
-      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=500&auto=format&fit=crop&q=80",
       includes: ["Temporary shoring pillars setup", "Complete wall demolition", "Debris packing & clearing"],
       excludes: ["Permit collection fees"],
       inspectionHighlights: ["Load carrying check"],
@@ -11027,7 +11035,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "1-2 hrs",
       rating: "4.8",
       reviews: "1.3K",
-      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&auto=format&fit=crop&q=80",
       includes: ["Demolishing partition walls", "Debris packing & clearing"],
       excludes: ["Rebuilding walls"],
       inspectionHighlights: ["Utility mapping"],
@@ -11045,7 +11053,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "2 hrs",
       rating: "4.7",
       reviews: "820",
-      image: "/tractor-emulsion.png",
+      image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=500&auto=format&fit=crop&q=80",
       includes: ["Lintel beam installation support", "Opening cutting & edge leveling", "Window frame slot prep"],
       excludes: ["Door frame / Window glass installation"],
       inspectionHighlights: ["Lintel suitability audit", "Wall safety clearance check"],
@@ -11054,15 +11062,114 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     }
   ];
 
-  const cardRefs = {
-    "brick-new": useRef(null), "brick-block": useRef(null), "brick-ext": useRef(null), "brick-repair": useRef(null), "brick-small": useRef(null),
-    "plaster-new": useRef(null), "plaster-re": useRef(null), "plaster-crack": useRef(null), "plaster-dmg": useRef(null), "plaster-ceil": useRef(null),
-    "part-room": useRef(null), "part-office": useRef(null), "part-kitchen": useRef(null), "part-internal": useRef(null), "part-ext": useRef(null),
-    "house-comp": useRef(null), "house-found": useRef(null), "house-struct": useRef(null), "house-brick": useRef(null), "house-finish": useRef(null), "house-renov": useRef(null), "house-room": useRef(null),
-    "office-comp": useRef(null), "office-new": useRef(null), "office-renov": useRef(null), "office-comm": useRef(null), "office-part": useRef(null), "office-struct": useRef(null), "office-floor": useRef(null),
-    "dem-part": useRef(null), "dem-rem": useRef(null), "dem-door": useRef(null), "dem-window": useRef(null), "dem-wall": useRef(null), "dem-small": useRef(null)
+  const masonKey = React.useMemo(() => {
+    if (!packagesData) return null;
+    const foundKey = Object.keys(packagesData).find(key => 
+      packagesData[key] && packagesData[key].some(p => p.category_slug === "mason" || p.category_slug === "masons" || String(p.category) === "mason" || String(p.category) === "11")
+    );
+    return foundKey || null;
+  }, [packagesData]);
+
+  const dbPackages = React.useMemo(() => {
+    return masonKey ? packagesData[masonKey] : [];
+  }, [packagesData, masonKey]);
+
+  const MASON_CATEGORIES = React.useMemo(() => {
+    if (dbPackages && dbPackages.length > 0) {
+      const distinct = [];
+      dbPackages.forEach(pkg => {
+        const rawSlug = pkg.service_slug || "brick-block-work";
+        let cId = rawSlug;
+        if (rawSlug === "brick-block-work") cId = "brick";
+        else if (rawSlug === "plastering-wall-repair") cId = "plastering";
+        else if (rawSlug === "wall-partition-construction") cId = "partition";
+        else if (rawSlug === "wall-breaking-demolition") cId = "demolition";
+        else if (rawSlug.startsWith("mason-")) cId = rawSlug.replace("mason-", "");
+        
+        const sName = pkg.service_name || pkg.service?.name || "Masonry Work";
+        if (!distinct.some(c => c.id === cId)) {
+          let icon = "🧱";
+          if (cId === "plastering") icon = "🪣";
+          else if (cId === "partition") icon = "📐";
+          else if (cId === "demolition") icon = "🔨";
+          else if (cId.includes("construction") || cId.includes("house")) icon = "🏗️";
+          
+          distinct.push({
+            id: cId,
+            name: sName,
+            icon: icon
+          });
+        }
+      });
+      return distinct;
+    }
+    return STATIC_MASON_CATEGORIES;
+  }, [dbPackages]);
+
+  React.useEffect(() => {
+    if (MASON_CATEGORIES && MASON_CATEGORIES.length > 0) {
+      if (!MASON_CATEGORIES.some(c => c.id === activeTab)) {
+        setActiveTab(MASON_CATEGORIES[0].id);
+      }
+    }
+  }, [MASON_CATEGORIES]);
+
+  const getMasonDefaultFaqs = (serviceName) => {
+    const name = serviceName ? serviceName.toLowerCase() : "masonry";
+    return [
+      {
+        q: `What materials are included in the ${name} service?`,
+        a: `All standard tools, machinery, and equipment required are included. Raw materials (cement, sand, bricks, aggregates) can be supplied by us or procured by you based on the site inspection.`
+      },
+      {
+        q: `How long does the site inspection take?`,
+        a: `A professional site inspection takes approximately 30 to 45 minutes, during which our structural expert measures the area and provides an itemized material and labor estimate.`
+      },
+      {
+        q: `Is there a warranty on the structural masonry work?`,
+        a: "Yes! CalServices provides a 1-year service warranty covering workmanship, joint stability, and alignment protection for all civil works."
+      }
+    ];
   };
 
+  const MASON_SERVICES = React.useMemo(() => {
+    if (dbPackages && dbPackages.length > 0) {
+      return dbPackages.map(pkg => {
+        const rawSlug = pkg.service_slug || "brick-block-work";
+        let cId = rawSlug;
+        if (rawSlug === "brick-block-work") cId = "brick";
+        else if (rawSlug === "plastering-wall-repair") cId = "plastering";
+        else if (rawSlug === "wall-partition-construction") cId = "partition";
+        else if (rawSlug === "wall-breaking-demolition") cId = "demolition";
+        else if (rawSlug.startsWith("mason-")) cId = rawSlug.replace("mason-", "");
+
+        const staticTemplate = STATIC_MASON_SERVICES.find(s => s.id === pkg.slug || s.name === pkg.name);
+
+        return {
+          id: pkg.slug || pkg.id.toString(),
+          catId: cId,
+          name: pkg.name,
+          price: parseFloat(pkg.price) || 0,
+          priceStr: pkg.priceStr || `Starts at ₹${pkg.price}`,
+          badge: pkg.tag || staticTemplate?.badge || "",
+          badgeColor: staticTemplate?.badgeColor || "bg-emerald-50 text-emerald-700 border-emerald-100",
+          duration: pkg.duration || staticTemplate?.duration || "Flexible",
+          rating: pkg.service_customization?.rating || staticTemplate?.rating || "4.8",
+          reviews: pkg.service_customization?.reviews || staticTemplate?.reviews || "100+",
+          image: pkg.image || staticTemplate?.image || "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
+          includes: Array.isArray(pkg.includes) && pkg.includes.length > 0 ? pkg.includes : (staticTemplate?.includes || ["Quality masonry work", "CalServices warranty"]),
+          excludes: Array.isArray(pkg.excludes) ? pkg.excludes : (staticTemplate?.excludes || []),
+          inspectionHighlights: staticTemplate?.inspectionHighlights || ["Visual inspection", "Measurement scan"],
+          steps: staticTemplate?.steps || ["Site prep", "Execution", "Clean-up"],
+          desc: pkg.description || staticTemplate?.desc || `Professional masonry service for ${pkg.name.toLowerCase()}.`,
+          faqs: Array.isArray(pkg.faqs) && pkg.faqs.length > 0 ? pkg.faqs : (staticTemplate?.faqs || getMasonDefaultFaqs(pkg.name))
+        };
+      });
+    }
+    return STATIC_MASON_SERVICES;
+  }, [dbPackages]);
+
+  const cardRefs = useRef({});
   const contentRef = useRef(null);
 
   useEffect(() => {
@@ -11072,7 +11179,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   }, [searchQuery, activeTab]);
 
   const scrollToCard = (id) => {
-    const card = cardRefs[id]?.current;
+    const card = cardRefs.current[id];
     if (!card) return;
     const container = contentRef.current;
     if (!container) {
@@ -11159,6 +11266,32 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
   const totalQuantity = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  if (packagesData === null) {
+    return (
+      <div className="uc-paint-overlay" onClick={onClose}>
+        <motion.div
+          className="uc-paint-modal"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "350px" }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+            <div style={{ width: "35px", height: "35px", border: "4px solid #f3f3f3", borderTop: "4px solid #7c3aed", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+            <span style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.03em" }}>LOADING CATALOG DETAILS...</span>
+          </div>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="uc-paint-overlay" onClick={onClose}>
@@ -11370,7 +11503,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                       return (
                         <div
                           key={service.id}
-                          ref={cardRefs[service.id]}
+                          ref={el => { cardRefs.current[service.id] = el; }}
                           style={{
                             border: "1px solid #e2e8f0",
                             borderRadius: "20px",
@@ -12190,13 +12323,13 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
                   {/* FREQUENTLY ASKED QUESTIONS */}
                   {(() => {
-                    const extra = MASON_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
-                    if (extra.faqs.length === 0) return null;
+                    const faqs = activeDetailService.faqs || [];
+                    if (faqs.length === 0) return null;
                     return (
                       <div style={{ textAlign: 'left', marginTop: '1.25rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                         <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Frequently Asked Questions</h4>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {extra.faqs.map((faq, idx) => {
+                          {faqs.map((faq, idx) => {
                             const isExpanded = expandedFaq === idx;
                             return (
                               <div key={idx} style={{ border: '1.5px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', overflow: 'hidden' }}>
@@ -13532,7 +13665,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-orange-50 text-orange-700 border-orange-100",
           description: "High-quality red clay brick masonry work with standard cement-mortar mix.",
           includes: ["Red brick supply & laying", "Mortar alignment check", "Curing guidance"],
-          image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop"
+          image: "/mockups/brick_wall_construction_red.jpg"
         },
         {
           id: "mason-brick-2",
@@ -13543,7 +13676,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
           description: "AAC concrete block laying using thin-bed adhesive mortar for fast execution.",
           includes: ["AAC block laying", "Block adhesive jointing", "Plumb alignment check"],
-          image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop"
+          image: "/mockups/aac_block_wall_construction.jpg"
         },
         {
           id: "mason-brick-3",
@@ -13554,7 +13687,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
           description: "Replacing damaged bricks/blocks, repairing loose mortar joints, and strengthening structure.",
           includes: ["Damaged brick removal", "Mortar joint repointing", "Joint bonding agent application"],
-          image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&auto=format&fit=crop&q=80"
         }
       ],
       "Plastering & Wall Repair": [
@@ -13567,7 +13700,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
           description: "Smooth sand-cement plaster application for internal or external brick walls.",
           includes: ["Surface preparation & wetting", "Base slurry application", "Sponge finish styling"],
-          image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop"
+          image: "/mockups/wall_plastering_masonry.jpg"
         },
         {
           id: "mason-plast-2",
@@ -13578,7 +13711,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
           description: "Patching hollow/peeling plaster surfaces and restoring wall strength.",
           includes: ["Hollow plaster scraping", "Cement paste bonding", "Patch trowel leveling"],
-          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop"
+          image: "/mockups/plaster_repair_patch.jpg"
         },
         {
           id: "mason-plast-3",
@@ -13589,7 +13722,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-rose-50 text-rose-700 border-rose-100",
           description: "V-groove wall cracking repairs using polymer-modified mortar or specialized sealant.",
           includes: ["Crack cleanout chiseling", "Polymer filler injection", "Surface smoothing"],
-          image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop"
+          image: "/mockups/wall_crack_repair.jpg"
         }
       ],
       "Wall & Partition Construction": [
@@ -13602,7 +13735,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
           description: "Heavy brick masonry partition wall built with proper top ceiling anchors.",
           includes: ["Foundation course anchoring", "Brick partition build", "Lintel support casting"],
-          image: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&auto=format&fit=crop&q=80"
         },
         {
           id: "mason-part-2",
@@ -13613,7 +13746,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
           description: "Autoclaved lightweight concrete block partition wall to divide living space.",
           includes: ["Space layout leveling", "Block joint gluing", "Wall perimeter sealing"],
-          image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop&q=80"
         },
         {
           id: "mason-part-3",
@@ -13624,7 +13757,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-teal-50 text-teal-700 border-teal-100",
           description: "Low-height counter/half-brick walls for open kitchen partitions or balcony boundaries.",
           includes: ["Layout leveling scan", "Counter brick layout work", "Top coping concrete slab"],
-          image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&auto=format&fit=crop&q=80"
         }
       ],
       "Wall Breaking & Demolition": [
@@ -13637,7 +13770,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-rose-50 text-rose-700 border-rose-100",
           description: "Controlled brick or concrete block wall demolition using rotary hammer breakers.",
           includes: ["Rotary breaker breaking", "Safety prop supporting", "Debris bagging"],
-          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=500&auto=format&fit=crop&q=80"
         },
         {
           id: "mason-demo-2",
@@ -13648,7 +13781,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-amber-50 text-amber-700 border-amber-100",
           description: "Disassembling soft or lightweight concrete partitions without structural damage.",
           includes: ["Anchor detaching", "Block breaking", "Debris removal packing"],
-          image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&auto=format&fit=crop&q=80"
         },
         {
           id: "mason-demo-3",
@@ -13659,19 +13792,19 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-purple-50 text-purple-700 border-purple-100",
           description: "Chiseling and structural lintel casting to create a door or window opening cutout.",
           includes: ["Lintel support insert", "Controlled wall cutting", "Smooth border plastering"],
-          image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop"
+          image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=500&auto=format&fit=crop&q=80"
         }
       ]
     },
     pest_control: {
       "Termite Control": [
-        { id: "pest-term-1", name: "Termite Drill & Injection Guard", price: 2499, duration: "2 hrs", badge: "5-Yr Protection", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Precision drilling along wall bases, chemical pressure injection, and color-matched hole sealing.", includes: ["Wall base chemical injection", "Wood furniture chemical spray", "5-year warranty certificate"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "pest-term-1", name: "Termite Drill & Injection Guard", price: 2499, duration: "2 hrs", badge: "5-Yr Protection", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Precision drilling along wall bases, chemical pressure injection, and color-matched hole sealing.", includes: ["Wall base chemical injection", "Wood furniture chemical spray", "5-year warranty certificate"], image: "/mockups/termite_control.jpg" }
       ],
       "Cockroach & Ant Control": [
         { id: "pest-roach-1", name: "Herbal Gel & Odorless Spray", price: 799, duration: "45 mins", badge: "Odorless & Safe", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Herbal bait gel dot application in kitchen cabinets, odorless spray for drains & skirting boards.", includes: ["Kitchen cabinet gel baiting", "Bathroom drain spray", "90-day protection"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
       ],
       "Bed Bug Treatment": [
-        { id: "pest-bug-1", name: "2-Stage Bed Bug Steam & Chemical", price: 1499, duration: "1.5 hrs", badge: "Double Stage", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "High-temperature steam extraction of mattresses & sofas followed by residual chemical spray.", includes: ["Mattress heat steam treatment", "Residual chemical spray", "2nd visit included"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+        { id: "pest-bug-1", name: "2-Stage Bed Bug Steam & Chemical", price: 1499, duration: "1.5 hrs", badge: "Double Stage", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "High-temperature steam extraction of mattresses & sofas followed by residual chemical spray.", includes: ["Mattress heat steam treatment", "Residual chemical spray", "2nd visit included"], image: "/mockups/bedbugs_control.jpg" }
       ]
     },
     goods_transport: {
@@ -18604,7 +18737,7 @@ const FULL_KITCHEN_PACKAGES = [
     price: 1959,
     duration: "3 hrs",
     description: "Deep steam sanitization of kitchen counters, cabinets, chimney, and hobs.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1556912173-3bb406ef7e77?w=600&q=80&fit=crop",
     includes: [
       "Includes everything in Basic, plus:",
       "Cabinet interior & exterior cleaning",
@@ -18618,7 +18751,7 @@ const FULL_KITCHEN_PACKAGES = [
     price: 849,
     duration: "2.5 hrs",
     description: "Thorough deep cleaning of empty kitchen spaces before moving in or after moving out.",
-    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=600&q=80&fit=crop",
     includes: [
       "Thorough degreasing of wall tiles, countertops, and exhaust fans",
       "Detailed cleaning of kitchen floors, windows, switchboards, and cabinets (exterior)",
@@ -18839,7 +18972,7 @@ const APPLIANCE_SERVICES = [
     price: 99,
     duration: "15 mins",
     description: "Sandwich maker deep cleaning to remove charred food spills.",
-    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=600&q=80&fit=crop",
+    image: "/mockups/sandwich_griller.png",
     includes: [
       "Deep cleaning of plates to remove stuck food & char marks",
       "Exterior wipe to remove oil, grease & food stains"
@@ -18867,7 +19000,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Detailed glass panel and frame grease cleaning.",
-    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
+    image: "/mockups/window_cleaning.png",
     includes: [
       "Glass panes dusting and wet wiping",
       "Window frames, sill, and tracks cleaning",
@@ -18880,7 +19013,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 449,
     duration: "30 mins",
     description: "Detailed dining table surface cleaning and grease removal.",
-    image: "https://images.unsplash.com/photo-1577140917170-285929fb55b7?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=600&q=80&fit=crop",
     includes: [
       "Surface cleaning & sanitation",
       "Removal of food stains & greasy layers",
@@ -18919,7 +19052,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Washing and scrubbing of balcony floor and railings.",
-    image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop",
+    image: "/mockups/balcony_cleaning.png",
     includes: [
       "Balcony floor washing & scrubbing",
       "Dusting of railing and windows",
@@ -18932,7 +19065,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 549,
     duration: "50 mins",
     description: "Deep floor scrubbing and mesh cleaning for large balconies.",
-    image: "https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=300&q=80&fit=crop",
+    image: "/mockups/balcony_cleaning.png",
     includes: [
       "Deep floor scrubbing & balcony washing",
       "Railing, windows, and mesh cleaning",
@@ -18945,7 +19078,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 89,
     duration: "10 mins",
     description: "Thorough wiping and dusting of doors to remove fingerprints and dirt.",
-    image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+    image: "/mockups/door_cleaning.png",
     includes: [
       "Wiping of door panels and frames",
       "Removal of smudges, dust & fingerprint marks",
@@ -19814,7 +19947,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             item.popular = dbMatch.popular || false;
             if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
             if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
-            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews = dbMatch.reviews;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
             if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
           }
         }
@@ -19918,7 +20051,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
                           <Star className="text-violet-600 fill-violet-600" size={11} />
                           <span className="text-slate-800">{service.rating}</span>
-                          <span className="text-slate-400 font-normal">({service.reviews})</span>
+                          <span className="text-slate-400 font-normal">({typeof service.reviews === 'string' ? service.reviews : (Array.isArray(service.reviews) ? `${service.reviews.length} reviews` : "15K")})</span>
                         </div>
                       )}
 
@@ -19934,15 +20067,17 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                         <span className="text-slate-500 font-semibold">{service.duration}</span>
                       </div>
 
-                      {activeTab !== "addons" && service.includes && service.includes.length > 0 && (
+                      {service.includes && service.includes.length > 0 && (
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
                           {(() => {
                             const isBasic = service.id === "occ-basic";
                             const isDeep = service.id === "occ-deep";
                             const isExpanded = isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true);
-                            const displayIncludes = (isBasic || isDeep) && !isExpanded
+                            const displayIncludes = ((isBasic || isDeep) && !isExpanded
                               ? service.includes.slice(0, 3)
-                              : service.includes;
+                              : service.includes)
+                              .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false))
+                              .map(inc => typeof inc === "string" ? inc : inc.text);
 
                             return (
                               <>
@@ -20251,9 +20386,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const tools = (Array.isArray(selectedServiceDetails.tools) && selectedServiceDetails.tools.length > 0)
+                const tools = ((Array.isArray(selectedServiceDetails.tools) && selectedServiceDetails.tools.length > 0)
                   ? selectedServiceDetails.tools
-                  : (detail.tools || []);
+                  : (detail.tools || []))
+                  .filter(t => typeof t === "string" ? true : (t?.enabled !== false))
+                  .map(t => typeof t === "string" ? t : (t.text || ""));
                 if (tools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -20274,9 +20411,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const readyList = (Array.isArray(selectedServiceDetails.ready) && selectedServiceDetails.ready.length > 0)
+                const readyList = ((Array.isArray(selectedServiceDetails.ready) && selectedServiceDetails.ready.length > 0)
                   ? selectedServiceDetails.ready
-                  : (detail.ready || []);
+                  : (detail.ready || []))
+                  .filter(r => typeof r === "string" ? true : (r?.enabled !== false))
+                  .map(r => typeof r === "string" ? r : (r.text || ""));
                 if (readyList.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -20299,9 +20438,10 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 {(() => {
                   const id = selectedServiceDetails.id;
                   const detail = SERVICE_DETAIL_DATA[id] || {};
-                  const reviews = (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0)
+                  const reviews = ((Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0)
                     ? selectedServiceDetails.reviews
-                    : (detail.reviews || []);
+                    : (detail.reviews || []))
+                    .filter(r => r.enabled !== false);
                   return reviews.map((rev, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
                       <div className="flex items-center justify-between">
@@ -20326,9 +20466,10 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   {(() => {
                     const id = selectedServiceDetails.id;
                     const detail = SERVICE_DETAIL_DATA[id] || {};
-                    const faqs = (Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0)
+                    const faqs = ((Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0)
                       ? selectedServiceDetails.faqs
-                      : (detail.faqs || []);
+                      : (detail.faqs || []))
+                      .filter(f => f.enabled !== false);
                     return faqs.map((faq, idx) => {
                       const isFaqOpen = activeFaq === idx;
                       return (

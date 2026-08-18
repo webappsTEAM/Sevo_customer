@@ -49,7 +49,10 @@ class User(AbstractBaseUser):
     )
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
-    email = models.EmailField(blank=True)
+    # null=True (not just blank) so multiple accounts without an email don't
+    # collide under the unique constraint below — same pattern mobile_number
+    # already used correctly.
+    email = models.EmailField(null=True, blank=True, unique=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_superuser = models.BooleanField(default=False)
@@ -65,7 +68,9 @@ class User(AbstractBaseUser):
 
     # Extended profile fields
     bio = models.TextField(blank=True, default="")
-    phone = models.CharField(max_length=30, blank=True, default="")
+    # null=True so multiple accounts without a phone don't collide under the
+    # unique constraint — one phone = one account, enforced at the DB level.
+    phone = models.CharField(max_length=30, null=True, blank=True, unique=True)
     mobile_number = models.CharField(max_length=15, unique=True, null=True, blank=True, db_index=True)
     profile_complete = models.BooleanField(default=False)
     last_known_location = models.JSONField(null=True, blank=True, default=dict)
@@ -89,7 +94,6 @@ class User(AbstractBaseUser):
         verbose_name = "user"
         verbose_name_plural = "users"
         indexes = [
-            models.Index(fields=["email"], name="idx_user_email"),
             models.Index(fields=["role"], name="idx_user_role"),
             models.Index(fields=["company", "role"], name="idx_user_company_role"),
         ]
@@ -111,12 +115,22 @@ class User(AbstractBaseUser):
         return self.role == self.Role.ADMIN
 
 
+class OTPChannel(models.TextChoices):
+    PHONE = "PHONE", "Phone"
+    EMAIL = "EMAIL", "Email"
+
+
 class OTPRequest(models.Model):
     """
-    Mobile OTP Request model.
+    Customer OTP request model — channel-agnostic (phone or email).
     Stores hashed OTP codes with 5-minute expiration and attempt counters.
+    `identifier` holds a normalized phone number when channel=PHONE, or a
+    lowercased email address when channel=EMAIL. Was phone-only (field was
+    named `mobile_number`) before customer login was unified onto one OTP
+    mechanism for both channels.
     """
-    mobile_number = models.CharField(max_length=15, db_index=True)
+    identifier = models.CharField(max_length=255, db_index=True)
+    channel = models.CharField(max_length=10, choices=OTPChannel.choices, default=OTPChannel.PHONE)
     otp_hash = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
@@ -130,7 +144,7 @@ class OTPRequest(models.Model):
         verbose_name_plural = "OTP Requests"
 
     def __str__(self):
-        return f"OTP for {self.mobile_number} ({self.purpose}) - Verified: {self.is_verified}"
+        return f"OTP for {self.identifier} ({self.channel}/{self.purpose}) - Verified: {self.is_verified}"
 
     def is_expired(self):
         return timezone.now() > self.expires_at

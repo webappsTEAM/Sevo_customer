@@ -10,8 +10,11 @@ import {
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
 import { createBooking } from "../../api/bookingService.js"
+<<<<<<< HEAD
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
+=======
+>>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -822,16 +825,9 @@ export function PackersMoversBookingHosurPage() {
   // Booking Flow State
   const [vehicleSelectorOpen, setVehicleSelectorOpen] = useState(false)
   const [selectedPackage, setSelectedPackage] = useState(null)
-  const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
-  const [otpStep, setOtpStep] = useState(false)
-  const [otpValue, setOtpValue] = useState("")
-  const [otpLoading, setOtpLoading] = useState(false)
-  const [otpSent, setOtpSent] = useState(false)
-  const [loginEmail, setLoginEmail] = useState("")
-  const [loginWhatsapp, setLoginWhatsapp] = useState(true)
   const { user } = useAuth()
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
@@ -904,7 +900,7 @@ export function PackersMoversBookingHosurPage() {
   }, [])
 
   useEffect(() => {
-    if (inventoryBuilderOpen || vehicleSelectorOpen || loginModalOpen || bookingSuccessOpen) {
+    if (inventoryBuilderOpen || vehicleSelectorOpen || showCustomerEntryModal || bookingSuccessOpen) {
       document.body.style.overflow = "hidden"
     } else {
       document.body.style.overflow = "unset"
@@ -912,7 +908,7 @@ export function PackersMoversBookingHosurPage() {
     return () => {
       document.body.style.overflow = "unset"
     }
-  }, [inventoryBuilderOpen, vehicleSelectorOpen, loginModalOpen, bookingSuccessOpen])
+  }, [inventoryBuilderOpen, vehicleSelectorOpen, showCustomerEntryModal, bookingSuccessOpen])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -1128,9 +1124,15 @@ export function PackersMoversBookingHosurPage() {
     setBookingError("")
     setBookingSubmitting(true)
     try {
-      const today = todayDateString()
       const pkg = selectedPackage || PACKERS_PACKAGES[0]
       const fare = Number(String(pkg.price).replace(/[^0-9.]/g, "")) || 0
+      
+      let dateString = todayDateString()
+      if (selectedDate && selectedDate.fullDate) {
+        const d = selectedDate.fullDate
+        dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      }
+
       const payload = {
         customer_name: name || "Guest",
         phone,
@@ -1139,12 +1141,14 @@ export function PackersMoversBookingHosurPage() {
         description: userType,
         address: pickup || "Hosur",
         drop_address: drop,
-        preferred_date: today,
+        preferred_date: dateString,
+        preferred_time: selectedSlot || "Morning",
         total_amount: fare,
         payment_method: "COD",
         cart_data: [{
           package: pkg.name, price: pkg.price, route: selectedRoute?.to || null,
           relocation_type: relocationType, inventory: inventoryItems,
+          date: selectedDate?.value, slot: selectedSlot
         }],
       }
       if (pkg._tierId) payload.logistics_tier = pkg._tierId
@@ -1152,6 +1156,8 @@ export function PackersMoversBookingHosurPage() {
 
       const res = await createBooking(payload)
       setLastBookingId(res?.data?.request_id || res?.request_id || null)
+      setInventoryBuilderOpen(false)
+      setVehicleSelectorOpen(false)
       setBookingSuccessOpen(true)
     } catch (err) {
       setBookingError(err?.body?.message || "Couldn't confirm your booking. Please try again.")
@@ -1162,14 +1168,13 @@ export function PackersMoversBookingHosurPage() {
 
   const handleBookNow = () => {
     if (!isSignedIn) {
-      setVehicleSelectorOpen(false)
-      setLoginModalOpen(true)
+      setShowCustomerEntryModal(true)
     } else {
-      setVehicleSelectorOpen(false)
       submitBooking()
     }
   }
 
+<<<<<<< HEAD
   const handleSendOtp = async () => {
     if (!phone || phone.trim().length < 10) return
     setOtpLoading(true)
@@ -1214,6 +1219,8 @@ export function PackersMoversBookingHosurPage() {
     }
   }
 
+=======
+>>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
   const handleItemCount = (item, delta) => {
     setInventoryItems(prev => {
       const current = prev[item] || 0
@@ -2553,12 +2560,12 @@ export function PackersMoversBookingHosurPage() {
                       </div>
                       <button
                         onClick={() => {
-                          setInventoryBuilderOpen(false)
                           handleBookNow()
                         }}
-                        className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer"
+                        disabled={bookingSubmitting}
+                        className="px-10 py-3.5 bg-[#0B8860] hover:bg-[#097754] text-white text-[15px] font-bold rounded-xl transition-all shadow-md shadow-[#0B8860]/20 cursor-pointer disabled:opacity-60"
                       >
-                        Confirm Booking
+                        {bookingSubmitting ? "Confirming..." : "Confirm Booking"}
                       </button>
                     </div>
                   </>
@@ -2599,6 +2606,7 @@ export function PackersMoversBookingHosurPage() {
         </div>
       )}
 
+<<<<<<< HEAD
       {/* 3. Login & OTP Verification Modal */}
       {loginModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -2734,6 +2742,8 @@ export function PackersMoversBookingHosurPage() {
         </div>
       )}
 
+=======
+>>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
       {/* 4. Booking Confirmation Success Modal */}
       {bookingSuccessOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -2809,7 +2819,10 @@ export function PackersMoversBookingHosurPage() {
         <CustomerEntryFlowModal
           isOpen={showCustomerEntryModal}
           onClose={() => setShowCustomerEntryModal(false)}
-          onSuccess={() => setShowCustomerEntryModal(false)}
+          onComplete={() => {
+            setShowCustomerEntryModal(false)
+            submitBooking()
+          }}
         />
       )}
     </div>

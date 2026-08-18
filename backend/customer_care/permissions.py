@@ -3,6 +3,7 @@ from .models import CareAgentProfile
 
 CARE_ROLE_REFUND_LIMITS = {
     CareAgentProfile.CareRole.CARE_EXECUTIVE: 0,
+    CareAgentProfile.CareRole.SENIOR_CARE: 5000,
     CareAgentProfile.CareRole.OPS_MANAGER: 15000,
     CareAgentProfile.CareRole.ADMIN: None,
 }

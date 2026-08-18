@@ -41,6 +41,7 @@ _RESCHEDULE_TRANSITIONS = {
         RescheduleStatus.RESCHEDULED,
         RescheduleStatus.REJECTED,
         RescheduleStatus.CANCELLED,
+        RescheduleStatus.RESCHEDULED,
     },
     RescheduleStatus.PENDING_ADMIN_REVIEW: {
         RescheduleStatus.ADMIN_REVIEW,
@@ -49,6 +50,7 @@ _RESCHEDULE_TRANSITIONS = {
         RescheduleStatus.RESCHEDULED,
         RescheduleStatus.REJECTED,
         RescheduleStatus.CANCELLED,
+        RescheduleStatus.RESCHEDULED,
     },
     RescheduleStatus.ADMIN_REVIEW: {
         RescheduleStatus.ADMIN_APPROVED,

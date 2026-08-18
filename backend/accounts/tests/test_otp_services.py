@@ -39,7 +39,7 @@ class OTPAuthServicesTestCase(TestCase):
         self.assertIn("dev_otp", res["data"])
         
         # Check DB record
-        req = OTPRequest.objects.filter(mobile_number=self.mobile_1).first()
+        req = OTPRequest.objects.filter(identifier=self.mobile_1).first()
         self.assertIsNotNone(req)
         self.assertFalse(req.is_verified)
         self.assertEqual(req.attempt_count, 0)
@@ -65,7 +65,7 @@ class OTPAuthServicesTestCase(TestCase):
         # Seed 5 requests within the last hour
         for i in range(5):
             OTPRequest.objects.create(
-                mobile_number=self.mobile_2,
+                identifier=self.mobile_2,
                 otp_hash="dummy_hash",
                 created_at=now - timedelta(minutes=10 + i),
                 expires_at=now + timedelta(minutes=5),

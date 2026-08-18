@@ -12,8 +12,8 @@ import {
   Lock, Home
 } from "lucide-react"
 import {
-  apiRequestCustomerMobileOTP,
-  apiVerifyCustomerMobileOTP,
+  apiRequestCustomerOTP,
+  apiVerifyCustomerOTP,
   apiCompleteCustomerProfile,
   apiUpdateCustomerLastLocation,
   apiDetectCustomerLocation
@@ -103,6 +103,12 @@ const MODAL_STYLES = `
     display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 800;
     color: #6366f1; background: none; border: none; cursor: pointer; margin-bottom: 1.25rem; padding: 0; transition: color 0.2s;
   }
+  .cef-tabs { display: flex; gap: 8px; margin-bottom: 1rem; }
+  .cef-tab {
+    flex: 1; padding: 10px; border-radius: 12px; font-weight: 800; font-size: 0.82rem; cursor: pointer;
+    border: 1.5px solid #e2e8f0; background: #f8fafc; color: #64748b; transition: all 0.2s;
+  }
+  .cef-tab.active { border-color: #6366f1; background: #6366f110; color: #6366f1; }
   .cef-back-btn:hover { color: #4f46e5; }
   .otp-grid { display: flex; gap: 8px; justify-content: center; align-items: center; width: 100%; margin-bottom: 1.25rem; box-sizing: border-box; }
   .otp-box {
@@ -145,11 +151,16 @@ const MODAL_STYLES = `
 export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   const [step, setStep] = useState(1)
   const { refreshMe } = useAuth()
+  const [channel, setChannel] = useState("PHONE") // "PHONE" | "EMAIL" — which identifier the customer is logging in with
   const [mobileNumber, setMobileNumber] = useState("")
+  const [emailInput, setEmailInput] = useState("")
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""])
   const [customerId, setCustomerId] = useState(null)
   const [fullName, setFullName] = useState("")
-  const [email, setEmail] = useState("")
+  // Step 3 collects whichever identifier the customer did NOT log in with —
+  // both end up required on the account (name + email + phone all validated
+  // for a new customer).
+  const [secondIdentifier, setSecondIdentifier] = useState("")
   const [manualLocationInput, setManualLocationInput] = useState("")
   const [showManualLocation, setShowManualLocation] = useState(false)
   const [geoLoading, setGeoLoading] = useState(false)
@@ -165,12 +176,18 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
 
   if (!isOpen) return null
 
-  const handleRequestOTP = async (overrideMobile = null) => {
-    const targetMobile = overrideMobile || mobileNumber.trim()
-    if (!/^[6-9]\d{9}$/.test(targetMobile)) { setErrorMsg("Please enter a valid 10-digit Indian mobile number."); return }
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const identifier = channel === "EMAIL" ? emailInput.trim() : mobileNumber.trim()
+  const isIdentifierValid = channel === "EMAIL" ? EMAIL_RE.test(identifier) : /^[6-9]\d{9}$/.test(identifier)
+
+  const handleRequestOTP = async () => {
+    if (!isIdentifierValid) {
+      setErrorMsg(channel === "EMAIL" ? "Please enter a valid email address." : "Please enter a valid 10-digit Indian mobile number.")
+      return
+    }
     setLoading(true); setErrorMsg(""); setAttemptsRemaining(null)
     try {
-      const res = await apiRequestCustomerMobileOTP(targetMobile)
+      const res = await apiRequestCustomerOTP(identifier, channel)
       if (res.success) {
         setDevOtp(res.data?.dev_otp || "")
         setOtpDigits(["", "", "", "", "", ""])
@@ -221,6 +238,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
     setErrorMsg("")
 
     try {
+<<<<<<< HEAD
       let res = null
       try {
         // 1. Instant WebSocket verification
@@ -231,6 +249,10 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
       }
 
       if (res && res.success) {
+=======
+      const res = await apiVerifyCustomerOTP(identifier, channel, otpCode)
+      if (res.success) {
+>>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
         const { is_new_customer, customer_id } = res.data || {}
         setCustomerId(customer_id)
         if (typeof refreshMe === "function") await refreshMe()
@@ -260,11 +282,24 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
     }
   }
 
+  // The identifier NOT used to log in — required for a new customer.
+  const secondChannel = channel === "EMAIL" ? "PHONE" : "EMAIL"
+  const isSecondIdentifierValid = secondChannel === "EMAIL"
+    ? EMAIL_RE.test(secondIdentifier.trim())
+    : /^[6-9]\d{9}$/.test(secondIdentifier.trim())
+
   const handleCompleteProfile = async () => {
     if (!fullName.trim()) { setErrorMsg("Full Name is required."); return }
+    if (!isSecondIdentifierValid) {
+      setErrorMsg(secondChannel === "EMAIL" ? "Please enter a valid email address." : "Please enter a valid 10-digit Indian mobile number.")
+      return
+    }
     setLoading(true); setErrorMsg("")
     try {
-      const res = await apiCompleteCustomerProfile(customerId, fullName.trim(), email.trim() || null)
+      const profileArgs = secondChannel === "EMAIL"
+        ? { email: secondIdentifier.trim() }
+        : { phone: secondIdentifier.trim() }
+      const res = await apiCompleteCustomerProfile(customerId, fullName.trim(), profileArgs)
       if (res.success) { if (typeof refreshMe === "function") await refreshMe(); setStep(4) }
       else setErrorMsg(res.error?.message || "Failed to complete profile.")
     } catch (e) { setErrorMsg(e?.body?.error?.message || e?.message || "Error completing profile.") }
@@ -340,8 +375,8 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   }
 
   const STEP_TITLES = {
-    1: { title: "Welcome Back", sub: "Enter your mobile to receive an OTP" },
-    2: { title: "Verify OTP", sub: `Code sent to +91 ${mobileNumber}` },
+    1: { title: "Welcome Back", sub: channel === "EMAIL" ? "Enter your email to receive an OTP" : "Enter your mobile to receive an OTP" },
+    2: { title: "Verify OTP", sub: channel === "EMAIL" ? `Code sent to ${emailInput}` : `Code sent to +91 ${mobileNumber}` },
     3: { title: "Your Profile", sub: "Tell us your name to personalize" },
     4: { title: "Your Location", sub: "Help us find pros near you" },
   }
@@ -389,18 +424,36 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
               )}
             </AnimatePresence>
 
-            {/* STEP 1 — Mobile */}
+            {/* STEP 1 — Identify (phone or email) */}
             {step === 1 && (
               <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                <label className="cef-label">Mobile Number</label>
-                <div className="cef-input-wrap">
-                  <div className="cef-prefix"><span>🇮🇳</span><span>+91</span></div>
-                  <input type="tel" className="cef-input" maxLength={10} value={mobileNumber}
-                    onChange={e => { setMobileNumber(e.target.value.replace(/\D/g,"")); if(errorMsg) setErrorMsg("") }}
-                    placeholder="10-digit mobile number" autoFocus />
-                  {mobileNumber.length === 10 && <CheckCircle2 size={18} style={{ marginRight: 12, color: "#10b981", flexShrink: 0 }} />}
+                <div className="cef-tabs">
+                  <button type="button" className={`cef-tab ${channel === "PHONE" ? "active" : ""}`}
+                    onClick={() => { setChannel("PHONE"); setErrorMsg("") }}>Phone</button>
+                  <button type="button" className={`cef-tab ${channel === "EMAIL" ? "active" : ""}`}
+                    onClick={() => { setChannel("EMAIL"); setErrorMsg("") }}>Email</button>
                 </div>
-                <button className="cef-btn cef-btn-primary" disabled={loading || !/^[6-9]\d{9}$/.test(mobileNumber)} onClick={() => handleRequestOTP()} style={{ marginBottom: "1rem" }}>
+                {channel === "PHONE" ? (
+                  <>
+                    <label className="cef-label">Mobile Number</label>
+                    <div className="cef-input-wrap">
+                      <div className="cef-prefix"><span>🇮🇳</span><span>+91</span></div>
+                      <input type="tel" className="cef-input" maxLength={10} value={mobileNumber}
+                        onChange={e => { setMobileNumber(e.target.value.replace(/\D/g,"")); if(errorMsg) setErrorMsg("") }}
+                        placeholder="10-digit mobile number" autoFocus />
+                      {mobileNumber.length === 10 && <CheckCircle2 size={18} style={{ marginRight: 12, color: "#10b981", flexShrink: 0 }} />}
+                    </div>
+                  </>
+                ) : (
+                  <div className="cef-field-wrap">
+                    <label className="cef-label">Email Address</label>
+                    <Mail size={16} />
+                    <input type="email" className="cef-input-plain" value={emailInput}
+                      onChange={e => { setEmailInput(e.target.value); if(errorMsg) setErrorMsg("") }}
+                      placeholder="e.g. ramesh@example.com" autoFocus />
+                  </div>
+                )}
+                <button className="cef-btn cef-btn-primary" disabled={loading || !isIdentifierValid} onClick={() => handleRequestOTP()} style={{ marginBottom: "1rem" }}>
                   {loading ? <RefreshCcw size={16} className="animate-spin" /> : <><span>Continue</span><ChevronRight size={16} /></>}
                 </button>
                 <div className="cef-divider">or continue with</div>
@@ -421,7 +474,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
             {step === 2 && (
               <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
                 <button className="cef-back-btn" onClick={() => { setStep(1); setErrorMsg(""); setOtpDigits(["","","","","",""]); }}>
-                  <ArrowLeft size={14} /> Change Number (+91 {mobileNumber})
+                  <ArrowLeft size={14} /> {channel === "EMAIL" ? `Change Email (${emailInput})` : `Change Number (+91 ${mobileNumber})`}
                 </button>
                 {attemptsRemaining !== null && (
                   <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 12, padding: "0.65rem 1rem", marginBottom: "1rem", fontSize: "0.78rem", fontWeight: 700, color: "#c2410c", textAlign: "center" }}>
@@ -479,11 +532,17 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                     onChange={e => { setFullName(e.target.value); if(errorMsg) setErrorMsg("") }} placeholder="e.g. Ramesh Sharma" autoFocus />
                 </div>
                 <div className="cef-field-wrap">
-                  <label className="cef-label">Email Address <span style={{ color: "#94a3b8", fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>(Optional)</span></label>
-                  <Mail size={16} />
-                  <input type="email" className="cef-input-plain" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. ramesh@example.com" />
+                  <label className="cef-label">{secondChannel === "EMAIL" ? "Email Address *" : "Mobile Number *"}</label>
+                  {secondChannel === "EMAIL" ? <Mail size={16} /> : <Phone size={16} />}
+                  <input
+                    type={secondChannel === "EMAIL" ? "email" : "tel"}
+                    className="cef-input-plain"
+                    value={secondIdentifier}
+                    onChange={e => { setSecondIdentifier(e.target.value); if (errorMsg) setErrorMsg("") }}
+                    placeholder={secondChannel === "EMAIL" ? "e.g. ramesh@example.com" : "10-digit mobile number"}
+                  />
                 </div>
-                <button className="cef-btn cef-btn-primary" disabled={loading || !fullName.trim()} onClick={handleCompleteProfile}>
+                <button className="cef-btn cef-btn-primary" disabled={loading || !fullName.trim() || !isSecondIdentifierValid} onClick={handleCompleteProfile}>
                   {loading ? <RefreshCcw size={16} className="animate-spin" /> : <><span>Continue to Location</span><ChevronRight size={16} /></>}
                 </button>
               </motion.div>

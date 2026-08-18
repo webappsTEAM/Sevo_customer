@@ -410,7 +410,7 @@ SERVICES_STRUCTURE = [
                 "name": "Termite Control",
                 "slug": "termite-control",
                 "icon": "Shield",
-                "image": "/mockups/service_termite.png",
+                "image": "/mockups/termite_control.jpg",
                 "description": "Drill-fill-seal chemical barrier protection for doors, frames & wooden furniture",
                 "sort_order": 2,
                 "packages": [
@@ -421,7 +421,7 @@ SERVICES_STRUCTURE = [
                 "name": "Ants & Bed Bugs Control",
                 "slug": "ants-bed-bugs-control",
                 "icon": "ShieldCheck",
-                "image": "/mockups/service_bedbugs.png",
+                "image": "/mockups/bedbugs_control.jpg",
                 "description": "Targeted insecticidal spray for mattresses, cot cracks & wall crevices",
                 "sort_order": 3,
                 "packages": [

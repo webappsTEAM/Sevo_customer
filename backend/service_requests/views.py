@@ -148,11 +148,19 @@ class CatalogCategoryListView(APIView):
         from .models import CatalogCategory
         from .serializers import CatalogCategorySerializer
         from django.core.cache import cache
+        from django.conf import settings
 
-        data = cache.get("catalog_categories_list")
-        if data is None:
-            cats = CatalogCategory.objects.all().order_by('name')
-            data = CatalogCategorySerializer(cats, many=True).data
+        use_cache = not getattr(settings, 'DEBUG', False)
+        
+        if use_cache:
+            data = cache.get("catalog_categories_list")
+            if data is not None:
+                return Response({"success": True, "data": data})
+
+        cats = CatalogCategory.objects.all().order_by('name')
+        data = CatalogCategorySerializer(cats, many=True).data
+        
+        if use_cache:
             try:
                 cache.set("catalog_categories_list", data, timeout=600)
             except Exception:
@@ -166,17 +174,25 @@ class CatalogServiceListView(APIView):
         from .models import Package
         from .serializers import CatalogServiceSerializer
         from django.core.cache import cache
+        from django.conf import settings
 
         cat_id = request.GET.get('category_id') or ''
         service_slug = request.GET.get('service_slug') or ''
         status_filter = request.GET.get('status') or ''
+<<<<<<< HEAD
 
+=======
+        
+        use_cache = not getattr(settings, 'DEBUG', False)
+>>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
         cache_key = f"catalog_services_list_{cat_id}_{service_slug}_{status_filter}"
-        cached_res = cache.get(cache_key)
-        if cached_res is not None:
-            return Response(cached_res)
+        
+        if use_cache:
+            cached_res = cache.get(cache_key)
+            if cached_res is not None:
+                return Response(cached_res)
 
-        qs = Package.objects.select_related("service").all().order_by('name')
+        qs = Package.objects.select_related("service", "service__category").all().order_by('name')
         if cat_id:
             qs = qs.filter(service__category_id=cat_id)
         if service_slug:
@@ -191,10 +207,12 @@ class CatalogServiceListView(APIView):
             "currency": "INR",
             "currency_symbol": "₹"
         }
-        try:
-            cache.set(cache_key, res_payload, timeout=600)
-        except Exception:
-            pass
+        
+        if use_cache:
+            try:
+                cache.set(cache_key, res_payload, timeout=600)
+            except Exception:
+                pass
         return Response(res_payload)
 
 
@@ -256,9 +274,9 @@ class BookingCreateView(APIView):
             phone_clean = str(request.data.get("phone") or "").strip()
             email_clean = str(request.data.get("email") or "").strip().lower()
             if phone_clean:
-                customer_user = User.objects.filter(phone=phone_clean, role=User.Role.CUSTOMER).first()
+                customer_user = User.objects.filter(phone=phone_clean).first()
             if not customer_user and email_clean:
-                customer_user = User.objects.filter(email__iexact=email_clean, role=User.Role.CUSTOMER).first()
+                customer_user = User.objects.filter(email__iexact=email_clean).first()
 
             if not customer_user and (phone_clean or email_clean):
                 cust_name = str(request.data.get("customer_name") or "").strip()
@@ -274,14 +292,20 @@ class BookingCreateView(APIView):
                 if User.objects.filter(username=uname).exists():
                     uname = f"{uname_base}_{uuid.uuid4().hex[:6]}"
 
-                customer_user = User.objects.create(
-                    username=uname,
-                    phone=phone_clean,
-                    email=email_clean,
-                    first_name=first_name,
-                    last_name=last_name,
-                    role=User.Role.CUSTOMER
-                )
+                try:
+                    customer_user = User.objects.create(
+                        username=uname,
+                        phone=phone_clean or None,
+                        email=email_clean or "",
+                        first_name=first_name,
+                        last_name=last_name,
+                        role=getattr(User.Role, 'CUSTOMER', 'CUSTOMER')
+                    )
+                except Exception:
+                    if phone_clean:
+                        customer_user = User.objects.filter(phone=phone_clean).first()
+                    if not customer_user and email_clean:
+                        customer_user = User.objects.filter(email__iexact=email_clean).first()
 
         sr = serializer.save(
             company=company,

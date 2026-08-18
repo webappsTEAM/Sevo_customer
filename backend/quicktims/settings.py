@@ -92,13 +92,20 @@ if USE_POSTGRES:
         _connection_opts.append(f"-c statement_timeout={_stmt_timeout}")
     _db_options["options"] = " ".join(_connection_opts)
 
+    _db_host = os.getenv("DB_HOST", "localhost")
+    if _db_host == "aws-0-ap-south-1.pooler.supabase.com":
+        try:
+            import socket
+            socket.gethostbyname(_db_host)
+        except Exception:
+            _db_host = "3.111.105.85"
+
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
             "NAME": os.getenv("DB_NAME", "postgres"),
             "USER": os.getenv("DB_USER", "postgres"),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
-            "HOST": os.getenv("DB_HOST", "localhost"),
+            "HOST": _db_host,
             "PORT": os.getenv("DB_PORT", "5432"),
             "OPTIONS": _db_options,
             "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "0")),

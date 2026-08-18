@@ -1021,35 +1021,39 @@ export function LandingPage() {
   const [activeLocationLabel, setActiveLocationLabel] = useState(() => {
     return localStorage.getItem("calservice_user_location") || null;
   })
-  const [packagesData, setPackagesData] = useState({})
+  const [packagesData, setPackagesData] = useState(null)
 
   useEffect(() => {
     async function loadCatalog() {
+      console.log("DEBUG: [LandingPage] loadCatalog starting...");
       try {
         const svcRes = await apiRequest("/catalog/services/")
+        console.log("DEBUG: [LandingPage] loadCatalog svcRes received success =", svcRes.success, svcRes);
         if (svcRes.success) {
           const pkgs = {}
           svcRes.data.forEach(s => {
             const cid = s.category.toString()
             if (!pkgs[cid]) pkgs[cid] = []
             pkgs[cid].push({
+              ...s,
               id: s.id.toString(),
-              name: s.name,
+              category: s.category.toString(),
               price: parseFloat(s.price),
               priceStr: "₹" + s.price,
               duration: s.duration || "1 hr",
               payment_policy: s.payment_policy,
-              image: s.image,
-              includes: s.includes || [],
-              excludes: s.excludes || [],
+              image: s.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+              includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
+              excludes: Array.isArray(s.excludes) ? s.excludes : [],
               popular: !!s.popular,
               tag: s.tag || ""
             })
           })
+          console.log("DEBUG: [LandingPage] loadCatalog pkgs mapped successfully:", pkgs);
           setPackagesData(pkgs)
         }
       } catch (err) {
-        console.error(err)
+        console.error("DEBUG: [LandingPage] loadCatalog failed with error:", err)
       }
     }
     loadCatalog()
@@ -1279,6 +1283,10 @@ export function LandingPage() {
       window.removeEventListener("keydown", handleKeyDown)
       document.body.style.overflow = ""
     }
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+      document.body.style.overflow = ""
+    }
   }, [isGoodsModalOpen, isElecModalOpen, isAcModalOpen, isHomePestModalOpen, isForYouModalOpen, isFoodHealthModalOpen, isHomeServicesCombinedModalOpen])
 
   const SEARCH_ROTATING_SERVICES = useMemo(() => [
@@ -1475,7 +1483,7 @@ export function LandingPage() {
                   onClose={handleCloseCategory}
                   onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
                 />
-              ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
+              ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || activeCategory.slug === "paintings" || String(activeCategory.id) === "17" || activeCategory.name?.toLowerCase() === "painting" || activeCategory.name?.toLowerCase() === "paintings") ? (
                 <PaintingPackageModal
                   category={activeCategory}
                   cart={modalCart}
@@ -1493,7 +1501,7 @@ export function LandingPage() {
                     navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
                   }}
                 />
-              ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+              ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.slug === "masons" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase() === "mason" || activeCategory.name?.toLowerCase() === "masonry") ? (
                 <MasonPackageModal
                   category={activeCategory}
                   cart={modalCart}
@@ -1844,14 +1852,14 @@ export function LandingPage() {
                     id="homepest-modal-title"
                     className="text-lg sm:text-xl font-extrabold text-slate-900"
                   >
-                    Cleaning &amp; Pest Control
+                    Home Cleaning &amp; Pest Control
                   </h3>
                 </div>
 
                 {/* Cleaning Section */}
                 <div className="mb-6">
                   <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                    Cleaning
+                    Home Cleaning
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
                     {HOME_SERVICES_SUB.map((item) => (
@@ -2493,7 +2501,7 @@ export function LandingPage() {
             onClose={() => navigate("/home")}
             onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
           />
-        ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
+        ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || activeCategory.slug === "paintings" || String(activeCategory.id) === "17" || activeCategory.name?.toLowerCase() === "painting" || activeCategory.name?.toLowerCase() === "paintings") ? (
           <PaintingPackageModal
             category={activeCategory}
             cart={modalCart}
@@ -2511,7 +2519,7 @@ export function LandingPage() {
               navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
             }}
           />
-        ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+        ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.slug === "masons" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase() === "mason" || activeCategory.name?.toLowerCase() === "masonry") ? (
           <MasonPackageModal
             category={activeCategory}
             cart={modalCart}
@@ -2602,14 +2610,14 @@ export function LandingPage() {
                   id="homepest-modal-title"
                   className="text-lg sm:text-xl font-extrabold text-slate-900"
                 >
-                  Cleaning &amp; Pest Control
+                  Home Cleaning &amp; Pest Control
                 </h3>
               </div>
 
               {/* Cleaning Section */}
               <div className="mb-6">
                 <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                  Cleaning
+                  Home Cleaning
                 </h4>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
                   {HOME_SERVICES_SUB.map((item) => (
@@ -3714,6 +3722,8 @@ export function LandingPage() {
 
                       if (itemsList.length === 0) return
 
+                      document.body.style.overflow = ""
+                      setIsFoodHealthModalOpen(false)
                       setSelectedFoodSubModuleId(null)
                       navigate(routes.booking_checkout, {
                         state: {
@@ -3722,9 +3732,12 @@ export function LandingPage() {
                             name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
                             isQuickCommerce: true,
                             deliveryTime: "15-25 mins",
+                            foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
                           },
                           cart: itemsList,
                           isQuickCommerce: true,
+                          foodCart: foodCart,
+                          foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
                         }
                       })
                     }}
@@ -4172,7 +4185,7 @@ export function LandingPage() {
           onClose={() => navigate("/home")}
           onCheckout={(customCart) => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: resolveCartArg(customCart) } })}
         />
-      ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || String(activeCategory.id) === "painting" || activeCategory.name?.toLowerCase() === "painting") ? (
+      ) : (activeCategory.id === "painting" || activeCategory.slug === "painting" || activeCategory.slug === "paintings" || String(activeCategory.id) === "17" || activeCategory.name?.toLowerCase() === "painting" || activeCategory.name?.toLowerCase() === "paintings") ? (
         <PaintingPackageModal
           category={activeCategory}
           cart={modalCart}
@@ -4190,7 +4203,7 @@ export function LandingPage() {
             navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
           }}
         />
-      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || String(activeCategory.id) === "mason" || activeCategory.name?.toLowerCase() === "mason") ? (
+      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.slug === "masons" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase() === "mason" || activeCategory.name?.toLowerCase() === "masonry") ? (
         <MasonPackageModal
           category={activeCategory}
           cart={modalCart}

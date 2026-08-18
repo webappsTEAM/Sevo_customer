@@ -37,7 +37,7 @@ const SOFA_CLEANING_SERVICES = [
     price: 329,
     duration: "1 hr",
     description: "Deep foam cleaning and vacuuming to revitalize fabric sofas.",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+    image: "/mockups/sofa_cleaning.png",
     includes: [
       "Foam cleaning of sofa seats and backrests",
       "Deep vacuuming to remove dust and dirt",
@@ -51,7 +51,7 @@ const SOFA_CLEANING_SERVICES = [
     price: 599,
     duration: "1.5 hrs",
     description: "Complete foam cleaning of fabric sofas including all loose cushions.",
-    image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=300&q=80&fit=crop",
+    image: "/mockups/sofa_cleaning.png",
     includes: [
       "Foam cleaning of sofa seats and backrests",
       "Deep wet & dry vacuuming",
@@ -65,7 +65,7 @@ const SOFA_CLEANING_SERVICES = [
     price: 349,
     duration: "1 hr",
     description: "Gentle cleaning and conditioning to restore leather shine.",
-    image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop",
+    image: "/mockups/leather_sofa_cleaning.png",
     includes: [
       "Gentle cleaning of leather sofa surfaces",
       "Removal of dust and everyday dirt",
@@ -79,7 +79,7 @@ const SOFA_CLEANING_SERVICES = [
     price: 619,
     duration: "1.5 hrs",
     description: "Comprehensive leather cleaning and conditioning including cushions.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    image: "/mockups/leather_sofa_cleaning.png",
     includes: [
       "Gentle cleaning of leather sofa seats and backrests",
       "Cleaning of loose/removable leather cushions",
@@ -96,7 +96,7 @@ const MATTRESS_SERVICES = [
     price: 389,
     duration: "1 hr",
     description: "Deep vacuuming and shampoo wash to remove dust mites and stains.",
-    image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80&fit=crop",
+    image: "/mockups/mattress_deep_cleaning.png",
     includes: [
       "Deep vacuuming to remove dust and dirt",
       "Shampoo cleaning of the mattress surface",
@@ -110,7 +110,7 @@ const MATTRESS_SERVICES = [
     price: 499,
     duration: "1.5 hrs",
     description: "Complete mattress shampooing and pillow deep cleaning.",
-    image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=300&q=80&fit=crop",
+    image: "/mockups/mattress_pillow_refresh.png",
     includes: [
       "Deep vacuuming of mattress and pillows",
       "Shampoo cleaning for visible stains",
@@ -127,7 +127,7 @@ const CARPET_SERVICES = [
     price: 369,
     duration: "1 hr",
     description: "Deep foam shampoo wash to extract deep-seated dirt from carpets.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    image: "/mockups/carpet_cleaning.png",
     includes: [
       "Removal of accumulated dust particles, dirt",
       "Foam based shampooing on the carpet using a sponge",
@@ -143,11 +143,9 @@ const SOFA_ADDONS_SERVICES = [
     price: 449,
     duration: "30 mins",
     description: "Detailed dining table and chairs surface cleaning and grease removal.",
-    image: "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=600&q=80&fit=crop",
     includes: [
-      "Surface cleaning & sanitation of table and chairs",
-      "Removal of food stains & greasy layers",
-      "Wiping & drying of tabletop"
+      "Surface cleaning, sanitation, and wood/glass polishing"
     ]
   },
   {
@@ -156,11 +154,9 @@ const SOFA_ADDONS_SERVICES = [
     price: 89,
     duration: "15 mins",
     description: "Detailed ceiling fan dusting and blade wipe down.",
-    image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop",
+    image: "/mockups/ceiling_fan.png",
     includes: [
-      "Fan blade cleaning",
-      "Motor housing & cover dusting",
-      "Dust & surface grime removal"
+      "Fan blades, motor housing, and cover deep dusting"
     ]
   },
   {
@@ -169,11 +165,9 @@ const SOFA_ADDONS_SERVICES = [
     price: 89,
     duration: "10 mins",
     description: "Thorough wiping and dusting of doors to remove fingerprints and dirt.",
-    image: "/mockups/bath_door.png",
+    image: "/mockups/door_cleaning.png",
     includes: [
-      "Wiping of door panels and frames",
-      "Removal of smudges, dust & fingerprint marks",
-      "Handle sanitization"
+      "Door frames, panels, hinges dusting, and handle polishing"
     ]
   },
   {
@@ -185,7 +179,7 @@ const SOFA_ADDONS_SERVICES = [
     options: "3 options",
     duration: "1.5 hrs",
     description: "Thorough interior defrosting and rack-by-rack deep cleaning.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&q=80&fit=crop",
+    image: "/mockups/appliance_cleaning_thumb.png",
     includes: [
       "Interior & exterior cleaning",
       "Shelves, trays & compartments cleaning",
@@ -216,7 +210,7 @@ const SOFA_ADDONS_SERVICES = [
         price: 799,
         rating: "4.80",
         reviews: "9K reviews",
-        image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+        image: "/mockups/appliance_cleaning_thumb.png",
         duration: "2 hrs"
       }
     ]
@@ -227,11 +221,9 @@ const SOFA_ADDONS_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Washing and scrubbing of balcony floor and railings.",
-    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    image: "/mockups/balcony_cleaning.png",
     includes: [
-      "Balcony floor washing & scrubbing",
-      "Dusting of railing and windows",
-      "Clearance of cobwebs and dust bunnies"
+      "Balcony floor washing, scrubbing, and railing dusting"
     ]
   },
   {
@@ -240,11 +232,9 @@ const SOFA_ADDONS_SERVICES = [
     price: 549,
     duration: "50 mins",
     description: "Deep floor scrubbing and mesh cleaning for large balconies.",
-    image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=300&q=80&fit=crop",
+    image: "/mockups/balcony_cleaning.png",
     includes: [
-      "Deep floor scrubbing & balcony washing",
-      "Railing, windows, and mesh cleaning",
-      "Thorough dust and dirt clearance"
+      "Balcony floor washing, scrubbing, and railing dusting"
     ]
   }
 ];
@@ -317,7 +307,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
             item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
             if (Array.isArray(parentDbMatch.tools) && parentDbMatch.tools.length > 0) item.tools = parentDbMatch.tools;
             if (Array.isArray(parentDbMatch.ready) && parentDbMatch.ready.length > 0) item.ready = parentDbMatch.ready;
-            if (Array.isArray(parentDbMatch.reviews) && parentDbMatch.reviews.length > 0) item.reviews = parentDbMatch.reviews;
+            if (Array.isArray(parentDbMatch.reviews) && parentDbMatch.reviews.length > 0) item.reviews_list = parentDbMatch.reviews;
             if (Array.isArray(parentDbMatch.faqs) && parentDbMatch.faqs.length > 0) item.faqs = parentDbMatch.faqs;
           }
 
@@ -333,7 +323,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
               };
               if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) updatedSub.tools = dbMatch.tools;
               if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) updatedSub.ready = dbMatch.ready;
-              if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) updatedSub.reviews = dbMatch.reviews;
+              if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) updatedSub.reviews_list = dbMatch.reviews;
               if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) updatedSub.faqs = dbMatch.faqs;
               return updatedSub;
             }
@@ -352,7 +342,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
             item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
             if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
             if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
-            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews = dbMatch.reviews;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
             if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
           }
         }
@@ -366,7 +356,10 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
 
   const activeServices = currentServicesList.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.includes.some(inc => inc.toLowerCase().includes(searchQuery.toLowerCase()))
+    (Array.isArray(s.includes) && s.includes.some(inc => {
+      const text = typeof inc === "string" ? inc : (inc?.text || "");
+      return text.toLowerCase().includes(searchQuery.toLowerCase());
+    }))
   );
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -460,12 +453,15 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
 
                       {service.includes && service.includes.length > 0 && (
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
-                          {service.includes.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2">
-                              <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                              <span>{item}</span>
-                            </li>
-                          ))}
+                          {service.includes
+                            .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false))
+                            .map(inc => typeof inc === "string" ? inc : inc.text)
+                            .map((item, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="text-emerald-600 font-bold mt-0.5">✓</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
                         </ul>
                       )}
                       <button 
@@ -747,9 +743,11 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
                 {(() => {
                   const id = selectedServiceDetails.id;
-                  const rawReviews = (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0 && (!SOFA_DETAIL_DATA[id]?.reviews || selectedServiceDetails.reviews.length >= SOFA_DETAIL_DATA[id].reviews.length))
-                    ? selectedServiceDetails.reviews
-                    : (SOFA_DETAIL_DATA[id]?.reviews || []);
+                  const rawReviews = (Array.isArray(selectedServiceDetails.reviews_list) && selectedServiceDetails.reviews_list.length > 0)
+                    ? selectedServiceDetails.reviews_list
+                    : (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0 && (!SOFA_DETAIL_DATA[id]?.reviews || selectedServiceDetails.reviews.length >= SOFA_DETAIL_DATA[id].reviews.length))
+                      ? selectedServiceDetails.reviews
+                      : (SOFA_DETAIL_DATA[id]?.reviews || []);
                   const reviews = rawReviews.filter(r => r.enabled !== false);
                   return reviews.map((rev, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">

@@ -57,54 +57,31 @@ export async function apiVerify2FA(code) {
   })
 }
 
-export async function apiRequestCustomerEmailOTP(email) {
-  return fetchJSON("/auth/customer/email/request-otp/", {
-    method: "POST",
-    body: JSON.stringify({ email })
-  })
-}
+// ── Unified customer OTP login (phone or email, one mechanism) ─────────────
+// Single canonical pair — replaces the old apiRequestCustomerEmailOTP /
+// apiVerifyCustomerEmailOTP / apiRequestCustomerPhoneOTP /
+// apiVerifyCustomerPhoneOTP / apiRequestCustomerMobileOTP /
+// apiVerifyCustomerMobileOTP functions, which called three separate,
+// inconsistent backend OTP implementations.
 
-export async function apiVerifyCustomerEmailOTP(email, otp) {
-  return fetchJSON("/auth/customer/email/verify-otp/", {
-    method: "POST",
-    body: JSON.stringify({ email, otp })
-  })
-}
-
-export async function apiRequestCustomerPhoneOTP(phone) {
-  return fetchJSON("/auth/customer/phone/request-otp/", {
-    method: "POST",
-    body: JSON.stringify({ phone })
-  })
-}
-
-export async function apiVerifyCustomerPhoneOTP(phone, otp) {
-  return fetchJSON("/auth/customer/phone/verify-otp/", {
-    method: "POST",
-    body: JSON.stringify({ phone, otp })
-  })
-}
-
-// ── Prompt 2 Standardized OTP & Profile API Calls ───────────────────────────
-
-export async function apiRequestCustomerMobileOTP(mobile_number) {
+export async function apiRequestCustomerOTP(identifier, channel) {
   return fetchJSON("/auth/customer/otp/request/", {
     method: "POST",
-    body: JSON.stringify({ mobile_number })
+    body: JSON.stringify({ identifier, channel })
   })
 }
 
-export async function apiVerifyCustomerMobileOTP(mobile_number, otp_code) {
+export async function apiVerifyCustomerOTP(identifier, channel, otp_code) {
   return fetchJSON("/auth/customer/otp/verify/", {
     method: "POST",
-    body: JSON.stringify({ mobile_number, otp_code })
+    body: JSON.stringify({ identifier, channel, otp_code })
   })
 }
 
-export async function apiCompleteCustomerProfile(customer_id, full_name, email = null) {
+export async function apiCompleteCustomerProfile(customer_id, full_name, { email = null, phone = null } = {}) {
   return fetchJSON("/auth/customer/profile/complete/", {
     method: "POST",
-    body: JSON.stringify({ customer_id, full_name, email })
+    body: JSON.stringify({ customer_id, full_name, email, phone })
   })
 }
 
