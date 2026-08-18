@@ -13553,13 +13553,13 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     },
     pest_control: {
       "Termite Control": [
-        { id: "pest-term-1", name: "Termite Drill & Injection Guard", price: 2499, duration: "2 hrs", badge: "5-Yr Protection", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Precision drilling along wall bases, chemical pressure injection, and color-matched hole sealing.", includes: ["Wall base chemical injection", "Wood furniture chemical spray", "5-year warranty certificate"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "pest-term-1", name: "Termite Drill & Injection Guard", price: 2499, duration: "2 hrs", badge: "5-Yr Protection", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Precision drilling along wall bases, chemical pressure injection, and color-matched hole sealing.", includes: ["Wall base chemical injection", "Wood furniture chemical spray", "5-year warranty certificate"], image: "/mockups/termite_control.jpg" }
       ],
       "Cockroach & Ant Control": [
         { id: "pest-roach-1", name: "Herbal Gel & Odorless Spray", price: 799, duration: "45 mins", badge: "Odorless & Safe", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Herbal bait gel dot application in kitchen cabinets, odorless spray for drains & skirting boards.", includes: ["Kitchen cabinet gel baiting", "Bathroom drain spray", "90-day protection"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" }
       ],
       "Bed Bug Treatment": [
-        { id: "pest-bug-1", name: "2-Stage Bed Bug Steam & Chemical", price: 1499, duration: "1.5 hrs", badge: "Double Stage", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "High-temperature steam extraction of mattresses & sofas followed by residual chemical spray.", includes: ["Mattress heat steam treatment", "Residual chemical spray", "2nd visit included"], image: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&q=80&fit=crop" }
+        { id: "pest-bug-1", name: "2-Stage Bed Bug Steam & Chemical", price: 1499, duration: "1.5 hrs", badge: "Double Stage", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "High-temperature steam extraction of mattresses & sofas followed by residual chemical spray.", includes: ["Mattress heat steam treatment", "Residual chemical spray", "2nd visit included"], image: "/mockups/bedbugs_control.jpg" }
       ]
     },
     goods_transport: {
@@ -18492,7 +18492,7 @@ const FULL_KITCHEN_PACKAGES = [
     price: 1959,
     duration: "3 hrs",
     description: "Deep steam sanitization of kitchen counters, cabinets, chimney, and hobs.",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1556912173-3bb406ef7e77?w=600&q=80&fit=crop",
     includes: [
       "Includes everything in Basic, plus:",
       "Cabinet interior & exterior cleaning",
@@ -18506,7 +18506,7 @@ const FULL_KITCHEN_PACKAGES = [
     price: 849,
     duration: "2.5 hrs",
     description: "Thorough deep cleaning of empty kitchen spaces before moving in or after moving out.",
-    image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=600&q=80&fit=crop",
     includes: [
       "Thorough degreasing of wall tiles, countertops, and exhaust fans",
       "Detailed cleaning of kitchen floors, windows, switchboards, and cabinets (exterior)",
@@ -18727,7 +18727,7 @@ const APPLIANCE_SERVICES = [
     price: 99,
     duration: "15 mins",
     description: "Sandwich maker deep cleaning to remove charred food spills.",
-    image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=600&q=80&fit=crop",
+    image: "/mockups/sandwich_griller.png",
     includes: [
       "Deep cleaning of plates to remove stuck food & char marks",
       "Exterior wipe to remove oil, grease & food stains"
@@ -18755,7 +18755,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Detailed glass panel and frame grease cleaning.",
-    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=300&q=80&fit=crop",
+    image: "/mockups/window_cleaning.png",
     includes: [
       "Glass panes dusting and wet wiping",
       "Window frames, sill, and tracks cleaning",
@@ -18768,7 +18768,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 449,
     duration: "30 mins",
     description: "Detailed dining table surface cleaning and grease removal.",
-    image: "https://images.unsplash.com/photo-1577140917170-285929fb55b7?w=300&q=80&fit=crop",
+    image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=600&q=80&fit=crop",
     includes: [
       "Surface cleaning & sanitation",
       "Removal of food stains & greasy layers",
@@ -18807,7 +18807,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 399,
     duration: "30 mins",
     description: "Washing and scrubbing of balcony floor and railings.",
-    image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=300&q=80&fit=crop",
+    image: "/mockups/balcony_cleaning.png",
     includes: [
       "Balcony floor washing & scrubbing",
       "Dusting of railing and windows",
@@ -18820,7 +18820,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 549,
     duration: "50 mins",
     description: "Deep floor scrubbing and mesh cleaning for large balconies.",
-    image: "https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=300&q=80&fit=crop",
+    image: "/mockups/balcony_cleaning.png",
     includes: [
       "Deep floor scrubbing & balcony washing",
       "Railing, windows, and mesh cleaning",
@@ -18833,7 +18833,7 @@ const QUICK_EXTRA_SERVICES = [
     price: 89,
     duration: "10 mins",
     description: "Thorough wiping and dusting of doors to remove fingerprints and dirt.",
-    image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+    image: "/mockups/door_cleaning.png",
     includes: [
       "Wiping of door panels and frames",
       "Removal of smudges, dust & fingerprint marks",
@@ -19822,15 +19822,17 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                         <span className="text-slate-500 font-semibold">{service.duration}</span>
                       </div>
 
-                      {activeTab !== "addons" && service.includes && service.includes.length > 0 && (
+                      {service.includes && service.includes.length > 0 && (
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
                           {(() => {
                             const isBasic = service.id === "occ-basic";
                             const isDeep = service.id === "occ-deep";
                             const isExpanded = isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true);
-                            const displayIncludes = (isBasic || isDeep) && !isExpanded
+                            const displayIncludes = ((isBasic || isDeep) && !isExpanded
                               ? service.includes.slice(0, 3)
-                              : service.includes;
+                              : service.includes)
+                              .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false))
+                              .map(inc => typeof inc === "string" ? inc : inc.text);
 
                             return (
                               <>
@@ -20139,9 +20141,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const tools = (Array.isArray(selectedServiceDetails.tools) && selectedServiceDetails.tools.length > 0)
+                const tools = ((Array.isArray(selectedServiceDetails.tools) && selectedServiceDetails.tools.length > 0)
                   ? selectedServiceDetails.tools
-                  : (detail.tools || []);
+                  : (detail.tools || []))
+                  .filter(t => typeof t === "string" ? true : (t?.enabled !== false))
+                  .map(t => typeof t === "string" ? t : (t.text || ""));
                 if (tools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -20162,9 +20166,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               {(() => {
                 const id = selectedServiceDetails.id;
                 const detail = SERVICE_DETAIL_DATA[id] || {};
-                const readyList = (Array.isArray(selectedServiceDetails.ready) && selectedServiceDetails.ready.length > 0)
+                const readyList = ((Array.isArray(selectedServiceDetails.ready) && selectedServiceDetails.ready.length > 0)
                   ? selectedServiceDetails.ready
-                  : (detail.ready || []);
+                  : (detail.ready || []))
+                  .filter(r => typeof r === "string" ? true : (r?.enabled !== false))
+                  .map(r => typeof r === "string" ? r : (r.text || ""));
                 if (readyList.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -20187,9 +20193,10 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 {(() => {
                   const id = selectedServiceDetails.id;
                   const detail = SERVICE_DETAIL_DATA[id] || {};
-                  const reviews = (Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0)
+                  const reviews = ((Array.isArray(selectedServiceDetails.reviews) && selectedServiceDetails.reviews.length > 0)
                     ? selectedServiceDetails.reviews
-                    : (detail.reviews || []);
+                    : (detail.reviews || []))
+                    .filter(r => r.enabled !== false);
                   return reviews.map((rev, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
                       <div className="flex items-center justify-between">
@@ -20214,9 +20221,10 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   {(() => {
                     const id = selectedServiceDetails.id;
                     const detail = SERVICE_DETAIL_DATA[id] || {};
-                    const faqs = (Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0)
+                    const faqs = ((Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0)
                       ? selectedServiceDetails.faqs
-                      : (detail.faqs || []);
+                      : (detail.faqs || []))
+                      .filter(f => f.enabled !== false);
                     return faqs.map((faq, idx) => {
                       const isFaqOpen = activeFaq === idx;
                       return (

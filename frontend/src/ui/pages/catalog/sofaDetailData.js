@@ -1,4 +1,4 @@
-﻿// Shared sofa/mattress/carpet service detail data used in both admin Customise modal and customer app modal
+// Shared sofa/mattress/carpet service detail data used in both admin Customise modal and customer app modal
 export const SOFA_DETAIL_DATA = {
   "quick-fan-clean": {
     tools: ["Extension dusters", "Microfiber cloths", "Mild cleaning sprays"],
@@ -106,8 +106,8 @@ export const SOFA_DETAIL_DATA = {
     ]
   },
   "quick-dining-table": {
-    tools: ["Heavy duty degreasers / polishers", "Microfiber detailing cloths", "Soft detailing brushes"],
-    ready: ["Clear all items from the dining table", "Ensure access to water and power outlets"],
+    tools: ["Premium wood polish", "Sanitizing sprays", "Soft microfiber cloths"],
+    ready: ["Clear all plates, cutlery, and table runners from the dining table"],
     reviews: [
       { name: "Rohit P.", rating: "4.9", text: '"Very detailed cleaning of the dining chairs as well. Stains are completely gone!"' },
       { name: "Kunal M.", rating: "4.8", text: '"Cleaned the glass table top spotless. The wooden chairs look polished."' },

@@ -1854,14 +1854,14 @@ export function LandingPage() {
                     id="homepest-modal-title"
                     className="text-lg sm:text-xl font-extrabold text-slate-900"
                   >
-                    Cleaning &amp; Pest Control
+                    Home Cleaning &amp; Pest Control
                   </h3>
                 </div>
 
                 {/* Cleaning Section */}
                 <div className="mb-6">
                   <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                    Cleaning
+                    Home Cleaning
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
                     {HOME_SERVICES_SUB.map((item) => (
@@ -2612,14 +2612,14 @@ export function LandingPage() {
                   id="homepest-modal-title"
                   className="text-lg sm:text-xl font-extrabold text-slate-900"
                 >
-                  Cleaning &amp; Pest Control
+                  Home Cleaning &amp; Pest Control
                 </h3>
               </div>
 
               {/* Cleaning Section */}
               <div className="mb-6">
                 <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
-                  Cleaning
+                  Home Cleaning
                 </h4>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
                   {HOME_SERVICES_SUB.map((item) => (

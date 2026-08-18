@@ -16,96 +16,103 @@ SERVICES_DATA = {
         "desc": "Sofa, mattress, carpet deep cleaning & sanitization.",
         "order": 1,
         "packages": [
-            {
-                "slug": "fabric-sofa-clean",
-                "name": "Fabric Sofa Cleaning",
-                "price": 329,
-                "duration": "1 hr",
-                "description": "Deep foam cleaning and vacuuming to revitalize fabric sofas.",
-                "includes": [
-                    "Foam cleaning of sofa seats and backrests",
-                    "Deep vacuuming to remove dust and dirt",
-                    "Cleaning of light stains and marks",
-                    "Loose/removable cushions not included"
-                ]
-            },
-            {
-                "slug": "fabric-sofa-cushion-clean",
-                "name": "Fabric Sofa & Cushion Cleaning",
-                "price": 599,
-                "duration": "1.5 hrs",
-                "description": "Complete foam cleaning of fabric sofas including all loose cushions.",
-                "includes": [
-                    "Foam cleaning of sofa seats and backrests",
-                    "Deep wet & dry vacuuming",
-                    "Cleaning of light stains and marks",
-                    "Loose/removable sofa cushions included"
-                ]
-            },
-            {
-                "slug": "leather-sofa-clean",
-                "name": "Leather Sofa Cleaning",
-                "price": 349,
-                "duration": "1 hr",
-                "description": "Gentle cleaning and conditioning to restore leather shine.",
-                "includes": [
-                    "Gentle cleaning of leather sofa surfaces",
-                    "Removal of dust and everyday dirt",
-                    "Cleaning of seats and backrests",
-                    "Leather-safe conditioning"
-                ]
-            },
-            {
-                "slug": "leather-sofa-cushion-clean",
-                "name": "Leather Sofa & Cushion Cleaning",
-                "price": 619,
-                "duration": "1.5 hrs",
-                "description": "Comprehensive leather cleaning and conditioning including cushions.",
-                "includes": [
-                    "Gentle cleaning of leather sofa seats and backrests",
-                    "Cleaning of loose/removable leather cushions",
-                    "Leather-safe conditioning",
-                    "Soft finishing for a clean appearance"
-                ]
-            },
-            {
-                "slug": "mattress-deep",
-                "name": "Mattress Deep Cleaning",
-                "price": 389,
-                "duration": "1 hr",
-                "description": "Deep vacuuming and shampoo wash to remove dust mites and stains.",
-                "includes": [
-                    "Deep vacuuming to remove dust and dirt",
-                    "Shampoo cleaning of the mattress surface",
-                    "Treatment for common stains and marks",
-                    "Wet vacuuming to remove dirt and moisture"
-                ]
-            },
-            {
-                "slug": "mattress-pillow-refresh",
-                "name": "Mattress & Pillow Refresh",
-                "price": 499,
-                "duration": "1.5 hrs",
-                "description": "Complete mattress shampooing and pillow deep cleaning.",
-                "includes": [
-                    "Deep vacuuming of mattress and pillows",
-                    "Shampoo cleaning for visible stains",
-                    "Odour and dirt removal",
-                    "Wet vacuuming for a fresher finish"
-                ]
-            },
-            {
-                "slug": "carpet-deep",
-                "name": "Carpet Cleaning",
-                "price": 369,
-                "duration": "1 hr",
-                "description": "Deep foam shampoo wash to extract deep-seated dirt from carpets.",
-                "includes": [
-                    "Removal of accumulated dust particles, dirt",
-                    "Foam based shampooing on the carpet using a sponge",
-                    "Vacuuming & wiping shampoo"
-                ]
-            }
+    {
+        "slug": "fabric-sofa-clean",
+        "name": "Fabric Sofa Cleaning",
+        "price": 329,
+        "duration": "1 hr",
+        "description": "Deep foam cleaning and vacuuming to revitalize fabric sofas.",
+        "image": "/mockups/sofa_cleaning.png",
+        "includes": [
+            "Foam cleaning of sofa seats and backrests",
+            "Deep vacuuming to remove dust and dirt",
+            "Cleaning of light stains and marks",
+            "Loose/removable cushions not included"
+        ]
+    },
+    {
+        "slug": "fabric-sofa-cushion-clean",
+        "name": "Fabric Sofa & Cushion Cleaning",
+        "price": 599,
+        "duration": "1.5 hrs",
+        "description": "Complete foam cleaning of fabric sofas including all loose cushions.",
+        "image": "/mockups/sofa_cleaning.png",
+        "includes": [
+            "Foam cleaning of sofa seats and backrests",
+            "Deep wet & dry vacuuming",
+            "Cleaning of light stains and marks",
+            "Loose/removable sofa cushions included"
+        ]
+    },
+    {
+        "slug": "leather-sofa-clean",
+        "name": "Leather Sofa Cleaning",
+        "price": 349,
+        "duration": "1 hr",
+        "description": "Gentle cleaning and conditioning to restore leather shine.",
+        "image": "/mockups/leather_sofa_cleaning.png",
+        "includes": [
+            "Gentle cleaning of leather sofa surfaces",
+            "Removal of dust and everyday dirt",
+            "Cleaning of seats and backrests",
+            "Leather-safe conditioning"
+        ]
+    },
+    {
+        "slug": "leather-sofa-cushion-clean",
+        "name": "Leather Sofa & Cushion Cleaning",
+        "price": 619,
+        "duration": "1.5 hrs",
+        "description": "Comprehensive leather cleaning and conditioning including cushions.",
+        "image": "/mockups/leather_sofa_cleaning.png",
+        "includes": [
+            "Gentle cleaning of leather sofa seats and backrests",
+            "Cleaning of loose/removable leather cushions",
+            "Leather-safe conditioning",
+            "Soft finishing for a clean appearance"
+        ]
+    },
+    {
+        "slug": "mattress-deep",
+        "name": "Mattress Deep Cleaning",
+        "price": 389,
+        "duration": "1 hr",
+        "description": "Deep vacuuming and shampoo wash to remove dust mites and stains.",
+        "image": "/mockups/mattress_deep_cleaning.png",
+        "includes": [
+            "Deep vacuuming to remove dust and dirt",
+            "Shampoo cleaning of the mattress surface",
+            "Treatment for common stains and marks",
+            "Wet vacuuming to remove dirt and moisture"
+        ]
+    },
+    {
+        "slug": "mattress-pillow-refresh",
+        "name": "Mattress & Pillow Refresh",
+        "price": 499,
+        "duration": "1.5 hrs",
+        "description": "Complete mattress shampooing and pillow deep cleaning.",
+        "image": "/mockups/mattress_pillow_refresh.png",
+        "includes": [
+            "Deep vacuuming of mattress and pillows",
+            "Shampoo cleaning for visible stains",
+            "Odour and dirt removal",
+            "Wet vacuuming for a fresher finish"
+        ]
+    },
+    {
+        "slug": "carpet-deep",
+        "name": "Carpet Cleaning",
+        "price": 369,
+        "duration": "1 hr",
+        "description": "Deep foam shampoo wash to extract deep-seated dirt from carpets.",
+        "image": "/mockups/carpet_cleaning.png",
+        "includes": [
+            "Removal of accumulated dust particles, dirt",
+            "Foam based shampooing on the carpet using a sponge",
+            "Vacuuming & wiping shampoo"
+        ]
+    }
         ]
     },
     "bathroom-cleaning": {
@@ -180,16 +187,17 @@ SERVICES_DATA = {
                     "Door panel wipe and handle sanitization"
                 ]
             },
-            {
-                "slug": "bath-mirror-add",
-                "name": "Mirror cleaning (additional)",
-                "price": 59,
-                "duration": "10 mins",
-                "description": "Additional mirror cleaning for a crystal-clear reflection.",
-                "includes": [
-                    "Mirror glass cleaning and smudge removal"
-                ]
-            },
+    {
+        "slug": "bath-mirror-add",
+        "name": "Mirror cleaning (additional)",
+        "price": 59,
+        "duration": "10 mins",
+        "description": "Additional mirror cleaning for a crystal-clear reflection.",
+        "image": "/mockups/mirror_cleaning.png",
+        "includes": [
+            "Mirror glass cleaning and smudge removal"
+        ]
+    },
             {
                 "slug": "bath-drain-clean",
                 "name": "Drain Cleaning",
@@ -237,6 +245,7 @@ SERVICES_DATA = {
                 "price": 3139,
                 "duration": "3 hrs",
                 "description": "Deep cleaning of empty/unfurnished apartment before moving in or after moving out.",
+                "image": "/mockups/unoccupied_apartment_cleaning.png",
                 "includes": [
                     "Scrubbing of floors, wall tiles, windows and balcony",
                     "Deep clean of empty kitchen cabinets & closets",
@@ -274,6 +283,7 @@ SERVICES_DATA = {
                 "price": 4579,
                 "duration": "4 hrs 30 mins",
                 "description": "Includes Gold plan + sofa, carpet & mattress shampoo wash.",
+                "image": "/mockups/occupied_apartment_diamond.png",
                 "includes": [
                     "All premium inclusions of the Gold deep-cleaning package",
                     "Full wet shampooing and extraction wash of sofas and mattresses"
@@ -363,6 +373,7 @@ SERVICES_DATA = {
                 "price": 999,
                 "duration": "45 mins",
                 "description": "Dual-session gel and spray treatment targeting kitchen & bathroom cockroaches.",
+                "image": "/mockups/cockroach_control.png",
                 "includes": [
                     "Before inspection we will handle utensils",
                     "After removal customer has to keep the utensils",
@@ -375,6 +386,7 @@ SERVICES_DATA = {
                 "price": 1549,
                 "duration": "1 hr",
                 "description": "Complete cockroach control for apartments with odorless bio-spray.",
+                "image": "/mockups/cockroach_control.png",
                 "includes": [
                     "Before inspection we will handle utensils",
                     "After removal customer has to keep the utensils",
@@ -387,6 +399,7 @@ SERVICES_DATA = {
                 "price": 2099,
                 "duration": "1.5 hrs",
                 "description": "Full independent house & villa cockroach eradication service.",
+                "image": "/mockups/cockroach_control.png",
                 "includes": [
                     "Before inspection we will handle utensils",
                     "After removal customer has to keep the utensils",
@@ -525,6 +538,7 @@ def seed():
                 pkg.base_price = pkg_data["price"]
                 pkg.duration = pkg_data["duration"]
                 pkg.description = pkg_data["description"]
+                pkg.image = pkg_data.get("image") or ""
                 pkg.includes = pkg_data["includes"]
                 pkg.status = PackageStatus.ACTIVE
                 pkg.save()
@@ -539,6 +553,7 @@ def seed():
                     base_price=pkg_data["price"],
                     duration=pkg_data["duration"],
                     description=pkg_data["description"],
+                    image=pkg_data.get("image") or "",
                     includes=pkg_data["includes"],
                     status=PackageStatus.ACTIVE
                 )
