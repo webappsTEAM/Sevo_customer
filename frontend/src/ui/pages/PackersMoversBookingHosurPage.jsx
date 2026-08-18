@@ -9,9 +9,6 @@ import {
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
-import { createBooking } from "../../api/bookingService.js"
-import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
-import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -1171,49 +1168,6 @@ export function PackersMoversBookingHosurPage() {
     }
   }
 
-  const handleSendOtp = async () => {
-    if (!phone || phone.trim().length < 10) return
-    setOtpLoading(true)
-    setBookingError("")
-    try {
-      await apiRequestCustomerPhoneOTP(phone)
-      setOtpSent(true)
-      setOtpStep(true)
-    } catch (err) {
-      setBookingError(err?.body?.detail || "Couldn't send OTP. Please check the number and try again.")
-    } finally {
-      setOtpLoading(false)
-    }
-  }
-
-  const handleVerifyOtp = async (forcedVal = null) => {
-    const code = (forcedVal || otpValue).replace(/\D/g, "")
-    if (code.length < 6 || otpLoading) return
-    setOtpLoading(true)
-    setBookingError("")
-    try {
-      let verified = false
-      try {
-        const wsRes = await verifyOtpViaWebSocket(phone, code)
-        if (wsRes && wsRes.success) verified = true
-      } catch {
-        // fallback
-      }
-      if (!verified) {
-        await apiVerifyCustomerPhoneOTP(phone, code)
-      }
-      setLocalIsSignedIn(true)
-      setLoginModalOpen(false)
-      setOtpStep(false)
-      setOtpValue("")
-      setOtpSent(false)
-      await submitBooking()
-    } catch (err) {
-      setBookingError(err?.body?.detail || err?.message || "Invalid OTP. Please try again.")
-    } finally {
-      setOtpLoading(false)
-    }
-  }
   const handleItemCount = (item, delta) => {
     setInventoryItems(prev => {
       const current = prev[item] || 0
@@ -2599,140 +2553,6 @@ export function PackersMoversBookingHosurPage() {
         </div>
       )}
 
-      {/* 3. Login & OTP Verification Modal */}
-      {loginModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-extrabold text-slate-900">
-                  {otpStep ? "Enter OTP Verification" : "Sign In to Complete Booking"}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  {otpStep ? `We sent a 6-digit code to +91 ${phone}` : "Quick verification to confirm your moving booking"}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setLoginModalOpen(false)
-                  setOtpStep(false)
-                }}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {!otpStep ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Mobile Number <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 focus-within:bg-white transition-all">
-                    <span className="text-xs font-bold text-slate-500 mr-2">+91</span>
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))}
-                      placeholder="Enter 10-digit mobile number"
-                      className="w-full bg-transparent text-xs font-semibold text-slate-800 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Email Address (Optional)
-                  </label>
-                  <input
-                    type="email"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="name@example.com for invoice & insurance"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="pm-whatsapp"
-                    checked={loginWhatsapp}
-                    onChange={(e) => setLoginWhatsapp(e.target.checked)}
-                    className="rounded text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <label htmlFor="pm-whatsapp" className="text-xs text-slate-600 cursor-pointer">
-                    Receive moving schedule &amp; supervisor details on WhatsApp
-                  </label>
-                </div>
-
-                {bookingError && (
-                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleSendOtp}
-                  disabled={otpLoading || !phone || phone.length < 10}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer mt-2"
-                >
-                  {otpLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>Generate OTP</span>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">
-                    Enter 6-digit OTP
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={otpValue}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 6)
-                      setOtpValue(val)
-                      if (val.length === 6) {
-                        handleVerifyOtp(val)
-                      }
-                    }}
-                    placeholder="• • • • • •"
-                    className="w-full text-center text-2xl tracking-[1em] font-extrabold bg-slate-50 border border-slate-200 rounded-xl py-3 text-slate-900 outline-none focus:border-emerald-500 focus:bg-white"
-                  />
-                </div>
-
-                {bookingError && (
-                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
-                )}
-
-                {otpLoading || bookingSubmitting ? (
-                  <div className="w-full py-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-sm">
-                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                    <span>{bookingSubmitting ? "Confirming booking in real time..." : "Verifying OTP in real time..."}</span>
-                  </div>
-                ) : (
-                  <div className="w-full py-2.5 bg-slate-50 border border-dashed border-slate-200 text-slate-500 text-[11px] font-semibold rounded-xl text-center flex items-center justify-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Auto-verifying — enters and confirms instantly</span>
-                  </div>
-                )}
-
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => setOtpStep(false)}
-                    className="text-xs text-slate-500 hover:text-emerald-600 font-semibold cursor-pointer"
-                  >
-                    &larr; Change Mobile Number
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
       {/* 4. Booking Confirmation Success Modal */}
       {bookingSuccessOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
