@@ -11,6 +11,7 @@ import { apiRequest } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
 import { useToast, ToastBanner } from "./useToast.jsx"
 import { SOFA_DETAIL_DATA } from "./sofaDetailData.js"
+import { HOUSE_DETAILS_CONTENT } from "../FullHouseCleaningModal.jsx"
 
 const DEFAULT_SUITABLE_PRESETS = {
   "2-wheeler-electric-express": [
@@ -1136,6 +1137,33 @@ export function CatalogPackagesPage() {
         allSvcPkgs = [...allSvcPkgs, ...uniqueAddons]
       }
 
+      if (svc.slug === "bathroom-cleaning") {
+        const extraPkgs = packages.filter((p) =>
+          p.slug.startsWith("bath-") ||
+          p.slug.startsWith("sub-")
+        )
+        const seenIds = new Set(allSvcPkgs.map(p => p.id))
+        const uniqueExtras = extraPkgs.filter(p => !seenIds.has(p.id))
+        allSvcPkgs = [...allSvcPkgs, ...uniqueExtras]
+      }
+
+      if (svc.slug === "full-house-cleaning" || svc.slug === "house-cleaning" || svc.slug === "full_house_cleaning") {
+        const extraPkgs = packages.filter((p) =>
+          p.slug.includes("-apt-") ||
+          p.slug.includes("-bungalow-") ||
+          p.slug.startsWith("unfurnished-") ||
+          p.slug.startsWith("unoccupied-") ||
+          p.slug.startsWith("quick-") ||
+          p.slug.startsWith("window-") ||
+          p.slug.includes("flat") ||
+          p.slug.includes("house") ||
+          p.slug === "kitchen-microwave-clean"
+        )
+        const seenIds = new Set(allSvcPkgs.map(p => p.id))
+        const uniqueExtras = extraPkgs.filter(p => !seenIds.has(p.id))
+        allSvcPkgs = [...allSvcPkgs, ...uniqueExtras]
+      }
+
       // Custom sorting for Goods & Transports modules
       let sortedPkgs = allSvcPkgs
       if (svc.slug === "truck") {
@@ -1166,7 +1194,7 @@ export function CatalogPackagesPage() {
         const groups = [
           {
             subSlug: "packages",
-            displayName: "Full Kitchen Packages",
+            displayName: "Kitchen Cleaning",
             filterFn: (p) => 
               p.slug.startsWith("occ-") || 
               p.slug.startsWith("empty-") ||
@@ -1313,6 +1341,77 @@ export function CatalogPackagesPage() {
             return orderA - orderB
           })
           const finalPkgs = g.transformFn ? g.transformFn(groupPkgs, getFilteredPkgs) : getFilteredPkgs(groupPkgs);
+          return {
+            service: {
+              ...svc,
+              id: `${svc.id}-${g.subSlug}`,
+              virtualSlug: g.subSlug,
+              realServiceId: svc.id,
+            },
+            displayName: g.displayName,
+            icon: getServiceIcon(g.subSlug, g.displayName),
+            totalPackages: finalPkgs.length,
+            packages: finalPkgs,
+          }
+        })
+      }
+
+      if (svc.slug === "full-house-cleaning" || svc.slug === "house-cleaning" || svc.slug === "full_house_cleaning") {
+        const groups = [
+          {
+            subSlug: "full_apartment",
+            displayName: "Full house cleaning",
+            filterFn: (p) => p.slug.includes("-apt-") && (p.slug.startsWith("classic-") || p.slug.startsWith("gold-") || p.slug.startsWith("diamond-")),
+          },
+          {
+            subSlug: "unoccupied_apartment",
+            displayName: "Unoccupied Apartment",
+            filterFn: (p) => p.slug === "unfurnished-apt-deep",
+          },
+          {
+            subSlug: "full_bungalow",
+            displayName: "Occupied Bungalow",
+            filterFn: (p) => p.slug.includes("-bungalow-") && (p.slug.startsWith("classic-") || p.slug.startsWith("gold-") || p.slug.startsWith("diamond-")),
+          },
+          {
+            subSlug: "unoccupied_bungalow",
+            displayName: "Unoccupied Bungalow",
+            filterFn: (p) => p.slug === "unoccupied-bungalow-deep",
+          },
+          {
+            subSlug: "partial_home",
+            displayName: "Quick Extra Services",
+            filterFn: (p) => p.slug === "quick-balcony-upto-4ft" || p.slug === "quick-balcony-above-4ft" || p.slug === "window-clean-under-4" || p.slug === "window-clean-above-4" || p.slug === "quick-dining-table" || p.slug === "kitchen-microwave-clean",
+          }
+        ]
+
+        const HOUSE_SLUG_ORDER = [
+          "classic-apt-deep",
+          "gold-apt-deep",
+          "diamond-apt-deep",
+          "unfurnished-apt-deep",
+          "classic-bungalow-deep",
+          "gold-bungalow-deep",
+          "diamond-bungalow-deep",
+          "unoccupied-bungalow-deep",
+          "quick-balcony-upto-4ft",
+          "quick-balcony-above-4ft",
+          "window-clean-under-4",
+          "window-clean-above-4",
+          "quick-dining-table",
+          "kitchen-microwave-clean"
+        ]
+
+        return groups.map((g) => {
+          let groupPkgs = allSvcPkgs.filter(g.filterFn)
+          groupPkgs = [...groupPkgs].sort((a, b) => {
+            const idxA = HOUSE_SLUG_ORDER.indexOf(a.slug)
+            const idxB = HOUSE_SLUG_ORDER.indexOf(b.slug)
+            const orderA = idxA !== -1 ? idxA : 999
+            const orderB = idxB !== -1 ? idxB : 999
+            return orderA - orderB
+          })
+          const finalPkgs = getFilteredPkgs(groupPkgs)
           return {
             service: {
               ...svc,
@@ -1595,8 +1694,15 @@ export function CatalogPackagesPage() {
       }
     })
 
-    // Load fallback defaults from SOFA_DETAIL_DATA or STATIC_SERVICE_DETAIL_DATA
-    const staticData = SOFA_DETAIL_DATA[slug] || SOFA_DETAIL_DATA[pkg.id] || STATIC_SERVICE_DETAIL_DATA[slug] || STATIC_SERVICE_DETAIL_DATA[pkg.id] || {}
+    // Load fallback defaults from SOFA_DETAIL_DATA, HOUSE_DETAILS_CONTENT, or STATIC_SERVICE_DETAIL_DATA
+    const staticData = 
+      SOFA_DETAIL_DATA[slug] || 
+      SOFA_DETAIL_DATA[pkg.id] || 
+      HOUSE_DETAILS_CONTENT[slug] || 
+      HOUSE_DETAILS_CONTENT[pkg.id] || 
+      STATIC_SERVICE_DETAIL_DATA[slug] || 
+      STATIC_SERVICE_DETAIL_DATA[pkg.id] || 
+      {}
 
     setQuickPriceEditing({
       ...pkg,
@@ -1609,12 +1715,27 @@ export function CatalogPackagesPage() {
       icon: pkg.icon || "",
       editingItemId: null,
       _vdOpen: true,
-      viewDetails: {
-        tools: Array.isArray(pkg.tools) && pkg.tools.length > 0 ? pkg.tools : (staticData.tools || []),
-        ready: Array.isArray(pkg.ready) && pkg.ready.length > 0 ? pkg.ready : (staticData.ready || []),
-        reviews: (Array.isArray(pkg.reviews) && pkg.reviews.length > 0 && pkg.reviews.length >= (staticData.reviews || []).length) ? pkg.reviews : (staticData.reviews || pkg.reviews || []),
-        faqs: (Array.isArray(pkg.faqs) && pkg.faqs.length > 0 && pkg.faqs.length >= (staticData.faqs || []).length) ? pkg.faqs : (staticData.faqs || pkg.faqs || []),
-      },
+      viewDetails: (() => {
+        // Normalize reviews: staticData uses 'comment' but admin UI uses 'text'
+        const normalizeReviews = (revs) => (revs || []).map(r => ({
+          ...r,
+          text: r.text || r.comment || "",
+          name: r.name || "",
+          rating: r.rating || "5.0",
+          enabled: r.enabled !== false,
+        }));
+        const hasSavedTools = Array.isArray(pkg.tools) && pkg.tools.length > 0;
+        const hasSavedReady = Array.isArray(pkg.ready) && pkg.ready.length > 0;
+        const hasSavedReviews = Array.isArray(pkg.reviews) && pkg.reviews.length > 0;
+        const hasSavedFaqs = Array.isArray(pkg.faqs) && pkg.faqs.length > 0;
+
+        return {
+          tools: hasSavedTools ? pkg.tools : (staticData.tools || []),
+          ready: hasSavedReady ? pkg.ready : (staticData.ready || []),
+          reviews: hasSavedReviews ? normalizeReviews(pkg.reviews) : normalizeReviews(staticData.reviews),
+          faqs: hasSavedFaqs ? pkg.faqs : (staticData.faqs || []),
+        };
+      })(),
     })
     setNewItemText("")
   }
@@ -1629,9 +1750,9 @@ export function CatalogPackagesPage() {
           .filter((i) => i.text && i.text.trim())
           .map((i) => ({ text: i.text.trim(), checked: i.checked }))
       } else if (typeof quickPriceEditing.includes === "string") {
-        finalIncludes = quickPriceEditing.includes.split(",").map((s) => s.trim()).filter(Boolean)
+        finalIncludes = quickPriceEditing.includes.split(",").map((s) => ({ text: s.trim(), checked: true })).filter(i => i.text)
       } else if (Array.isArray(quickPriceEditing.includes)) {
-        finalIncludes = quickPriceEditing.includes
+        finalIncludes = quickPriceEditing.includes.map(i => typeof i === "string" ? { text: i, checked: true } : i)
       }
 
       const isPop = Boolean(
@@ -3527,7 +3648,7 @@ export function CatalogPackagesPage() {
                       className={`flex items-center justify-between gap-3 p-2.5 rounded-xl border transition-all ${
                         item.checked
                           ? "bg-white border-blue-200 hover:border-blue-300 shadow-2xs"
-                          : "bg-slate-100/60 border-slate-200 opacity-60 hover:opacity-100"
+                          : "bg-slate-50 border-slate-200 opacity-80"
                       }`}
                     >
                       <label className="flex items-center gap-2.5 flex-1 cursor-pointer select-none">
@@ -3568,7 +3689,7 @@ export function CatalogPackagesPage() {
                               // Clicking the checkbox still toggles, but span does nothing.
                             }}
                             className={`text-xs font-semibold px-1.5 py-0.5 flex-1 select-none ${
-                              item.checked ? "text-slate-800" : "text-slate-500 line-through"
+                              item.checked ? "text-slate-800" : "text-slate-400"
                             }`}
                           >
                             {item.text}
