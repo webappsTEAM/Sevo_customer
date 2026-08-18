@@ -57,6 +57,15 @@ def RequireModuleAccess(module_name: str, required_action: str):
             # Superusers bypass
             if user.is_superuser:
                 return True
+
+            # Care agents get read-only access to the customers module
+            if module_name == "customers" and required_action == "view":
+                try:
+                    from customer_care.permissions import get_care_access
+                    if get_care_access(user)["has_access"]:
+                        return True
+                except Exception:
+                    pass
                 
             perms = company.module_permissions or {}
             if not perms or module_name not in perms:

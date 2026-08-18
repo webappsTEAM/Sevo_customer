@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "customer_care",
     "reports",
     "workforce_integration",
+    "customer_analytics",
 ]
 
 MIDDLEWARE = [
@@ -152,7 +153,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "UTC")
+TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "Asia/Kolkata")
 USE_I18N = True
 USE_TZ = True
 
