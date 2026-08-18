@@ -1245,10 +1245,18 @@ export function CatalogPackagesPage() {
             subSlug: "cabinet_tile",
             displayName: "Cabinet & Tile Care",
             filterFn: (p) =>
-              p.slug.startsWith("kitchen-") ||
-              p.slug.startsWith("cabinet-") ||
-              p.slug.startsWith("tile-") ||
-              p.slug.startsWith("care-"),
+              (p.slug.startsWith("kitchen-") ||
+               p.slug.startsWith("cabinet-") ||
+               p.slug.startsWith("tile-") ||
+               p.slug.startsWith("care-")) &&
+              !p.slug.includes("fridge") &&
+              !p.slug.includes("microwave") &&
+              !p.slug.includes("chimney") &&
+              !p.slug.includes("stove") &&
+              !p.slug.includes("dishwasher") &&
+              !p.slug.includes("air-fryer") &&
+              !p.slug.includes("otg") &&
+              !p.slug.includes("sandwich"),
           },
           {
             subSlug: "addons",
@@ -1562,12 +1570,13 @@ export function CatalogPackagesPage() {
     if (existingIncludes.length > 0) {
       existingIncludes.forEach((inc, idx) => {
         const text = typeof inc === "string" ? inc.trim() : (inc?.text || "")
+        const checked = typeof inc === "string" ? true : (inc.checked !== false)
         if (text && !seen.has(text.toLowerCase())) {
           seen.add(text.toLowerCase())
           items.push({
             id: `inc-${idx}-${Date.now()}`,
             text,
-            checked: true,
+            checked: checked,
           })
         }
       })
@@ -1617,8 +1626,8 @@ export function CatalogPackagesPage() {
       let finalIncludes = []
       if (Array.isArray(quickPriceEditing.checklist)) {
         finalIncludes = quickPriceEditing.checklist
-          .filter((i) => i.checked && i.text && i.text.trim())
-          .map((i) => i.text.trim())
+          .filter((i) => i.text && i.text.trim())
+          .map((i) => ({ text: i.text.trim(), checked: i.checked }))
       } else if (typeof quickPriceEditing.includes === "string") {
         finalIncludes = quickPriceEditing.includes.split(",").map((s) => s.trim()).filter(Boolean)
       } else if (Array.isArray(quickPriceEditing.includes)) {
@@ -1641,10 +1650,43 @@ export function CatalogPackagesPage() {
         includes: finalIncludes,
         image: quickPriceEditing.image || "",
         offer_price: null,
-        tools: Array.isArray(vd.tools) ? vd.tools.filter(Boolean) : [],
-        ready: Array.isArray(vd.ready) ? vd.ready.filter(Boolean) : [],
-        reviews: Array.isArray(vd.reviews) ? vd.reviews.filter(r => r.name || r.text) : [],
-        faqs: Array.isArray(vd.faqs) ? vd.faqs.filter(f => f.q || f.a) : [],
+        tools: Array.isArray(vd.tools)
+          ? vd.tools
+              .map(t => {
+                const text = typeof t === "string" ? t : (t.text || "");
+                const enabled = typeof t === "string" ? true : (t.enabled !== false);
+                return { text, enabled };
+              })
+              .filter(t => t.text.trim())
+          : [],
+        ready: Array.isArray(vd.ready)
+          ? vd.ready
+              .map(r => {
+                const text = typeof r === "string" ? r : (r.text || "");
+                const enabled = typeof r === "string" ? true : (r.enabled !== false);
+                return { text, enabled };
+              })
+              .filter(r => r.text.trim())
+          : [],
+        reviews: Array.isArray(vd.reviews)
+          ? vd.reviews
+              .map(r => ({
+                name: r.name || "",
+                text: r.text || "",
+                rating: r.rating || "5.0",
+                enabled: r.enabled !== false
+              }))
+              .filter(r => r.name.trim() || r.text.trim())
+          : [],
+        faqs: Array.isArray(vd.faqs)
+          ? vd.faqs
+              .map(f => ({
+                q: f.q || "",
+                a: f.a || "",
+                enabled: f.enabled !== false
+              }))
+              .filter(f => f.q.trim() || f.a.trim())
+          : [],
         sort_order: parseInt(quickPriceEditing.sort_order) || 0,
         button_text: quickPriceEditing.button_text || "Add",
         icon: quickPriceEditing.icon || "",
@@ -1741,6 +1783,8 @@ export function CatalogPackagesPage() {
         suboptions_heading: cust.suboptions_heading || "",
         faqs_heading: cust.faqs_heading || "",
         reviews_heading: cust.reviews_heading || "",
+        price_list: Array.isArray(cust.price_list) ? cust.price_list : [],
+        paint_types: Array.isArray(cust.paint_types) ? cust.paint_types : [],
       }
     })
     setCustomizerTab("general")
@@ -2456,6 +2500,7 @@ export function CatalogPackagesPage() {
                 { id: "general", label: "Card & General Settings" },
                 { id: "content", label: "Includes & Excludes" },
                 { id: "details", label: "Badges, Steps & FAQs" },
+                { id: "pricing", label: "Price List & Materials" },
               ].map((t) => (
                 <button
                   key={t.id}
@@ -3169,6 +3214,182 @@ export function CatalogPackagesPage() {
               </div>
             )}
 
+            {customizerTab === "pricing" && (
+              <div className="space-y-5">
+                {/* Informative Price List */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-800 block">Price List Table (Shown in "View Price List" dropdown)</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updatedList = [...(serviceCustomizing.customization.price_list || [])];
+                        updatedList.push({ type: "", price: "" });
+                        setServiceCustomizing({
+                          ...serviceCustomizing,
+                          customization: { ...serviceCustomizing.customization, price_list: updatedList }
+                        });
+                      }}
+                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-750 border border-indigo-200 text-[10px] font-bold rounded-xl cursor-pointer"
+                    >
+                      + Add Row
+                    </button>
+                  </div>
+                  <div className="space-y-3 max-h-60 overflow-y-auto border border-slate-200 rounded-xl p-2.5 bg-white">
+                    {(!serviceCustomizing.customization.price_list || serviceCustomizing.customization.price_list.length === 0) ? (
+                      <span className="text-xs text-slate-400 block text-center py-2">No custom prices configured. Default fallbacks will be used.</span>
+                    ) : (
+                      serviceCustomizing.customization.price_list.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2.5 bg-slate-50/40 border border-slate-200 p-2 rounded-xl relative">
+                          <Input
+                            label="Paint/Service Type"
+                            placeholder="e.g. Economy Exterior"
+                            value={item.type || ""}
+                            onChange={(e) => {
+                              const updated = [...serviceCustomizing.customization.price_list];
+                              updated[idx] = { ...item, type: e.target.value };
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, price_list: updated }
+                              });
+                            }}
+                          />
+                          <Input
+                            label="Rate Label"
+                            placeholder="e.g. ₹15/sq.ft"
+                            value={item.price || ""}
+                            onChange={(e) => {
+                              const updated = [...serviceCustomizing.customization.price_list];
+                              updated[idx] = { ...item, price: e.target.value };
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, price_list: updated }
+                              });
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = serviceCustomizing.customization.price_list.filter((_, i) => i !== idx);
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, price_list: updated }
+                              });
+                            }}
+                            className="p-1.5 mt-4 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Option / Material Types */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-800 block">Calculation Material/Option Types (Shown as Selection Boxes)</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updatedList = [...(serviceCustomizing.customization.paint_types || [])];
+                        updatedList.push({ id: "", name: "", price: 0, type: "", image: "" });
+                        setServiceCustomizing({
+                          ...serviceCustomizing,
+                          customization: { ...serviceCustomizing.customization, paint_types: updatedList }
+                        });
+                      }}
+                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-750 border border-indigo-200 text-[10px] font-bold rounded-xl cursor-pointer"
+                    >
+                      + Add Material
+                    </button>
+                  </div>
+                  <div className="space-y-3 max-h-80 overflow-y-auto border border-slate-200 rounded-xl p-2.5 bg-white">
+                    {(!serviceCustomizing.customization.paint_types || serviceCustomizing.customization.paint_types.length === 0) ? (
+                      <span className="text-xs text-slate-400 block text-center py-2">No custom material options configured. Default fallbacks will be used.</span>
+                    ) : (
+                      serviceCustomizing.customization.paint_types.map((item, idx) => (
+                        <div key={idx} className="bg-slate-50/30 border border-slate-200 p-3 rounded-xl space-y-2 relative">
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <Input
+                              label="Material Name"
+                              placeholder="e.g. Tractor UNO"
+                              value={item.name || ""}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.paint_types];
+                                const autoId = e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                                updated[idx] = { ...item, name: e.target.value, id: autoId };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                });
+                              }}
+                            />
+                            <Input
+                              label="Grade / Category Label"
+                              placeholder="e.g. Economy, Premium"
+                              value={item.type || ""}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.paint_types];
+                                updated[idx] = { ...item, type: e.target.value };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                });
+                              }}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <Input
+                              label="Rate per sq.ft (Number)"
+                              type="number"
+                              placeholder="e.g. 7"
+                              value={item.price || ""}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.paint_types];
+                                updated[idx] = { ...item, price: parseFloat(e.target.value) || 0 };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                });
+                              }}
+                            />
+                            <Input
+                              label="Image URL"
+                              placeholder="e.g. /tractor-uno.png"
+                              value={item.image || ""}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.paint_types];
+                                updated[idx] = { ...item, image: e.target.value };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                });
+                              }}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = serviceCustomizing.customization.paint_types.filter((_, i) => i !== idx);
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, paint_types: updated }
+                              });
+                            }}
+                            className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3 justify-end mt-2 pt-4 border-t border-slate-100">
               <button
                 type="button"
@@ -3207,7 +3428,7 @@ export function CatalogPackagesPage() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Input
                 label="Package Heading / Vehicle Name"
                 required
@@ -3225,6 +3446,15 @@ export function CatalogPackagesPage() {
                 value={quickPriceEditing.base_price}
                 onChange={(e) =>
                   setQuickPriceEditing({ ...quickPriceEditing, base_price: e.target.value })
+                }
+              />
+              <Input
+                label="Time / Duration"
+                required
+                placeholder="e.g. 1.5 hrs, 2 hrs, 45 mins"
+                value={quickPriceEditing.duration || ""}
+                onChange={(e) =>
+                  setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
                 }
               />
             </div>

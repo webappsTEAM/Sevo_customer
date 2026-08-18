@@ -27,6 +27,42 @@ def _validation_error_response(exc):
     return Response({"success": False, "message": "Validation failed", "errors": detail}, status=400)
 
 
+def clear_catalog_cache():
+    from django.core.cache import cache
+    # Clear categories list
+    cache.delete("catalog_categories_list")
+    
+    # Try deleting patterns
+    try:
+        if hasattr(cache, "delete_pattern"):
+            cache.delete_pattern("*catalog_services_list*")
+    except Exception:
+        pass
+        
+    try:
+        if hasattr(cache, "_cache"):
+            # LocMemCache keys
+            keys_to_del = [k for k in cache._cache.keys() if "catalog_services_list" in k or "catalog_categories_list" in k]
+            for k in keys_to_del:
+                cache._cache.pop(k, None)
+    except Exception:
+        pass
+
+    # Standard loop to be absolutely sure
+    from service_requests.models import CatalogCategory
+    try:
+        cat_ids = [""] + list(CatalogCategory.objects.values_list("id", flat=True))
+    except Exception:
+        cat_ids = [""]
+        
+    cache.delete("catalog_services_list___")
+    for cid in cat_ids:
+        cache.delete(f"catalog_services_list_{cid}__")
+        for status in ["", "ACTIVE", "INACTIVE", "DRAFT", "ARCHIVED"]:
+            cache.delete(f"catalog_services_list_{cid}_{status}")
+            cache.delete(f"catalog_services_list_{cid}__{status}")
+
+
 # ── Public (no-auth) read-only catalog endpoints ─────────────────────────────
 
 class PublicPackageListView(APIView):
@@ -64,6 +100,7 @@ class AdminCategoryListView(APIView):
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
         category = catalog_service.create_category(serializer.validated_data, request.user)
+        clear_catalog_cache()
         return Response({"success": True, "data": CatalogCategorySerializer(category).data})
 
 
@@ -80,6 +117,7 @@ class AdminCategoryDetailView(APIView):
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
         reason = request.data.get("reason")
         category = catalog_service.update_category(category, serializer.validated_data, request.user, reason=reason)
+        clear_catalog_cache()
         return Response({"success": True, "data": CatalogCategorySerializer(category).data})
 
     def delete(self, request, pk):
@@ -89,6 +127,7 @@ class AdminCategoryDetailView(APIView):
             category = get_object_or_404(CatalogCategory, slug=str(pk))
         try:
             catalog_service.delete_category(category)
+            clear_catalog_cache()
         except DjangoValidationError as exc:
             return _validation_error_response(exc)
         return Response({"success": True, "message": "Category deleted"})
@@ -112,6 +151,7 @@ class AdminServiceListView(APIView):
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
         service = catalog_service.create_service(serializer.validated_data, request.user)
+        clear_catalog_cache()
         return Response({"success": True, "data": ServiceSerializer(service).data})
 
 
@@ -128,6 +168,7 @@ class AdminServiceDetailView(APIView):
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
         reason = request.data.get("reason")
         service = catalog_service.update_service(service, serializer.validated_data, request.user, reason=reason)
+        clear_catalog_cache()
         return Response({"success": True, "data": ServiceSerializer(service).data})
 
     def delete(self, request, pk):
@@ -137,6 +178,7 @@ class AdminServiceDetailView(APIView):
             service = get_object_or_404(Service, slug=str(pk))
         try:
             catalog_service.delete_service(service)
+            clear_catalog_cache()
         except DjangoValidationError as exc:
             return _validation_error_response(exc)
         return Response({"success": True, "message": "Service deleted"})
@@ -179,6 +221,7 @@ class AdminPackageListView(APIView):
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
         package = catalog_service.create_package(serializer.validated_data, request.user)
+        clear_catalog_cache()
         return Response({"success": True, "data": PackageSerializer(package).data})
 
 
@@ -209,12 +252,14 @@ class AdminPackageDetailView(APIView):
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
         reason = request.data.get("reason")
         package = catalog_service.update_package(package, serializer.validated_data, request.user, reason=reason)
+        clear_catalog_cache()
         return Response({"success": True, "data": PackageSerializer(package).data})
 
     def delete(self, request, pk):
         package = get_object_or_404(Package, pk=pk)
         try:
             catalog_service.delete_package(package)
+            clear_catalog_cache()
         except DjangoValidationError as exc:
             return _validation_error_response(exc)
         return Response({"success": True, "message": "Package deleted"})
@@ -234,6 +279,7 @@ class AdminPackageTransitionView(APIView):
             return Response({"success": False, "message": "status is required"}, status=400)
         try:
             package = catalog_service.transition_package_status(package, new_status, request.user, reason=reason)
+            clear_catalog_cache()
         except DjangoValidationError as exc:
             return _validation_error_response(exc)
         return Response({"success": True, "data": PackageSerializer(package).data})
@@ -257,6 +303,7 @@ class AdminAddOnListView(APIView):
         if not serializer.is_valid():
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
         addon = catalog_service.create_addon(serializer.validated_data, request.user)
+        clear_catalog_cache()
         return Response({"success": True, "data": AddOnSerializer(addon).data})
 
 
@@ -270,11 +317,13 @@ class AdminAddOnDetailView(APIView):
             return Response({"success": False, "message": "Validation failed", "errors": serializer.errors}, status=400)
         reason = request.data.get("reason")
         addon = catalog_service.update_addon(addon, serializer.validated_data, request.user, reason=reason)
+        clear_catalog_cache()
         return Response({"success": True, "data": AddOnSerializer(addon).data})
 
     def delete(self, request, pk):
         addon = get_object_or_404(AddOn, pk=pk)
         addon.delete()
+        clear_catalog_cache()
         return Response({"success": True, "message": "Add-on deleted"})
 
 

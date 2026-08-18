@@ -24,7 +24,7 @@ const FULL_HOUSE_SERVICES = {
       reviews: "1.7M bookings",
       price: 3139,
       duration: "3 hrs",
-      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+      image: "/mockups/unoccupied_apartment_cleaning.png",
       includes: [
         "Scrubbing of floors, wall tiles, windows and balcony",
         "Deep clean of empty kitchen cabinets & closets",
@@ -72,7 +72,7 @@ const FULL_HOUSE_SERVICES = {
       reviews: "950K bookings",
       price: 4579,
       duration: "4 hrs 30 mins",
-      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80&fit=crop",
+      image: "/mockups/occupied_apartment_diamond.png",
       includes: [
         "All premium inclusions of the Gold deep-cleaning package",
         "Full wet shampooing and extraction wash of sofas and mattresses"
@@ -153,7 +153,7 @@ const FULL_HOUSE_SERVICES = {
       reviews: "1.7M bookings",
       price: 399,
       duration: "30 mins",
-      image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop",
+      image: "/mockups/balcony_cleaning.png",
       includes: [
         "Complete balcony floor scrubbing & wet mopping",
         "Dusting and wet wiping of balcony railings & grilles"
@@ -167,7 +167,7 @@ const FULL_HOUSE_SERVICES = {
       reviews: "1.7M bookings",
       price: 549,
       duration: "50 mins",
-      image: "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=300&q=80&fit=crop",
+      image: "/mockups/balcony_cleaning.png",
       includes: [
         "Heavy scrubbing of tiled/concrete balcony floor surfaces",
         "Polishing of glass balustrades & frame borders"
@@ -181,7 +181,7 @@ const FULL_HOUSE_SERVICES = {
       reviews: "1.7M bookings",
       price: 399,
       duration: "30 mins",
-      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+      image: "/mockups/window_cleaning.png",
       includes: [
         "Glass panel cleaning inside and outside",
         "Deep vacuuming of dirt and mud from sliding tracks"
@@ -195,7 +195,7 @@ const FULL_HOUSE_SERVICES = {
       reviews: "1.7M bookings",
       price: 449,
       duration: "1 hr",
-      image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop",
+      image: "/mockups/window_cleaning.png",
       includes: [
         "Thorough cleaning of wide glass windows and frames",
         "Removal of sticky dust from grilles & meshes"
@@ -209,7 +209,7 @@ const FULL_HOUSE_SERVICES = {
       reviews: "1.7M bookings",
       price: 449,
       duration: "30 mins",
-      image: "https://images.unsplash.com/photo-1517825738774-7de9363ef735?w=300&q=80&fit=crop",
+      image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=600&q=80&fit=crop",
       includes: [
         "Polishing and sanitizing of wooden/glass tabletop",
         "Wiping and dust clearance of up to 6 dining chairs"
@@ -223,7 +223,7 @@ const FULL_HOUSE_SERVICES = {
       reviews: "1.7M bookings",
       price: 199,
       duration: "15 mins",
-      image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300&q=80&fit=crop",
+      image: "/mockups/microwave_clean.png",
       includes: [
         "Internal cavity degreasing and splash stain removal",
         "Glass door cleaning and control panel sanitization"

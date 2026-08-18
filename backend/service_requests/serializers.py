@@ -24,12 +24,23 @@ class CatalogServiceSerializer(serializers.ModelSerializer):
     keep working unchanged. Still live and actually consumed — do not remove."""
     category = serializers.SerializerMethodField()
     price = serializers.DecimalField(source="base_price", max_digits=10, decimal_places=2)
+    service_id = serializers.IntegerField(source="service.id", read_only=True)
+    service_name = serializers.CharField(source="service.name", read_only=True)
+    service_slug = serializers.CharField(source="service.slug", read_only=True)
+    service_description = serializers.CharField(source="service.description", read_only=True)
+    service_customization = serializers.JSONField(source="service.customization", read_only=True)
+    service_sort_order = serializers.IntegerField(source="service.sort_order", read_only=True)
+    service_image = serializers.CharField(source="service.image", read_only=True)
+    category_slug = serializers.CharField(source="service.category.slug", read_only=True)
 
     class Meta:
         model = Package
         fields = [
-            "id", "category", "name", "description", "price", "duration",
+            "id", "category", "category_slug", "name", "slug", "description", "price", "duration",
             "image", "popular", "tag", "includes", "excludes", "payment_policy",
+            "faqs", "sort_order", "tools", "ready",
+            "service_id", "service_name", "service_slug", "service_description",
+            "service_customization", "service_sort_order", "service_image",
         ]
 
     def get_category(self, obj):

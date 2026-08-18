@@ -110,7 +110,7 @@ const BATHROOM_SERVICES = {
       reviews: "48K reviews",
       price: 59,
       duration: "10 mins",
-      image: "/mockups/bath_2.png",
+      image: "/mockups/mirror_cleaning.png",
       includes: [
         "Mirror glass cleaning and smudge removal"
       ]
