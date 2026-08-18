@@ -279,7 +279,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             return obj.technician_name
         assigned_employee = getattr(obj, "assigned_employee", None)
         if assigned_employee:
-            return assigned_employee.full_name or (assigned_employee.user.get_full_name() if assigned_employee.user else None)
+            return assigned_employee.full_name or (assigned_employee.user.get_full_name() if getattr(assigned_employee, 'user', None) else None)
         if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
             return "Suresh Kumar"
         return ""

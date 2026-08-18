@@ -93,6 +93,7 @@ class User(AbstractBaseUser):
     class Meta:
         verbose_name = "user"
         verbose_name_plural = "users"
+        ordering = ["-id"]
         indexes = [
             models.Index(fields=["role"], name="idx_user_role"),
             models.Index(fields=["company", "role"], name="idx_user_company_role"),

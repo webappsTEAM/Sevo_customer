@@ -371,10 +371,7 @@ export function LoginPage() {
         }
         const u = result
         if (!u) {
-          setError("Login failed. Please check your credentials and try again.")
-          setFailedIdentity(username)
-          setFailedReason("Unable to retrieve user profile after successful login.")
-          setShowFailedLogin(true)
+          setError("Invalid username or password.")
           return
         }
         if (rememberMe) {
@@ -385,11 +382,7 @@ export function LoginPage() {
         navigate(postLoginRoute(u), { replace: true }) 
       }
       catch (err) { 
-        const errMsg = extractAuthError(err, "Login failed.")
-        setError(errMsg) 
-        setFailedIdentity(username)
-        setFailedReason(errMsg)
-        setShowFailedLogin(true)
+        setError("Invalid username or password.")
       }
       finally { setLoading(false) }
     } else {
@@ -1195,9 +1188,6 @@ export function LoginPage() {
               </form>
 
               <div className="mt-8 text-center space-y-4">
-                <Link to={routes.organization_signup} className="block text-[11px] font-bold uppercase tracking-widest text-indigo-600 hover:text-indigo-500 transition-colors">
-                  Setup New Organization
-                </Link>
                 <button className="text-[10px] font-mono uppercase tracking-widest text-slate-600 hover:text-indigo-600 transition-colors">
                   Need Help? <span className="text-slate-400">Contact Support</span>
                 </button>
