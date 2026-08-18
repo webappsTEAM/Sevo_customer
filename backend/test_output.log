@@ -1,0 +1,24 @@
+Found 1 test(s).
+Skipping setup of unused database(s): default.
+System check identified no issues (0 silenced).
+test_work_extensions (unittest.loader._FailedTest.test_work_extensions) ... ERROR
+
+======================================================================
+ERROR: test_work_extensions (unittest.loader._FailedTest.test_work_extensions)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_work_extensions
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.12_3.12.2800.0_x64__qbz5n2kfra8p0\Lib\unittest\loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\CalTrack\calservices\backend\service_requests\tests\test_work_extensions.py", line 26, in <module>
+    from django_tenants.test.cases import TenantTestCase
+ModuleNotFoundError: No module named 'django_tenants'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (errors=1)
+
+Test Failures Count: 1

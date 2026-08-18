@@ -1793,6 +1793,8 @@ export function CatalogPackagesPage() {
         suboptions_heading: cust.suboptions_heading || "",
         faqs_heading: cust.faqs_heading || "",
         reviews_heading: cust.reviews_heading || "",
+        price_list: Array.isArray(cust.price_list) ? cust.price_list : [],
+        paint_types: Array.isArray(cust.paint_types) ? cust.paint_types : [],
       }
     })
     setCustomizerTab("general")
@@ -2508,6 +2510,7 @@ export function CatalogPackagesPage() {
                 { id: "general", label: "Card & General Settings" },
                 { id: "content", label: "Includes & Excludes" },
                 { id: "details", label: "Badges, Steps & FAQs" },
+                { id: "pricing", label: "Price List & Materials" },
               ].map((t) => (
                 <button
                   key={t.id}
@@ -3217,6 +3220,182 @@ export function CatalogPackagesPage() {
                   >
                     + Add FAQ Question
                   </button>
+                </div>
+              </div>
+            )}
+
+            {customizerTab === "pricing" && (
+              <div className="space-y-5">
+                {/* Informative Price List */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-800 block">Price List Table (Shown in "View Price List" dropdown)</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updatedList = [...(serviceCustomizing.customization.price_list || [])];
+                        updatedList.push({ type: "", price: "" });
+                        setServiceCustomizing({
+                          ...serviceCustomizing,
+                          customization: { ...serviceCustomizing.customization, price_list: updatedList }
+                        });
+                      }}
+                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-750 border border-indigo-200 text-[10px] font-bold rounded-xl cursor-pointer"
+                    >
+                      + Add Row
+                    </button>
+                  </div>
+                  <div className="space-y-3 max-h-60 overflow-y-auto border border-slate-200 rounded-xl p-2.5 bg-white">
+                    {(!serviceCustomizing.customization.price_list || serviceCustomizing.customization.price_list.length === 0) ? (
+                      <span className="text-xs text-slate-400 block text-center py-2">No custom prices configured. Default fallbacks will be used.</span>
+                    ) : (
+                      serviceCustomizing.customization.price_list.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2.5 bg-slate-50/40 border border-slate-200 p-2 rounded-xl relative">
+                          <Input
+                            label="Paint/Service Type"
+                            placeholder="e.g. Economy Exterior"
+                            value={item.type || ""}
+                            onChange={(e) => {
+                              const updated = [...serviceCustomizing.customization.price_list];
+                              updated[idx] = { ...item, type: e.target.value };
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, price_list: updated }
+                              });
+                            }}
+                          />
+                          <Input
+                            label="Rate Label"
+                            placeholder="e.g. ₹15/sq.ft"
+                            value={item.price || ""}
+                            onChange={(e) => {
+                              const updated = [...serviceCustomizing.customization.price_list];
+                              updated[idx] = { ...item, price: e.target.value };
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, price_list: updated }
+                              });
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = serviceCustomizing.customization.price_list.filter((_, i) => i !== idx);
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, price_list: updated }
+                              });
+                            }}
+                            className="p-1.5 mt-4 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Option / Material Types */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-800 block">Calculation Material/Option Types (Shown as Selection Boxes)</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updatedList = [...(serviceCustomizing.customization.paint_types || [])];
+                        updatedList.push({ id: "", name: "", price: 0, type: "", image: "" });
+                        setServiceCustomizing({
+                          ...serviceCustomizing,
+                          customization: { ...serviceCustomizing.customization, paint_types: updatedList }
+                        });
+                      }}
+                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-750 border border-indigo-200 text-[10px] font-bold rounded-xl cursor-pointer"
+                    >
+                      + Add Material
+                    </button>
+                  </div>
+                  <div className="space-y-3 max-h-80 overflow-y-auto border border-slate-200 rounded-xl p-2.5 bg-white">
+                    {(!serviceCustomizing.customization.paint_types || serviceCustomizing.customization.paint_types.length === 0) ? (
+                      <span className="text-xs text-slate-400 block text-center py-2">No custom material options configured. Default fallbacks will be used.</span>
+                    ) : (
+                      serviceCustomizing.customization.paint_types.map((item, idx) => (
+                        <div key={idx} className="bg-slate-50/30 border border-slate-200 p-3 rounded-xl space-y-2 relative">
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <Input
+                              label="Material Name"
+                              placeholder="e.g. Tractor UNO"
+                              value={item.name || ""}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.paint_types];
+                                const autoId = e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                                updated[idx] = { ...item, name: e.target.value, id: autoId };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                });
+                              }}
+                            />
+                            <Input
+                              label="Grade / Category Label"
+                              placeholder="e.g. Economy, Premium"
+                              value={item.type || ""}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.paint_types];
+                                updated[idx] = { ...item, type: e.target.value };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                });
+                              }}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <Input
+                              label="Rate per sq.ft (Number)"
+                              type="number"
+                              placeholder="e.g. 7"
+                              value={item.price || ""}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.paint_types];
+                                updated[idx] = { ...item, price: parseFloat(e.target.value) || 0 };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                });
+                              }}
+                            />
+                            <Input
+                              label="Image URL"
+                              placeholder="e.g. /tractor-uno.png"
+                              value={item.image || ""}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.paint_types];
+                                updated[idx] = { ...item, image: e.target.value };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                });
+                              }}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = serviceCustomizing.customization.paint_types.filter((_, i) => i !== idx);
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, paint_types: updated }
+                              });
+                            }}
+                            className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             )}

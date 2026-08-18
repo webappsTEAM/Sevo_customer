@@ -167,25 +167,20 @@ def notify_ticket_resolved(ticket):
     category = (ticket.category or "").lower()
     
     # Customize message based on the ticket category
-    if category == "billing":
+    if category in ["payment_issue", "refund", "pricing_issue"]:
         message_body = (
             "your billing or payment query has been fully resolved by our billing department. "
             "Any adjustments or invoice revisions have been updated in your profile."
         )
-    elif category == "technical":
+    elif category in ["booking_issue", "reschedule", "cancellation"]:
         message_body = (
-            "the technical issues you reported have been completely resolved and verified. "
-            "Everything is now running smoothly and as expected."
-        )
-    elif category == "scheduling":
-        message_body = (
-            "your scheduling request has been processed and confirmed with our dispatch team. "
+            "your booking/scheduling request has been processed and confirmed with our dispatch team. "
             "Your appointment details are updated."
         )
-    elif category == "feedback":
+    elif category in ["service_quality", "technician_issue", "missing_damaged", "safety_issue"]:
         message_body = (
-            "we have fully reviewed your feedback/complaint and taken the necessary actions. "
-            "We deeply value your input as it helps us improve our service."
+            "we have fully reviewed your feedback/complaint regarding the service quality or staff behavior "
+            "and taken the necessary corrective actions. We deeply value your input."
         )
     else:
         message_body = (

@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from service_requests.models import Complaint
-from customer_care.models import CustomerCareTicket
+from service_requests.models import Complaint, ComplaintMessage
+from customer_care.models import CustomerCareTicket, TicketMessage
 from customer_care.services import ticket_service
 from django.core.exceptions import ValidationError
 
@@ -11,18 +11,62 @@ def auto_create_ticket_from_complaint(sender, instance, created, **kwargs):
         if CustomerCareTicket.objects.filter(linked_complaint=instance).exists():
             return
 
+        # 1. Try to find an existing open ticket for the same customer that doesn't have a linked complaint yet
+        from django.db.models import Q
+        user = instance.raised_by
+        q_filter = Q(customer=user) if user else Q()
+        if user and user.email:
+            q_filter |= Q(email__iexact=user.email)
+        if user and getattr(user, "phone", ""):
+            q_filter |= Q(phone=user.phone)
+            
+        existing_ticket = None
+        if q_filter:
+            existing_ticket = CustomerCareTicket.objects.filter(
+                q_filter,
+                linked_complaint__isnull=True
+            ).exclude(status__in=["resolved", "closed"]).order_by("-created_at").first()
+
+        if existing_ticket:
+            existing_ticket.linked_complaint = instance
+            existing_ticket.save(update_fields=["linked_complaint", "updated_at"])
+            
+            # Log the complaint's description as a customer message on the existing ticket
+            if instance.description:
+                TicketMessage.objects.create(
+                    ticket=existing_ticket,
+                    sender=instance.raised_by,
+                    sender_persona=TicketMessage.SenderPersona.CUSTOMER,
+                    message=instance.description,
+                    is_internal_note=False
+                )
+            
+            # Log activity
+            from customer_care.models import TicketActivity
+            TicketActivity.objects.create(
+                ticket=existing_ticket,
+                actor=user,
+                activity_type="LINKED_COMPLAINT",
+                description=f"Complaint #{instance.complaint_number} was linked to this ticket from the portal."
+            )
+            return
+
+        # 2. Otherwise, create a new ticket
         company = getattr(instance.booking, "company", None)
         if not company:
             from companies.models import Company
             company = Company.objects.first()
 
         category_map = {
-            Complaint.Category.WRONG_BILLING: "billing",
-            Complaint.Category.TECHNICIAN_LATE: "scheduling",
-            Complaint.Category.POOR_SERVICE: "feedback",
-            Complaint.Category.QUALITY_ISSUE: "feedback",
+            Complaint.Category.WRONG_BILLING: "payment_issue",
+            Complaint.Category.TECHNICIAN_LATE: "booking_issue",
+            Complaint.Category.TECHNICIAN_BEHAVIOUR: "technician_issue",
+            Complaint.Category.INCOMPLETE_WORK: "booking_issue",
+            Complaint.Category.POOR_SERVICE: "service_quality",
+            Complaint.Category.QUALITY_ISSUE: "service_quality",
+            Complaint.Category.DAMAGED_PROPERTY: "missing_damaged",
         }
-        ticket_category = category_map.get(instance.category, "general")
+        ticket_category = category_map.get(instance.category, "other")
 
         priority_map = {
             Complaint.Priority.LOW: "low",
@@ -33,7 +77,7 @@ def auto_create_ticket_from_complaint(sender, instance, created, **kwargs):
         ticket_priority = priority_map.get(instance.priority, "medium")
 
         try:
-            ticket_service.create_ticket(
+            ticket = ticket_service.create_ticket(
                 company=company,
                 created_by=instance.raised_by,
                 category=ticket_category,
@@ -46,6 +90,16 @@ def auto_create_ticket_from_complaint(sender, instance, created, **kwargs):
                 booking=instance.booking,
                 linked_complaint=instance
             )
+            
+            # Log the complaint's description as a customer message on the new ticket
+            if instance.description:
+                TicketMessage.objects.create(
+                    ticket=ticket,
+                    sender=instance.raised_by,
+                    sender_persona=TicketMessage.SenderPersona.CUSTOMER,
+                    message=instance.description,
+                    is_internal_note=False
+                )
         except ValidationError:
             pass
 
@@ -61,7 +115,7 @@ def auto_create_ticket_from_low_rating(sender, instance, created, **kwargs):
             company = Company.objects.first()
 
         # Prevent duplicate tickets for same low feedback event
-        if CustomerCareTicket.objects.filter(booking=booking, category="feedback").exists():
+        if CustomerCareTicket.objects.filter(booking=booking, category="service_quality").exists():
             return
 
         customer = booking.customer
@@ -73,7 +127,7 @@ def auto_create_ticket_from_low_rating(sender, instance, created, **kwargs):
             ticket_service.create_ticket(
                 company=company,
                 created_by=customer or booking.created_by or User.objects.first(),
-                category="feedback",
+                category="service_quality",
                 priority="high",
                 channel="portal",
                 customer=customer,
@@ -84,3 +138,54 @@ def auto_create_ticket_from_low_rating(sender, instance, created, **kwargs):
             )
         except ValidationError:
             pass
+
+
+@receiver(post_save, sender=ComplaintMessage)
+def sync_complaint_message_to_ticket(sender, instance, created, **kwargs):
+    if created:
+        ticket = CustomerCareTicket.objects.filter(linked_complaint=instance.complaint).first()
+        if ticket:
+            exists = TicketMessage.objects.filter(
+                ticket=ticket,
+                sender=instance.sender,
+                message=instance.message
+            ).exists()
+            if not exists:
+                persona = TicketMessage.SenderPersona.CUSTOMER
+                if instance.sender_persona == ComplaintMessage.Persona.ADMIN:
+                    persona = TicketMessage.SenderPersona.AGENT
+                elif instance.sender_persona == ComplaintMessage.Persona.EMPLOYEE:
+                    persona = TicketMessage.SenderPersona.AGENT
+                
+                TicketMessage.objects.create(
+                    ticket=ticket,
+                    sender=instance.sender,
+                    sender_persona=persona,
+                    message=instance.message,
+                    is_internal_note=False
+                )
+
+
+@receiver(post_save, sender=TicketMessage)
+def sync_ticket_message_to_complaint(sender, instance, created, **kwargs):
+    if created:
+        if instance.is_internal_note:
+            return
+        ticket = instance.ticket
+        if ticket.linked_complaint:
+            exists = ComplaintMessage.objects.filter(
+                complaint=ticket.linked_complaint,
+                sender=instance.sender,
+                message=instance.message
+            ).exists()
+            if not exists:
+                persona = ComplaintMessage.Persona.CUSTOMER
+                if instance.sender_persona == TicketMessage.SenderPersona.AGENT:
+                    persona = ComplaintMessage.Persona.ADMIN
+                
+                ComplaintMessage.objects.create(
+                    complaint=ticket.linked_complaint,
+                    sender=instance.sender,
+                    sender_persona=persona,
+                    message=instance.message
+                )

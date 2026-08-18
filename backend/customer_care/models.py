@@ -11,12 +11,22 @@ def generate_ticket_number():
 
 class CustomerCareTicket(CompanyScopedModel):
     class Category(models.TextChoices):
+        BOOKING_ISSUE = "booking_issue", "Booking Issue"
+        SERVICE_QUALITY = "service_quality", "Service Quality"
+        TECHNICIAN_ISSUE = "technician_issue", "Technician Issue"
+        PAYMENT_ISSUE = "payment_issue", "Payment Issue"
+        REFUND = "refund", "Refund"
+        CANCELLATION = "cancellation", "Cancellation"
+        RESCHEDULE = "reschedule", "Reschedule"
+        PRICING_ISSUE = "pricing_issue", "Pricing Issue"
+        MISSING_DAMAGED = "missing_damaged", "Missing / Damaged Item"
+        SAFETY_ISSUE = "safety_issue", "Safety Issue"
+        OTHER = "other", "Other"
         GENERAL = "general", "General Support"
         BILLING = "billing", "Billing & Payments"
         TECHNICAL = "technical", "Technical Issue"
         SCHEDULING = "scheduling", "Scheduling & Dispatch"
         FEEDBACK = "feedback", "Customer Feedback"
-        OTHER = "other", "Other"
 
     class Priority(models.TextChoices):
         LOW = "low", "Low"
@@ -87,7 +97,7 @@ class CustomerCareTicket(CompanyScopedModel):
     )
 
     category = models.CharField(
-        max_length=20, choices=Category.choices, default=Category.GENERAL
+        max_length=20, choices=Category.choices, default=Category.OTHER
     )
     priority = models.CharField(
         max_length=20, choices=Priority.choices, default=Priority.MEDIUM
@@ -226,6 +236,7 @@ class CommunicationLog(models.Model):
 class CareAgentProfile(CompanyScopedModel):
     class CareRole(models.TextChoices):
         CARE_EXECUTIVE = "care_executive", "Care Executive"
+        SENIOR_CARE = "senior_care", "Senior Care"
         OPS_MANAGER = "ops_manager", "Ops Manager"
         ADMIN = "admin", "Admin Support"
 
