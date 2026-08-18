@@ -8823,7 +8823,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "780",
-      image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&auto=format&fit=crop&q=80",
+      image: "/mockups/brick_wall_construction_red.jpg",
       includes: ["Base anchor setup", "Internal brick/block wall building", "Plaster coat finishing"],
       excludes: ["Electrical box carving"],
       inspectionHighlights: ["Vertical alignment verification"],
@@ -8841,7 +8841,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "950",
-      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop&q=80",
+      image: "/mockups/aac_block_wall_construction.jpg",
       includes: ["Partition plan layout", "Anchor setup", "Brick/block partition walls construction"],
       excludes: ["Painting and electrical wiring"],
       inspectionHighlights: ["Floor load verification", "Alignment checks"],
@@ -8859,7 +8859,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       duration: "Flexible",
       rating: "4.8",
       reviews: "1.1K",
-      image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&auto=format&fit=crop&q=80",
+      image: "/mockups/half_wall_construction.jpg",
       includes: ["Custom brick partitions", "Counter top support construction", "Breakfast counter base"],
       excludes: ["Granite counter top installation"],
       inspectionHighlights: ["Space optimization check"],
@@ -10729,7 +10729,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     mason: [
       { name: "Brick & Block Work", image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop" },
       { name: "Plastering & Wall Repair", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-      { name: "Wall & Partition Construction", image: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=300&q=80&fit=crop" },
+      { name: "Wall & Partition Construction", image: "/mockups/brick_wall_construction_red.jpg" },
       { name: "Wall Breaking & Demolition", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
     ],
     pest_control: [
@@ -11595,7 +11595,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100",
           description: "Heavy brick masonry partition wall built with proper top ceiling anchors.",
           includes: ["Foundation course anchoring", "Brick partition build", "Lintel support casting"],
-          image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=500&auto=format&fit=crop&q=80"
+          image: "/mockups/brick_wall_construction_red.jpg"
         },
         {
           id: "mason-part-2",
@@ -11606,7 +11606,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-blue-50 text-blue-700 border-blue-100",
           description: "Autoclaved lightweight concrete block partition wall to divide living space.",
           includes: ["Space layout leveling", "Block joint gluing", "Wall perimeter sealing"],
-          image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop&q=80"
+          image: "/mockups/aac_block_wall_construction.jpg"
         },
         {
           id: "mason-part-3",
@@ -11617,7 +11617,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
           badgeColor: "bg-teal-50 text-teal-700 border-teal-100",
           description: "Low-height counter/half-brick walls for open kitchen partitions or balcony boundaries.",
           includes: ["Layout leveling scan", "Counter brick layout work", "Top coping concrete slab"],
-          image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=500&auto=format&fit=crop&q=80"
+          image: "/mockups/half_wall_construction.jpg"
         }
       ],
       "Wall Breaking & Demolition": [
