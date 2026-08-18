@@ -110,20 +110,15 @@ export const SOFA_DETAIL_DATA = {
     ready: ["Clear all plates, cutlery, and table runners from the dining table"],
     reviews: [
       { name: "Rohit P.", rating: "4.9", text: '"Very detailed cleaning of the dining chairs as well. Stains are completely gone!"' },
-      { name: "Kunal M.", rating: "4.8", text: '"Cleaned the glass table top spotless. The wooden chairs look polished."' },
-      { name: "Manoj D.", rating: "5.0", text: '"Removed grease stains from the chair handles. Very neat work."' },
-      { name: "Sunita G.", rating: "4.9", text: '"Cleaned our 6-seater dining set thoroughly. Spotless tabletop."' },
-      { name: "Amit H.", rating: "4.7", text: '"Polite technician. Sanitsed the dining table surface well."' }
+      { name: "Kunal M.", rating: "4.8", text: '"Cleaned the glass table top spotless. The wooden chairs look polished."' }
     ],
     faqs: [
-      { q: "Will this clean the table chairs too?", a: "Yes, this service covers the deep cleaning of both the dining table and the chairs." },
-      { q: "Is wood polishing included?", a: "No, we perform standard cleaning and gentle wiping. Wood varnishing or professional polishing is not included." },
-      { q: "How many chairs are covered?", a: "Up to a 6-seater dining set is covered in the standard package." },
-      { q: "Will you clean table mats?", a: "No, table mats, table cloths, and runners are not cleaned." },
-      { q: "Do you clean table extensions?", a: "Yes, if the table extensions are opened by the customer before cleaning." },
-      { q: "Will you remove grease stains?", a: "Yes, food oil, grease, and sticky stains are thoroughly cleaned." },
-      { q: "Do you clean glass tabletops?", a: "Yes, glass tops are cleaned with specialized glass cleaning spray." },
-      { q: "How long does it take?", a: "The dining table and chairs cleaning takes about 30 to 40 minutes." }
+      { q: "Do you clean chair cushions?", a: "Yes, we dry dust and wipe the chairs. Complete fabric shampooing of chair cushions is not included." },
+      { q: "What types of table materials do you clean?", a: "We clean all common table surfaces including wood, glass, marble, metal, and laminates." },
+      { q: "Do you apply polish to wooden tables?", a: "Yes, we use a premium wood polish to restore the natural shine and protect wooden surfaces." },
+      { q: "Will this remove food stains from marble?", a: "We clean and sanitize marble tops; however, deep acidic stains or etching in marble may require professional polishing." },
+      { q: "How long does table and chair cleaning take?", a: "It typically takes 30 to 40 minutes depending on the table size and chair setup." },
+      { q: "Do you clean under the table?", a: "Yes, we clean the table legs and the floor space immediately underneath the dining table." }
     ]
   },
   "fabric-sofa-clean": {
