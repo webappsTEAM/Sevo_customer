@@ -6,7 +6,6 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('service_requests', '0033_merge_20260814_1629'),
         ('service_requests', '0037_alter_package_options'),
     ]
 
