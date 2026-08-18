@@ -1194,7 +1194,11 @@ export function LoginPage() {
                 </div>
               </form>
 
-              <div className="mt-8 text-center space-y-4">
+              <div className="mt-8 text-center space-y-3">
+                <Link to={routes.customer_login} className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-xs font-bold hover:bg-teal-100 transition-all">
+                  <span>Looking for Customer Login?</span>
+                  <ArrowRight size={12} />
+                </Link>
                 <Link to={routes.organization_signup} className="block text-[11px] font-bold uppercase tracking-widest text-indigo-600 hover:text-indigo-500 transition-colors">
                   Setup New Organization
                 </Link>
