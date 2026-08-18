@@ -78,6 +78,22 @@ export async function apiVerifyCustomerOTP(identifier, channel, otp_code) {
   })
 }
 
+export async function apiRequestCustomerPhoneOTP(phone) {
+  return apiRequestCustomerOTP(phone, "phone")
+}
+
+export async function apiVerifyCustomerPhoneOTP(phone, otp_code) {
+  return apiVerifyCustomerOTP(phone, "phone", otp_code)
+}
+
+export async function apiRequestCustomerMobileOTP(phone) {
+  return apiRequestCustomerOTP(phone, "phone")
+}
+
+export async function apiVerifyCustomerMobileOTP(phone, otp_code) {
+  return apiVerifyCustomerOTP(phone, "phone", otp_code)
+}
+
 export async function apiCompleteCustomerProfile(customer_id, full_name, { email = null, phone = null } = {}) {
   return fetchJSON("/auth/customer/profile/complete/", {
     method: "POST",

@@ -179,12 +179,7 @@ class CatalogServiceListView(APIView):
         cat_id = request.GET.get('category_id') or ''
         service_slug = request.GET.get('service_slug') or ''
         status_filter = request.GET.get('status') or ''
-<<<<<<< HEAD
-
-=======
-        
         use_cache = not getattr(settings, 'DEBUG', False)
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
         cache_key = f"catalog_services_list_{cat_id}_{service_slug}_{status_filter}"
         
         if use_cache:

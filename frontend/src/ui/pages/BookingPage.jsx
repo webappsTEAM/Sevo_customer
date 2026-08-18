@@ -1284,7 +1284,6 @@ function LocationPickerModal({ onClose, onConfirm, initialLocation, initialCoord
   )
 }
 
-<<<<<<< HEAD
 function StepHome({ searchQuery, setSearchQuery, onSelect, categories, dynamicReviews, user }) {
   const [rotIdx, setRotIdx] = useState(0)
   const safeCats = categories && categories.length > 0 ? categories : CATEGORIES;
@@ -3336,8 +3335,6 @@ function StepBar({ step, total }) {
     </div>
   )
 }
-=======
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    MAIN PAGE

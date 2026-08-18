@@ -9,11 +9,8 @@ import {
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
 import { createBooking } from "../../api/bookingService.js"
-<<<<<<< HEAD
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
-=======
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -973,15 +970,10 @@ export function MiniTruckBookingHosurPage() {
   }
 
   const handleBookNow = () => {
-<<<<<<< HEAD
-    // Called from vehicle selector modal "Book Now"
-    if (!isSignedIn) {
-      setVehicleSelectorOpen(false)
-      setLoginModalOpen(true)
-    } else {
-      setVehicleSelectorOpen(false)
-      submitBooking()
-    }
+    // Called from vehicle selector modal "Book Now" -> Opens Date & Slot Stepper
+    setVehicleSelectorOpen(false)
+    setStepperStep(3)
+    setSlotStepperOpen(true)
   }
 
   const handleSendOtp = async () => {
@@ -1026,12 +1018,6 @@ export function MiniTruckBookingHosurPage() {
     } finally {
       setOtpLoading(false)
     }
-=======
-    // Called from vehicle selector modal "Book Now" -> Opens Date & Slot Stepper
-    setVehicleSelectorOpen(false)
-    setStepperStep(3)
-    setSlotStepperOpen(true)
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
   }
 
   return (
@@ -2219,7 +2205,6 @@ export function MiniTruckBookingHosurPage() {
         </div>
       )}
 
-<<<<<<< HEAD
       {/* ── Login / Welcome Modal (Image 5 flow) ─────────────────── */}
       {loginModalOpen && (
         <div
@@ -2394,9 +2379,6 @@ export function MiniTruckBookingHosurPage() {
           </div>
         </div>
       )}
-
-=======
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
       {/* ── Booking Success Modal ─────────────────────────────────── */}
       {bookingSuccessOpen && (
         <div

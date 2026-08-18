@@ -10,11 +10,8 @@ import {
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
 import { createBooking } from "../../api/bookingService.js"
-<<<<<<< HEAD
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
-=======
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -1174,7 +1171,6 @@ export function PackersMoversBookingHosurPage() {
     }
   }
 
-<<<<<<< HEAD
   const handleSendOtp = async () => {
     if (!phone || phone.trim().length < 10) return
     setOtpLoading(true)
@@ -1218,9 +1214,6 @@ export function PackersMoversBookingHosurPage() {
       setOtpLoading(false)
     }
   }
-
-=======
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
   const handleItemCount = (item, delta) => {
     setInventoryItems(prev => {
       const current = prev[item] || 0
@@ -2606,7 +2599,6 @@ export function PackersMoversBookingHosurPage() {
         </div>
       )}
 
-<<<<<<< HEAD
       {/* 3. Login & OTP Verification Modal */}
       {loginModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -2741,9 +2733,6 @@ export function PackersMoversBookingHosurPage() {
           </div>
         </div>
       )}
-
-=======
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
       {/* 4. Booking Confirmation Success Modal */}
       {bookingSuccessOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">

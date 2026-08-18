@@ -9,11 +9,8 @@ import {
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
 import { createBooking } from "../../api/bookingService.js"
-<<<<<<< HEAD
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
-=======
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -679,14 +676,10 @@ export function TwoWheelerBookingHosurPage() {
   }
 
   const handleBookNow = () => {
-<<<<<<< HEAD
-    if (!isSignedIn) {
-      setVehicleSelectorOpen(false)
-      setLoginModalOpen(true)
-    } else {
-      setVehicleSelectorOpen(false)
-      submitBooking()
-    }
+    // Called from vehicle selector modal "Book Now" -> Opens Date & Slot Stepper
+    setVehicleSelectorOpen(false)
+    setStepperStep(3)
+    setSlotStepperOpen(true)
   }
 
   const handleSendOtp = async () => {
@@ -731,12 +724,6 @@ export function TwoWheelerBookingHosurPage() {
     } finally {
       setOtpLoading(false)
     }
-=======
-    // Called from vehicle selector modal "Book Now" -> Opens Date & Slot Stepper
-    setVehicleSelectorOpen(false)
-    setStepperStep(3)
-    setSlotStepperOpen(true)
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
   }
 
   return (
@@ -1823,59 +1810,7 @@ export function TwoWheelerBookingHosurPage() {
                   </div>
                 </div>
               </div>
-<<<<<<< HEAD
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">
-                    Enter 6-digit OTP
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={otpValue}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 6)
-                      setOtpValue(val)
-                      if (val.length === 6) {
-                        handleVerifyOtp(val)
-                      }
-                    }}
-                    placeholder="• • • • • •"
-                    className="w-full text-center text-2xl tracking-[1em] font-extrabold bg-slate-50 border border-slate-200 rounded-xl py-3 text-slate-900 outline-none focus:border-emerald-500 focus:bg-white"
-                  />
-                </div>
-
-                {bookingError && (
-                  <p style={{ color: "var(--bad)", fontSize: 12, textAlign: "center" }}>{bookingError}</p>
-                )}
-
-                {otpLoading || bookingSubmitting ? (
-                  <div className="w-full py-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-sm">
-                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                    <span>{bookingSubmitting ? "Confirming booking in real time..." : "Verifying OTP in real time..."}</span>
-                  </div>
-                ) : (
-                  <div className="w-full py-2.5 bg-slate-50 border border-dashed border-slate-200 text-slate-500 text-[11px] font-semibold rounded-xl text-center flex items-center justify-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Auto-verifying — enters and confirms instantly</span>
-                  </div>
-                )}
-
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => setOtpStep(false)}
-                    className="text-xs text-slate-500 hover:text-emerald-600 font-semibold cursor-pointer"
-                  >
-                    &larr; Change Mobile Number
-                  </button>
-                </div>
-              </div>
-            )}
-=======
             </div>
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
           </div>
         </div>
       )}

@@ -238,7 +238,6 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
     setErrorMsg("")
 
     try {
-<<<<<<< HEAD
       let res = null
       try {
         // 1. Instant WebSocket verification
@@ -249,10 +248,6 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
       }
 
       if (res && res.success) {
-=======
-      const res = await apiVerifyCustomerOTP(identifier, channel, otpCode)
-      if (res.success) {
->>>>>>> 58b537a12c4ef4b04b525eb79048e9fd3135c975
         const { is_new_customer, customer_id } = res.data || {}
         setCustomerId(customer_id)
         if (typeof refreshMe === "function") await refreshMe()
