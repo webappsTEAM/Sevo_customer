@@ -177,7 +177,7 @@ export default function TeamMembersSection({ showToast, SectionHeader }) {
 
   return (
     <div className="stPanel animate-fadeUp">
-      <SectionHeader title="Team & Members" subtitle="Invite teammates, assign roles, and manage workspace access." />
+      <SectionHeader title="Team & Administrators" subtitle="Invite fellow administrators, managers, and support staff to manage services, bookings, and customer care." />
 
       <Card>
         <div className="flex flex-col md:flex-row md:items-end gap-6">
