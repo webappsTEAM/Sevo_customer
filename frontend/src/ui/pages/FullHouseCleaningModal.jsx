@@ -148,29 +148,27 @@ const FULL_HOUSE_SERVICES = {
     {
       id: "quick-balcony-upto-4ft",
       name: "Balcony Cleaning: Upto 4 ft Width",
-      description: "Thorough floor scrubbing, railing wipe and drainage cleaning for smaller balconies.",
+      description: "Washing and scrubbing of balcony floor and railings.",
       rating: "4.81",
       reviews: "1.7M bookings",
       price: 399,
       duration: "30 mins",
       image: "/mockups/balcony_cleaning.png",
       includes: [
-        "Complete balcony floor scrubbing & wet mopping",
-        "Dusting and wet wiping of balcony railings & grilles"
+        "Balcony floor washing, scrubbing, and railing dusting"
       ]
     },
     {
       id: "quick-balcony-above-4ft",
       name: "Balcony Cleaning: Above 4 ft Width",
-      description: "Intensive floor scrubbing, glass partition wipe and railing cleaning for spacious balconies.",
+      description: "Deep floor scrubbing and mesh cleaning for large balconies.",
       rating: "4.81",
       reviews: "1.7M bookings",
       price: 549,
       duration: "50 mins",
       image: "/mockups/balcony_cleaning.png",
       includes: [
-        "Heavy scrubbing of tiled/concrete balcony floor surfaces",
-        "Polishing of glass balustrades & frame borders"
+        "Balcony floor washing, scrubbing, and railing dusting"
       ]
     },
     {
@@ -641,21 +639,19 @@ export const HOUSE_DETAILS_CONTENT = {
   },
   "quick-balcony-upto-4ft": {
     covered: ["Scrubbing of balcony floor", "Wiping of balcony railings", "Cleaning of drainage outlet"],
-    tools: ["Scrubbing brush", "Eco-friendly cleaning agents", "Microfiber cloth"],
-    ready: ["Clear any plants or furniture from the balcony", "Ensure access to water and power outlets"],
+    tools: ["Floor scrubbing brushes", "Balcony floor cleaner", "Wiper", "Microfiber cloths"],
+    ready: ["Clear plants, clothes drying racks, and outdoor furniture from the balcony floor"],
     reviews: [
-      { name: "Rashmi A.", rating: 4.8, comment: "Small balcony looks spotless now. Quick and efficient service in just 25 minutes!" },
-      { name: "Harish G.", rating: 4.7, comment: "Great job removing pigeon droppings and dirt. Railings are shining." }
+      { name: "Manish P.", rating: 4.9, comment: "The balcony floor tiles and railing are sparkling clean. Great dust and pigeon dropping removal!" },
+      { name: "Swati D.", rating: 4.8, comment: "Quick and efficient pressure wash. Removed all the hard dirt from the balcony corners." }
     ],
     faqs: [
-      { q: "How long does a small balcony clean take?", a: "It typically takes 20-30 minutes." },
-      { q: "Do you clean the sliding door frame too?", a: "Yes, we wipe down the door frames bordering the balcony." },
-      { q: "Is pigeon droppings removal covered?", a: "Yes, we remove pigeon droppings and sanitize the area." },
-      { q: "Are cleaning chemicals safe for pets?", a: "Yes, we use safe, non-toxic cleaning agents." },
-      { q: "Do you offer a satisfaction warranty?", a: "We guarantee quality work and will address any spots missed." },
-      { q: "What if there is heavy dust accumulation?", a: "We perform deep manual scrubbing to remove thick dust layers." },
-      { q: "Do you wash the balcony wall?", a: "We do localized spot wiping on balcony walls, not complete high-pressure wash." },
-      { q: "Are windows bordering the balcony cleaned?", a: "Only the exterior frame and panes facing the balcony are wiped." }
+      { q: "Do you clean pigeon droppings?", a: "Yes, we scrape, disinfect, and wash areas affected by bird droppings." },
+      { q: "Will you clean the balcony glass railing?", a: "Yes, deep cleaning of glass panels and steel/iron railings is included." },
+      { q: "Is water outlet required?", a: "Yes, access to water (a tap) is required to wash the balcony floor." },
+      { q: "Do you clean wall tiles in the balcony?", a: "Yes, we wipe and scrub accessible balcony wall tiles up to shoulder height." },
+      { q: "How long does it take?", a: "It takes approximately 30 to 45 minutes depending on balcony size." },
+      { q: "Do you clean balcony ceiling fans?", a: "Dusting is included; deep fan cleaning can be added as a separate service." }
     ]
   },
   "quick-balcony-above-4ft": {
@@ -778,12 +774,12 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
   useEffect(() => {
     const fetchPackages = async () => {
       try {
-        const res = await apiRequest("/settings/catalog/public/packages/?service_slug=full-house-cleaning");
+        const res = await apiRequest("/settings/catalog/public/packages/");
         if (res.success && Array.isArray(res.data)) {
           setDbPackages(res.data);
         }
       } catch (err) {
-        console.error("Failed to fetch full house packages:", err);
+        console.error("Failed to fetch packages:", err);
       }
     };
     fetchPackages();

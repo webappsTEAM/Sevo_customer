@@ -13,6 +13,562 @@ import { useToast, ToastBanner } from "./useToast.jsx"
 import { SOFA_DETAIL_DATA } from "./sofaDetailData.js"
 import { HOUSE_DETAILS_CONTENT } from "../FullHouseCleaningModal.jsx"
 
+const SERVICE_DEFAULT_CUSTOMIZATIONS = {
+  // --- PAINTING SERVICES ---
+  "interior-painting": {
+    rating: "4.8",
+    reviews: "18K",
+    reviews_list: [
+      { name: "Aranya S.", rating: 5.0, comment: "The painters were highly professional. They completed the work on time with superb masking and protection for my furniture. Clean cleanup afterwards!", enabled: true },
+      { name: "Rahul K.", rating: 4.8, comment: "Good service for home interior wall painting. The team was quick and standard finish paint quality was excellent.", enabled: true }
+    ],
+    points: [
+      "Complete wall prep & putty application",
+      "Double coat premium emulsion paint",
+      "Detailed masking & post-cleanup protection",
+      "1-Year Service Warranty"
+    ],
+    benefits: [
+      { title: "Premium Quality", icon: "award" },
+      { title: "Verified Painters", icon: "shield" },
+      { title: "Clean Post-Service", icon: "sparkles" },
+      { title: "1-Year Warranty", icon: "check-circle" }
+    ],
+    includes: [
+      "Wall Putty",
+      "Primer Application",
+      "2 Coats Premium Emulsion Paint",
+      "Masking & Protection",
+      "Post-Service Cleaning",
+      "1-Year Warranty"
+    ],
+    excludes: [
+      "Major plastering work",
+      "Dampness treatment (available separately)",
+      "Electrical/re-wiring work"
+    ],
+    inspection_highlights: [
+      "Digital Wall Measurement",
+      "Moisture Meter Inspection",
+      "Wall Putty/Paint Damage Assessment"
+    ],
+    steps: [
+      { title: "Book Home Inspection", desc: "Tell us preferred time to book", icon: "calendar" },
+      { title: "Measure & Estimate", desc: "Get accurate quotes with laser measurements", icon: "calculator" },
+      { title: "Project Initiation", desc: "Guaranteed on time project initiation and completion", icon: "paint-roller" },
+      { title: "Cleaning & Quality Check", desc: "Post paint cleanup and quality check", icon: "check-circle" }
+    ],
+    faqs: [
+      { q: "Will the painters cover and protect the furniture?", a: "Yes, complete masking and covering of furniture, electronics, and floors with plastic sheets is included." },
+      { q: "Do I need to clean the house after the painting is done?", a: "No, our team handles all post-painting cleanup, including paint splatters and vacuuming." },
+      { q: "What paint brands do you use?", a: "We use premium quality paints from Asian Paints, Berger, and Nerolac based on your selection." }
+    ],
+    price_list: [
+      { type: "Tractor UNO", price: "₹7/sq.ft" },
+      { type: "Tractor Emulsion", price: "₹9/sq.ft" },
+      { type: "Premium Emulsion", price: "₹15/sq.ft" },
+      { type: "Royal Luxury Emulsion", price: "₹27/sq.ft" }
+    ],
+    paint_types: [
+      { id: "tractor-uno", name: "Tractor UNO", price: 7, type: "Economy", image: "/tractor-uno.png" },
+      { id: "tractor-emulsion", name: "Tractor Emulsion", price: 9, type: "Standard", image: "/tractor-emulsion.png" },
+      { id: "premium-emulsion", name: "Premium Emulsion", price: 15, type: "Premium", image: "/premium-emulsion.png" },
+      { id: "royal-luxury", name: "Royal Luxury Emulsion", price: 27, type: "Luxury", image: "/royal-luxury-emulsion.png" }
+    ],
+    includes_heading: "WHAT'S INCLUDED",
+    excludes_heading: "WHAT'S NOT INCLUDED",
+    steps_heading: "HOW PAINTING WORKS",
+    suboptions_heading: "Painting choices for your home",
+    faqs_heading: "Frequently Asked Questions",
+    button_text: "View details",
+    estimate_cta: "Get Estimate"
+  },
+  "exterior-painting": {
+    rating: "4.7",
+    reviews: "15K",
+    reviews_list: [
+      { name: "Vikram M.", rating: 4.9, comment: "Superb exterior painting. They did excellent crack filling and high pressure washing before applying the weathercoat. Very satisfied!", enabled: true },
+      { name: "Sneha R.", rating: 4.7, comment: "Very professional scaffolding work and paint job. The dust-resistant paint looks wonderful on our building.", enabled: true }
+    ],
+    points: [
+      "Pressure washing & crack filling",
+      "Anti-fungal primer coat",
+      "Double coat weather-defense paint",
+      "Dust and dirt resistant finish"
+    ],
+    benefits: [
+      { title: "Weatherproof Shield", icon: "shield" },
+      { title: "Scaffolding Safety", icon: "award" },
+      { title: "Crack Treatment", icon: "tool" },
+      { title: "3-Year Warranty", icon: "check-circle" }
+    ],
+    includes: [
+      "High Pressure Washing",
+      "Sanding & Crack Filling",
+      "Anti-Algae Exterior Primer",
+      "2 Coats Weatherproof Paint",
+      "Grill & Pipe Protective Coating",
+      "Post-Service Cleaning"
+    ],
+    excludes: [
+      "Is scaffolding included in the package?",
+      "How do you handle cracks on the outer walls?",
+      "How long does exterior painting last?"
+    ],
+    inspection_highlights: [
+      "Outer Wall Crack Scan",
+      "Height & Scaffolding Check",
+      "Dampness Assessment"
+    ],
+    steps: [
+      { title: "Book Home Inspection", desc: "Tell us preferred time to book", icon: "calendar" },
+      { title: "Measure & Estimate", desc: "Get accurate quotes with laser measurements", icon: "calculator" },
+      { title: "Project Initiation", desc: "Guaranteed on time project initiation and completion", icon: "paint-roller" },
+      { title: "Cleaning & Quality Check", desc: "Post paint cleanup and quality check", icon: "check-circle" }
+    ],
+    faqs: [
+      { q: "Is scaffolding included in the package?", a: "Yes, standard scaffolding is included for up to three floors. Higher floors may incur additional safety setup fees." },
+      { q: "How do you handle cracks on the outer walls?", a: "We fill exterior cracks with high-grade weather defense sealant and apply anti-fungal primer before painting." },
+      { q: "How long does exterior painting last?", a: "Our premium exterior weather coat packages come with a 3-year durability warranty." }
+    ],
+    price_list: [
+      { type: "Economy Exterior", price: "₹15/sq.ft" },
+      { type: "Weather Protection", price: "₹20/sq.ft" },
+      { type: "Premium Exterior", price: "₹28/sq.ft" },
+      { type: "Advanced Weatherproof", price: "₹35/sq.ft" }
+    ],
+    paint_types: [
+      { id: "economy-exterior", name: "Economy Exterior", price: 15, type: "Economy", image: "/tractor-uno.png" },
+      { id: "weather-protection", name: "Weather Protection", price: 20, type: "Standard", image: "/tractor-emulsion.png" },
+      { id: "premium-exterior", name: "Premium Exterior", price: 28, type: "Premium", image: "/premium-emulsion.png" },
+      { id: "advanced-weatherproof", name: "Advanced Weatherproof", price: 35, type: "Luxury", image: "/royal-luxury-emulsion.png" }
+    ],
+    includes_heading: "WHAT'S INCLUDED",
+    excludes_heading: "WHAT'S NOT INCLUDED",
+    steps_heading: "HOW EXTERIOR PAINTING WORKS",
+    suboptions_heading: "Weather-proof exterior choices",
+    faqs_heading: "Frequently Asked Questions",
+    button_text: "View details",
+    estimate_cta: "Get Estimate"
+  },
+  "waterproofing": {
+    rating: "4.8",
+    reviews: "12K",
+    reviews_list: [
+      { name: "Amit P.", rating: 4.8, comment: "Resolved our bathroom wall seepage problem. They detected the leakage source using a thermal scanner and sealed it.", enabled: true },
+      { name: "Deepa S.", rating: 4.9, comment: "Waterproofed our terrace before the monsoon. Excellent pressure grouting work. Highly recommend!", enabled: true }
+    ],
+    points: [
+      "Thermal moisture scan analysis",
+      "Multi-layer waterproof barriers",
+      "Epoxy and polyurethane sealing",
+      "3-Year Leakage Warranty"
+    ],
+    benefits: [
+      { title: "Leak Scan Tech", icon: "eye" },
+      { title: "Pressure Grouting", icon: "tool" },
+      { title: "Seepage Defense", icon: "shield" },
+      { title: "3-Year Warranty", icon: "check-circle" }
+    ],
+    includes: [
+      "Thermal Moisture Scan",
+      "Surface Prep & Grinding",
+      "High-Build Waterproofing Seal",
+      "Epoxy Grout Application",
+      "Pressure Grouting Checks",
+      "CalServices Warranty"
+    ],
+    excludes: [
+      "Breaking structural slabs",
+      "Restoration painting (optional addon)",
+      "Plumbing line replacement"
+    ],
+    inspection_highlights: [
+      "Thermal Moisture Scan",
+      "Leakage Source Mapping",
+      "Tile Joint Soundness Inspection"
+    ],
+    steps: [
+      { title: "Book Home Inspection", desc: "Tell us preferred time to book", icon: "calendar" },
+      { title: "Measure & Estimate", desc: "Get accurate quotes with laser measurements", icon: "calculator" },
+      { title: "Project Initiation", desc: "Guaranteed on time project initiation and completion", icon: "paint-roller" },
+      { title: "Cleaning & Quality Check", desc: "Post paint cleanup and quality check", icon: "check-circle" }
+    ],
+    faqs: [
+      { q: "Do you break the floor tiles for bathroom waterproofing?", a: "Only if the leakage source is underneath the slab. For minor joints, we do it without breaking using advanced grouting." },
+      { q: "How does the warranty work?", a: "Our waterproofing treatments come with a 3-year warranty covering leakage from treated areas." },
+      { q: "Is leakage source detection free?", a: "Yes, leakage scan and source mapping is included in the ₹49 inspection visit." }
+    ],
+    price_list: [
+      { type: "Terrace Waterproofing", price: "₹45/sq.ft" },
+      { type: "Bathroom Waterproofing", price: "₹50/sq.ft" },
+      { type: "Wall Seepage Treatment", price: "₹35/sq.ft" },
+      { type: "Crack Waterproofing", price: "₹30/sq.ft" },
+      { type: "Balcony Waterproofing", price: "₹45/sq.ft" }
+    ],
+    paint_types: [
+      { id: "crack-waterproofing", name: "Crack Waterproofing", price: 30, type: "Basic", image: "/premium-emulsion.png" },
+      { id: "wall-seepage", name: "Wall Seepage Treatment", price: 35, type: "Standard", image: "/tractor-emulsion.png" },
+      { id: "terrace-waterproofing", name: "Terrace Waterproofing", price: 45, type: "Premium", image: "/tractor-uno.png" },
+      { id: "balcony-waterproofing", name: "Balcony Waterproofing", price: 45, type: "Premium", image: "/royal-luxury-emulsion.png" },
+      { id: "bathroom-waterproofing", name: "Bathroom Waterproofing", price: 50, type: "Advanced", image: "/premium-emulsion.png" }
+    ],
+    includes_heading: "WHAT'S INCLUDED",
+    excludes_heading: "WHAT'S NOT INCLUDED",
+    steps_heading: "HOW WATERPROOFING WORKS",
+    suboptions_heading: "Waterproofing areas & treatments",
+    faqs_heading: "Frequently Asked Questions",
+    button_text: "View details",
+    estimate_cta: "Get Estimate"
+  },
+  "wood-metal": {
+    rating: "4.8",
+    reviews: "9K",
+    reviews_list: [
+      { name: "Karan T.", rating: 4.8, comment: "Gave our old wooden doors a premium PU polish look. The spray finish is perfectly smooth.", enabled: true },
+      { name: "Preeti G.", rating: 4.7, comment: "Repainted our rusted balcony grills. Excellent mechanical sanding and anti-rust coating.", enabled: true }
+    ],
+    points: [
+      "Anti-corrosive primer coat",
+      "Mechanical rust sanding prep",
+      "High gloss enamel application",
+      "Premium wooden PU polish option"
+    ],
+    benefits: [
+      { title: "Rust Sanding", icon: "tool" },
+      { title: "Anti-Rust Shield", icon: "shield" },
+      { title: "Smooth Spray finish", icon: "droplet" },
+      { title: "Premium PU", icon: "award" }
+    ],
+    includes: [
+      "Mechanical Sanding Prep",
+      "Rust Scrape & Removal",
+      "Corrosion Inhibiting Primer",
+      "2 Coats Premium Enamel/Polish",
+      "Gloss & Matt Options",
+      "Cleanup & Disposal"
+    ],
+    excludes: [
+      "Wood carpentry repairs",
+      "Replacing rusted metal grills",
+      "Structural alignment fixes"
+    ],
+    inspection_highlights: [
+      "Rust Damage Assessment",
+      "Wood Grain Quality Check",
+      "Surface Polish Thickness Scan"
+    ],
+    steps: [
+      { title: "Book Home Inspection", desc: "Tell us preferred time to book", icon: "calendar" },
+      { title: "Measure & Estimate", desc: "Get accurate quotes with laser measurements", icon: "calculator" },
+      { title: "Project Initiation", desc: "Guaranteed on time project initiation and completion", icon: "paint-roller" },
+      { title: "Cleaning & Quality Check", desc: "Post paint cleanup and quality check", icon: "check-circle" }
+    ],
+    faqs: [
+      { q: "Do you repair broken wooden parts?", a: "No, carpentry repairs or wood replacement must be completed before painting begins." },
+      { q: "What is the difference between PU polish and normal enamel?", a: "PU polish retains the natural wood grains with a premium finish, while enamel is an opaque protective color coat." },
+      { q: "How do you prevent grill rust from returning?", a: "We scrape existing rust mechanically, apply a specialized anti-corrosion primer, and cover with double coat enamel." }
+    ],
+    price_list: [
+      { type: "Wooden Door Painting", price: "₹35/sq.ft" },
+      { type: "Wooden Polish", price: "₹50/sq.ft" },
+      { type: "Window Painting", price: "₹30/sq.ft" },
+      { type: "Metal Grill Painting", price: "₹25/sq.ft" },
+      { type: "Metal Gate Painting", price: "₹30/sq.ft" },
+      { type: "Enamel Finish", price: "₹35/sq.ft" }
+    ],
+    paint_types: [
+      { id: "metal-grill", name: "Metal Grill Painting", price: 25, type: "Basic", image: "/tractor-emulsion.png" },
+      { id: "window-painting", name: "Window Painting", price: 30, type: "Basic", image: "/premium-emulsion.png" },
+      { id: "metal-gate", name: "Metal Gate Painting", price: 30, type: "Standard", image: "/tractor-uno.png" },
+      { id: "wooden-door", name: "Wooden Door Painting", price: 35, type: "Standard", image: "/royal-luxury-emulsion.png" },
+      { id: "enamel-finish", name: "Enamel Finish", price: 35, type: "Standard", image: "/premium-emulsion.png" },
+      { id: "wooden-polish", name: "Wooden Polish", price: 50, type: "Premium", image: "/royal-luxury-emulsion.png" }
+    ],
+    includes_heading: "WHAT'S INCLUDED",
+    excludes_heading: "WHAT'S NOT INCLUDED",
+    steps_heading: "HOW WOOD & METAL PAINTING WORKS",
+    suboptions_heading: "Polish & protective choices",
+    faqs_heading: "Frequently Asked Questions",
+    button_text: "View details",
+    estimate_cta: "Get Estimate"
+  },
+  "texture-decor": {
+    rating: "4.8",
+    reviews: "6K",
+    reviews_list: [
+      { name: "Neha V.", rating: 4.9, comment: "The metallic accent wall looks absolutely stunning in our living room. Excellent craftsmanship.", enabled: true },
+      { name: "Rajesh L.", rating: 4.8, comment: "Highly creative designer textures. The team helped us choose the best stencil pattern matching our decor.", enabled: true }
+    ],
+    points: [
+      "Designer texture catalog catalog",
+      "Premium metallic & sand textures",
+      "Expert designer wall artists",
+      "Stunning accent walls creation"
+    ],
+    benefits: [
+      { title: "Designer Artists", icon: "award" },
+      { title: "Accent Design", icon: "sparkles" },
+      { title: "Premium Stencils", icon: "layers" },
+      { title: "High Washability", icon: "check-circle" }
+    ],
+    includes: [
+      "Wall Sanding & Prep",
+      "Primer Coating Coat",
+      "Accent Texture Base Coat",
+      "Specialty Designer Finish",
+      "Stencil Patterns Application",
+      "Clean post-service cleanup"
+    ],
+    excludes: [
+      "Base plastering work",
+      "General house paint (available separately)",
+      "Moving heavy wall fixtures"
+    ],
+    inspection_highlights: [
+      "Wall Uniformity Check",
+      "Texture Shade Soundness Test",
+      "Accent Light Contrast Scan"
+    ],
+    steps: [
+      { title: "Book Home Inspection", desc: "Tell us preferred time to book", icon: "calendar" },
+      { title: "Measure & Estimate", desc: "Get accurate quotes with laser measurements", icon: "calculator" },
+      { title: "Project Initiation", desc: "Guaranteed on time project initiation and completion", icon: "paint-roller" },
+      { title: "Cleaning & Quality Check", desc: "Post paint cleanup and quality check", icon: "check-circle" }
+    ],
+    faqs: [
+      { q: "Is texture paint applied to all walls?", a: "No, texture paint is typically applied to a single accent/focal wall to highlight the room." },
+      { q: "Can I customize the stencil design?", a: "Yes, our catalog has various stencil patterns. You can select your preferred style during consultation." },
+      { q: "Are texture paints washable?", a: "Yes, all our premium designer texture paints have high washability." }
+    ],
+    price_list: [
+      { type: "Smooth Texture", price: "₹80/sq.ft" },
+      { type: "Sand Texture", price: "₹100/sq.ft" },
+      { type: "Metallic Texture", price: "₹130/sq.ft" },
+      { type: "Stone/Pebbled Texture", price: "₹170/sq.ft" },
+      { type: "Premium Designer Texture", price: "₹200/sq.ft" }
+    ],
+    paint_types: [
+      { id: "smooth-texture", name: "Smooth Texture", price: 80, type: "Standard", image: "/tractor-uno.png" },
+      { id: "sand-texture", name: "Sand Texture", price: 100, type: "Premium", image: "/tractor-emulsion.png" },
+      { id: "metallic-texture", name: "Metallic Texture", price: 130, type: "Premium", image: "/premium-emulsion.png" },
+      { id: "stone-texture", name: "Stone/Pebbled Texture", price: 170, type: "Luxury", image: "/royal-luxury-emulsion.png" },
+      { id: "premium-designer", name: "Premium Designer Texture", price: 200, type: "Luxury", image: "/premium-emulsion.png" }
+    ],
+    includes_heading: "WHAT'S INCLUDED",
+    excludes_heading: "WHAT'S NOT INCLUDED",
+    steps_heading: "HOW ACCENT WALL TEXTURING WORKS",
+    suboptions_heading: "Designer texture styles",
+    faqs_heading: "Frequently Asked Questions",
+    button_text: "View details",
+    estimate_cta: "Get Estimate"
+  },
+
+  // --- MASON SERVICES ---
+  "brick-block-work": {
+    rating: "4.7",
+    reviews: "950",
+    reviews_list: [
+      { name: "Gopal V.", rating: 4.8, comment: "Very strong structural work. Alignment of brick walls is perfect.", enabled: true },
+      { name: "Ramesh N.", rating: 4.7, comment: "Quick AAC block construction. Clean joint adhesive application.", enabled: true }
+    ],
+    points: [
+      "Precision alignment bricklaying",
+      "Strong mortar joints formulation",
+      "Durable foundation block installation"
+    ],
+    benefits: [
+      { title: "Sturdy Build", icon: "shield" },
+      { title: "Perfect Leveling", icon: "tool" },
+      { title: "Structural Warranty", icon: "award" }
+    ],
+    includes: [
+      "AAC block laying",
+      "Block adhesive jointing",
+      "Plumb alignment check",
+      "Quality bricklaying"
+    ],
+    excludes: [
+      "Foundation excavation",
+      "Plastering"
+    ],
+    inspection_highlights: [
+      "Ground leveling check",
+      "Alignment verification"
+    ],
+    steps: [
+      { title: "Site Prep", desc: "Level and clear ground base.", icon: "tool" },
+      { title: "Mortar Mix", desc: "Mix cement/sand or high-strength block adhesive.", icon: "droplet" },
+      { title: "Block Laying", desc: "Lay blocks in uniform levels.", icon: "layers" },
+      { title: "Alignment Check", desc: "Use plumb line to check levels.", icon: "eye" },
+      { title: "Curing", desc: "Moisten brickwork to secure curing.", icon: "check-circle" }
+    ],
+    faqs: [
+      { q: "What materials are included in the masonry service?", a: "All standard tools, machinery, and equipment required are included. Raw materials (cement, sand, bricks, aggregates) can be supplied by us or procured by you based on the site inspection." },
+      { q: "How long does the site inspection take?", a: "A professional site inspection takes approximately 30 to 45 minutes, during which our structural expert measures the area and provides an itemized material and labor estimate." },
+      { q: "Is there a warranty on the structural masonry work?", a: "Yes! CalServices provides a 1-year service warranty covering workmanship, joint stability, and alignment protection for all civil works." }
+    ],
+    includes_heading: "WHAT'S INCLUDED",
+    excludes_heading: "WHAT'S NOT INCLUDED",
+    steps_heading: "HOW WE WORK",
+    suboptions_heading: "What would you like to inspect?",
+    faqs_heading: "Frequently Asked Questions",
+    button_text: "View details",
+    estimate_cta: "Get Estimate"
+  },
+  "plastering-wall-repair": {
+    rating: "4.8",
+    reviews: "1.4K",
+    reviews_list: [
+      { name: "Vijay K.", rating: 4.7, comment: "Perfect wall leveling plaster. The hollow peeling areas are completely restored.", enabled: true }
+    ],
+    points: [
+      "Smooth level plastering finish",
+      "Dampness and peeling repairs",
+      "Structural crack epoxy grouting"
+    ],
+    benefits: [
+      { title: "Flawless Finish", icon: "star" },
+      { title: "Moisture Protection", icon: "shield" },
+      { title: "Damp Treatment", icon: "droplet" }
+    ],
+    includes: [
+      "Surface wetting",
+      "Cement slurry coat",
+      "Cement-sand plastering",
+      "Screeding & leveling",
+      "Chipping loose plaster",
+      "Patch plastering & smoothing",
+      "V-groove crack opening",
+      "Bonding agent application",
+      "Epoxy/cement grout filling"
+    ],
+    excludes: [
+      "Wall putty application",
+      "Painting",
+      "Full room plastering (unless quoted)"
+    ],
+    inspection_highlights: [
+      "Alignment checks",
+      "Moisture level validation"
+    ],
+    steps: [
+      { title: "Surface Prep", desc: "Chip off loose plaster, scrape damp sections.", icon: "tool" },
+      { title: "Wetting", desc: "Wet surfaces thoroughly and apply cement slurry.", icon: "droplet" },
+      { title: "Plaster Coat", desc: "Apply cement-sand plaster mix uniformly.", icon: "layers" },
+      { title: "Smoothing", desc: "Use screed boards and floats for a smooth finish.", icon: "check-circle" }
+    ],
+    faqs: [
+      { q: "Do you repair hollow-sounding plaster?", a: "Yes, hollow plaster indicates it has separated from the brick base. We chip it off and re-plaster the patch to ensure solid walls." }
+    ],
+    includes_heading: "WHAT'S INCLUDED",
+    excludes_heading: "WHAT'S NOT INCLUDED",
+    steps_heading: "HOW WE PLASTER",
+    suboptions_heading: "What would you like to inspect?",
+    faqs_heading: "Frequently Asked Questions",
+    button_text: "View details",
+    estimate_cta: "Get Estimate"
+  },
+  "wall-partition-construction": {
+    rating: "4.8",
+    reviews: "950",
+    reviews_list: [
+      { name: "Anil R.", rating: 4.8, comment: "Solid brick partitioning walls. The plaster finishing matches the main walls perfectly.", enabled: true }
+    ],
+    points: [
+      "Custom brick room partitions",
+      "Half-wall countertops support construction",
+      "Breakfast counter bases"
+    ],
+    benefits: [
+      { title: "Space Divider", icon: "layout" },
+      { title: "Sturdy Anchors", icon: "tool" },
+      { title: "Plaster Finished", icon: "award" }
+    ],
+    includes: [
+      "Partition plan layout",
+      "Anchor setup",
+      "Brick/block partition walls construction",
+      "Base anchor setup",
+      "Plaster coat finishing"
+    ],
+    excludes: [
+      "Granite counter top installation",
+      "Painting and electrical wiring"
+    ],
+    inspection_highlights: [
+      "Floor load verification",
+      "Alignment checks",
+      "Space optimization check"
+    ],
+    steps: [
+      { title: "Marking Layout", desc: "Define partition boundaries on floor and walls.", icon: "edit" },
+      { title: "Base Anchor Setup", desc: "Secure anchor posts to existing structural walls.", icon: "tool" },
+      { title: "Wall Partitioning", desc: "Construct block/brick partitions with mortar.", icon: "layers" },
+      { title: "Plaster Finishing", desc: "Apply plaster coatings on both sides.", icon: "check-circle" }
+    ],
+    faqs: [
+      { q: "Can partition walls support heavy TV mounts?", a: "Yes, our partitions are built with cement blocks or clay bricks, which can support heavy mounts, unlike thin drywall partitions." }
+    ],
+    includes_heading: "WHAT'S INCLUDED",
+    excludes_heading: "WHAT'S NOT INCLUDED",
+    steps_heading: "HOW WE CONSTRUCT",
+    suboptions_heading: "What would you like to inspect?",
+    faqs_heading: "Frequently Asked Questions",
+    button_text: "View details",
+    estimate_cta: "Get Estimate"
+  },
+  "wall-breaking-demolition": {
+    rating: "4.7",
+    reviews: "1.5K",
+    reviews_list: [
+      { name: "Sunil T.", rating: 4.9, comment: "Safest demolition ever. They used steel props and cleared all debris.", enabled: true }
+    ],
+    points: [
+      "Safe structural shoring support",
+      "Non-load bearing wall demolition",
+      "Debris packing and site clearing"
+    ],
+    benefits: [
+      { title: "Safety Certified", icon: "shield" },
+      { title: "Load Check Done", icon: "eye" },
+      { title: "Clean Removal", icon: "sparkles" }
+    ],
+    includes: [
+      "Temporary shoring pillars setup",
+      "Complete wall demolition",
+      "Debris packing & clearing",
+      "Door/Window opening cutout"
+    ],
+    excludes: [
+      "Permit collection fees",
+      "Rebuilding walls"
+    ],
+    inspection_highlights: [
+      "Utility mapping check",
+      "Load carrying clearance audit",
+      "Wall safety clearance validation"
+    ],
+    steps: [
+      { title: "Safety Shoring", desc: "Erect steel shoring props to support ceiling.", icon: "tool" },
+      { title: "Utility Check", desc: "Confirm electricity, water, and gas lines are isolated.", icon: "shield" },
+      { title: "Wall Demolition", desc: "Demolish wall safely starting from top down.", icon: "hammer" },
+      { title: "Site Clearing", desc: "Pack debris in bags and clear site.", icon: "sparkles" }
+    ],
+    faqs: [
+      { q: "Do you clear load bearing walls?", a: "No, we only demolish non-load bearing partitions. Load-bearing walls require concrete beams and structural engineers, which is excluded from simple demolition." }
+    ],
+    includes_heading: "WHAT'S INCLUDED",
+    excludes_heading: "WHAT'S NOT INCLUDED",
+    steps_heading: "HOW WE DEMOLISH",
+    suboptions_heading: "What would you like to inspect?",
+    faqs_heading: "Frequently Asked Questions",
+    button_text: "View details",
+    estimate_cta: "Get Estimate"
+  }
+};
+
+
 const DEFAULT_SUITABLE_PRESETS = {
   "2-wheeler-electric-express": [
     "Small parcels & packages",
@@ -882,6 +1438,150 @@ const STATIC_SERVICE_DETAIL_DATA = {
     faqs: [
       { q: "Do you clean the door frames?", a: "Yes, we clean both panels and frames." }
     ]
+  },
+  "pest-kb-main": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Rajesh K.", rating: "5.0", text: '"Excellent service. The technician cleared the utensils carefully and put gel in all hinges."' },
+      { name: "Anjali S.", rating: "4.0", text: '"Very professional. The treatment is odorless and highly effective."' }
+    ],
+    faqs: [
+      { q: "Is the treatment safe for kids and pets?", a: "Yes, we use government-approved odorless chemicals that are completely safe. However, we recommend keeping them away during active spraying." },
+      { q: "Do you clear the utensils?", a: "Before the inspection and treatment, our technician will assist in removing the utensils. After treatment, the customer is requested to put them back." },
+      { q: "How long does a session take?", a: "Typically, a kitchen cockroach treatment takes about 45min." },
+      { q: "How quickly do cockroaches die?", a: "You will start seeing a significant reduction within 48 hours, and complete elimination of active roaches in 1 day." },
+      { q: "Do I need to leave the house?", a: "It is not required to leave the house." },
+      { q: "Does the spray stain cabinets?", a: "No, our water-based chemicals are non-staining and odorless, making them safe for wooden, laminate, and steel modular kitchens." }
+    ]
+  },
+  "pest-apt-main": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Vikram M.", rating: "5.0", text: '"Roach problem resolved completely. Best service ever."' },
+      { name: "Neha G.", rating: "5.0", text: '"Awesome odorless spray. They handled the kitchen prep too."' }
+    ],
+    faqs: [
+      { q: "How long does the effect last?", a: "The treatment prevents pest return for up to 90 days. A second visit at 14 days is included to ensure complete eradication." },
+      { q: "Is pre-cleaning of the rooms required?", a: "No, but clearing toys, clothes, and loose items from skirting boards helps the partner spray more efficiently." },
+      { q: "Does this spray have a strong chemical smell?", a: "No, we use premium water-soluble odorless chemical sprays that leave no foul scent behind." },
+      { q: "What should I do after the treatment?", a: "Keep ventilation open for 15 minutes, avoid wet wiping the skirting boards for at least 48 hours so the chemical barrier stays intact." },
+      { q: "Do you treat electrical boxes?", a: "Yes, we use Eco-safe Herbal Gel bait instead of liquid spray inside electrical switch boards and sockets." },
+      { q: "Are balcony areas covered in the apartment plan?", a: "Yes, balcony drains, washing areas, and main entry doors are sprayed to block external entry points." },
+      { q: "What chemicals do you use?", a: "We use only government-approved, low-toxicity synthetic pyrethroids which are highly target-specific for insects." },
+      { q: "Is there any preparation for pet food bowls?", a: "Yes, please remove and store all pet food bowls and water bowls before our technician begins the spray." }
+    ]
+  },
+  "pest-bung-main": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Suresh P.", rating: "4.0", text: '"Detailed inspection and gel application. Highly recommended."' }
+    ],
+    faqs: [
+      { q: "Do you cover all floors of the bungalow?", a: "Yes, we treat all rooms, staircase areas, terraces, and external verandas." },
+      { q: "How long does a bungalow cockroach treatment take?", a: "It takes about 1.5 to 2.5 hours depending on the total floor count and rooms." },
+      { q: "Do you treat external drainage chambers?", a: "Yes, external manholes and drain chambers are treated with chemical sprays to prevent entry from the drainage system." },
+      { q: "Is garden area spraying included?", a: "No, this is an indoor-focused treatment. However, we spray immediate porches, verandas, and outer door frames." },
+      { q: "Can we clean the house immediately after treatment?", a: "You can sweep, but avoid washing or mopping along skirting boards for 2 to 3 days to maximize residual action." },
+      { q: "What type of gel do you use?", a: "We use advanced fipronil/imidacloprid gels which act as highly palatable bait for roaches." },
+      { q: "What is the warranty period for bungalows?", a: "We provide a 90-day complete protection warranty from the date of the first service." },
+      { q: "How many partners are sent for a bungalow?", a: "Usually 1 to 2 trained service partners are assigned depending on the size of the duplex/villa." }
+    ]
+  },
+  "pest-termite-kb": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Mahesh S.", rating: "5.0", text: '"Excellent termite control. Wood cabinets are completely safe now."' }
+    ],
+    faqs: [
+      { q: "Does the drilling damage walls?", a: "No, we use fine-tip drills and seal the holes cleanly with color-matched cement/putty." },
+      { q: "What chemicals do you use for termites?", a: "We use premium termiticides containing imidacloprid or fipronil, which create a chemical barrier to block and destroy termites." },
+      { q: "Is termite treatment odorless?", a: "Yes, the chemical solutions are completely odorless and do not cause any respiratory discomfort." },
+      { q: "How deep do you drill?", a: "We drill about 4 to 6 inches deep into the base of walls at regular intervals to inject chemicals into the foundation." },
+      { q: "Can termites return after drilling?", a: "Our treatment kills the existing infestation and prevents return. We offer a long-term warranty to secure your kitchen wood structures." },
+      { q: "Do I need to empty my kitchen cabinets?", a: "Yes, emptying cabinets in the treatment zone is required so we can access and inject chemicals behind the wood ply." },
+      { q: "How long does this termite treatment take?", a: "It takes about 2 to 3 hours depending on the number of bathrooms and kitchen cabinets treated." },
+      { q: "Does it kill termite eggs?", a: "Termiticide is a systemic chemical. Termites carry it back to their colony, which leads to total colony elimination, including eggs." }
+    ]
+  },
+  "pest-termite-apt": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Karan T.", rating: "5.0", text: '"Professional termite drilling. They gave a 5-year warranty certificate."' }
+    ],
+    faqs: [
+      { q: "What does the 5-year warranty cover?", a: "If termites reappear anywhere in the treated zones within 5 years, we will re-treat the area completely free of charge." },
+      { q: "Is the entire apartment treated in this plan?", a: "Yes, we drill and inject termiticide along the floor-wall junctions of all rooms in the apartment." },
+      { q: "How safe is the chemical inside rooms?", a: "The termiticide is injected deep inside the walls and sealed, so there is no chemical exposure to children or pets." },
+      { q: "Do we need to vacate the house during treatment?", a: "No, there is no need to vacate as the service is clean, non-toxic, and odorless." },
+      { q: "Will the drill noise disturb neighbors?", a: "There will be drill noises during the first 1-2 hours. We recommend informing neighbors beforehand." },
+      { q: "How do you seal the drilled holes?", a: "We fill the holes with white cement mixed with wall putty, smoothing them out so they blend with your floor trim." },
+      { q: "Does this cover wooden wardrobes?", a: "Yes, we spray anti-termite chemicals on the back boards and frames of all fixed wooden wardrobes." },
+      { q: "Can we clean floors after termite drilling?", a: "You can mop the center of the rooms immediately. Avoid washing wall-floor junctions for 24 hours." }
+    ]
+  },
+  "pest-termite-bung": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Pooja V.", rating: "5.0", text: '"Very thorough treatment. They spent hours securing our duplex. Great service!"' }
+    ],
+    faqs: [
+      { q: "Do we need to vacate the bungalow?", a: "No vacation needed. The chemicals are safe and completely odorless." },
+      { q: "What does the bungalow termite plan cover?", a: "It covers drilling and chemical injection of all levels of the bungalow, wardrobe backboards, and soil barrier misting around the duplex perimeter." },
+      { q: "How long does a bungalow termite service take?", a: "A complete bungalow service takes about 4 to 6 hours depending on the size." },
+      { q: "Is external soil treatment included?", a: "Yes, we spray the soil borders around the bungalow's foundation to prevent termites from migrating inside." },
+      { q: "What is the warranty period?", a: "We provide a 5-year warranty with a physical certificate for the bungalow termite treatment." },
+      { q: "Do you treat wooden staircases?", a: "Yes, wooden stair casings and railings are carefully injected and sprayed to protect them." },
+      { q: "How many technicians are sent?", a: "Usually 2 to 3 trained professionals equipped with heavy hammer drills and high-pressure chemical pumps." },
+      { q: "What happens if termites appear in my furniture?", a: "During the 5-year warranty, if any termites emerge in treated structures, contact us and we will re-inject them at no extra cost." }
+    ]
   }
 }
 
@@ -1091,7 +1791,7 @@ export function CatalogPackagesPage() {
 
     if (activeCategoryKey === "home_pest_control") {
       catServices = catServices.filter(
-        (s) => s.slug !== "general" && s.slug !== "security"
+        (s) => s.slug !== "general" && s.slug !== "security" && s.slug !== "termite-control"
       )
     }
 
@@ -1099,7 +1799,7 @@ export function CatalogPackagesPage() {
       catServices = services.filter((s) => s.category_id === catId || s.category === catId)
       if (activeCategoryKey === "home_pest_control") {
         catServices = catServices.filter(
-          (s) => s.slug !== "general" && s.slug !== "security"
+          (s) => s.slug !== "general" && s.slug !== "security" && s.slug !== "termite-control"
         )
       }
     }
@@ -1122,6 +1822,16 @@ export function CatalogPackagesPage() {
         const pkgSvcId = p.service?.id || p.service || p.service_id
         return String(pkgSvcId) === String(svc.id)
       })
+
+      if (svc.slug === "cockroach-control") {
+        const termiteSvc = services.find(s => s.slug === "termite-control")
+        const termitePkgs = termiteSvc
+          ? packages.filter(p => String(p.service?.id || p.service || p.service_id) === String(termiteSvc.id))
+          : []
+        const seenIds = new Set(allSvcPkgs.map(p => p.id))
+        const uniqueTermite = termitePkgs.filter(p => !seenIds.has(p.id))
+        allSvcPkgs = [...allSvcPkgs, ...uniqueTermite]
+      }
 
       if (svc.slug === "sofa-cleaning") {
         const addonPkgs = packages.filter((p) =>
@@ -1175,6 +1885,16 @@ export function CatalogPackagesPage() {
       } else if (svc.slug === "packers-movers") {
         const moverOrder = { "1-rk-1-bhk-shifting": 1, "2-bhk-3-bhk-shifting": 2, "villa-office-relocation": 3 }
         sortedPkgs = [...allSvcPkgs].sort((a, b) => (moverOrder[a.slug] || 99) - (moverOrder[b.slug] || 99))
+      } else if (svc.slug === "cockroach-control") {
+        const cockroachOrder = { 
+          "pest-kb-main": 1, 
+          "pest-apt-main": 2, 
+          "pest-bung-main": 3,
+          "pest-termite-kb": 4,
+          "pest-termite-apt": 5,
+          "pest-termite-bung": 6
+        }
+        sortedPkgs = [...allSvcPkgs].sort((a, b) => (cockroachOrder[a.slug] || 99) - (cockroachOrder[b.slug] || 99))
       }
 
       // Filter by search query if present
@@ -1532,11 +2252,106 @@ export function CatalogPackagesPage() {
         })
       }
 
+      if (svc.slug === "cockroach-control") {
+        const groups = [
+          {
+            subSlug: "cockroach",
+            displayName: "Cockroach Control",
+            filterFn: (p) => p.slug.startsWith("pest-") && !p.slug.includes("termite"),
+          },
+          {
+            subSlug: "termite",
+            displayName: "Termite Control",
+            filterFn: (p) => p.slug.includes("termite"),
+          }
+        ]
+
+        const PEST_SLUG_ORDER = [
+          "pest-kb-main",
+          "pest-apt-main",
+          "pest-bung-main",
+          "pest-termite-kb",
+          "pest-termite-apt",
+          "pest-termite-bung"
+        ]
+
+        return groups.map((g) => {
+          let groupPkgs = allSvcPkgs.filter(g.filterFn)
+          groupPkgs = [...groupPkgs].sort((a, b) => {
+            const idxA = PEST_SLUG_ORDER.indexOf(a.slug)
+            const idxB = PEST_SLUG_ORDER.indexOf(b.slug)
+            const orderA = idxA !== -1 ? idxA : 999
+            const orderB = idxB !== -1 ? idxB : 999
+            return orderA - orderB
+          })
+          const finalPkgs = getFilteredPkgs(groupPkgs)
+          return {
+            service: {
+              ...svc,
+              id: `${svc.id}-${g.subSlug}`,
+              virtualSlug: g.subSlug,
+              realServiceId: svc.id,
+            },
+            displayName: g.displayName,
+            icon: getServiceIcon(g.subSlug, g.displayName),
+            totalPackages: finalPkgs.length,
+            packages: finalPkgs,
+          }
+        })
+      }
+
+      if (svc.slug === "ants-bed-bugs-control") {
+        const groups = [
+          {
+            subSlug: "ants",
+            displayName: "Ants Control",
+            filterFn: (p) => p.slug.includes("ant"),
+          },
+          {
+            subSlug: "bedbugs",
+            displayName: "Bed Bugs Control",
+            filterFn: (p) => p.slug.includes("bedbug"),
+          }
+        ]
+
+        const PEST_SLUG_ORDER = [
+          "pest-ant-kb",
+          "pest-ant-apt",
+          "pest-ant-bung",
+          "pest-bedbug-main"
+        ]
+
+        return groups.map((g) => {
+          let groupPkgs = allSvcPkgs.filter(g.filterFn)
+          groupPkgs = [...groupPkgs].sort((a, b) => {
+            const idxA = PEST_SLUG_ORDER.indexOf(a.slug)
+            const idxB = PEST_SLUG_ORDER.indexOf(b.slug)
+            const orderA = idxA !== -1 ? idxA : 999
+            const orderB = idxB !== -1 ? idxB : 999
+            return orderA - orderB
+          })
+          const finalPkgs = getFilteredPkgs(groupPkgs)
+          return {
+            service: {
+              ...svc,
+              id: `${svc.id}-${g.subSlug}`,
+              virtualSlug: g.subSlug,
+              realServiceId: svc.id,
+            },
+            displayName: g.displayName,
+            icon: getServiceIcon(g.subSlug, g.displayName),
+            totalPackages: finalPkgs.length,
+            packages: finalPkgs,
+          }
+        })
+      }
+
       // Friendly display name formatting (e.g. "Two Wheeler" -> "2 Wheeler")
       let displayName = svc.name
       if (svc.slug === "two-wheeler" || svc.name === "Two Wheeler") displayName = "2 Wheeler"
       if (svc.slug === "truck") displayName = "Truck"
       if (svc.slug === "packers-movers") displayName = "Packers & Movers"
+      if (svc.slug === "cockroach-control") displayName = "Cockroach & Termite control"
 
       return [{
         service: svc,
@@ -1880,32 +2695,61 @@ export function CatalogPackagesPage() {
 
   const openServiceCustomizer = (service) => {
     const cust = service.customization || {}
+    const defaults = SERVICE_DEFAULT_CUSTOMIZATIONS[service.slug] || {}
+    
+
+
     setServiceCustomizing({
       ...service,
       customization: {
-        rating: cust.rating || "4.8",
-        reviews: cust.reviews || "15K",
-        points: Array.isArray(cust.points) ? cust.points : [],
-        benefits: Array.isArray(cust.benefits) ? cust.benefits : [],
-        includes_heading: cust.includes_heading || "WHAT'S INCLUDED",
-        includes: Array.isArray(cust.includes) ? cust.includes : [],
-        free_inspection_heading: cust.free_inspection_heading || "FREE SITE INSPECTION INCLUDED",
-        free_inspection_enabled: cust.free_inspection_enabled !== false,
-        inspection_highlights: Array.isArray(cust.inspection_highlights) ? cust.inspection_highlights : [],
-        excludes_heading: cust.excludes_heading || "WHAT'S NOT INCLUDED",
-        excludes_enabled: !cust.excludes_enabled !== false,
-        excludes: Array.isArray(cust.excludes) ? cust.excludes : [],
-        steps_heading: cust.steps_heading || "HOW PAINTING WORKS",
-        steps: Array.isArray(cust.steps) ? cust.steps : [],
-        faqs: Array.isArray(cust.faqs) ? cust.faqs : [],
-        starting_fare: cust.starting_fare || "",
-        button_text: cust.button_text || "View details",
-        estimate_cta: cust.estimate_cta || "Get Estimate",
-        suboptions_heading: cust.suboptions_heading || "",
-        faqs_heading: cust.faqs_heading || "",
-        reviews_heading: cust.reviews_heading || "",
-        price_list: Array.isArray(cust.price_list) ? cust.price_list : [],
-        paint_types: Array.isArray(cust.paint_types) ? cust.paint_types : [],
+        rating: cust.rating || defaults.rating || "4.8",
+        reviews: cust.reviews || defaults.reviews || "15K",
+        points: Array.isArray(cust.points) && cust.points.length > 0 
+                  ? cust.points 
+                  : (Array.isArray(defaults.points) ? defaults.points : []),
+        benefits: Array.isArray(cust.benefits) && cust.benefits.length > 0 
+                  ? cust.benefits 
+                  : (Array.isArray(defaults.benefits) ? defaults.benefits : []),
+        includes_heading: cust.includes_heading || defaults.includes_heading || "WHAT'S INCLUDED",
+        includes: Array.isArray(cust.includes) && cust.includes.length > 0 
+                  ? cust.includes 
+                  : (Array.isArray(defaults.includes) ? defaults.includes : []),
+        free_inspection_heading: cust.free_inspection_heading || defaults.free_inspection_heading || "FREE SITE INSPECTION INCLUDED",
+        free_inspection_enabled: cust.free_inspection_enabled !== undefined 
+                  ? cust.free_inspection_enabled 
+                  : (defaults.free_inspection_enabled !== undefined ? defaults.free_inspection_enabled : true),
+        inspection_highlights: Array.isArray(cust.inspection_highlights) && cust.inspection_highlights.length > 0 
+                  ? cust.inspection_highlights 
+                  : (Array.isArray(defaults.inspection_highlights) ? defaults.inspection_highlights : []),
+        excludes_heading: cust.excludes_heading || defaults.excludes_heading || "WHAT'S NOT INCLUDED",
+        excludes_enabled: cust.excludes_enabled !== undefined 
+                  ? cust.excludes_enabled 
+                  : (defaults.excludes_enabled !== undefined ? defaults.excludes_enabled : true),
+        excludes: Array.isArray(cust.excludes) && cust.excludes.length > 0 
+                  ? cust.excludes 
+                  : (Array.isArray(defaults.excludes) ? defaults.excludes : []),
+        steps_heading: cust.steps_heading || defaults.steps_heading || "HOW IT WORKS",
+        steps: Array.isArray(cust.steps) && cust.steps.length > 0 
+                  ? cust.steps 
+                  : (Array.isArray(defaults.steps) ? defaults.steps : []),
+        faqs: Array.isArray(cust.faqs) && cust.faqs.length > 0 
+                  ? cust.faqs 
+                  : (Array.isArray(defaults.faqs) ? defaults.faqs : []),
+        starting_fare: cust.starting_fare || defaults.starting_fare || "",
+        button_text: cust.button_text || defaults.button_text || "View details",
+        estimate_cta: cust.estimate_cta || defaults.estimate_cta || "Get Estimate",
+        suboptions_heading: cust.suboptions_heading || defaults.suboptions_heading || "",
+        faqs_heading: cust.faqs_heading || defaults.faqs_heading || "",
+        reviews_heading: cust.reviews_heading || defaults.reviews_heading || "",
+        price_list: Array.isArray(cust.price_list) && cust.price_list.length > 0
+                  ? cust.price_list
+                  : (Array.isArray(defaults.price_list) ? defaults.price_list : []),
+        paint_types: Array.isArray(cust.paint_types) && cust.paint_types.length > 0
+                  ? cust.paint_types
+                  : (Array.isArray(defaults.paint_types) ? defaults.paint_types : []),
+        reviews_list: Array.isArray(cust.reviews_list) && cust.reviews_list.length > 0
+                  ? cust.reviews_list
+                  : (Array.isArray(defaults.reviews_list) ? defaults.reviews_list : []),
       }
     })
     setCustomizerTab("general")
@@ -2202,7 +3046,7 @@ export function CatalogPackagesPage() {
                     }`}
                   >
                     <SubIcon className="w-3.5 h-3.5" />
-                    <span>{item.displayName}</span>
+                    <span>{item.service.slug === "cockroach-control" ? "Cockroach & Termite control" : item.displayName}</span>
                     <span
                       className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
                         isSubActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
@@ -2601,41 +3445,55 @@ export function CatalogPackagesPage() {
       {serviceCustomizing && (
         <Modal
           maxWidth="max-w-3xl sm:max-w-4xl"
-          title={`Customise Painting Service Page: ${serviceCustomizing.name}`}
+          title={`Customise Service Page: ${serviceCustomizing.name}`}
           onClose={() => setServiceCustomizing(null)}
         >
-          <form onSubmit={handleServiceCustomizerSave} className="flex flex-col gap-5 font-sans text-left">
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50/70 rounded-2xl border border-indigo-100 flex items-center justify-between">
-              <div>
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Category Pillar</span>
-                <div className="text-sm sm:text-base font-extrabold text-indigo-955 mt-0.5">{activePillar.name}</div>
+          <form onSubmit={handleServiceCustomizerSave} className="flex flex-col gap-6 font-sans text-left text-slate-800 dark:text-slate-200">
+            {/* Header Banner */}
+            <div className={`p-5 bg-gradient-to-r ${
+              activeCategoryKey === "paintings" 
+                ? "from-emerald-600 via-emerald-550 to-teal-600" 
+                : (activeCategoryKey === "mason" ? "from-amber-600 via-amber-550 to-yellow-600" : "from-indigo-650 via-indigo-600 to-violet-600")
+            } rounded-3xl border border-white/10 text-white flex items-center justify-between shadow-md`}>
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center backdrop-blur-md">
+                  {React.createElement(ActiveIcon || Palette, { className: "w-6 h-6 text-white" })}
+                </div>
+                <div>
+                  <span className="text-[10px] font-black text-white/80 uppercase tracking-widest leading-none">Sub-Service Page Settings</span>
+                  <div className="text-base md:text-lg font-black mt-0.5 tracking-tight">{activePillar.name}: {serviceCustomizing.name}</div>
+                </div>
               </div>
-              <span className="px-3 py-1 bg-white text-indigo-700 text-xs font-bold rounded-full border border-indigo-200/80 shadow-2xs">
-                Painting Customizer
+              <span className="px-3.5 py-1.5 bg-white/20 text-white text-[10px] font-black uppercase tracking-wider rounded-xl backdrop-blur-md border border-white/10 shadow-xs">
+                {activeCategoryKey === "paintings" ? "Painting Customizer" : (activeCategoryKey === "mason" ? "Masonry Customizer" : `${activePillar.shortName.split(" ")[0]} Customizer`)}
               </span>
             </div>
 
-            {/* Tabs Header */}
-            <div className="flex border-b border-slate-200">
+            {/* Pill Tabs Selector */}
+            <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100/70 dark:bg-slate-900/60 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 no-print">
               {[
-                { id: "general", label: "Card & General Settings" },
-                { id: "content", label: "Includes & Excludes" },
-                { id: "details", label: "Badges, Steps & FAQs" },
-                { id: "pricing", label: "Price List & Materials" },
-              ].map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setCustomizerTab(t.id)}
-                  className={`px-4 py-2 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
-                    customizerTab === t.id
-                      ? "border-indigo-600 text-indigo-600"
-                      : "border-transparent text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
+                { id: "general", label: "Card & General Settings", icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
+                { id: "content", label: "Includes & Excludes", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+                { id: "details", label: "Badges, Steps & FAQs", icon: <Layers className="w-3.5 h-3.5" /> },
+                { id: "pricing", label: "Price List & Materials", icon: <DollarSign className="w-3.5 h-3.5" /> },
+              ].map((t) => {
+                const isSelected = customizerTab === t.id
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setCustomizerTab(t.id)}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 shadow-xs border border-slate-200/50 dark:border-slate-700/50"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    {t.icon}
+                    <span>{t.label}</span>
+                  </button>
+                )
+              })}
             </div>
 
             {/* Tab 1: General & Card settings */}
@@ -3542,7 +4400,22 @@ export function CatalogPackagesPage() {
             <div className="p-4 bg-gradient-to-r from-blue-50 via-indigo-50/50 to-blue-50/70 rounded-2xl border border-indigo-100/90 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Service Category</span>
-                <div className="text-sm sm:text-base font-extrabold text-indigo-950 mt-0.5">{quickPriceEditing.service_name || activePillar.name}</div>
+                <div className="text-sm sm:text-base font-extrabold text-indigo-950 mt-0.5">
+                  {(() => {
+                    const currentSubService = activeCategoryServicesWithPackages.find(
+                      (item) =>
+                        item.service.slug === activeSubServiceKey ||
+                        item.service.virtualSlug === activeSubServiceKey ||
+                        String(item.service.id) === String(activeSubServiceKey) ||
+                        String(item.service.realServiceId) === String(activeSubServiceKey) ||
+                        item.displayName.toLowerCase().replace(/[^a-z0-9]/g, "") === activeSubServiceKey.toLowerCase().replace(/[^a-z0-9]/g, "")
+                    );
+                    if (currentSubService) {
+                      return currentSubService.displayName;
+                    }
+                    return quickPriceEditing.service_name || activePillar.name;
+                  })()}
+                </div>
               </div>
               <span className="px-3 py-1 bg-white text-indigo-700 text-xs font-bold rounded-full border border-indigo-200/80 shadow-2xs">
                 Live Sync Enabled

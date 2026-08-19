@@ -4,8 +4,9 @@ import { useParams, useNavigate } from "react-router-dom"
 import { fetchCustomerDetail, fetchCustomerTimeline } from "../../store/customerAnalyticsSlice.js"
 import { ChevronLeft, User, Phone, Mail, Calendar, Key, AlertTriangle, ArrowUpRight, History } from "lucide-react"
 
-export function CustomerDetailPage() {
-  const { id } = useParams()
+export function CustomerDetailPage({ customerId, isInline = false }) {
+  const { id: paramId } = useParams()
+  const id = customerId || paramId
   const dispatch = useDispatch()
   const navigate = useNavigate()
 
@@ -18,13 +19,23 @@ export function CustomerDetailPage() {
   }
 
   useEffect(() => {
-    dispatch(fetchCustomerDetail(id))
-    dispatch(fetchCustomerTimeline(id))
+    if (id) {
+      dispatch(fetchCustomerDetail(id))
+      dispatch(fetchCustomerTimeline(id))
+    }
   }, [dispatch, id])
+
+  if (!id) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-slate-400 text-xs font-semibold italic">
+        Select a customer to view details.
+      </div>
+    )
+  }
 
   if (!cacheData) {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-400 text-sm font-semibold">
+      <div className={`${isInline ? "py-24" : "h-screen"} flex items-center justify-center text-slate-400 text-sm font-semibold`}>
         Loading customer data...
       </div>
     )
@@ -33,18 +44,20 @@ export function CustomerDetailPage() {
   const { profile, addresses, rollups, recent_bookings, payment_ledger, login_history, support_tickets, complaints, feedback, timeline } = cacheData
 
   return (
-    <div className="p-6 md:p-8 space-y-6 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen">
+    <div className={isInline ? "space-y-6" : "p-6 md:p-8 space-y-6 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen"}>
       
       {/* ── BACK BUTTON & BREADCRUMB ── */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => navigate("/customers/list")}
-          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 hover:text-indigo-500 shadow-sm"
-        >
-          <ChevronLeft size={16} />
-        </button>
-        <span className="text-xs font-bold text-slate-400">Customer Directory / Details</span>
-      </div>
+      {!isInline && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate("/customers/list")}
+            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 hover:text-indigo-500 shadow-sm"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="text-xs font-bold text-slate-400">Customer Directory / Details</span>
+        </div>
+      )}
 
       {/* ── HEADER CARD (360 PROFILE) ── */}
       <div className="p-6 bg-gradient-to-r from-white via-slate-50/50 to-white dark:from-slate-900 dark:via-slate-900/60 dark:to-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/80 shadow-md flex flex-col md:flex-row justify-between gap-6 hover:shadow-lg transition-all duration-300">

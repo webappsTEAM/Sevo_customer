@@ -9499,6 +9499,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
       return staticServices.map(service => {
         const relevantPkgs = dbPackages.filter(p => p.service_slug === service.serviceSlug);
         if (relevantPkgs.length > 0) {
+          const cust = relevantPkgs[0]?.service_customization || {};
           const dynamicSubOptions = relevantPkgs.map(p => ({
             id: p.slug || p.id.toString(),
             name: p.slug === "int-full-home" ? "Full House painting" : p.name,
@@ -9506,6 +9507,34 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
           }));
           return {
             ...service,
+            name: cust.heading || service.name,
+            image: relevantPkgs[0]?.image || cust.image_url || service.image,
+            rating: cust.rating || service.rating,
+            reviews: cust.reviews || service.reviews,
+            points: Array.isArray(cust.points) && cust.points.filter(Boolean).length > 0
+                      ? cust.points.filter(Boolean)
+                      : service.points,
+            benefits: Array.isArray(cust.benefits) && cust.benefits.length > 0
+                      ? cust.benefits.map(b => typeof b === 'string' ? b : (b.title || ''))
+                      : service.benefits,
+            includes: Array.isArray(cust.includes) && cust.includes.filter(Boolean).length > 0
+                      ? cust.includes.filter(Boolean)
+                      : service.includes,
+            excludes: Array.isArray(cust.excludes) && cust.excludes.filter(Boolean).length > 0
+                      ? cust.excludes.filter(Boolean)
+                      : service.excludes,
+            inspectionHighlights: Array.isArray(cust.inspection_highlights) && cust.inspection_highlights.filter(Boolean).length > 0
+                      ? cust.inspection_highlights.filter(Boolean)
+                      : service.inspectionHighlights,
+            steps: Array.isArray(cust.steps) && cust.steps.length > 0
+                      ? cust.steps
+                      : service.steps,
+            faqs: Array.isArray(cust.faqs) && cust.faqs.length > 0
+                      ? cust.faqs.map(f => ({ q: f.q || f.question || '', a: f.a || f.answer || '' }))
+                      : service.faqs,
+            reviews_list: cust.reviews_list || [],
+            price_list: cust.price_list || [],
+            paint_types: cust.paint_types || [],
             subOptions: dynamicSubOptions
           };
         }
@@ -10452,105 +10481,129 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                   let hideListText = "Hide Price List ↑";
                   let tableHeaderType = "Paint Type";
 
-                  let priceList = [];
-                  let paintTypes = [];
+                  let priceList = Array.isArray(activeDetailService.price_list) && activeDetailService.price_list.length > 0
+                    ? activeDetailService.price_list
+                    : [];
+                  let paintTypes = Array.isArray(activeDetailService.paint_types) && activeDetailService.paint_types.length > 0
+                    ? activeDetailService.paint_types
+                    : [];
                   let chooseTypeTitle = "🎨 Choose Paint Type";
                   let chooseTypePlaceholder = "Select a painting area above to choose paint types & see exact price estimate.";
 
-                  if (serviceId === "paint-interior") {
-                    startingRateText = "Starting from ₹7/sq.ft";
-                    subtitleText = "Final price depends on area, paint type & site inspection";
-                    priceList = [
-                      { type: "Tractor UNO", price: "₹7/sq.ft" },
-                      { type: "Tractor Emulsion", price: "₹9/sq.ft" },
-                      { type: "Premium Emulsion", price: "₹15/sq.ft" },
-                      { type: "Royal Luxury Emulsion", price: "₹27/sq.ft" }
-                    ];
-                    paintTypes = [
-                      { id: "tractor-uno", name: "Tractor UNO", price: 7, type: "Economy", image: "/tractor-uno.png" },
-                      { id: "tractor-emulsion", name: "Tractor Emulsion", price: 9, type: "Standard", image: "/tractor-emulsion.png" },
-                      { id: "premium-emulsion", name: "Premium Emulsion", price: 15, type: "Premium", image: "/premium-emulsion.png" },
-                      { id: "royal-luxury", name: "Royal Luxury Emulsion", price: 27, type: "Luxury", image: "/royal-luxury-emulsion.png" }
-                    ];
-                  } else if (serviceId === "paint-exterior") {
-                    startingRateText = "Starting from ₹15/sq.ft";
-                    subtitleText = "Final price depends on area, paint type & site inspection";
-                    priceList = [
-                      { type: "Economy Exterior", price: "₹15/sq.ft" },
-                      { type: "Weather Protection", price: "₹20/sq.ft" },
-                      { type: "Premium Exterior", price: "₹28/sq.ft" },
-                      { type: "Advanced Weatherproof", price: "₹35/sq.ft" }
-                    ];
-                    paintTypes = [
-                      { id: "economy-exterior", name: "Economy Exterior", price: 15, type: "Economy", image: "/tractor-uno.png" },
-                      { id: "weather-protection", name: "Weather Protection", price: 20, type: "Standard", image: "/tractor-emulsion.png" },
-                      { id: "premium-exterior", name: "Premium Exterior", price: 28, type: "Premium", image: "/premium-emulsion.png" },
-                      { id: "advanced-weatherproof", name: "Advanced Weatherproof", price: 35, type: "Luxury", image: "/royal-luxury-emulsion.png" }
-                    ];
-                  } else if (serviceId === "paint-waterproofing") {
-                    startingRateText = "Starting from ₹30/sq.ft";
-                    subtitleText = "Final price after site inspection. Treatment depends heavily on the leakage problem.";
-                    viewListText = "View Treatments →";
-                    hideListText = "Hide Treatments ↑";
-                    tableHeaderType = "Waterproofing Service";
-                    priceList = [
-                      { type: "Terrace Waterproofing", price: "₹45/sq.ft" },
-                      { type: "Bathroom Waterproofing", price: "₹50/sq.ft" },
-                      { type: "Wall Seepage Treatment", price: "₹35/sq.ft" },
-                      { type: "Crack Waterproofing", price: "₹30/sq.ft" },
-                      { type: "Balcony Waterproofing", price: "₹45/sq.ft" }
-                    ];
-                    paintTypes = [
-                      { id: "crack-waterproofing", name: "Crack Waterproofing", price: 30, type: "Basic", image: "/premium-emulsion.png" },
-                      { id: "wall-seepage", name: "Wall Seepage Treatment", price: 35, type: "Standard", image: "/tractor-emulsion.png" },
-                      { id: "terrace-waterproofing", name: "Terrace Waterproofing", price: 45, type: "Premium", image: "/tractor-uno.png" },
-                      { id: "balcony-waterproofing", name: "Balcony Waterproofing", price: 45, type: "Premium", image: "/royal-luxury-emulsion.png" },
-                      { id: "bathroom-waterproofing", name: "Bathroom Waterproofing", price: 50, type: "Advanced", image: "/premium-emulsion.png" }
-                    ];
-                    chooseTypeTitle = "💧 Choose Treatment Type";
-                    chooseTypePlaceholder = "Select a waterproof area above to choose treatment types & see exact price estimate.";
-                  } else if (serviceId === "paint-wood-metal") {
-                    startingRateText = "Starting from ₹25/sq.ft";
-                    subtitleText = "Final price depends on area, surface condition & site inspection";
-                    tableHeaderType = "Service";
-                    priceList = [
-                      { type: "Wooden Door Painting", price: "₹35/sq.ft" },
-                      { type: "Wooden Polish", price: "₹50/sq.ft" },
-                      { type: "Window Painting", price: "₹30/sq.ft" },
-                      { type: "Metal Grill Painting", price: "₹25/sq.ft" },
-                      { type: "Metal Gate Painting", price: "₹30/sq.ft" },
-                      { type: "Enamel Finish", price: "₹35/sq.ft" }
-                    ];
-                    paintTypes = [
-                      { id: "metal-grill", name: "Metal Grill Painting", price: 25, type: "Basic", image: "/tractor-emulsion.png" },
-                      { id: "window-painting", name: "Window Painting", price: 30, type: "Basic", image: "/premium-emulsion.png" },
-                      { id: "metal-gate", name: "Metal Gate Painting", price: 30, type: "Standard", image: "/tractor-uno.png" },
-                      { id: "wooden-door", name: "Wooden Door Painting", price: 35, type: "Standard", image: "/royal-luxury-emulsion.png" },
-                      { id: "enamel-finish", name: "Enamel Finish", price: 35, type: "Standard", image: "/premium-emulsion.png" },
-                      { id: "wooden-polish", name: "Wooden Polish", price: 50, type: "Premium", image: "/royal-luxury-emulsion.png" }
-                    ];
-                    chooseTypeTitle = "🚪 Choose Polish/Enamel Type";
-                    chooseTypePlaceholder = "Select a wood/metal item above to choose types & see exact price estimate.";
-                  } else if (serviceId === "paint-texture") {
-                    startingRateText = "Starting from ₹80/sq.ft";
-                    subtitleText = "Final price depends on design complexity, texture type & site inspection";
-                    tableHeaderType = "Texture Type";
-                    priceList = [
-                      { type: "Smooth Texture", price: "₹80/sq.ft" },
-                      { type: "Sand Texture", price: "₹100/sq.ft" },
-                      { type: "Metallic Texture", price: "₹130/sq.ft" },
-                      { type: "Stone/Pebbled Texture", price: "₹170/sq.ft" },
-                      { type: "Premium Designer Texture", price: "₹200/sq.ft" }
-                    ];
-                    paintTypes = [
-                      { id: "smooth-texture", name: "Smooth Texture", price: 80, type: "Standard", image: "/tractor-uno.png" },
-                      { id: "sand-texture", name: "Sand Texture", price: 100, type: "Premium", image: "/tractor-emulsion.png" },
-                      { id: "metallic-texture", name: "Metallic Texture", price: 130, type: "Premium", image: "/premium-emulsion.png" },
-                      { id: "stone-texture", name: "Stone/Pebbled Texture", price: 170, type: "Luxury", image: "/royal-luxury-emulsion.png" },
-                      { id: "premium-designer", name: "Premium Designer Texture", price: 200, type: "Luxury", image: "/premium-emulsion.png" }
-                    ];
-                    chooseTypeTitle = "✨ Choose Texture Decor Type";
-                    chooseTypePlaceholder = "Select a wall above to choose texture types & see exact price estimate.";
+                  if (priceList.length > 0 && paintTypes.length > 0) {
+                    const minPriceObj = paintTypes.reduce((prev, curr) => (parseFloat(prev.price) || 0) < (parseFloat(curr.price) || 0) ? prev : curr, paintTypes[0] || {});
+                    const minPrice = parseFloat(minPriceObj.price) || 0;
+                    startingRateText = activeDetailService.starting_fare || `Starting from ₹${minPrice}/sq.ft`;
+                    
+                    if (serviceId === "paint-waterproofing") {
+                      tableHeaderType = "Waterproofing Service";
+                      chooseTypeTitle = "💧 Choose Treatment Type";
+                      chooseTypePlaceholder = "Select a waterproof area above to choose treatment types & see exact price estimate.";
+                    } else if (serviceId === "paint-wood-metal") {
+                      tableHeaderType = "Service";
+                      chooseTypeTitle = "🚪 Choose Polish/Enamel Type";
+                      chooseTypePlaceholder = "Select a wood/metal item above to choose types & see exact price estimate.";
+                    } else if (serviceId === "paint-texture") {
+                      tableHeaderType = "Texture Type";
+                      chooseTypeTitle = "✨ Choose Texture Decor Type";
+                      chooseTypePlaceholder = "Select a wall above to choose texture types & see exact price estimate.";
+                    }
+                  } else {
+                    if (serviceId === "paint-interior") {
+                      startingRateText = "Starting from ₹7/sq.ft";
+                      subtitleText = "Final price depends on area, paint type & site inspection";
+                      priceList = [
+                        { type: "Tractor UNO", price: "₹7/sq.ft" },
+                        { type: "Tractor Emulsion", price: "₹9/sq.ft" },
+                        { type: "Premium Emulsion", price: "₹15/sq.ft" },
+                        { type: "Royal Luxury Emulsion", price: "₹27/sq.ft" }
+                      ];
+                      paintTypes = [
+                        { id: "tractor-uno", name: "Tractor UNO", price: 7, type: "Economy", image: "/tractor-uno.png" },
+                        { id: "tractor-emulsion", name: "Tractor Emulsion", price: 9, type: "Standard", image: "/tractor-emulsion.png" },
+                        { id: "premium-emulsion", name: "Premium Emulsion", price: 15, type: "Premium", image: "/premium-emulsion.png" },
+                        { id: "royal-luxury", name: "Royal Luxury Emulsion", price: 27, type: "Luxury", image: "/royal-luxury-emulsion.png" }
+                      ];
+                    } else if (serviceId === "paint-exterior") {
+                      startingRateText = "Starting from ₹15/sq.ft";
+                      subtitleText = "Final price depends on area, paint type & site inspection";
+                      priceList = [
+                        { type: "Economy Exterior", price: "₹15/sq.ft" },
+                        { type: "Weather Protection", price: "₹20/sq.ft" },
+                        { type: "Premium Exterior", price: "₹28/sq.ft" },
+                        { type: "Advanced Weatherproof", price: "₹35/sq.ft" }
+                      ];
+                      paintTypes = [
+                        { id: "economy-exterior", name: "Economy Exterior", price: 15, type: "Economy", image: "/tractor-uno.png" },
+                        { id: "weather-protection", name: "Weather Protection", price: 20, type: "Standard", image: "/tractor-emulsion.png" },
+                        { id: "premium-exterior", name: "Premium Exterior", price: 28, type: "Premium", image: "/premium-emulsion.png" },
+                        { id: "advanced-weatherproof", name: "Advanced Weatherproof", price: 35, type: "Luxury", image: "/royal-luxury-emulsion.png" }
+                      ];
+                    } else if (serviceId === "paint-waterproofing") {
+                      startingRateText = "Starting from ₹30/sq.ft";
+                      subtitleText = "Final price after site inspection. Treatment depends heavily on the leakage problem.";
+                      viewListText = "View Treatments →";
+                      hideListText = "Hide Treatments ↑";
+                      tableHeaderType = "Waterproofing Service";
+                      priceList = [
+                        { type: "Terrace Waterproofing", price: "₹45/sq.ft" },
+                        { type: "Bathroom Waterproofing", price: "₹50/sq.ft" },
+                        { type: "Wall Seepage Treatment", price: "₹35/sq.ft" },
+                        { type: "Crack Waterproofing", price: "₹30/sq.ft" },
+                        { type: "Balcony Waterproofing", price: "₹45/sq.ft" }
+                      ];
+                      paintTypes = [
+                        { id: "crack-waterproofing", name: "Crack Waterproofing", price: 30, type: "Basic", image: "/premium-emulsion.png" },
+                        { id: "wall-seepage", name: "Wall Seepage Treatment", price: 35, type: "Standard", image: "/tractor-emulsion.png" },
+                        { id: "terrace-waterproofing", name: "Terrace Waterproofing", price: 45, type: "Premium", image: "/tractor-uno.png" },
+                        { id: "balcony-waterproofing", name: "Balcony Waterproofing", price: 45, type: "Premium", image: "/royal-luxury-emulsion.png" },
+                        { id: "bathroom-waterproofing", name: "Bathroom Waterproofing", price: 50, type: "Advanced", image: "/premium-emulsion.png" }
+                      ];
+                      chooseTypeTitle = "💧 Choose Treatment Type";
+                      chooseTypePlaceholder = "Select a waterproof area above to choose treatment types & see exact price estimate.";
+                    } else if (serviceId === "paint-wood-metal") {
+                      startingRateText = "Starting from ₹25/sq.ft";
+                      subtitleText = "Final price depends on area, surface condition & site inspection";
+                      tableHeaderType = "Service";
+                      priceList = [
+                        { type: "Wooden Door Painting", price: "₹35/sq.ft" },
+                        { type: "Wooden Polish", price: "₹50/sq.ft" },
+                        { type: "Window Painting", price: "₹30/sq.ft" },
+                        { type: "Metal Grill Painting", price: "₹25/sq.ft" },
+                        { type: "Metal Gate Painting", price: "₹30/sq.ft" },
+                        { type: "Enamel Finish", price: "₹35/sq.ft" }
+                      ];
+                      paintTypes = [
+                        { id: "metal-grill", name: "Metal Grill Painting", price: 25, type: "Basic", image: "/tractor-emulsion.png" },
+                        { id: "window-painting", name: "Window Painting", price: 30, type: "Basic", image: "/premium-emulsion.png" },
+                        { id: "metal-gate", name: "Metal Gate Painting", price: 30, type: "Standard", image: "/tractor-uno.png" },
+                        { id: "wooden-door", name: "Wooden Door Painting", price: 35, type: "Standard", image: "/royal-luxury-emulsion.png" },
+                        { id: "enamel-finish", name: "Enamel Finish", price: 35, type: "Standard", image: "/premium-emulsion.png" },
+                        { id: "wooden-polish", name: "Wooden Polish", price: 50, type: "Premium", image: "/royal-luxury-emulsion.png" }
+                      ];
+                      chooseTypeTitle = "🚪 Choose Polish/Enamel Type";
+                      chooseTypePlaceholder = "Select a wood/metal item above to choose types & see exact price estimate.";
+                    } else if (serviceId === "paint-texture") {
+                      startingRateText = "Starting from ₹80/sq.ft";
+                      subtitleText = "Final price depends on design complexity, texture type & site inspection";
+                      tableHeaderType = "Texture Type";
+                      priceList = [
+                        { type: "Smooth Texture", price: "₹80/sq.ft" },
+                        { type: "Sand Texture", price: "₹100/sq.ft" },
+                        { type: "Metallic Texture", price: "₹130/sq.ft" },
+                        { type: "Stone/Pebbled Texture", price: "₹170/sq.ft" },
+                        { type: "Premium Designer Texture", price: "₹200/sq.ft" }
+                      ];
+                      paintTypes = [
+                        { id: "smooth-texture", name: "Smooth Texture", price: 80, type: "Standard", image: "/tractor-uno.png" },
+                        { id: "sand-texture", name: "Sand Texture", price: 100, type: "Premium", image: "/tractor-emulsion.png" },
+                        { id: "metallic-texture", name: "Metallic Texture", price: 130, type: "Premium", image: "/premium-emulsion.png" },
+                        { id: "stone-texture", name: "Stone/Pebbled Texture", price: 170, type: "Luxury", image: "/royal-luxury-emulsion.png" },
+                        { id: "premium-designer", name: "Premium Designer Texture", price: 200, type: "Luxury", image: "/premium-emulsion.png" }
+                      ];
+                      chooseTypeTitle = "✨ Choose Texture Decor Type";
+                      chooseTypePlaceholder = "Select a wall above to choose texture types & see exact price estimate.";
+                    }
                   }
 
                   let subOptionsTitle = "What would you like to inspect?";
@@ -10831,59 +10884,99 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                             How {activeDetailService.name?.toLowerCase().includes("painting") ? "painting" : "waterproofing"} works
                           </h4>
                           <div style={{ display: 'flex', flexDirection: 'column', position: 'relative', paddingLeft: '0.5rem' }}>
-                            {[
-                              {
-                                title: "Book Home Inspection",
-                                desc: "Tell us preferred time to book",
-                                icon: <Calendar size={18} color="#6366f1" />,
-                                bg: "#eff6ff",
-                                border: "#c7d2fe"
-                              },
-                              {
-                                title: "Measure & Estimate",
-                                desc: "Get accurate quotes with laser measurements",
-                                icon: <Calculator size={18} color="#f59e0b" />,
-                                bg: "#fff7ed",
-                                border: "#fde68a"
-                              },
-                              {
-                                title: "Project Initiation",
-                                desc: "Guaranteed on time project initiation and completion",
-                                icon: <PaintRoller size={18} color="#10b981" />,
-                                bg: "#ecfdf5",
-                                border: "#a7f3d0"
-                              },
-                              {
-                                title: "Cleaning & Quality Check",
-                                desc: "Post paint cleanup and quality check",
-                                icon: <CheckCircle2 size={18} color="#06b6d4" />,
-                                bg: "#ecfeff",
-                                border: "#a5f3fc"
-                              }
-                            ].map((step, i, arr) => (
-                              <div key={i} style={{ display: 'flex', gap: '1rem', position: 'relative', paddingBottom: i < arr.length - 1 ? '1.5rem' : '0' }}>
-                                {/* Timeline Line */}
-                                {i < arr.length - 1 && (
-                                  <div style={{
-                                    position: 'absolute', left: '17px', top: '34px', bottom: '0',
-                                    width: '2px', borderLeft: '2px dotted #cbd5e1'
-                                  }} />
-                                )}
-                                {/* Step Icon */}
-                                <div style={{
-                                  width: '36px', height: '36px', borderRadius: '50%', background: step.bg,
-                                  border: `1.5px solid ${step.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  zIndex: 2, flexShrink: 0, boxShadow: '0 2px 5px rgba(0,0,0,0.03)'
-                                }}>
-                                  {step.icon}
-                                </div>
-                                {/* Step Text */}
-                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{step.title}</span>
-                                  <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px', lineHeight: 1.3 }}>{step.desc}</span>
-                                </div>
-                              </div>
-                            ))}
+                            {(() => {
+                              const staticSteps = [
+                                {
+                                  title: "Book Home Inspection",
+                                  desc: "Tell us preferred time to book",
+                                  icon: <Calendar size={18} color="#6366f1" />,
+                                  bg: "#eff6ff",
+                                  border: "#c7d2fe"
+                                },
+                                {
+                                  title: "Measure & Estimate",
+                                  desc: "Get accurate quotes with laser measurements",
+                                  icon: <Calculator size={18} color="#f59e0b" />,
+                                  bg: "#fff7ed",
+                                  border: "#fde68a"
+                                },
+                                {
+                                  title: "Project Initiation",
+                                  desc: "Guaranteed on time project initiation and completion",
+                                  icon: <PaintRoller size={18} color="#10b981" />,
+                                  bg: "#ecfdf5",
+                                  border: "#a7f3d0"
+                                },
+                                {
+                                  title: "Cleaning & Quality Check",
+                                  desc: "Post paint cleanup and quality check",
+                                  icon: <CheckCircle2 size={18} color="#06b6d4" />,
+                                  bg: "#ecfeff",
+                                  border: "#a5f3fc"
+                                }
+                              ];
+                              
+                              const steps = Array.isArray(activeDetailService.steps) && activeDetailService.steps.length > 0
+                                ? activeDetailService.steps
+                                : staticSteps;
+
+                              const stepColors = ["#eff6ff", "#fff7ed", "#ecfdf5", "#ecfeff", "#faf5ff", "#fdf2f8"];
+                              const stepBorders = ["#c7d2fe", "#fde68a", "#a7f3d0", "#a5f3fc", "#e9d5ff", "#fbcfe8"];
+                              const stepTextColors = ["#6366f1", "#f59e0b", "#10b981", "#06b6d4", "#9333ea", "#db2777"];
+
+                              const resolveStepIcon = (iconName, idx) => {
+                                if (!iconName) return <Calendar size={18} color={stepTextColors[idx % stepTextColors.length]} />;
+                                if (typeof iconName !== 'string') return iconName;
+                                const Lower = iconName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                const iconMap = {
+                                  calendar: Calendar,
+                                  calculator: Calculator,
+                                  paintroller: PaintRoller,
+                                  checkcircle: CheckCircle2,
+                                  checkcircle2: CheckCircle2,
+                                  eye: Camera,
+                                  search: Search,
+                                  shield: ShieldCheck,
+                                  star: Star,
+                                  clock: Clock
+                                };
+                                const FoundIcon = iconMap[Lower] || Calendar;
+                                return <FoundIcon size={18} color={stepTextColors[idx % stepTextColors.length]} />;
+                              };
+
+                              return steps.map((step, i, arr) => {
+                                const title = typeof step === 'string' ? step : (step.title || step.label || "");
+                                const desc = typeof step === 'string' ? "" : (step.desc || step.description || "");
+                                const bg = step.bg || stepColors[i % stepColors.length];
+                                const border = step.border || stepBorders[i % stepBorders.length];
+                                return (
+                                  <div key={i} style={{ display: 'flex', gap: '1rem', position: 'relative', paddingBottom: i < arr.length - 1 ? '1.5rem' : '0' }}>
+                                    {/* Timeline Line */}
+                                    {i < arr.length - 1 && (
+                                      <div style={{
+                                        position: 'absolute', left: '17px', top: '34px', bottom: '0',
+                                        width: '2px', borderLeft: '2px dotted #cbd5e1'
+                                      }} />
+                                    )}
+                                    {/* Step Icon */}
+                                    <div style={{
+                                      width: '36px', height: '36px', borderRadius: '50%', background: bg,
+                                      border: `1.5px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      zIndex: 2, flexShrink: 0, boxShadow: '0 2px 5px rgba(0,0,0,0.03)'
+                                    }}>
+                                      {resolveStepIcon(step.icon, i)}
+                                    </div>
+                                    {/* Step Text */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                      <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e293b' }}>{title}</span>
+                                      {desc && (
+                                        <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px', lineHeight: 1.3 }}>{desc}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            })()}
                           </div>
                         </div>
 
@@ -10928,24 +11021,31 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         {/* CUSTOMER REVIEWS LIST */}
                         {(() => {
                           const extra = PAINTING_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
-                          if (extra.reviews.length === 0) return null;
+                          const reviews = Array.isArray(activeDetailService.reviews_list) && activeDetailService.reviews_list.length > 0
+                            ? activeDetailService.reviews_list.filter(r => r.enabled !== false)
+                            : (extra.reviews || []);
+                          if (reviews.length === 0) return null;
                           return (
                             <div style={{ textAlign: 'left', marginTop: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                               <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Customer Reviews</h4>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                {extra.reviews.map((rev, idx) => (
-                                  <div key={idx} style={{ padding: '0.75rem 1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                      <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e293b' }}>{rev.name}</span>
-                                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6366f1', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                        <Star size={12} style={{ fill: '#6366f1', color: '#6366f1' }} /> {rev.rating.toFixed(1)}
-                                      </span>
+                                {reviews.map((rev, idx) => {
+                                  const rRating = typeof rev.rating === 'string' ? parseFloat(rev.rating) : (typeof rev.rating === 'number' ? rev.rating : 5.0);
+                                  const rRatingStr = isNaN(rRating) ? "5.0" : rRating.toFixed(1);
+                                  return (
+                                    <div key={idx} style={{ padding: '0.75rem 1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                        <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e293b' }}>{rev.name}</span>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#6366f1', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                          <Star size={12} style={{ fill: '#6366f1', color: '#6366f1' }} /> {rRatingStr}
+                                        </span>
+                                      </div>
+                                      <p style={{ margin: 0, fontSize: '0.72rem', color: '#475569', fontStyle: 'italic', lineHeight: 1.3 }}>
+                                        "{rev.comment || rev.text}"
+                                      </p>
                                     </div>
-                                    <p style={{ margin: 0, fontSize: '0.72rem', color: '#475569', fontStyle: 'italic', lineHeight: 1.3 }}>
-                                      "{rev.comment}"
-                                    </p>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           );
@@ -12805,24 +12905,31 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   {/* CUSTOMER REVIEWS LIST */}
                   {(() => {
                     const extra = MASON_DETAILS_EXTRA[activeDetailService?.id] || { reviews: [], faqs: [] };
-                    if (extra.reviews.length === 0) return null;
+                    const reviews = Array.isArray(activeDetailService.reviews_list) && activeDetailService.reviews_list.length > 0
+                      ? activeDetailService.reviews_list.filter(r => r.enabled !== false)
+                      : (extra.reviews || []);
+                    if (reviews.length === 0) return null;
                     return (
                       <div style={{ textAlign: 'left', marginTop: '1rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
                         <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Customer Reviews</h4>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                          {extra.reviews.map((rev, idx) => (
-                            <div key={idx} style={{ padding: '0.75rem 1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e293b' }}>{rev.name}</span>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0d9488', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                  <Star size={12} style={{ fill: '#0d9488', color: '#0d9488' }} /> {rev.rating.toFixed(1)}
-                                </span>
+                          {reviews.map((rev, idx) => {
+                            const rRating = typeof rev.rating === 'string' ? parseFloat(rev.rating) : (typeof rev.rating === 'number' ? rev.rating : 5.0);
+                            const rRatingStr = isNaN(rRating) ? "5.0" : rRating.toFixed(1);
+                            return (
+                              <div key={idx} style={{ padding: '0.75rem 1rem', border: '1px solid #f1f5f9', borderRadius: '12px', background: '#f8fafc' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                  <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e293b' }}>{rev.name}</span>
+                                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0d9488', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                    <Star size={12} style={{ fill: '#0d9488', color: '#0d9488' }} /> {rRatingStr}
+                                  </span>
+                                </div>
+                                <p style={{ margin: 0, fontSize: '0.72rem', color: '#475569', fontStyle: 'italic', lineHeight: 1.3 }}>
+                                  "{rev.comment || rev.text}"
+                                </p>
                               </div>
-                              <p style={{ margin: 0, fontSize: '0.72rem', color: '#475569', fontStyle: 'italic', lineHeight: 1.3 }}>
-                                "{rev.comment}"
-                              </p>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -13538,7 +13645,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     effectiveKey = "washing_machine";
   } else if (refrigeratorSubtabs.includes(activeSubTab)) {
     effectiveKey = "refrigerator";
-  } else if (activeSubTab === "Microwave & Purifier") {
+  } else if (activeSubTab === "Microwave & Purifier" || activeSubTab === "Microwave Repair") {
     effectiveKey = "microwave";
   } else if (applianceSubtabs.includes(activeSubTab)) {
     effectiveKey = "appliance_repair";
@@ -14334,18 +14441,135 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     (OTHER_SERVICES["appliance_repair"] && OTHER_SERVICES["appliance_repair"][activeSubTab]) || [];
 
   const currentOtherPlans = useMemo(() => {
-    if (!dbCatalogPackages || dbCatalogPackages.length === 0) return rawOtherPlans;
+    // Filter out Refrigerator Drain Cleaning from hardcoded plans
+    const filteredRawPlans = rawOtherPlans.filter(plan => {
+      const isRefDrainCleaning = (normalizedKey === "refrigerator" || normalizedKey === "appliance_repair") && 
+        (plan.id === "ref-cln-4" || plan.name === "Drain Cleaning");
+      return !isRefDrainCleaning;
+    });
+
+    if (!dbCatalogPackages || dbCatalogPackages.length === 0) return filteredRawPlans;
+
+    // Helper to filter packages based on tab name keywords (fixes categorization gaps)
+    const doesPackageMatchTab = (p) => {
+      const sSlug = (p.service_slug || (p.service && p.service.slug) || "").toLowerCase();
+      const sName = (p.service_name || (p.service && p.service.name) || "").toLowerCase();
+      const pName = (p.name || "").toLowerCase();
+      const tab = (activeSubTab || "").toLowerCase();
+
+      // 1. Refrigerator subtabs
+      if (tab.includes("refrigerator") || tab.includes("fridge")) {
+        const isRef = sSlug.includes("ref") || sSlug.includes("refrigerator") || sName.includes("refrigerator");
+        if (!isRef) return false;
+
+        if (tab.includes("cooling")) {
+          return sSlug.includes("cool") || sName.includes("cooling") || pName.includes("cool") || pName.includes("freezer");
+        }
+        if (tab.includes("gas") || tab.includes("compressor")) {
+          return sSlug.includes("gas") || sSlug.includes("comp") || sName.includes("gas") || sName.includes("compressor") || pName.includes("gas") || pName.includes("compressor");
+        }
+        if (tab.includes("cleaning") || tab.includes("maintenance")) {
+          return sSlug.includes("cln") || sName.includes("cleaning") || pName.includes("clean") || pName.includes("defrost") || pName.includes("maintenance");
+        }
+        if (tab.includes("install")) {
+          return sSlug.includes("inst") || sName.includes("installation") || pName.includes("install") || pName.includes("leveling");
+        }
+        if (tab.includes("parts") || tab.includes("electrical")) {
+          return sSlug.includes("prt") || sName.includes("parts") || pName.includes("part") || pName.includes("pcb") || pName.includes("thermostat") || pName.includes("sensor") || pName.includes("relay") || pName.includes("fan") || pName.includes("gasket") || pName.includes("seal");
+        }
+        // General refrigerator subtab fallback
+        return true;
+      }
+
+      // 2. Washing Machine
+      if (tab.includes("washing") || tab.includes("washer") || tab.includes("wm")) {
+        return sSlug.includes("washing") || sName.includes("washing");
+      }
+
+      // 3. TV
+      if (tab.includes("tv") || tab.includes("display")) {
+        return sSlug.includes("tv") || sName.includes("tv") || sName.includes("display");
+      }
+
+      // 4. Microwave
+      if (tab.includes("microwave") || tab.includes("oven")) {
+        return sSlug.includes("microwave") || sName.includes("microwave");
+      }
+
+      // 5. AC/HVAC subtabs
+      if (tab.includes("ac ") || tab.includes("hvac") || tab.includes("air conditioner")) {
+        const isAc = sSlug.includes("ac") || sSlug.includes("hvac") || sName.includes("ac") || sName.includes("hvac") || sName.includes("heating");
+        if (!isAc) return false;
+
+        if (tab.includes("gas") || tab.includes("refrigerant") || tab.includes("cooling")) {
+          return sSlug.includes("gas") || sName.includes("gas") || pName.includes("gas") || pName.includes("refill") || pName.includes("charge");
+        }
+        if (tab.includes("install")) {
+          return sSlug.includes("inst") || sName.includes("installation") || pName.includes("install") || pName.includes("uninstallation");
+        }
+        if (tab.includes("cleaning") || tab.includes("clean") || tab.includes("maintenance")) {
+          return sSlug.includes("clean") || sName.includes("clean") || sName.includes("cleaning") || pName.includes("foam") || pName.includes("jet") || pName.includes("wash");
+        }
+        if (tab.includes("repair") || tab.includes("diagnostic") || tab.includes("fix")) {
+          return sSlug.includes("repair") || sName.includes("repair") || sName.includes("diagnostics") || pName.includes("repair") || pName.includes("leakage") || pName.includes("noise");
+        }
+        if (tab.includes("pcb") || tab.includes("electrical")) {
+          return sSlug.includes("pcb") || sSlug.includes("cap") || sSlug.includes("cnt") || sSlug.includes("sns") || sSlug.includes("lvt") || pName.includes("pcb") || pName.includes("capacitor") || pName.includes("sensor") || pName.includes("contactor");
+        }
+        if (tab.includes("parts") || tab.includes("accessories")) {
+          return sSlug.includes("prt") || pName.includes("pipe") || pName.includes("stand") || pName.includes("plate") || pName.includes("fastener");
+        }
+        return true;
+      }
+
+      // Fallback: general word overlap match
+      const normSName = sName.replace(/[^a-z0-9]/g, "");
+      const normTab = tab.replace(/[^a-z0-9]/g, "");
+      return normSName.includes(normTab) || normTab.includes(normSName);
+    };
+
+    const getDbCategorySlug = (nk) => {
+      if (nk === "hvac" || nk === "appliance_repair" || nk === "microwave" || nk === "refrigerator" || nk === "washing_machine") {
+        return "ac_appliance";
+      }
+      if (nk === "cleaning") return "deep-cleaning";
+      if (nk === "mason") return "mason";
+      if (nk === "electrical" || nk === "plumbing" || nk === "carpentry") {
+        return "electrician_plumbing_carpentry";
+      }
+      return nk;
+    };
+
+    const targetDbCategory = getDbCategorySlug(normalizedKey);
+    // Filter database packages to only include those matching the target category and subtab
+    const filteredDbPackages = dbCatalogPackages.filter(p => {
+      const pCatSlug = (p.category_slug || "").toLowerCase();
+      if (pCatSlug && pCatSlug !== targetDbCategory) return false;
+      
+      // Remove Drain Cleaning from Refrigerator category as it belongs in Home Services (Plumbing)
+      const isRefDrainCleaning = (targetDbCategory === "ac_appliance") && 
+        (p.slug === "ref-cln-4" || p.name === "Drain Cleaning" || p.name === "Refrigerator Drain Cleaning");
+      if (isRefDrainCleaning) return false;
+
+      return doesPackageMatchTab(p);
+    });
 
     // 1. Map existing catalog items with latest DB values (100% DB-driven)
     const seenIds = new Set();
-    const mapped = rawOtherPlans.map(plan => {
+    const mapped = filteredRawPlans.map(plan => {
       const normPlanName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      const dbMatch = dbCatalogPackages.find(p => {
-        if (p.slug && (p.slug === plan.slug || p.slug === plan.id)) return true;
-        if (String(p.id) === String(plan.id)) return true;
-        const normDbName = (p.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        return normDbName && normPlanName && (normDbName.includes(normPlanName) || normPlanName.includes(normDbName));
-      });
+      
+      // Pass 1: Prioritize exact slug/id matches to prevent cross-matching duplicates
+      let dbMatch = filteredDbPackages.find(p => (p.slug && (p.slug === plan.slug || p.slug === plan.id)) || String(p.id) === String(plan.id));
+      
+      // Pass 2: Fallback to name matches
+      if (!dbMatch) {
+        dbMatch = filteredDbPackages.find(p => {
+          const normDbName = (p.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          return normDbName && normPlanName && (normDbName.includes(normPlanName) || normPlanName.includes(normDbName));
+        });
+      }
+
       if (!dbMatch) return plan;
       seenIds.add(String(dbMatch.id));
       if (dbMatch.slug) seenIds.add(dbMatch.slug);
@@ -14368,7 +14592,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     });
 
     // 2. Append any extra packages created in database for this service / subtab
-    const extraDbPackages = dbCatalogPackages.filter(p => {
+    const extraDbPackages = filteredDbPackages.filter(p => {
       if (seenIds.has(String(p.id)) || (p.slug && seenIds.has(p.slug))) return false;
       const sSlug = (p.service_slug || (p.service && p.service.slug) || "").toLowerCase();
       const sName = (p.service_name || (p.service && p.service.name) || "").toLowerCase();
@@ -14395,7 +14619,20 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       faqs: p.faqs,
     }));
 
-    return [...mapped, ...extraDbPackages];
+    // Deduplicate to guarantee unique keys and prevent duplicate products rendering in the list
+    const finalPlans = [];
+    const seenNames = new Set();
+    const finalSeenIds = new Set();
+    [...mapped, ...extraDbPackages].forEach(plan => {
+      const normName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const planId = String(plan.id);
+      if (!seenNames.has(normName) && !finalSeenIds.has(planId)) {
+        seenNames.add(normName);
+        finalSeenIds.add(planId);
+        finalPlans.push(plan);
+      }
+    });
+    return finalPlans;
   }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
@@ -20215,8 +20452,8 @@ const SERVICE_DETAIL_DATA = {
       "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Vikram P.", rating: "4.9", text: '"Scrubbed all the dust and dirt from the balcony floor. Very clean."' },
-      { name: "Divya N.", rating: "4.8", text: '"The pigeon droppings were cleaned very neatly. Worth the price."' }
+      { name: "Manish P.", rating: "4.9", text: '"The balcony floor tiles and railing are sparkling clean. Great dust and pigeon dropping removal!"' },
+      { name: "Swati D.", rating: "4.8", text: '"Quick and efficient pressure wash. Removed all the hard dirt from the balcony corners."' }
     ],
     faqs: [
       { q: "Do you clean balcony windows?", a: "Yes, accessible balcony windows are dusted and wiped." },
@@ -20241,8 +20478,8 @@ const SERVICE_DETAIL_DATA = {
       "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Aditi G.", rating: "4.8", text: '"Deep scrubbed the entire balcony floor and mesh screens. Perfect."' },
-      { name: "Rohan J.", rating: "4.7", text: '"Professional cleaners. Cleaned my large balcony tiles and railings nicely."' }
+      { name: "Manish P.", rating: "4.9", text: '"The balcony floor tiles and railing are sparkling clean. Great dust and pigeon dropping removal!"' },
+      { name: "Swati D.", rating: "4.8", text: '"Quick and efficient pressure wash. Removed all the hard dirt from the balcony corners."' }
     ],
     faqs: [
       { q: "Is mesh screen cleaning included?", a: "Yes, mesh screen dusting and washing is included." },

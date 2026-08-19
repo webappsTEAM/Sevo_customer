@@ -250,12 +250,12 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
   useEffect(() => {
     const fetchPackages = async () => {
       try {
-        const res = await apiRequest("/settings/catalog/public/packages/?service_slug=sofa-cleaning");
+        const res = await apiRequest("/settings/catalog/public/packages/");
         if (res.success && Array.isArray(res.data)) {
           setDbPackages(res.data);
         }
       } catch (err) {
-        console.error("Failed to fetch sofa packages:", err);
+        console.error("Failed to fetch packages:", err);
       }
     };
     fetchPackages();
