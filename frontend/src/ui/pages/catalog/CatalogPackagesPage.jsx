@@ -882,6 +882,150 @@ const STATIC_SERVICE_DETAIL_DATA = {
     faqs: [
       { q: "Do you clean the door frames?", a: "Yes, we clean both panels and frames." }
     ]
+  },
+  "pest-kb-main": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Rajesh K.", rating: "5.0", text: '"Excellent service. The technician cleared the utensils carefully and put gel in all hinges."' },
+      { name: "Anjali S.", rating: "4.0", text: '"Very professional. The treatment is odorless and highly effective."' }
+    ],
+    faqs: [
+      { q: "Is the treatment safe for kids and pets?", a: "Yes, we use government-approved odorless chemicals that are completely safe. However, we recommend keeping them away during active spraying." },
+      { q: "Do you clear the utensils?", a: "Before the inspection and treatment, our technician will assist in removing the utensils. After treatment, the customer is requested to put them back." },
+      { q: "How long does a session take?", a: "Typically, a kitchen cockroach treatment takes about 45min." },
+      { q: "How quickly do cockroaches die?", a: "You will start seeing a significant reduction within 48 hours, and complete elimination of active roaches in 1 day." },
+      { q: "Do I need to leave the house?", a: "It is not required to leave the house." },
+      { q: "Does the spray stain cabinets?", a: "No, our water-based chemicals are non-staining and odorless, making them safe for wooden, laminate, and steel modular kitchens." }
+    ]
+  },
+  "pest-apt-main": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Vikram M.", rating: "5.0", text: '"Roach problem resolved completely. Best service ever."' },
+      { name: "Neha G.", rating: "5.0", text: '"Awesome odorless spray. They handled the kitchen prep too."' }
+    ],
+    faqs: [
+      { q: "How long does the effect last?", a: "The treatment prevents pest return for up to 90 days. A second visit at 14 days is included to ensure complete eradication." },
+      { q: "Is pre-cleaning of the rooms required?", a: "No, but clearing toys, clothes, and loose items from skirting boards helps the partner spray more efficiently." },
+      { q: "Does this spray have a strong chemical smell?", a: "No, we use premium water-soluble odorless chemical sprays that leave no foul scent behind." },
+      { q: "What should I do after the treatment?", a: "Keep ventilation open for 15 minutes, avoid wet wiping the skirting boards for at least 48 hours so the chemical barrier stays intact." },
+      { q: "Do you treat electrical boxes?", a: "Yes, we use Eco-safe Herbal Gel bait instead of liquid spray inside electrical switch boards and sockets." },
+      { q: "Are balcony areas covered in the apartment plan?", a: "Yes, balcony drains, washing areas, and main entry doors are sprayed to block external entry points." },
+      { q: "What chemicals do you use?", a: "We use only government-approved, low-toxicity synthetic pyrethroids which are highly target-specific for insects." },
+      { q: "Is there any preparation for pet food bowls?", a: "Yes, please remove and store all pet food bowls and water bowls before our technician begins the spray." }
+    ]
+  },
+  "pest-bung-main": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Suresh P.", rating: "4.0", text: '"Detailed inspection and gel application. Highly recommended."' }
+    ],
+    faqs: [
+      { q: "Do you cover all floors of the bungalow?", a: "Yes, we treat all rooms, staircase areas, terraces, and external verandas." },
+      { q: "How long does a bungalow cockroach treatment take?", a: "It takes about 1.5 to 2.5 hours depending on the total floor count and rooms." },
+      { q: "Do you treat external drainage chambers?", a: "Yes, external manholes and drain chambers are treated with chemical sprays to prevent entry from the drainage system." },
+      { q: "Is garden area spraying included?", a: "No, this is an indoor-focused treatment. However, we spray immediate porches, verandas, and outer door frames." },
+      { q: "Can we clean the house immediately after treatment?", a: "You can sweep, but avoid washing or mopping along skirting boards for 2 to 3 days to maximize residual action." },
+      { q: "What type of gel do you use?", a: "We use advanced fipronil/imidacloprid gels which act as highly palatable bait for roaches." },
+      { q: "What is the warranty period for bungalows?", a: "We provide a 90-day complete protection warranty from the date of the first service." },
+      { q: "How many partners are sent for a bungalow?", a: "Usually 1 to 2 trained service partners are assigned depending on the size of the duplex/villa." }
+    ]
+  },
+  "pest-termite-kb": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Mahesh S.", rating: "5.0", text: '"Excellent termite control. Wood cabinets are completely safe now."' }
+    ],
+    faqs: [
+      { q: "Does the drilling damage walls?", a: "No, we use fine-tip drills and seal the holes cleanly with color-matched cement/putty." },
+      { q: "What chemicals do you use for termites?", a: "We use premium termiticides containing imidacloprid or fipronil, which create a chemical barrier to block and destroy termites." },
+      { q: "Is termite treatment odorless?", a: "Yes, the chemical solutions are completely odorless and do not cause any respiratory discomfort." },
+      { q: "How deep do you drill?", a: "We drill about 4 to 6 inches deep into the base of walls at regular intervals to inject chemicals into the foundation." },
+      { q: "Can termites return after drilling?", a: "Our treatment kills the existing infestation and prevents return. We offer a long-term warranty to secure your kitchen wood structures." },
+      { q: "Do I need to empty my kitchen cabinets?", a: "Yes, emptying cabinets in the treatment zone is required so we can access and inject chemicals behind the wood ply." },
+      { q: "How long does this termite treatment take?", a: "It takes about 2 to 3 hours depending on the number of bathrooms and kitchen cabinets treated." },
+      { q: "Does it kill termite eggs?", a: "Termiticide is a systemic chemical. Termites carry it back to their colony, which leads to total colony elimination, including eggs." }
+    ]
+  },
+  "pest-termite-apt": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Karan T.", rating: "5.0", text: '"Professional termite drilling. They gave a 5-year warranty certificate."' }
+    ],
+    faqs: [
+      { q: "What does the 5-year warranty cover?", a: "If termites reappear anywhere in the treated zones within 5 years, we will re-treat the area completely free of charge." },
+      { q: "Is the entire apartment treated in this plan?", a: "Yes, we drill and inject termiticide along the floor-wall junctions of all rooms in the apartment." },
+      { q: "How safe is the chemical inside rooms?", a: "The termiticide is injected deep inside the walls and sealed, so there is no chemical exposure to children or pets." },
+      { q: "Do we need to vacate the house during treatment?", a: "No, there is no need to vacate as the service is clean, non-toxic, and odorless." },
+      { q: "Will the drill noise disturb neighbors?", a: "There will be drill noises during the first 1-2 hours. We recommend informing neighbors beforehand." },
+      { q: "How do you seal the drilled holes?", a: "We fill the holes with white cement mixed with wall putty, smoothing them out so they blend with your floor trim." },
+      { q: "Does this cover wooden wardrobes?", a: "Yes, we spray anti-termite chemicals on the back boards and frames of all fixed wooden wardrobes." },
+      { q: "Can we clean floors after termite drilling?", a: "You can mop the center of the rooms immediately. Avoid washing wall-floor junctions for 24 hours." }
+    ]
+  },
+  "pest-termite-bung": {
+    tools: [
+      "Professional pest control equipment",
+      "Approved pest treatment solutions",
+      "Targeted gel bait application"
+    ],
+    ready: [
+      "Keep food items covered",
+      "Store utensils safely after clearing"
+    ],
+    reviews: [
+      { name: "Pooja V.", rating: "5.0", text: '"Very thorough treatment. They spent hours securing our duplex. Great service!"' }
+    ],
+    faqs: [
+      { q: "Do we need to vacate the bungalow?", a: "No vacation needed. The chemicals are safe and completely odorless." },
+      { q: "What does the bungalow termite plan cover?", a: "It covers drilling and chemical injection of all levels of the bungalow, wardrobe backboards, and soil barrier misting around the duplex perimeter." },
+      { q: "How long does a bungalow termite service take?", a: "A complete bungalow service takes about 4 to 6 hours depending on the size." },
+      { q: "Is external soil treatment included?", a: "Yes, we spray the soil borders around the bungalow's foundation to prevent termites from migrating inside." },
+      { q: "What is the warranty period?", a: "We provide a 5-year warranty with a physical certificate for the bungalow termite treatment." },
+      { q: "Do you treat wooden staircases?", a: "Yes, wooden stair casings and railings are carefully injected and sprayed to protect them." },
+      { q: "How many technicians are sent?", a: "Usually 2 to 3 trained professionals equipped with heavy hammer drills and high-pressure chemical pumps." },
+      { q: "What happens if termites appear in my furniture?", a: "During the 5-year warranty, if any termites emerge in treated structures, contact us and we will re-inject them at no extra cost." }
+    ]
   }
 }
 
@@ -1091,7 +1235,7 @@ export function CatalogPackagesPage() {
 
     if (activeCategoryKey === "home_pest_control") {
       catServices = catServices.filter(
-        (s) => s.slug !== "general" && s.slug !== "security"
+        (s) => s.slug !== "general" && s.slug !== "security" && s.slug !== "termite-control"
       )
     }
 
@@ -1099,7 +1243,7 @@ export function CatalogPackagesPage() {
       catServices = services.filter((s) => s.category_id === catId || s.category === catId)
       if (activeCategoryKey === "home_pest_control") {
         catServices = catServices.filter(
-          (s) => s.slug !== "general" && s.slug !== "security"
+          (s) => s.slug !== "general" && s.slug !== "security" && s.slug !== "termite-control"
         )
       }
     }
@@ -1122,6 +1266,16 @@ export function CatalogPackagesPage() {
         const pkgSvcId = p.service?.id || p.service || p.service_id
         return String(pkgSvcId) === String(svc.id)
       })
+
+      if (svc.slug === "cockroach-control") {
+        const termiteSvc = services.find(s => s.slug === "termite-control")
+        const termitePkgs = termiteSvc
+          ? packages.filter(p => String(p.service?.id || p.service || p.service_id) === String(termiteSvc.id))
+          : []
+        const seenIds = new Set(allSvcPkgs.map(p => p.id))
+        const uniqueTermite = termitePkgs.filter(p => !seenIds.has(p.id))
+        allSvcPkgs = [...allSvcPkgs, ...uniqueTermite]
+      }
 
       if (svc.slug === "sofa-cleaning") {
         const addonPkgs = packages.filter((p) =>
@@ -1175,6 +1329,16 @@ export function CatalogPackagesPage() {
       } else if (svc.slug === "packers-movers") {
         const moverOrder = { "1-rk-1-bhk-shifting": 1, "2-bhk-3-bhk-shifting": 2, "villa-office-relocation": 3 }
         sortedPkgs = [...allSvcPkgs].sort((a, b) => (moverOrder[a.slug] || 99) - (moverOrder[b.slug] || 99))
+      } else if (svc.slug === "cockroach-control") {
+        const cockroachOrder = { 
+          "pest-kb-main": 1, 
+          "pest-apt-main": 2, 
+          "pest-bung-main": 3,
+          "pest-termite-kb": 4,
+          "pest-termite-apt": 5,
+          "pest-termite-bung": 6
+        }
+        sortedPkgs = [...allSvcPkgs].sort((a, b) => (cockroachOrder[a.slug] || 99) - (cockroachOrder[b.slug] || 99))
       }
 
       // Filter by search query if present
@@ -1532,11 +1696,106 @@ export function CatalogPackagesPage() {
         })
       }
 
+      if (svc.slug === "cockroach-control") {
+        const groups = [
+          {
+            subSlug: "cockroach",
+            displayName: "Cockroach Control",
+            filterFn: (p) => p.slug.startsWith("pest-") && !p.slug.includes("termite"),
+          },
+          {
+            subSlug: "termite",
+            displayName: "Termite Control",
+            filterFn: (p) => p.slug.includes("termite"),
+          }
+        ]
+
+        const PEST_SLUG_ORDER = [
+          "pest-kb-main",
+          "pest-apt-main",
+          "pest-bung-main",
+          "pest-termite-kb",
+          "pest-termite-apt",
+          "pest-termite-bung"
+        ]
+
+        return groups.map((g) => {
+          let groupPkgs = allSvcPkgs.filter(g.filterFn)
+          groupPkgs = [...groupPkgs].sort((a, b) => {
+            const idxA = PEST_SLUG_ORDER.indexOf(a.slug)
+            const idxB = PEST_SLUG_ORDER.indexOf(b.slug)
+            const orderA = idxA !== -1 ? idxA : 999
+            const orderB = idxB !== -1 ? idxB : 999
+            return orderA - orderB
+          })
+          const finalPkgs = getFilteredPkgs(groupPkgs)
+          return {
+            service: {
+              ...svc,
+              id: `${svc.id}-${g.subSlug}`,
+              virtualSlug: g.subSlug,
+              realServiceId: svc.id,
+            },
+            displayName: g.displayName,
+            icon: getServiceIcon(g.subSlug, g.displayName),
+            totalPackages: finalPkgs.length,
+            packages: finalPkgs,
+          }
+        })
+      }
+
+      if (svc.slug === "ants-bed-bugs-control") {
+        const groups = [
+          {
+            subSlug: "ants",
+            displayName: "Ants Control",
+            filterFn: (p) => p.slug.includes("ant"),
+          },
+          {
+            subSlug: "bedbugs",
+            displayName: "Bed Bugs Control",
+            filterFn: (p) => p.slug.includes("bedbug"),
+          }
+        ]
+
+        const PEST_SLUG_ORDER = [
+          "pest-ant-kb",
+          "pest-ant-apt",
+          "pest-ant-bung",
+          "pest-bedbug-main"
+        ]
+
+        return groups.map((g) => {
+          let groupPkgs = allSvcPkgs.filter(g.filterFn)
+          groupPkgs = [...groupPkgs].sort((a, b) => {
+            const idxA = PEST_SLUG_ORDER.indexOf(a.slug)
+            const idxB = PEST_SLUG_ORDER.indexOf(b.slug)
+            const orderA = idxA !== -1 ? idxA : 999
+            const orderB = idxB !== -1 ? idxB : 999
+            return orderA - orderB
+          })
+          const finalPkgs = getFilteredPkgs(groupPkgs)
+          return {
+            service: {
+              ...svc,
+              id: `${svc.id}-${g.subSlug}`,
+              virtualSlug: g.subSlug,
+              realServiceId: svc.id,
+            },
+            displayName: g.displayName,
+            icon: getServiceIcon(g.subSlug, g.displayName),
+            totalPackages: finalPkgs.length,
+            packages: finalPkgs,
+          }
+        })
+      }
+
       // Friendly display name formatting (e.g. "Two Wheeler" -> "2 Wheeler")
       let displayName = svc.name
       if (svc.slug === "two-wheeler" || svc.name === "Two Wheeler") displayName = "2 Wheeler"
       if (svc.slug === "truck") displayName = "Truck"
       if (svc.slug === "packers-movers") displayName = "Packers & Movers"
+      if (svc.slug === "cockroach-control") displayName = "Cockroach & Termite control"
 
       return [{
         service: svc,
@@ -2202,7 +2461,7 @@ export function CatalogPackagesPage() {
                     }`}
                   >
                     <SubIcon className="w-3.5 h-3.5" />
-                    <span>{item.displayName}</span>
+                    <span>{item.service.slug === "cockroach-control" ? "Cockroach & Termite control" : item.displayName}</span>
                     <span
                       className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
                         isSubActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
@@ -3542,7 +3801,22 @@ export function CatalogPackagesPage() {
             <div className="p-4 bg-gradient-to-r from-blue-50 via-indigo-50/50 to-blue-50/70 rounded-2xl border border-indigo-100/90 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Service Category</span>
-                <div className="text-sm sm:text-base font-extrabold text-indigo-950 mt-0.5">{quickPriceEditing.service_name || activePillar.name}</div>
+                <div className="text-sm sm:text-base font-extrabold text-indigo-950 mt-0.5">
+                  {(() => {
+                    const currentSubService = activeCategoryServicesWithPackages.find(
+                      (item) =>
+                        item.service.slug === activeSubServiceKey ||
+                        item.service.virtualSlug === activeSubServiceKey ||
+                        String(item.service.id) === String(activeSubServiceKey) ||
+                        String(item.service.realServiceId) === String(activeSubServiceKey) ||
+                        item.displayName.toLowerCase().replace(/[^a-z0-9]/g, "") === activeSubServiceKey.toLowerCase().replace(/[^a-z0-9]/g, "")
+                    );
+                    if (currentSubService) {
+                      return currentSubService.displayName;
+                    }
+                    return quickPriceEditing.service_name || activePillar.name;
+                  })()}
+                </div>
               </div>
               <span className="px-3 py-1 bg-white text-indigo-700 text-xs font-bold rounded-full border border-indigo-200/80 shadow-2xs">
                 Live Sync Enabled
