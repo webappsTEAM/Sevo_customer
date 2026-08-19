@@ -467,7 +467,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 duration: dbMatch.duration || subOpt.duration,
-                includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : subOpt.includes,
+                includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes.filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false)).map(inc => typeof inc === "string" ? inc : (inc.text || "")) : subOpt.includes,
                 tools: dbMatch.tools,
                 ready: dbMatch.ready,
                 reviews: dbMatch.reviews,
@@ -487,7 +487,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : item.includes;
+            item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes.filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false)).map(inc => typeof inc === "string" ? inc : (inc.text || "")) : item.includes;
             item.tools = dbMatch.tools;
             item.ready = dbMatch.ready;
             if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
@@ -960,9 +960,13 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
               {/* Tools & Products We Use */}
               {(() => {
-                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const tools = selectedServiceDetails.tools || details.tools || [];
+                const id = selectedServiceDetails.id;
+                const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
+                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const hasSavedTools = dbMatch && Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0;
+                const tools = hasSavedTools ? dbMatch.tools.map(t => typeof t === "string" ? t : (t.text || "")) : (selectedServiceDetails.tools || details.tools || []);
                 const activeTools = tools.filter(t => typeof t === "string" ? true : (t?.checked !== false && t?.enabled !== false));
+
                 if (activeTools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -985,9 +989,13 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
               {/* What You Need to Keep Ready */}
               {(() => {
-                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const ready = selectedServiceDetails.ready || details.ready || [];
+                const id = selectedServiceDetails.id;
+                const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
+                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const hasSavedReady = dbMatch && Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0;
+                const ready = hasSavedReady ? dbMatch.ready.map(r => typeof r === "string" ? r : (r.text || "")) : (selectedServiceDetails.ready || details.ready || []);
                 const activeReady = ready.filter(r => typeof r === "string" ? true : (r?.checked !== false && r?.enabled !== false));
+
                 if (activeReady.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -1010,8 +1018,13 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
               {/* Customer Reviews Section */}
               {(() => {
-                const reviews = selectedServiceDetails.reviews_list || [];
+                const id = selectedServiceDetails.id;
+                const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
+                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const hasSavedReviews = dbMatch && Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0;
+                const reviews = hasSavedReviews ? dbMatch.reviews : (selectedServiceDetails.reviews_list || selectedServiceDetails.reviews || []);
                 const activeReviews = reviews.filter(r => r?.checked !== false && r?.enabled !== false);
+
                 if (activeReviews.length === 0) return null;
                 return (
                   <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
@@ -1026,7 +1039,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                               <span>{rev.rating || "4.8"}</span>
                             </div>
                           </div>
-                          <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">{rev.text || rev.comment}</p>
+                          <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">"{rev.text || rev.comment}"</p>
                         </div>
                       ))}
                     </div>
@@ -1036,10 +1049,13 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
               {/* Frequently Asked Questions */}
               {(() => {
-                const rawFaqs = (Array.isArray(selectedServiceDetails.faqs) && selectedServiceDetails.faqs.length > 0)
-                  ? selectedServiceDetails.faqs
-                  : (SERVICE_DETAILS_CONTENT[selectedServiceDetails.id]?.faqs || []);
+                const id = selectedServiceDetails.id;
+                const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
+                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const hasSavedFaqs = dbMatch && Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0;
+                const rawFaqs = hasSavedFaqs ? dbMatch.faqs : (selectedServiceDetails.faqs || details.faqs || []);
                 const faqs = rawFaqs.filter(f => f?.checked !== false && f?.enabled !== false);
+
                 if (faqs.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">

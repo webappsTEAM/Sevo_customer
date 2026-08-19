@@ -64,24 +64,19 @@ export const SOFA_DETAIL_DATA = {
     ]
   },
   "quick-balcony-upto-4ft": {
-    tools: ["Floor scrubbers", "High pressure water sprays", "Hard dusting brushes"],
-    ready: ["Remove plants or outdoor furniture from the balcony", "Ensure access to a water connection"],
+    tools: ["Floor scrubbing brushes", "Balcony floor cleaner", "Wiper", "Microfiber cloths"],
+    ready: ["Clear plants, clothes drying racks, and outdoor furniture from the balcony floor"],
     reviews: [
-      { name: "Vikram P.", rating: "4.9", text: '"Scrubbed all the dust and dirt from the balcony floor. Very clean."' },
-      { name: "Divya N.", rating: "4.8", text: '"The pigeon droppings were cleaned very neatly. Worth the price."' },
-      { name: "Hari L.", rating: "5.0", text: '"Cleaned the balcony railings and window tracks perfectly. Excellent job."' },
-      { name: "Sita R.", rating: "4.9", text: '"Removed all hard water stains from the tiles. Very happy with the result."' },
-      { name: "Vijay C.", rating: "4.7", text: '"Quick and efficient. Balcony is now spotless and odor-free."' }
+      { name: "Manish P.", rating: "4.9", text: '"The balcony floor tiles and railing are sparkling clean. Great dust and pigeon dropping removal!"' },
+      { name: "Swati D.", rating: "4.8", text: '"Quick and efficient pressure wash. Removed all the hard dirt from the balcony corners."' }
     ],
     faqs: [
-      { q: "Do you clean balcony windows?", a: "Yes, accessible balcony windows are dusted and wiped." },
-      { q: "Is roof cleaning included?", a: "No, ceiling/roof cleaning is not included in this quick package." },
-      { q: "Do you wash the railings?", a: "Yes, railings are scrubbed and wiped to remove dust." },
-      { q: "What if there is no water connection near the balcony?", a: "Our team will fetch water from the nearest bathroom or kitchen." },
-      { q: "Do you clean wall tiles in the balcony?", a: "Yes, wall tiles are wiped down to remove surface dust." },
-      { q: "Will you discard old items?", a: "No, we do not throw away trash or scrap items left in the balcony." },
-      { q: "How long does it take?", a: "It takes about 30 to 45 minutes." },
-      { q: "Do you clean mesh windows?", a: "Yes, window mesh screen dusting is included." }
+      { q: "Do you clean pigeon droppings?", a: "Yes, we scrape, disinfect, and wash areas affected by bird droppings." },
+      { q: "Will you clean the balcony glass railing?", a: "Yes, deep cleaning of glass panels and steel/iron railings is included." },
+      { q: "Is water outlet required?", a: "Yes, access to water (a tap) is required to wash the balcony floor." },
+      { q: "Do you clean wall tiles in the balcony?", a: "Yes, we wipe and scrub accessible balcony wall tiles up to shoulder height." },
+      { q: "How long does it take?", a: "It takes approximately 30 to 45 minutes depending on balcony size." },
+      { q: "Do you clean balcony ceiling fans?", a: "Dusting is included; deep fan cleaning can be added as a separate service." }
     ]
   },
   "quick-balcony-above-4ft": {
@@ -95,14 +90,12 @@ export const SOFA_DETAIL_DATA = {
       { name: "Arun K.", rating: "4.8", text: '"Great team work. Cleared the balcony drain blockage too."' }
     ],
     faqs: [
-      { q: "Is mesh screen cleaning included?", a: "Yes, mesh screen dusting and washing is included." },
-      { q: "Will you clean glass railings?", a: "Yes, both sides of glass railings are cleaned if safely accessible." },
-      { q: "Do you clean balcony ceilings?", a: "No, ceiling and roof cleaning is not included." },
-      { q: "How much time is required?", a: "It takes around 45 to 60 minutes for balconies above 4ft width." },
-      { q: "Do you scrub the floor with a machine?", a: "No, manual heavy-duty scrubbing brushes are used to remove stains." },
-      { q: "Are plant pots moved by the cleaners?", a: "We request customers to move heavy plant pots beforehand. Light pots can be moved by our team." },
-      { q: "Do you clean outer side of balcony walls?", a: "No, exterior walls are excluded due to safety hazards." },
-      { q: "Do you remove hard water stains from tiles?", a: "We use cleaning detergents, but very old hard water scaling might not disappear completely." }
+      { q: "Do you clean pigeon droppings?", a: "Yes, we scrape, disinfect, and wash areas affected by bird droppings." },
+      { q: "Will you clean the balcony glass railing?", a: "Yes, deep cleaning of glass panels and steel/iron railings is included." },
+      { q: "Is water outlet required?", a: "Yes, access to water (a tap) is required to wash the balcony floor." },
+      { q: "Do you clean wall tiles in the balcony?", a: "Yes, we wipe and scrub accessible balcony wall tiles up to shoulder height." },
+      { q: "How long does it take?", a: "It takes approximately 30 to 45 minutes depending on balcony size." },
+      { q: "Do you clean balcony ceiling fans?", a: "Dusting is included; deep fan cleaning can be added as a separate service." }
     ]
   },
   "quick-dining-table": {

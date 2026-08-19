@@ -94,25 +94,20 @@ const SERVICE_DETAILS_CONTENT = {
     ],
     note: "Bed bug treatment requires deep chemical penetration. Please prepare to vacate the rooms for 2–3 hours post spray.",
     includes: [
-      "Thorough inspection of mattress seams, box springs, and bed frames",
-      "Specialized chemical spray targeting cracks and baseboards",
-      "Steam extraction treatment for mattresses & pillow corners",
-      "Second chemical treatment visit after 14 days to eliminate newly hatched eggs"
+      "Clear Treatment Areas",
+      "Cover Food Items",
+      "Store Utensils Safely"
     ],
-    tools: ["Mattress Steam Extractor", "Odorless residual insecticide spray", "Baseboard crevice nozzle"],
+    tools: ["Precision Spray Equipment", "Approved Pest Solutions"],
     reviews_list: [
       { author: "Karthik R.", rating: 5, date: "3 days ago", comment: "The steam treatment was super thorough. Bed bugs are gone completely!" },
       { author: "Sneha M.", rating: 5, date: "2 weeks ago", comment: "Very professional. They explained the 2nd visit follow-up plan clearly." }
     ],
     faqs: [
-      { q: "Is a second visit included in the price?", a: "Yes, the second visit after 14 days is fully included to ensure any hatched nymphs are eliminated." },
-      { q: "Do I need to wash my bedsheets?", a: "Yes, we highly recommend washing all bedsheets, linens, and curtains in hot water post-service." },
-      { q: "How long should we vacate the house?", a: "We recommend vacating the treated rooms for 3 to 4 hours post-service to allow the chemical spray to dry completely." },
-      { q: "Do we need to throw away infested mattresses?", a: "No, our steam extraction and chemical spray are designed to eradicate bed bugs inside mattresses, making them reusable." },
-      { q: "Where do bed bugs hide?", a: "They hide in mattress seams, bed frames, headboards, wall cracks, electrical outlets, and nearby furniture joints." },
-      { q: "What chemicals do you use?", a: "We use synthetic pyrethroids and insect growth regulators which are target-specific and low-hazard to humans." },
-      { q: "Can we sleep on the mattress immediately?", a: "Wait at least 4 hours. Ensure the mattress is completely dry and cover it with fresh bedsheets before sleeping." },
-      { q: "Is there a service warranty?", a: "Yes, we provide a 90-day protection warranty from the date of the first treatment visit." }
+      { q: "How long does treatment take?", a: "Usually, the treatment takes around 1.5hrs, depending on the infestation level and area size." },
+      { q: "Is the treatment safe?", a: "Yes. We use approved pest-control products and apply them carefully as per safety guidelines." },
+      { q: "When can we re-enter?", a: "You can re-enter after the recommended waiting period provided by the technician." },
+      { q: "Will bed bugs return after treatment?", a: "Treatment helps control the existing infestation, but proper hygiene and prevention are important to reduce recurrence." }
     ]
   },
   "pest-ant-kb": {
@@ -124,23 +119,19 @@ const SERVICE_DETAILS_CONTENT = {
     ],
     note: "Our professionals will handle the complete removal of utensils and kitchenware before inspection. After the removal/clearing is completed, the customer has to store/keep the utensils safely.",
     includes: [
-      "Targeted gel baiting inside kitchen cabinets & drawers",
-      "Chemical spray block for baseboards and wall crevices",
-      "Silicone sealant sealing for primary entry holes"
+      "Clear Treatment Areas",
+      "Cover Food Items",
+      "Store Utensils Safely"
     ],
-    tools: ["Ant gel syringe applicator", "Silicone wall sealant", "Presurized pump spray"],
+    tools: ["Precision Spray Equipment", "Approved Pest Solutions"],
     reviews_list: [
       { author: "Vijay L.", rating: 5, date: "1 week ago", comment: "Excellent ant control. They sealed the entryway behind the microwave." }
     ],
     faqs: [
-      { q: "How long does the gel take to work?", a: "The gel bait attracts ants within 24 hours. The entire colony is eradicated within 3–5 days." },
-      { q: "Do I need to leave the kitchen during treatment?", a: "No, the treatment is odorless and gel-based, so there is no need to leave the room or vacate." },
-      { q: "Is the ant gel safe for food areas?", a: "The gel is applied in cracks, crevices, and cabinet hinges away from direct food contact, making it perfectly safe." },
-      { q: "What type of ants does this treat?", a: "It treats all common household ants including black ants, red ants, and sugar ants." },
-      { q: "Do you seal the entry holes?", a: "Yes, we seal visible entry crevices along wall margins using paintable silicone sealant." },
-      { q: "Will the ants return after treatment?", a: "The gel destroys the nest. To prevent return, ensure food scraps are cleared and counter tops are wiped clean." },
-      { q: "What should I do if I see ants post-treatment?", a: "Do not spray regular aerosol sprays on the gel, as it repels ants. Let them feed on the gel bait so they carry it to the colony." },
-      { q: "Do you offer a service warranty?", a: "Yes, we provide a 45-day warranty. If ants return during this time, we will provide a free follow-up service." }
+      { q: "How long does treatment take?", a: "Usually, the treatment takes around 45mins, depending on the infestation level and area size." },
+      { q: "Is the treatment safe?", a: "Yes. We use approved pest-control products and apply them carefully as per safety guidelines." },
+      { q: "When can we re-enter?", a: "You can re-enter after the recommended waiting period provided by the technician." },
+      { q: "Will ants return after treatment?", a: "Treatment helps control the existing infestation, but proper hygiene and prevention are important to reduce recurrence." }
     ]
   },
   "pest-ant-apt": {
@@ -153,23 +144,19 @@ const SERVICE_DETAILS_CONTENT = {
     ],
     note: "Our professionals will handle the complete removal of utensils and kitchenware before inspection. After the removal/clearing is completed, the customer has to store/keep the utensils safely.",
     includes: [
-      "Whole apartment perimeter wall base spraying",
-      "Cabinet gel treatment for ants in kitchen and bathrooms",
-      "Odorless insecticide spray for entryways and cracks"
+      "Clear Treatment Areas",
+      "Cover Food Items",
+      "Store Utensils Safely"
     ],
-    tools: ["Ant gel syringe applicator", "Odorless residual spray chemical", "Hole dusting gun"],
+    tools: ["Precision Spray Equipment", "Approved Pest Solutions"],
     reviews_list: [
       { author: "Nikhil S.", rating: 4, date: "4 days ago", comment: "Good service, but make sure you clear the cabinets yourself before they arrive." }
     ],
     faqs: [
-      { q: "Do you clear the cabinets?", a: "For this plan, the customer must completely empty and clear all kitchen cabinets and drawers before the partner arrives." },
-      { q: "Does the spray leave stains on walls?", a: "No, our water-based chemical spray is non-staining, colorless, and odorless." },
-      { q: "How long does the service take?", a: "An apartment ant extermination service takes about 1 hour to complete." },
-      { q: "Are balcony areas treated?", a: "Yes, we treat balcony skirting borders and drain junctions as they are major ant entry points." },
-      { q: "Is the treatment safe for plants?", a: "Yes, the chemical is sprayed along baseboards and does not harm potted indoor plants." },
-      { q: "Should we clean the floor after treatment?", a: "You can mop the center of the rooms. Avoid washing along the skirting boundaries for 48 hours." },
-      { q: "How long does the residual spray last?", a: "The spray creates a barrier that remains active for up to 90 days if left undisturbed." },
-      { q: "Is a second visit included?", a: "For ant control, a single session with gel and spray is highly effective. If there is a heavy infestation, a follow-up can be booked." }
+      { q: "How long does treatment take?", a: "Usually, the treatment takes around 1hr, depending on the infestation level and area size." },
+      { q: "Is the treatment safe?", a: "Yes. We use approved pest-control products and apply them carefully as per safety guidelines." },
+      { q: "When can we re-enter?", a: "You can re-enter after the recommended waiting period provided by the technician." },
+      { q: "Will ants return after treatment?", a: "Treatment helps control the existing infestation, but proper hygiene and prevention are important to reduce recurrence." }
     ]
   },
   "pest-ant-bung": {
@@ -182,23 +169,19 @@ const SERVICE_DETAILS_CONTENT = {
     ],
     note: "Our professionals will handle the complete removal of utensils and kitchenware before inspection. After the removal/clearing is completed, the customer has to store/keep the utensils safely.",
     includes: [
-      "Bungalow scale perimeter barrier spray",
-      "Cabinet gel treatment and crevice injection",
-      "Staircase and external entry treatment to block ant paths"
+      "Clear Treatment Areas",
+      "Cover Food Items",
+      "Store Utensils Safely"
     ],
-    tools: ["Multi-floor sprayer", "Wardrobe-safe gel", "Entry dust blocker"],
+    tools: ["Precision Spray Equipment", "Approved Pest Solutions"],
     reviews_list: [
       { author: "Pradeep J.", rating: 5, date: "1 week ago", comment: "Very thorough ant control for our double floor house. Highly effective." }
     ],
     faqs: [
-      { q: "Is this chemical safe for wooden floors?", a: "Yes, our chemicals are eco-safe and do not stain or harm wood, carpets, or laminates." },
-      { q: "Do you cover all floors in a bungalow?", a: "Yes, we spray skirting lines on all floors, balconies, terraces, and immediate foundation borders." },
-      { q: "How long does it take for a bungalow?", a: "It typically takes 1.5 to 2 hours depending on the size of the bungalow." },
-      { q: "Do you treat outdoor gardens for ants?", a: "We do not treat lawns or garden soil, but we apply barrier sprays along porch tiled surfaces and windows." },
-      { q: "Is a warranty provided for bungalow ant treatment?", a: "Yes, we provide a 45-day complete protection warranty from the service date." },
-      { q: "Can we be inside the villa during spraying?", a: "Yes, the chemicals are low-toxicity and odorless. However, we suggest keeping children away from wet sprayed areas until dry." },
-      { q: "Do you treat wooden attics?", a: "Yes, we apply gel bait and dry dusting powder in crevices inside attics or wooden stair structures." },
-      { q: "How many partners handle a bungalow?", a: "We assign 1 to 2 trained service professionals depending on the room count." }
+      { q: "How long does treatment take?", a: "Usually, the treatment takes around 1.5hrs, depending on the infestation level and area size." },
+      { q: "Is the treatment safe?", a: "Yes. We use approved pest-control products and apply them carefully as per safety guidelines." },
+      { q: "When can we re-enter?", a: "You can re-enter after the recommended waiting period provided by the technician." },
+      { q: "Will ants return after treatment?", a: "Treatment helps control the existing infestation, but proper hygiene and prevention are important to reduce recurrence." }
     ]
   }
 };
@@ -274,9 +257,10 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            // Only use DB includes if it's a non-empty array of strings
-            if (Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 && typeof dbMatch.includes[0] === "string") {
-              item.includes = dbMatch.includes;
+            if (Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0) {
+              item.includes = dbMatch.includes
+                .filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false))
+                .map(inc => typeof inc === "string" ? inc : (inc.text || ""));
             }
             // Do NOT overwrite item.reviews (a display string like "75K reviews")
             // with dbMatch.reviews which is an array of objects {name, text, rating}
@@ -419,13 +403,7 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                       <div className="flex-1 order-2 sm:order-1">
                         <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                        {service.rating && (
-                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
-                            <Star className="text-violet-600 fill-violet-600" size={11} />
-                            <span className="text-slate-800">{service.rating}</span>
-                            <span className="text-slate-400 font-normal">({service.reviews})</span>
-                          </div>
-                        )}
+
 
                         {service.description && (
                           <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
@@ -520,13 +498,7 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                           <div className="flex-1 order-2 sm:order-1">
                             <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                            {service.rating && (
-                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
-                                <Star className="text-violet-600 fill-violet-600" size={11} />
-                                <span className="text-slate-800">{service.rating}</span>
-                                <span className="text-slate-400 font-normal">({service.reviews})</span>
-                              </div>
-                            )}
+
 
                             {service.description && (
                               <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
@@ -597,13 +569,7 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                           <div className="flex-1 order-2 sm:order-1">
                             <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
 
-                            {service.rating && (
-                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold mb-1">
-                                <Star className="text-violet-600 fill-violet-600" size={11} />
-                                <span className="text-slate-800">{service.rating}</span>
-                                <span className="text-slate-400 font-normal">({service.reviews})</span>
-                              </div>
-                            )}
+
 
                             {service.description && (
                               <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
@@ -811,8 +777,12 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
               {/* What does this service include? */}
               {(() => {
-                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const includes = details.includes || [];
+                const id = selectedServiceDetails.id;
+                const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
+                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const hasSavedReady = dbMatch && Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0;
+                const includes = hasSavedReady ? dbMatch.ready.map(r => typeof r === "string" ? r : (r.text || "")) : (details.includes || []);
+
                 if (includes.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -831,8 +801,12 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
               {/* Tools we use */}
               {(() => {
-                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const tools = details.tools || [];
+                const id = selectedServiceDetails.id;
+                const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
+                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const hasSavedTools = dbMatch && Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0;
+                const tools = hasSavedTools ? dbMatch.tools.map(t => typeof t === "string" ? t : (t.text || "")) : (details.tools || []);
+
                 if (tools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
@@ -851,8 +825,12 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
               {/* Customer Reviews Section */}
               {(() => {
-                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const reviews = details.reviews_list || [];
+                const id = selectedServiceDetails.id;
+                const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
+                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const hasSavedReviews = dbMatch && Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0;
+                const reviews = hasSavedReviews ? dbMatch.reviews : (details.reviews_list || []);
+
                 if (reviews.length === 0) return null;
                 return (
                   <div className="space-y-4 border-t border-slate-100 pt-5 text-left">
@@ -861,19 +839,19 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                       {reviews.map((rev, i) => (
                         <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                           <div className="flex justify-between items-center mb-1.5">
-                            <div className="text-[11px] font-bold text-slate-700">{rev.author}</div>
-                            <div className="text-[9px] text-slate-400 font-semibold">{rev.date}</div>
+                            <div className="text-[11px] font-bold text-slate-700">{rev.author || rev.name}</div>
+                            <div className="text-[9px] text-slate-400 font-semibold">{rev.date || "2 days ago"}</div>
                           </div>
                           <div className="flex items-center gap-0.5 mb-1.5">
                             {[...Array(5)].map((_, idx) => (
                               <Star 
                                 key={idx} 
                                 size={10} 
-                                className={idx < rev.rating ? "text-yellow-500 fill-yellow-500" : "text-slate-300"} 
+                                className={idx < parseFloat(rev.rating) ? "text-yellow-500 fill-yellow-500" : "text-slate-300"} 
                               />
                             ))}
                           </div>
-                          <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">{rev.comment}</p>
+                          <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">"{rev.comment || rev.text}"</p>
                         </div>
                       ))}
                     </div>
@@ -883,8 +861,12 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
               {/* FAQs Section */}
               {(() => {
-                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                const faqs = details.faqs || [];
+                const id = selectedServiceDetails.id;
+                const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
+                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const hasSavedFaqs = dbMatch && Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0;
+                const faqs = hasSavedFaqs ? dbMatch.faqs : (details.faqs || []);
+
                 if (faqs.length === 0) return null;
                 return (
                   <div className="space-y-3 border-t border-slate-100 pt-5 text-left pb-4">
