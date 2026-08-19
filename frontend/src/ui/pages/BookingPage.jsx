@@ -8231,6 +8231,53 @@ export function BookingPage() {
   const [showSubCategoryChoiceModal, setShowSubCategoryChoiceModal] = useState(false)
   const [dynamicReviews, setDynamicReviews] = useState([])
 
+  // Hot reload services catalog and package customizations when modal is shown or category changes in BookingPage
+  useEffect(() => {
+    if (showPackageModal && category) {
+      const rawCatKey = (category.id || category.slug || "").toLowerCase();
+      if (rawCatKey.includes("painting") || rawCatKey.includes("mason")) {
+        console.log("DEBUG: [BookingPage] Hot-reloading catalog and customizations for category:", rawCatKey);
+        
+        // 1. Fetch fresh services catalog
+        apiRequest("/catalog/services/")
+          .then(svcRes => {
+            if (svcRes && svcRes.success) {
+              const pkgs = {}
+              svcRes.data.forEach(s => {
+                const cid = s.category.toString()
+                if (!pkgs[cid]) pkgs[cid] = []
+                pkgs[cid].push({
+                  ...s,
+                  id: s.id.toString(),
+                  category: s.category.toString(),
+                  price: parseFloat(s.price),
+                  priceStr: BOOKING_CURRENCY_SYMBOL + s.price,
+                  duration: s.duration || "1 hr",
+                  payment_policy: s.payment_policy,
+                  image: s.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+                  includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
+                  excludes: Array.isArray(s.excludes) ? s.excludes : [],
+                  popular: !!s.popular,
+                  tag: s.tag || ""
+                })
+              })
+              setPackagesData(pkgs)
+            }
+          })
+          .catch(err => console.error("Failed to hot-reload services in BookingPage:", err));
+
+        // 2. Fetch fresh package customizations
+        apiRequest("/settings/catalog/public/packages/")
+          .then((res) => {
+            if (res?.success && Array.isArray(res.data)) {
+              setDbCatalogPackages(res.data);
+            }
+          })
+          .catch((err) => console.error("Failed to fetch public catalog packages in BookingPage:", err));
+      }
+    }
+  }, [showPackageModal, category]);
+
   const [searchQuery, setSearchQuery] = useState("")
   const [location, setLocation] = useState("Set location")
   const [showLocPicker, setShowLocPicker] = useState(false)
@@ -9508,33 +9555,49 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
           return {
             ...service,
             name: cust.heading || service.name,
-            image: relevantPkgs[0]?.image || cust.image_url || service.image,
+            image: relevantPkgs[0]?.service_image || service.image || relevantPkgs[0]?.image,
             rating: cust.rating || service.rating,
             reviews: cust.reviews || service.reviews,
-            points: Array.isArray(cust.points) && cust.points.filter(Boolean).length > 0
-                      ? cust.points.filter(Boolean)
+            points: Array.isArray(cust.points) && cust.points.length > 0
+                      ? cust.points.map(p => typeof p === "string" ? { text: p, checked: true } : p)
+                                   .filter(p => p && p.checked !== false && p.text)
+                                   .map(p => p.text)
                       : service.points,
             benefits: Array.isArray(cust.benefits) && cust.benefits.length > 0
-                      ? cust.benefits.map(b => typeof b === 'string' ? b : (b.title || ''))
+                      ? cust.benefits.map(b => typeof b === "string" ? { title: b, checked: true } : b)
+                                     .filter(b => b && b.checked !== false && b.title)
+                                     .map(b => b.title)
                       : service.benefits,
-            includes: Array.isArray(cust.includes) && cust.includes.filter(Boolean).length > 0
-                      ? cust.includes.filter(Boolean)
+            includes: Array.isArray(cust.includes) && cust.includes.length > 0
+                      ? cust.includes.map(i => typeof i === "string" ? { text: i, checked: true } : i)
+                                     .filter(i => i && i.checked !== false && i.text)
+                                     .map(i => i.text)
                       : service.includes,
-            excludes: Array.isArray(cust.excludes) && cust.excludes.filter(Boolean).length > 0
-                      ? cust.excludes.filter(Boolean)
+            excludes: Array.isArray(cust.excludes) && cust.excludes.length > 0
+                      ? cust.excludes.map(e => typeof e === "string" ? { text: e, checked: true } : e)
+                                     .filter(e => e && e.checked !== false && e.text)
+                                     .map(e => e.text)
                       : service.excludes,
-            inspectionHighlights: Array.isArray(cust.inspection_highlights) && cust.inspection_highlights.filter(Boolean).length > 0
-                      ? cust.inspection_highlights.filter(Boolean)
+            inspectionHighlights: Array.isArray(cust.inspection_highlights) && cust.inspection_highlights.length > 0
+                      ? cust.inspection_highlights.map(h => typeof h === "string" ? { text: h, checked: true } : h)
+                                                   .filter(h => h && h.checked !== false && h.text)
+                                                   .map(h => h.text)
                       : service.inspectionHighlights,
             steps: Array.isArray(cust.steps) && cust.steps.length > 0
-                      ? cust.steps
+                      ? cust.steps.filter(s => s && s.checked !== false)
                       : service.steps,
             faqs: Array.isArray(cust.faqs) && cust.faqs.length > 0
-                      ? cust.faqs.map(f => ({ q: f.q || f.question || '', a: f.a || f.answer || '' }))
+                      ? cust.faqs.filter(f => f && f.checked !== false)
+                                 .map(f => ({ q: f.q || f.question || "", a: f.a || f.answer || "" }))
                       : service.faqs,
             reviews_list: cust.reviews_list || [],
-            price_list: cust.price_list || [],
-            paint_types: cust.paint_types || [],
+            button_text: cust.button_text || "View details",
+            price_list: Array.isArray(cust.price_list) && cust.price_list.length > 0
+                      ? cust.price_list.filter(p => p && p.checked !== false)
+                      : [],
+            paint_types: Array.isArray(cust.paint_types) && cust.paint_types.length > 0
+                      ? cust.paint_types.filter(pt => pt && pt.checked !== false)
+                      : [],
             subOptions: dynamicSubOptions
           };
         }
@@ -9685,31 +9748,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-  if (packagesData === null) {
-    return (
-      <div className="uc-paint-overlay" onClick={onClose}>
-        <motion.div
-          className="uc-paint-modal"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "350px" }}
-          onClick={e => e.stopPropagation()}
-        >
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-            <div style={{ width: "35px", height: "35px", border: "4px solid #f3f3f3", borderTop: "4px solid #7c3aed", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
-            <span style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.03em" }}>LOADING CATALOG DETAILS...</span>
-          </div>
-          <style>{`
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          `}</style>
-        </motion.div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="uc-paint-overlay" onClick={onClose}>
@@ -9960,7 +9999,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                   gap: '2px', padding: 0
                                 }}
                               >
-                                View details <ChevronRight size={14} />
+                                {service.button_text || "View details"} <ChevronRight size={14} />
                               </button>
                               <button
                                 className="uc-paint-action-btn"
@@ -11406,7 +11445,7 @@ const MASON_DETAILS_EXTRA = {
 };
 
 export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, setPhotoFile, setPhotoPreview, packagesData }) {
-  const [activeTab, setActiveTab] = useState("brick");
+  const [activeTab, setActiveTab] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [expanded, setExpanded] = useState({});
   const [activeDetailService, setActiveDetailService] = useState(null);
@@ -11695,11 +11734,21 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
         
         const sName = pkg.service_name || pkg.service?.name || "Masonry Work";
         if (!distinct.some(c => c.id === cId)) {
-          let icon = "🧱";
-          if (cId === "plastering") icon = "🪣";
-          else if (cId === "partition") icon = "📐";
-          else if (cId === "demolition") icon = "🔨";
-          else if (cId.includes("construction") || cId.includes("house")) icon = "🏗️";
+          const iconMap = {
+            "brick": "🧱",
+            "brick-block-work": "🧱",
+            "plastering": "🪣",
+            "plastering-wall-repair": "🪣",
+            "partition": "📐",
+            "wall-partition-construction": "📐",
+            "demolition": "🔨",
+            "wall-breaking-demolition": "🔨",
+            "full-house-construction": "🏗️",
+            "house-construction": "🏗️",
+            "home-construction": "🏠",
+            "construction": "🏗️",
+          };
+          let icon = iconMap[cId] || iconMap[rawSlug] || "🧱";
           
           distinct.push({
             id: cId,
@@ -11874,31 +11923,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   const totalQuantity = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-  if (packagesData === null) {
-    return (
-      <div className="uc-paint-overlay" onClick={onClose}>
-        <motion.div
-          className="uc-paint-modal"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "350px" }}
-          onClick={e => e.stopPropagation()}
-        >
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-            <div style={{ width: "35px", height: "35px", border: "4px solid #f3f3f3", borderTop: "4px solid #7c3aed", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
-            <span style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.03em" }}>LOADING CATALOG DETAILS...</span>
-          </div>
-          <style>{`
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          `}</style>
-        </motion.div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="uc-paint-overlay" onClick={onClose}>
@@ -12048,11 +12073,11 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   >
                     <div style={{
                       width: "56px", height: "56px", borderRadius: "16px",
-                      background: isActive ? "#0d9488" : "#f0fdf4",
-                      border: isActive ? "1.5px solid #0d9488" : "1.5px solid #dcfce7",
-                      color: isActive ? "#ffffff" : "#059669",
+                      background: "#f0fdf4",
+                      border: isActive ? "2.5px solid #10b981" : "1.5px solid #dcfce7",
+                      color: "#059669",
                       display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem",
-                      boxShadow: isActive ? "0 4px 12px rgba(13,148,136,0.25)" : "0 2px 6px rgba(0, 0, 0, 0.04)",
+                      boxShadow: isActive ? "0 0 0 3px rgba(16,185,129,0.18)" : "0 2px 6px rgba(0, 0, 0, 0.04)",
                       transition: "all 0.2s ease"
                     }}>
                       {cat.icon}
@@ -12159,7 +12184,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                                     cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", padding: 0
                                   }}
                                 >
-                                  View details <ChevronRight size={13} style={{ strokeWidth: 2.5 }} />
+                                  {service.button_text || "View details"} <ChevronRight size={13} style={{ strokeWidth: 2.5 }} />
                                 </button>
                                 <button
                                   onClick={() => addToCart(service)}
@@ -20874,7 +20899,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                         onClick={() => setSelectedServiceDetails(service)}
                         className="text-xs font-semibold text-blue-600 mt-2 hover:underline"
                       >
-                        View details
+                        {service.button_text || "View details"}
                       </button>
                     </div>
 
