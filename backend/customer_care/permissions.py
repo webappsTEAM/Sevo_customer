@@ -45,9 +45,14 @@ def get_care_access(user):
 
 class IsCareAgent(permissions.BasePermission):
     """
-    Allows access only to care agents (either implicit or explicit).
+    Allows access only to care agents (either implicit or explicit),
+    or authenticated customers accessing tickets.
     """
     def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if getattr(request.user, "role", "") == "customer":
+            return True
         access = get_care_access(request.user)
         return access["has_access"]
 

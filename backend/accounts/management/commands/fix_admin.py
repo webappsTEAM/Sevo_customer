@@ -1,8 +1,8 @@
 """
 Management command to fix an admin user account that is inactive or has wrong role.
 Usage:
-    python manage.py fix_admin --email suryaramya111111@gmail.com
-    python manage.py fix_admin --email suryaramya111111@gmail.com --reset-password NewPass@123
+    python manage.py fix_admin --email calservices05@gmail.com
+    python manage.py fix_admin --email calservices05@gmail.com --reset-password NewPass@123
 """
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
