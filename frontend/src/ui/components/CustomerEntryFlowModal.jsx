@@ -370,12 +370,12 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
       return
     }
 
-    const clean = value.replace(/\D/g, "")
+    const singleDigit = clean.slice(-1)
     const newDigits = [...otpDigits]
-    newDigits[index] = clean
+    newDigits[index] = singleDigit
     setOtpDigits(newDigits)
 
-    if (clean && index < 5) {
+    if (singleDigit && index < 5) {
       otpInputRefs.current[index + 1]?.focus()
     }
     const code = newDigits.join("")

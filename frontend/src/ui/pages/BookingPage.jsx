@@ -6639,7 +6639,8 @@ function QuickCommerceCartCheckout({
   setCart,
   category,
   onBack,
-  user
+  user,
+  onRequireAuth
 }) {
   useEffect(() => {
     document.body.style.overflow = "auto"
@@ -6724,6 +6725,10 @@ function QuickCommerceCartCheckout({
 
   const handleProceedToPay = async () => {
     if (cart.length === 0) return
+    if (!user) {
+      onRequireAuth && onRequireAuth()
+      return
+    }
     setIsSubmitting(true)
     setErrorMsg("")
     try {
@@ -8354,11 +8359,9 @@ export function BookingPage() {
     }
   }, [user])
 
-  // ALWAYS enforce Login / Signup first before proceeding through Checkout
+  // ALWAYS enforce Login / Signup first before proceeding through Checkout or viewing booking details
   useEffect(() => {
-    let savedPhone = ""
-    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
-    if (!user && !savedPhone && step > 0 && !trackParam) {
+    if (!user && step > 0 && !trackParam) {
       setShowCustomerEntryModal(true)
     }
   }, [user, step, trackParam])
@@ -8517,7 +8520,7 @@ export function BookingPage() {
   }
 
   const handleSubmit = async (paymentMethod = "cash", couponCode = null) => {
-    if (!user && (!formData.phone || formData.phone === "9150632938")) {
+    if (!user) {
       setShowCustomerEntryModal(true)
       return
     }
@@ -8646,30 +8649,52 @@ export function BookingPage() {
 
   if (isQuickCommerce && cart.length > 0) {
     return (
-      <QuickCommerceCartCheckout
-        cart={cart}
-        setCart={setCart}
-        category={category}
-        user={user}
-        onBack={() => {
-          const restoredFoodCart = {}
-          cart.forEach(item => {
-            const key = item.displayName || item.name
-            if (key) {
-              restoredFoodCart[key] = item.quantity || 1
-            }
-          })
-          navigate(routes.landing || "/home", {
-            replace: true,
-            state: {
-              openFoodHealthModal: true,
-              openVegetablesModal: true,
-              openFoodSubModuleId: routerLocation.state?.foodSubModuleId || category?.foodSubModuleId || "vegetables",
-              foodCart: Object.keys(restoredFoodCart).length > 0 ? restoredFoodCart : (routerLocation.state?.foodCart || {}),
-            }
-          })
-        }}
-      />
+      <>
+        <QuickCommerceCartCheckout
+          cart={cart}
+          setCart={setCart}
+          category={category}
+          user={user}
+          onRequireAuth={() => setShowCustomerEntryModal(true)}
+          onBack={() => {
+            const restoredFoodCart = {}
+            cart.forEach(item => {
+              const key = item.displayName || item.name
+              if (key) {
+                restoredFoodCart[key] = item.quantity || 1
+              }
+            })
+            navigate(routes.landing || "/home", {
+              replace: true,
+              state: {
+                openFoodHealthModal: true,
+                openVegetablesModal: true,
+                openFoodSubModuleId: routerLocation.state?.foodSubModuleId || category?.foodSubModuleId || "vegetables",
+                foodCart: Object.keys(restoredFoodCart).length > 0 ? restoredFoodCart : (routerLocation.state?.foodCart || {}),
+              }
+            })
+          }}
+        />
+        <AnimatePresence>
+          {showCustomerEntryModal && (
+            <CustomerEntryFlowModal
+              isOpen={showCustomerEntryModal}
+              onClose={() => {
+                setShowCustomerEntryModal(false)
+                if (!user && !trackParam) {
+                  navigate(routes.landing || "/home", { replace: true })
+                }
+              }}
+              onComplete={(locData) => {
+                setShowCustomerEntryModal(false)
+                setTimeout(() => {
+                  refreshMe && refreshMe()
+                }, 200)
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </>
     )
   }
 
@@ -8718,9 +8743,7 @@ export function BookingPage() {
             isOpen={showCustomerEntryModal}
             onClose={() => {
               setShowCustomerEntryModal(false)
-              let savedPhone = ""
-              try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
-              if (!user && !savedPhone && step > 0 && !trackParam) {
+              if (!user && step > 0 && !trackParam) {
                 navigate(routes.landing || "/home", { replace: true })
               }
             }}
