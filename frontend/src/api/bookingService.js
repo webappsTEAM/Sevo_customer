@@ -9,3 +9,7 @@ import { apiRequest } from "./client.js"
 export async function createBooking(payload) {
   return apiRequest("/booking/", { method: "POST", json: payload })
 }
+
+export async function cancelBooking(identifier, reason = "Customer requested cancellation") {
+  return apiRequest(`/booking/${identifier}/cancel/`, { method: "POST", json: { reason } })
+}
