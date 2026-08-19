@@ -13637,7 +13637,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     effectiveKey = "washing_machine";
   } else if (refrigeratorSubtabs.includes(activeSubTab)) {
     effectiveKey = "refrigerator";
-  } else if (activeSubTab === "Microwave & Purifier") {
+  } else if (activeSubTab === "Microwave & Purifier" || activeSubTab === "Microwave Repair") {
     effectiveKey = "microwave";
   } else if (applianceSubtabs.includes(activeSubTab)) {
     effectiveKey = "appliance_repair";
@@ -14433,18 +14433,135 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     (OTHER_SERVICES["appliance_repair"] && OTHER_SERVICES["appliance_repair"][activeSubTab]) || [];
 
   const currentOtherPlans = useMemo(() => {
-    if (!dbCatalogPackages || dbCatalogPackages.length === 0) return rawOtherPlans;
+    // Filter out Refrigerator Drain Cleaning from hardcoded plans
+    const filteredRawPlans = rawOtherPlans.filter(plan => {
+      const isRefDrainCleaning = (normalizedKey === "refrigerator" || normalizedKey === "appliance_repair") && 
+        (plan.id === "ref-cln-4" || plan.name === "Drain Cleaning");
+      return !isRefDrainCleaning;
+    });
+
+    if (!dbCatalogPackages || dbCatalogPackages.length === 0) return filteredRawPlans;
+
+    // Helper to filter packages based on tab name keywords (fixes categorization gaps)
+    const doesPackageMatchTab = (p) => {
+      const sSlug = (p.service_slug || (p.service && p.service.slug) || "").toLowerCase();
+      const sName = (p.service_name || (p.service && p.service.name) || "").toLowerCase();
+      const pName = (p.name || "").toLowerCase();
+      const tab = (activeSubTab || "").toLowerCase();
+
+      // 1. Refrigerator subtabs
+      if (tab.includes("refrigerator") || tab.includes("fridge")) {
+        const isRef = sSlug.includes("ref") || sSlug.includes("refrigerator") || sName.includes("refrigerator");
+        if (!isRef) return false;
+
+        if (tab.includes("cooling")) {
+          return sSlug.includes("cool") || sName.includes("cooling") || pName.includes("cool") || pName.includes("freezer");
+        }
+        if (tab.includes("gas") || tab.includes("compressor")) {
+          return sSlug.includes("gas") || sSlug.includes("comp") || sName.includes("gas") || sName.includes("compressor") || pName.includes("gas") || pName.includes("compressor");
+        }
+        if (tab.includes("cleaning") || tab.includes("maintenance")) {
+          return sSlug.includes("cln") || sName.includes("cleaning") || pName.includes("clean") || pName.includes("defrost") || pName.includes("maintenance");
+        }
+        if (tab.includes("install")) {
+          return sSlug.includes("inst") || sName.includes("installation") || pName.includes("install") || pName.includes("leveling");
+        }
+        if (tab.includes("parts") || tab.includes("electrical")) {
+          return sSlug.includes("prt") || sName.includes("parts") || pName.includes("part") || pName.includes("pcb") || pName.includes("thermostat") || pName.includes("sensor") || pName.includes("relay") || pName.includes("fan") || pName.includes("gasket") || pName.includes("seal");
+        }
+        // General refrigerator subtab fallback
+        return true;
+      }
+
+      // 2. Washing Machine
+      if (tab.includes("washing") || tab.includes("washer") || tab.includes("wm")) {
+        return sSlug.includes("washing") || sName.includes("washing");
+      }
+
+      // 3. TV
+      if (tab.includes("tv") || tab.includes("display")) {
+        return sSlug.includes("tv") || sName.includes("tv") || sName.includes("display");
+      }
+
+      // 4. Microwave
+      if (tab.includes("microwave") || tab.includes("oven")) {
+        return sSlug.includes("microwave") || sName.includes("microwave");
+      }
+
+      // 5. AC/HVAC subtabs
+      if (tab.includes("ac ") || tab.includes("hvac") || tab.includes("air conditioner")) {
+        const isAc = sSlug.includes("ac") || sSlug.includes("hvac") || sName.includes("ac") || sName.includes("hvac") || sName.includes("heating");
+        if (!isAc) return false;
+
+        if (tab.includes("gas") || tab.includes("refrigerant") || tab.includes("cooling")) {
+          return sSlug.includes("gas") || sName.includes("gas") || pName.includes("gas") || pName.includes("refill") || pName.includes("charge");
+        }
+        if (tab.includes("install")) {
+          return sSlug.includes("inst") || sName.includes("installation") || pName.includes("install") || pName.includes("uninstallation");
+        }
+        if (tab.includes("cleaning") || tab.includes("clean") || tab.includes("maintenance")) {
+          return sSlug.includes("clean") || sName.includes("clean") || sName.includes("cleaning") || pName.includes("foam") || pName.includes("jet") || pName.includes("wash");
+        }
+        if (tab.includes("repair") || tab.includes("diagnostic") || tab.includes("fix")) {
+          return sSlug.includes("repair") || sName.includes("repair") || sName.includes("diagnostics") || pName.includes("repair") || pName.includes("leakage") || pName.includes("noise");
+        }
+        if (tab.includes("pcb") || tab.includes("electrical")) {
+          return sSlug.includes("pcb") || sSlug.includes("cap") || sSlug.includes("cnt") || sSlug.includes("sns") || sSlug.includes("lvt") || pName.includes("pcb") || pName.includes("capacitor") || pName.includes("sensor") || pName.includes("contactor");
+        }
+        if (tab.includes("parts") || tab.includes("accessories")) {
+          return sSlug.includes("prt") || pName.includes("pipe") || pName.includes("stand") || pName.includes("plate") || pName.includes("fastener");
+        }
+        return true;
+      }
+
+      // Fallback: general word overlap match
+      const normSName = sName.replace(/[^a-z0-9]/g, "");
+      const normTab = tab.replace(/[^a-z0-9]/g, "");
+      return normSName.includes(normTab) || normTab.includes(normSName);
+    };
+
+    const getDbCategorySlug = (nk) => {
+      if (nk === "hvac" || nk === "appliance_repair" || nk === "microwave" || nk === "refrigerator" || nk === "washing_machine") {
+        return "ac_appliance";
+      }
+      if (nk === "cleaning") return "deep-cleaning";
+      if (nk === "mason") return "mason";
+      if (nk === "electrical" || nk === "plumbing" || nk === "carpentry") {
+        return "electrician_plumbing_carpentry";
+      }
+      return nk;
+    };
+
+    const targetDbCategory = getDbCategorySlug(normalizedKey);
+    // Filter database packages to only include those matching the target category and subtab
+    const filteredDbPackages = dbCatalogPackages.filter(p => {
+      const pCatSlug = (p.category_slug || "").toLowerCase();
+      if (pCatSlug && pCatSlug !== targetDbCategory) return false;
+      
+      // Remove Drain Cleaning from Refrigerator category as it belongs in Home Services (Plumbing)
+      const isRefDrainCleaning = (targetDbCategory === "ac_appliance") && 
+        (p.slug === "ref-cln-4" || p.name === "Drain Cleaning" || p.name === "Refrigerator Drain Cleaning");
+      if (isRefDrainCleaning) return false;
+
+      return doesPackageMatchTab(p);
+    });
 
     // 1. Map existing catalog items with latest DB values (100% DB-driven)
     const seenIds = new Set();
-    const mapped = rawOtherPlans.map(plan => {
+    const mapped = filteredRawPlans.map(plan => {
       const normPlanName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      const dbMatch = dbCatalogPackages.find(p => {
-        if (p.slug && (p.slug === plan.slug || p.slug === plan.id)) return true;
-        if (String(p.id) === String(plan.id)) return true;
-        const normDbName = (p.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        return normDbName && normPlanName && (normDbName.includes(normPlanName) || normPlanName.includes(normDbName));
-      });
+      
+      // Pass 1: Prioritize exact slug/id matches to prevent cross-matching duplicates
+      let dbMatch = filteredDbPackages.find(p => (p.slug && (p.slug === plan.slug || p.slug === plan.id)) || String(p.id) === String(plan.id));
+      
+      // Pass 2: Fallback to name matches
+      if (!dbMatch) {
+        dbMatch = filteredDbPackages.find(p => {
+          const normDbName = (p.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          return normDbName && normPlanName && (normDbName.includes(normPlanName) || normPlanName.includes(normDbName));
+        });
+      }
+
       if (!dbMatch) return plan;
       seenIds.add(String(dbMatch.id));
       if (dbMatch.slug) seenIds.add(dbMatch.slug);
@@ -14467,7 +14584,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     });
 
     // 2. Append any extra packages created in database for this service / subtab
-    const extraDbPackages = dbCatalogPackages.filter(p => {
+    const extraDbPackages = filteredDbPackages.filter(p => {
       if (seenIds.has(String(p.id)) || (p.slug && seenIds.has(p.slug))) return false;
       const sSlug = (p.service_slug || (p.service && p.service.slug) || "").toLowerCase();
       const sName = (p.service_name || (p.service && p.service.name) || "").toLowerCase();
@@ -14494,7 +14611,20 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       faqs: p.faqs,
     }));
 
-    return [...mapped, ...extraDbPackages];
+    // Deduplicate to guarantee unique keys and prevent duplicate products rendering in the list
+    const finalPlans = [];
+    const seenNames = new Set();
+    const finalSeenIds = new Set();
+    [...mapped, ...extraDbPackages].forEach(plan => {
+      const normName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const planId = String(plan.id);
+      if (!seenNames.has(normName) && !finalSeenIds.has(planId)) {
+        seenNames.add(normName);
+        finalSeenIds.add(planId);
+        finalPlans.push(plan);
+      }
+    });
+    return finalPlans;
   }, [rawOtherPlans, dbCatalogPackages, effectiveKey, activeSubTab]);
 
   const isTvTab = tvSubtabs.includes(activeSubTab);
