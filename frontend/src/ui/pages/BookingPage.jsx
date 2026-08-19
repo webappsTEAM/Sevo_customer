@@ -20551,8 +20551,8 @@ const SERVICE_DETAIL_DATA = {
       "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Vikram P.", rating: "4.9", text: '"Scrubbed all the dust and dirt from the balcony floor. Very clean."' },
-      { name: "Divya N.", rating: "4.8", text: '"The pigeon droppings were cleaned very neatly. Worth the price."' }
+      { name: "Manish P.", rating: "4.9", text: '"The balcony floor tiles and railing are sparkling clean. Great dust and pigeon dropping removal!"' },
+      { name: "Swati D.", rating: "4.8", text: '"Quick and efficient pressure wash. Removed all the hard dirt from the balcony corners."' }
     ],
     faqs: [
       { q: "Do you clean balcony windows?", a: "Yes, accessible balcony windows are dusted and wiped." },
@@ -20577,8 +20577,8 @@ const SERVICE_DETAIL_DATA = {
       "Ensure access to a water connection"
     ],
     reviews: [
-      { name: "Aditi G.", rating: "4.8", text: '"Deep scrubbed the entire balcony floor and mesh screens. Perfect."' },
-      { name: "Rohan J.", rating: "4.7", text: '"Professional cleaners. Cleaned my large balcony tiles and railings nicely."' }
+      { name: "Manish P.", rating: "4.9", text: '"The balcony floor tiles and railing are sparkling clean. Great dust and pigeon dropping removal!"' },
+      { name: "Swati D.", rating: "4.8", text: '"Quick and efficient pressure wash. Removed all the hard dirt from the balcony corners."' }
     ],
     faqs: [
       { q: "Is mesh screen cleaning included?", a: "Yes, mesh screen dusting and washing is included." },
