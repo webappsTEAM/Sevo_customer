@@ -299,9 +299,10 @@ export function App() {
           <Route path={routes.customer_work_extension} element={<CustomerDecisionPage />} />
           <Route path="/customer/decision/:token" element={<CustomerDecisionPage />} />
 
-          {/* ── Public Customer Live Tracking — no auth, secured by tracking_token query param ── */}
+          {/* ── Public Customer Live Tracking — secured by tracking_token query param or auth ── */}
           <Route path={routes.live_tracking} element={<LiveTrackingPage />} />
-          {/* Alias: /track/<bookingId> without :bookingId pattern for deep linking */}
+          <Route path="/track/:jobId" element={<LiveTrackingPage />} />
+          <Route path="/tracking/:token" element={<LiveTrackingPage />} />
 
           {/* ── Authenticated Shell ── */}
           <Route

@@ -194,7 +194,7 @@ function OverviewMarkers({ locations, onSelect }) {
         } catch { /* skip */ }
       } else {
         const circle = L.circle([loc.lat, loc.lng], {
-          radius: loc.geofence_radius || 300,
+          radius: loc.geofence_radius || 5,
           color, fillColor: color, fillOpacity: 0.06, weight: 1
         }).addTo(map)
         shapeLayers.push(circle)

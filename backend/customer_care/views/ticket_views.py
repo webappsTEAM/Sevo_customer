@@ -50,9 +50,17 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
         return TicketListSerializer
 
     def get_queryset(self):
-        # Customer Care is an internal admin tool — return ALL tickets without
-        # company-scope filtering so no tickets are ever hidden due to a
-        # missing/mismatched company field on old records.
+        user = self.request.user
+        if user.is_authenticated and getattr(user, "role", "") == "customer":
+            phone_val = getattr(user, "phone", "") or ""
+            email_val = user.email or ""
+            filters = Q(customer=user)
+            if email_val:
+                filters |= Q(email__iexact=email_val)
+            if phone_val:
+                filters |= Q(phone=phone_val)
+            return CustomerCareTicket.objects.filter(filters).distinct().order_by("-created_at")
+
         qs = CustomerCareTicket.objects.all()
 
         status_param = self.request.query_params.get("status")

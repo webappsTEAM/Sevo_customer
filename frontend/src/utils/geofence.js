@@ -86,7 +86,7 @@ export function checkGeofence(empLat, empLng, location) {
   }
 
   // ── Circle mode ───────────────────────────────────────────────────────────
-  const radius = location.geofence_radius ?? 300
+  const radius = location.geofence_radius ?? 5
   const dist = haversine(empLat, empLng, location.lat, location.lng)
   const distRounded = Math.round(dist)
 
