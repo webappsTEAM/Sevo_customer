@@ -435,9 +435,16 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
   };
 
   const addCustomizedItemToCart = (baseId, name, price, duration, detailsString) => {
-    const uniqueId = `${baseId}-${Date.now()}`;
-    const cartName = `${name} (${detailsString})`;
-    setCart(prev => [...prev, { id: uniqueId, name: cartName, price, duration, quantity: 1 }]);
+    const cartName = detailsString ? `${name} (${detailsString})` : name;
+    setCart(prev => {
+      const existingIdx = prev.findIndex(item => item.name === cartName && item.id.startsWith(baseId));
+      if (existingIdx !== -1) {
+        return prev.map((item, idx) => idx === existingIdx ? { ...item, quantity: item.quantity + 1 } : item);
+      } else {
+        const uniqueId = `${baseId}-${Date.now()}`;
+        return [...prev, { id: uniqueId, name: cartName, price, duration, quantity: 1 }];
+      }
+    });
   };
 
   const removeItemFromCart = (id) => {
@@ -447,6 +454,41 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
       if (existing.quantity === 1) return prev.filter(i => i.id !== id);
       return prev.map(i => i.id === id ? { ...i, quantity: i.quantity - 1 } : i);
     });
+  };
+
+  const handleRemoveOneOfService = (serviceId) => {
+    setCart(prev => {
+      const idx = prev.map(i => i.id === serviceId || i.id.startsWith(serviceId + "-")).lastIndexOf(true);
+      if (idx === -1) return prev;
+      const target = prev[idx];
+      if (target.quantity > 1) {
+        return prev.map((item, i) => i === idx ? { ...item, quantity: item.quantity - 1 } : item);
+      }
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const handleQuickAdd = (service) => {
+    const details = SERVICE_DETAILS_CONTENT[service.id] || {};
+    let detailsString = "";
+    if (details.bathroomRates && details.bathroomRates[0]) {
+      detailsString = details.bathroomRates[0].label;
+    } else if (details.rates && details.rates[0]) {
+      detailsString = details.rates[0].label;
+    }
+
+    const dbMatch = dbPackages.find(p => p.slug === service.id || p.id === service.id);
+    let price = service.price;
+    if (dbMatch && Array.isArray(dbMatch.excludes) && dbMatch.excludes[0]) {
+      detailsString = dbMatch.excludes[0].label || dbMatch.excludes[0].name || detailsString;
+      price = dbMatch.excludes[0].price;
+    } else if (details.bathroomRates && details.bathroomRates[0]) {
+      price = details.bathroomRates[0].price;
+    } else if (details.rates && details.rates[0]) {
+      price = details.rates[0].price;
+    }
+
+    addCustomizedItemToCart(service.id, service.name, price, service.duration, detailsString);
   };
 
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
@@ -525,10 +567,27 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
     setActiveFaq(null);
   };
 
+  const getSelectedServiceDetailsObject = () => {
+    if (!selectedServiceDetails) return {};
+    const id = selectedServiceDetails.id;
+    const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
+    const details = { ...(SERVICE_DETAILS_CONTENT[id] || {}) };
+    if (id === "bath-exhaust-fan") {
+      delete details.bathroomRates;
+      delete details.rates;
+      return details;
+    }
+    if (dbMatch && Array.isArray(dbMatch.excludes) && dbMatch.excludes.length > 0) {
+      if (details.bathroomRates) details.bathroomRates = dbMatch.excludes;
+      if (details.rates) details.rates = dbMatch.excludes;
+    }
+    return details;
+  };
+
   // Calculate current price in modal dynamically
   const getModalPrice = () => {
     if (!selectedServiceDetails) return 0;
-    const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+    const details = getSelectedServiceDetailsObject();
     if (details.bathroomRates && selectedRateIdx === null) return 0;
     const basePrice = details.bathroomRates ? details.bathroomRates[selectedRateIdx]?.price || selectedServiceDetails.price : selectedServiceDetails.price;
 
@@ -545,7 +604,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
   const handleProceedFromModal = () => {
     if (!selectedServiceDetails) return;
-    const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+    const details = getSelectedServiceDetailsObject();
     const rateObj = details.bathroomRates ? details.bathroomRates[selectedRateIdx] : null;
     const totalPrice = getModalPrice();
 
@@ -641,7 +700,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
           <div className="space-y-4">
             {activeServices.map((service) => {
-              const count = getCount(service.id);
+              const count = cart.filter(i => i.id === service.id || i.id.startsWith(service.id + "-")).reduce((sum, i) => sum + i.quantity, 0);
               return (
                 <div key={service.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 relative transition-all hover:shadow-md">
                   <div className="flex flex-col sm:flex-row gap-5">
@@ -694,12 +753,20 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                         <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
                       </div>
                       <div className="w-24 z-10">
-                        <button
-                          onClick={() => handleOpenDetails(service)}
-                          className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
-                        >
-                          <ShoppingCart size={14} /> Add
-                        </button>
+                        {count > 0 ? (
+                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
+                            <button onClick={(e) => { e.stopPropagation(); handleRemoveOneOfService(service.id); }} className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-black text-sm">-</button>
+                            <span>{count}</span>
+                            <button onClick={(e) => { e.stopPropagation(); handleQuickAdd(service); }} className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-black text-sm">+</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleQuickAdd(service); }}
+                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                          >
+                            <ShoppingCart size={14} /> Add
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -716,8 +783,8 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
         </div>
 
         {/* Right Column: Order Summary */}
-        <div className="w-full lg:w-[320px]">
-          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-48">
+        <div className="w-full lg:w-[320px] shrink-0">
+          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
             <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
               <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
               <span className="text-[10px] font-bold text-slate-400">{cart.reduce((a, b) => a + b.quantity, 0)} items</span>
@@ -733,7 +800,17 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                     </div>
                     <div className="text-right flex items-center gap-2">
                       <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
-                      <button onClick={() => removeItemFromCart(item.id)} className="text-red-500 hover:text-red-700 font-bold ml-1">×</button>
+                      <div className="inline-flex items-center gap-1.5 border border-slate-200 rounded-md px-1.5 py-0.5 bg-slate-50">
+                        <button onClick={() => removeItemFromCart(item.id)} className="text-slate-400 hover:text-slate-600 font-bold bg-transparent border-none cursor-pointer text-[10px]">-</button>
+                        <span className="text-[10px] font-black text-slate-700 min-w-3 text-center">{item.quantity}</span>
+                        <button onClick={() => {
+                          const baseId = item.id.split("-")[0];
+                          const parts = item.name.split(" (");
+                          const nameOnly = parts[0];
+                          const detailsString = parts.length > 1 ? parts.slice(1).join(" (").slice(0, -1) : "";
+                          addCustomizedItemToCart(baseId, nameOnly, item.price, item.duration, detailsString);
+                        }} className="text-slate-400 hover:text-slate-600 font-bold bg-transparent border-none cursor-pointer text-[10px]">+</button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -745,7 +822,11 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             )}
 
             <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
-              <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
+              <div className="flex justify-between text-slate-500 font-bold">
+                <span>Items Subtotal</span>
+                <span>₹{subtotal.toLocaleString("en-IN")}</span>
+              </div>
+              <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1 border-t border-dashed border-slate-100 mt-1">
                 <span>Total Amount</span>
                 <span>₹{subtotal.toLocaleString("en-IN")}</span>
               </div>
@@ -810,7 +891,9 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
               {/* Requirements selection section */}
               {(() => {
-                const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+                const details = getSelectedServiceDetailsObject();
+                const hasRequirements = !!(details.bathroomRates || details.isSubscription || details.frequencies);
+                if (!hasRequirements) return null;
                 return (
                   <div className="space-y-5">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">Select Requirements</h4>
@@ -962,7 +1045,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               {(() => {
                 const id = selectedServiceDetails.id;
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
-                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const details = getSelectedServiceDetailsObject();
                 const hasSavedTools = dbMatch && Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0;
                 const tools = hasSavedTools ? dbMatch.tools.map(t => typeof t === "string" ? t : (t.text || "")) : (selectedServiceDetails.tools || details.tools || []);
                 const activeTools = tools.filter(t => typeof t === "string" ? true : (t?.checked !== false && t?.enabled !== false));
@@ -991,7 +1074,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               {(() => {
                 const id = selectedServiceDetails.id;
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
-                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const details = getSelectedServiceDetailsObject();
                 const hasSavedReady = dbMatch && Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0;
                 const ready = hasSavedReady ? dbMatch.ready.map(r => typeof r === "string" ? r : (r.text || "")) : (selectedServiceDetails.ready || details.ready || []);
                 const activeReady = ready.filter(r => typeof r === "string" ? true : (r?.checked !== false && r?.enabled !== false));
@@ -1020,7 +1103,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               {(() => {
                 const id = selectedServiceDetails.id;
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
-                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const details = getSelectedServiceDetailsObject();
                 const hasSavedReviews = dbMatch && Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0;
                 const reviews = hasSavedReviews ? dbMatch.reviews : (selectedServiceDetails.reviews_list || selectedServiceDetails.reviews || []);
                 const activeReviews = reviews.filter(r => r?.checked !== false && r?.enabled !== false);
@@ -1051,7 +1134,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               {(() => {
                 const id = selectedServiceDetails.id;
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
-                const details = SERVICE_DETAILS_CONTENT[id] || {};
+                const details = getSelectedServiceDetailsObject();
                 const hasSavedFaqs = dbMatch && Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0;
                 const rawFaqs = hasSavedFaqs ? dbMatch.faqs : (selectedServiceDetails.faqs || details.faqs || []);
                 const faqs = rawFaqs.filter(f => f?.checked !== false && f?.enabled !== false);
@@ -1090,8 +1173,8 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
               <div>
                 {(() => {
-                  const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
-                  if (details.isSubscription && (selectedRateIdx === null || !selectedSubFreqWeeks || !selectedSubMonths)) {
+                  const details = getSelectedServiceDetailsObject();
+                  if (details.bathroomRates && selectedRateIdx === null) {
                     return null;
                   }
                   return (
@@ -1105,7 +1188,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               <button
                 onClick={handleProceedFromModal}
                 disabled={(() => {
-                  const details = SERVICE_DETAILS_CONTENT[selectedServiceDetails.id] || {};
+                  const details = getSelectedServiceDetailsObject();
                   if (details.isSubscription && (selectedRateIdx === null || !selectedSubFreqWeeks || !selectedSubMonths)) {
                     return true;
                   }

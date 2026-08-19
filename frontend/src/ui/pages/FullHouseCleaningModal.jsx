@@ -1107,8 +1107,8 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
         </div>
 
         {/* Right Column: Order Summary */}
-        <div className="w-full lg:w-[320px]">
-          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-48">
+        <div className="w-full lg:w-[320px] shrink-0">
+          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
             <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
               <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
               <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>

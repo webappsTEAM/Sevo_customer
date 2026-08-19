@@ -969,6 +969,141 @@ const DEFAULT_SUITABLE_PRESETS = {
 }
 
 const STATIC_SERVICE_DETAIL_DATA = {
+  "bath-deep-clean": {
+    bathroomRates: [
+      { label: "1 Bathroom", price: 499 },
+      { label: "2 Bathrooms", price: 998 },
+      { label: "3 Bathrooms", price: 1497 },
+      { label: "4 Bathrooms", price: 1996 },
+      { label: "5 Bathrooms", price: 2495 },
+      { label: "6 Bathrooms", price: 2994 }
+    ]
+  },
+  "bath-intense-clean": {
+    bathroomRates: [
+      { label: "1 Bathroom", price: 300 },
+      { label: "2 Bathrooms", price: 600 },
+      { label: "3 Bathrooms", price: 900 },
+      { label: "4 Bathrooms", price: 1200 },
+      { label: "5 Bathrooms", price: 1500 },
+      { label: "6 Bathrooms", price: 1800 }
+    ]
+  },
+  "sub-bath-machine": {
+    bathroomRates: [
+      { label: "1 Bathroom", price: 350 },
+      { label: "2 Bathrooms", price: 700 },
+      { label: "3 Bathrooms", price: 1050 },
+      { label: "4 Bathrooms", price: 1400 },
+      { label: "5 Bathrooms", price: 1750 },
+      { label: "6 Bathrooms", price: 2100 }
+    ]
+  },
+  "sub-bath-hands-on": {
+    bathroomRates: [
+      { label: "1 Bathroom", price: 215 },
+      { label: "2 Bathrooms", price: 430 },
+      { label: "3 Bathrooms", price: 645 },
+      { label: "4 Bathrooms", price: 860 },
+      { label: "5 Bathrooms", price: 1075 },
+      { label: "6 Bathrooms", price: 1290 }
+    ]
+  },
+  "bath-exhaust-fan": {
+    bathroomRates: [
+      { label: "1 Fan", price: 89 },
+      { label: "2 Fans", price: 178 },
+      { label: "3 Fans", price: 267 },
+      { label: "4 Fans", price: 356 }
+    ]
+  },
+  "pest-kb-main": {
+    rates: [
+      { label: "1 bathroom & kitchen", price: 999 },
+      { label: "2 bathrooms & kitchen", price: 1149 },
+      { label: "3 bathrooms & kitchen", price: 1249 },
+      { label: "4 bathrooms & kitchen", price: 1299 }
+    ]
+  },
+  "pest-apt-main": {
+    rates: [
+      { label: "1 BHK", price: 1549 },
+      { label: "2 BHK", price: 1699 },
+      { label: "3 BHK", price: 1849 },
+      { label: "4 BHK", price: 1999 },
+      { label: "5 BHK", price: 2149 }
+    ]
+  },
+  "pest-bung-main": {
+    rates: [
+      { label: "1 BHK", price: 2099 },
+      { label: "2 BHK", price: 2299 },
+      { label: "3 BHK", price: 2499 },
+      { label: "4 BHK", price: 2699 },
+      { label: "5 BHK", price: 2899 }
+    ]
+  },
+  "pest-termite-kb": {
+    rates: [
+      { label: "1 bathroom & kitchen", price: 1099 },
+      { label: "2 bathrooms & kitchen", price: 1249 },
+      { label: "3 bathrooms & kitchen", price: 1349 },
+      { label: "4 bathrooms & kitchen", price: 1399 }
+    ]
+  },
+  "pest-termite-apt": {
+    rates: [
+      { label: "1 BHK", price: 1649 },
+      { label: "2 BHK", price: 1799 },
+      { label: "3 BHK", price: 1949 },
+      { label: "4 BHK", price: 2099 },
+      { label: "5 BHK", price: 2249 }
+    ]
+  },
+  "pest-termite-bung": {
+    rates: [
+      { label: "1 BHK", price: 2199 },
+      { label: "2 BHK", price: 2399 },
+      { label: "3 BHK", price: 2599 },
+      { label: "4 BHK", price: 2799 },
+      { label: "5 BHK", price: 2999 }
+    ]
+  },
+  "pest-bedbug-main": {
+    rates: [
+      { label: "1 BHK", price: 1899 },
+      { label: "2 BHK", price: 2197 },
+      { label: "3 BHK", price: 2799 },
+      { label: "4 BHK", price: 3199 },
+      { label: "5 BHK", price: 3599 }
+    ]
+  },
+  "pest-ant-kb": {
+    rates: [
+      { label: "1 bathroom & kitchen", price: 999 },
+      { label: "2 bathrooms & kitchen", price: 1149 },
+      { label: "3 bathrooms & kitchen", price: 1249 },
+      { label: "4 bathrooms & kitchen", price: 1299 }
+    ]
+  },
+  "pest-ant-apt": {
+    rates: [
+      { label: "1 BHK", price: 1549 },
+      { label: "2 BHK", price: 1699 },
+      { label: "3 BHK", price: 1849 },
+      { label: "4 BHK", price: 1999 },
+      { label: "5 BHK", price: 2149 }
+    ]
+  },
+  "pest-ant-bung": {
+    rates: [
+      { label: "1 BHK", price: 2099 },
+      { label: "2 BHK", price: 2299 },
+      { label: "3 BHK", price: 2499 },
+      { label: "4 BHK", price: 2699 },
+      { label: "5 BHK", price: 2899 }
+    ]
+  },
   "empty-kitchen": {
     tools: ["Specialized degreasing agents", "High-pressure floor scrubbers", "Microfiber detailing cloths", "Glass cleaning kits"],
     ready: ["Ensure the kitchen is completely empty of utensils and items", "Provide access to continuous water and power supply"],
@@ -2346,6 +2481,63 @@ export function CatalogPackagesPage() {
         })
       }
 
+      if (svc.slug === "bathroom-cleaning") {
+        const groups = [
+          {
+            subSlug: "packages",
+            displayName: "Bathroom Cleaning Packages",
+            filterFn: (p) => p.slug === "bath-deep-clean" || p.slug === "bath-intense-clean",
+          },
+          {
+            subSlug: "subscription",
+            displayName: "Weekly Subscription Cleaning",
+            filterFn: (p) => p.slug.includes("sub-bath"),
+          },
+          {
+            subSlug: "minis",
+            displayName: "Quick extra service",
+            filterFn: (p) => !p.slug.includes("sub-bath") && p.slug !== "bath-deep-clean" && p.slug !== "bath-intense-clean",
+          }
+        ]
+
+        const BATHROOM_SLUG_ORDER = [
+          "bath-deep-clean",
+          "bath-intense-clean",
+          "sub-bath-machine",
+          "sub-bath-hands-on",
+          "bath-exhaust-fan",
+          "bath-washbasin-add",
+          "bath-ceiling-fan",
+          "bath-door-add",
+          "bath-mirror-add",
+          "bath-drain-clean"
+        ]
+
+        return groups.map((g) => {
+          let groupPkgs = allSvcPkgs.filter(g.filterFn)
+          groupPkgs = [...groupPkgs].sort((a, b) => {
+            const idxA = BATHROOM_SLUG_ORDER.indexOf(a.slug)
+            const idxB = BATHROOM_SLUG_ORDER.indexOf(b.slug)
+            const orderA = idxA !== -1 ? idxA : 999
+            const orderB = idxB !== -1 ? idxB : 999
+            return orderA - orderB
+          })
+          const finalPkgs = getFilteredPkgs(groupPkgs)
+          return {
+            service: {
+              ...svc,
+              id: `${svc.id}-${g.subSlug}`,
+              virtualSlug: g.subSlug,
+              realServiceId: svc.id,
+            },
+            displayName: g.displayName,
+            icon: getServiceIcon(g.subSlug, g.displayName),
+            totalPackages: finalPkgs.length,
+            packages: finalPkgs,
+          }
+        })
+      }
+
       // Friendly display name formatting (e.g. "Two Wheeler" -> "2 Wheeler")
       let displayName = svc.name
       if (svc.slug === "two-wheeler" || svc.name === "Two Wheeler") displayName = "2 Wheeler"
@@ -2530,6 +2722,10 @@ export function CatalogPackagesPage() {
       icon: pkg.icon || "",
       editingItemId: null,
       _vdOpen: true,
+      excludesRates: (() => {
+        const hasSavedExcludes = Array.isArray(pkg.excludes) && pkg.excludes.length > 0;
+        return hasSavedExcludes ? pkg.excludes : (staticData.bathroomRates || staticData.rates || []);
+      })(),
       viewDetails: (() => {
         // Normalize reviews: staticData uses 'comment' but admin UI uses 'text'
         const normalizeReviews = (revs) => (revs || []).map(r => ({
@@ -2586,6 +2782,7 @@ export function CatalogPackagesPage() {
         includes: finalIncludes,
         image: quickPriceEditing.image || "",
         offer_price: null,
+        excludes: Array.isArray(quickPriceEditing.excludesRates) ? quickPriceEditing.excludesRates : [],
         tools: Array.isArray(vd.tools)
           ? vd.tools
               .map(t => {
@@ -3046,7 +3243,13 @@ export function CatalogPackagesPage() {
                     }`}
                   >
                     <SubIcon className="w-3.5 h-3.5" />
-                    <span>{item.service.slug === "cockroach-control" ? "Cockroach & Termite control" : item.displayName}</span>
+                    <span>{
+                      item.service.slug === "cockroach-control" 
+                        ? "Cockroach & Termite control" 
+                        : (item.service.slug === "ants-bed-bugs-control" 
+                            ? "Ants & Bed bugs control" 
+                            : (item.service.slug === "bathroom-cleaning" ? "Bathroom Cleaning" : item.displayName))
+                    }</span>
                     <span
                       className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
                         isSubActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
@@ -4463,6 +4666,43 @@ export function CatalogPackagesPage() {
                 }
               />
             </div>
+
+            {quickPriceEditing.excludesRates && quickPriceEditing.excludesRates.length > 0 && (
+              <div className="bg-gradient-to-b from-indigo-50/50 to-slate-50/70 rounded-2xl p-4 sm:p-5 border border-indigo-100/90 space-y-3">
+                <span className="text-xs font-bold text-slate-800">Select Requirements / Multi-unit Rates (e.g. BHK / Bathroom prices)</span>
+                <p className="text-[11px] text-slate-500 mt-0.5">Customize the label and price for each option tier.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {quickPriceEditing.excludesRates.map((rate, rIdx) => (
+                    <div key={rIdx} className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-slate-200/60 shadow-3xs">
+                      <input
+                        type="text"
+                        placeholder="Label"
+                        value={rate.label || rate.name || ""}
+                        onChange={(e) => {
+                          const updated = quickPriceEditing.excludesRates.map((r, i) =>
+                            i === rIdx ? { ...r, label: e.target.value, name: e.target.value } : r
+                          );
+                          setQuickPriceEditing({ ...quickPriceEditing, excludesRates: updated });
+                        }}
+                        className="w-24 sm:w-28 text-xs font-bold text-slate-700 bg-slate-50/80 border border-slate-200/80 focus:border-indigo-500 rounded-lg px-2 py-1.5 focus:outline-none"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Price"
+                        value={rate.price}
+                        onChange={(e) => {
+                          const updated = quickPriceEditing.excludesRates.map((r, i) =>
+                            i === rIdx ? { ...r, price: parseInt(e.target.value) || 0 } : r
+                          );
+                          setQuickPriceEditing({ ...quickPriceEditing, excludesRates: updated });
+                        }}
+                        className="flex-1 text-xs font-semibold text-slate-800 bg-white border border-slate-200/80 focus:border-indigo-500 rounded-lg px-2 py-1.5 focus:outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {(activeCategoryKey === "paintings" || activeCategoryKey === "mason") && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
