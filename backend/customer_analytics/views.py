@@ -59,7 +59,7 @@ class CustomerListView(APIView):
                     pass
 
             results.append({
-                "id": identity_id.id if identity_id else ident.id,
+                "id": identity_id.id if identity_id else ident.display_customer_id,
                 "user_id": ident.user.id,
                 "name": ident.name or ident.user.get_full_name() or ident.user.username,
                 "email": ident.email or ident.user.email or "",
@@ -557,61 +557,173 @@ class CustomerExportView(APIView):
 
     def get(self, request):
         company = getattr(request, "company", None)
+        format_type = request.query_params.get("export_format", "csv").lower()
         
         # Log export event in AuditLog
         AuditLog.objects.create(
             actor=request.user,
             action="CUSTOMER_EXPORT",
-            details=f"Exported customer directory CSV. Company: {company.company_name if company else 'All'}."
+            details=f"Exported customer directory {format_type.upper()}. Company: {company.company_name if company else 'All'}."
         )
 
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="customers_export.csv"'
+        if format_type == "pdf":
+            # Generate PDF using ReportLab
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.lib.colors import HexColor, white
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from io import BytesIO
 
-        writer = csv.writer(response)
-        writer.writerow([
-            "ID", "Username", "Full Name", "Email", "Phone", "Total Bookings", "Total Spent", "Last Booking"
-        ])
+            buffer = BytesIO()
+            # Landscape A4 gives 842 pt width. Top/bottom margins of 30, left/right margins of 30. Printable width: 782 pt.
+            doc = SimpleDocTemplate(
+                buffer, 
+                pagesize=landscape(A4), 
+                rightMargin=30, 
+                leftMargin=30, 
+                topMargin=30, 
+                bottomMargin=30
+            )
+            story = []
 
-        customers = get_annotated_customers(request)
-        for c in customers:
-            identity_id = getattr(c.user, "customer_identity", None)
-            if not identity_id:
-                from customer_analytics.models import CustomerIdentity
-                raw_phone = getattr(c.user, "phone", "") or ""
-                import re
-                cleaned = re.sub(r"[^\d+]", "", str(raw_phone))
-                if cleaned and not cleaned.startswith("+"):
-                    if len(cleaned) == 10:
-                        cleaned = f"+91{cleaned}"
-                    elif cleaned.startswith("91") and len(cleaned) == 12:
-                        cleaned = f"+{cleaned}"
-                    else:
-                        cleaned = f"+{cleaned}"
-                try:
-                    identity_id, _ = CustomerIdentity.objects.get_or_create(
-                        user=c.user,
-                        defaults={
-                            "company": c.company,
-                            "phone_normalized": cleaned,
-                            "email_normalized": c.user.email or ""
-                        }
-                    )
-                except Exception:
-                    pass
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'TitleStyle',
+                parent=styles['Title'],
+                fontName='Helvetica-Bold',
+                fontSize=18,
+                textColor=HexColor("#4F46E5"),
+                alignment=0,
+                spaceAfter=15
+            )
+            
+            comp_name = company.company_name if company else "All"
+            title_text = f"Customer Directory Report - {comp_name}"
+            story.append(Paragraph(title_text, title_style))
+            story.append(Spacer(1, 10))
 
+            headers = ["ID", "Username", "Full Name", "Email", "Phone", "Bookings", "Spent", "Last Booking"]
+            data = [headers]
+
+            customers = get_annotated_customers(request)
+            for c in customers:
+                identity_id = getattr(c.user, "customer_identity", None)
+                if not identity_id:
+                    from customer_analytics.models import CustomerIdentity
+                    raw_phone = getattr(c.user, "phone", "") or ""
+                    import re
+                    cleaned = re.sub(r"[^\d+]", "", str(raw_phone))
+                    if cleaned and not cleaned.startswith("+"):
+                        if len(cleaned) == 10:
+                            cleaned = f"+91{cleaned}"
+                        elif cleaned.startswith("91") and len(cleaned) == 12:
+                            cleaned = f"+{cleaned}"
+                        else:
+                            cleaned = f"+{cleaned}"
+                    try:
+                        identity_id, _ = CustomerIdentity.objects.get_or_create(
+                            user=c.user,
+                            defaults={
+                                "company": c.company,
+                                "phone_normalized": cleaned,
+                                "email_normalized": c.user.email or ""
+                            }
+                        )
+                    except Exception:
+                        pass
+                
+                ident_id = str(identity_id.id if identity_id else c.display_customer_id)
+                last_booking = c.last_booking_date.strftime("%Y-%m-%d %H:%M:%S") if c.last_booking_date else "-"
+                
+                data.append([
+                    ident_id,
+                    str(c.user.username),
+                    str(c.name or c.user.get_full_name() or c.user.username),
+                    str(c.email or c.user.email or "-"),
+                    str(c.phone or c.user.phone or "-"),
+                    str(c.total_bookings),
+                    f"INR {float(c.total_spent or 0):.2f}",
+                    last_booking
+                ])
+
+            # colWidths sum up to 780 (fits within 782 printable width)
+            col_widths = [45, 95, 110, 160, 100, 60, 70, 110]
+            t = Table(data, colWidths=col_widths, repeatRows=1)
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), HexColor("#4F46E5")),
+                ('TEXTCOLOR', (0,0), (-1,0), white),
+                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,0), 10),
+                ('BOTTOMPADDING', (0,0), (-1,0), 8),
+                ('TOPPADDING', (0,0), (-1,0), 8),
+                ('GRID', (0,0), (-1,-1), 0.5, HexColor("#E2E8F0")),
+                ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
+                ('FONTSIZE', (0,1), (-1,-1), 9),
+                ('ROWBACKGROUNDS', (0,1), (-1,-1), [white, HexColor("#F8FAFC")]),
+                ('TOPPADDING', (0,1), (-1,-1), 6),
+                ('BOTTOMPADDING', (0,1), (-1,-1), 6),
+            ]))
+            story.append(t)
+
+            doc.build(story)
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = 'attachment; filename="customers_export.pdf"'
+            return response
+
+        else:
+            # Default to CSV
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="customers_export.csv"'
+
+            writer = csv.writer(response)
             writer.writerow([
-                identity_id.id if identity_id else c.id,
-                c.user.username,
-                c.name or c.user.get_full_name() or c.user.username,
-                c.email or c.user.email or "",
-                c.phone or c.user.phone or "",
-                c.total_bookings,
-                float(c.total_spent or 0),
-                c.last_booking_date.isoformat() if c.last_booking_date else ""
+                "ID", "Username", "Full Name", "Email", "Phone", "Total Bookings", "Total Spent", "Last Booking"
             ])
 
-        return response
+            customers = get_annotated_customers(request)
+            for c in customers:
+                identity_id = getattr(c.user, "customer_identity", None)
+                if not identity_id:
+                    from customer_analytics.models import CustomerIdentity
+                    raw_phone = getattr(c.user, "phone", "") or ""
+                    import re
+                    cleaned = re.sub(r"[^\d+]", "", str(raw_phone))
+                    if cleaned and not cleaned.startswith("+"):
+                        if len(cleaned) == 10:
+                            cleaned = f"+91{cleaned}"
+                        elif cleaned.startswith("91") and len(cleaned) == 12:
+                            cleaned = f"+{cleaned}"
+                        else:
+                            cleaned = f"+{cleaned}"
+                    try:
+                        identity_id, _ = CustomerIdentity.objects.get_or_create(
+                            user=c.user,
+                            defaults={
+                                "company": c.company,
+                                "phone_normalized": cleaned,
+                                "email_normalized": c.user.email or ""
+                            }
+                        )
+                    except Exception:
+                        pass
+
+                writer.writerow([
+                    identity_id.id if identity_id else c.display_customer_id,
+                    c.user.username,
+                    c.name or c.user.get_full_name() or c.user.username,
+                    c.email or c.user.email or "",
+                    c.phone or c.user.phone or "",
+                    c.total_bookings,
+                    f"{float(c.total_spent or 0):.2f}",
+                    c.last_booking_date.strftime("%Y-%m-%d %H:%M:%S") if c.last_booking_date else ""
+                ])
+
+            return response
 
 
 class CustomerMergeView(APIView):

@@ -58,8 +58,8 @@ def RequireModuleAccess(module_name: str, required_action: str):
             if user.is_superuser:
                 return True
 
-            # Care agents get read-only access to the customers module
-            if module_name == "customers" and required_action == "view":
+            # Care agents get read-only access to the customers module and permission to export
+            if module_name == "customers" and required_action in ["view", "export"]:
                 try:
                     from customer_care.permissions import get_care_access
                     if get_care_access(user)["has_access"]:
