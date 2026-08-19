@@ -3571,9 +3571,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
   const [profileEmail, setProfileEmail] = useState('')
+  const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || user?.avatar || '')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [profileSuccess, setProfileSuccess] = useState('')
+  const avatarInputRef = useRef(null)
 
   useEffect(() => {
     if (user) {
@@ -3581,8 +3583,32 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       setProfileName(uFullName)
       setProfilePhone(user?.phone || '')
       setProfileEmail(user?.email || '')
+      if (user?.avatar_url || user?.avatar) {
+        setAvatarPreview(user.avatar_url || user.avatar)
+      }
     }
   }, [user])
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileError("Profile photo must be under 5 MB.")
+      return
+    }
+    setAvatarPreview(URL.createObjectURL(file))
+    setProfileError('')
+    setProfileSuccess('')
+    try {
+      const body = new FormData()
+      body.append("avatar", file)
+      await apiRequest("/auth/profile/", { method: "PATCH", body })
+      if (refreshMe) await refreshMe()
+      setProfileSuccess("Profile photo updated successfully!")
+    } catch (err) {
+      setProfileError(err?.body?.message || "Failed to update profile photo.")
+    }
+  }
 
   const handleSaveProfile = async () => {
     setProfileError('')
@@ -3597,9 +3623,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         method: "PATCH",
         json: {
           first_name: firstName,
-          last_name: lastName,
-          phone: profilePhone,
-          email: profileEmail
+          last_name: lastName
         }
       })
       if (res.success || res.id) {
@@ -4222,13 +4246,30 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>My Profile</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 32, paddingBottom: 32, borderBottom: '1px solid #e2e8f0' }}>
-              <div style={{ width: 88, height: 88, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0' }}>
-                <User size={36} color="#94a3b8" />
+              <div style={{ width: 88, height: 88, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0', overflow: 'hidden', flexShrink: 0 }}>
+                {avatarPreview || user?.avatar_url || user?.avatar ? (
+                  <img src={avatarPreview || user?.avatar_url || user?.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <User size={36} color="#94a3b8" />
+                )}
               </div>
               <div>
                 <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: 4 }}>{userFullName}</div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 12 }}>{userEmail || userPhone}</div>
-                <button style={{ padding: '0.5rem 1.25rem', background: 'white', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}>Change Photo</button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleAvatarUpload}
+                />
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  style={{ padding: '0.5rem 1.25rem', background: 'white', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                >
+                  Change Photo
+                </button>
               </div>
             </div>
 
@@ -4238,15 +4279,41 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>Full Name</label>
-                <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)} style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }} />
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={e => setProfileName(e.target.value)}
+                  placeholder="Enter your full name"
+                  style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a', background: 'white' }}
+                />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>Phone Number</label>
-                <input type="text" value={profilePhone} onChange={e => setProfilePhone(e.target.value)} style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }} />
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
+                  <span>Phone Number</span>
+                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
+                </label>
+                <input
+                  type="text"
+                  value={profilePhone}
+                  disabled
+                  readOnly
+                  title="Phone number cannot be edited after login"
+                  style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
+                />
               </div>
               <div style={{ gridColumn: '1/-1' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>Email Address</label>
-                <input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)} style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }} />
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
+                  <span>Email Address</span>
+                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
+                </label>
+                <input
+                  type="email"
+                  value={profileEmail}
+                  disabled
+                  readOnly
+                  title="Email address cannot be edited after login"
+                  style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
+                />
               </div>
             </div>
             <button onClick={handleSaveProfile} disabled={isSavingProfile} style={{ marginTop: 32, padding: '0.9rem 2.5rem', background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer', boxShadow: '0 10px 20px rgba(5, 150, 105, 0.25)', opacity: isSavingProfile ? 0.7 : 1 }}>
@@ -6204,8 +6271,12 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         {/* Sidebar */}
         <div style={{ width: 280, background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '2.25rem 0', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '0 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg,#ede9fe,#ddd6fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #c4b5fd', flexShrink: 0 }}>
-              <User size={22} color="#6366f1" />
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg,#ede9fe,#ddd6fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #c4b5fd', flexShrink: 0, overflow: 'hidden' }}>
+              {avatarPreview || user?.avatar_url || user?.avatar ? (
+                <img src={avatarPreview || user?.avatar_url || user?.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <User size={22} color="#6366f1" />
+              )}
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userFullName}</div>
