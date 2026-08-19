@@ -773,8 +773,8 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
         </div>
 
         {/* Right Column: Order Summary */}
-        <div className="w-full lg:w-[320px]">
-          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-48">
+        <div className="w-full lg:w-[320px] shrink-0">
+          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
             <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
               <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
               <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
@@ -917,7 +917,9 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = SERVICE_DETAILS_CONTENT[id] || {};
                 const hasSavedTools = dbMatch && Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0;
-                const toolsList = hasSavedTools ? dbMatch.tools.map(t => typeof t === "string" ? t : (t.text || "")) : (details.tools || []);
+                const toolsList = hasSavedTools 
+                  ? dbMatch.tools.filter(t => typeof t === "string" ? true : (t.checked !== false && t.enabled !== false)).map(t => typeof t === "string" ? t : (t.text || "")) 
+                  : (details.tools || []);
                 
                 if (toolsList.length === 0) return null;
                 return (
@@ -941,7 +943,9 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = SERVICE_DETAILS_CONTENT[id] || {};
                 const hasSavedReady = dbMatch && Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0;
-                const readyList = hasSavedReady ? dbMatch.ready.map(r => typeof r === "string" ? r : (r.text || "")) : (details.includes || []);
+                const readyList = hasSavedReady 
+                  ? dbMatch.ready.filter(r => typeof r === "string" ? true : (r.checked !== false && r.enabled !== false)).map(r => typeof r === "string" ? r : (r.text || "")) 
+                  : (details.includes || []);
 
                 if (readyList.length === 0) return null;
                 return (
@@ -965,7 +969,9 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = SERVICE_DETAILS_CONTENT[id] || {};
                 const hasSavedReviews = dbMatch && Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0;
-                const reviewsList = hasSavedReviews ? dbMatch.reviews : (details.reviews_list || []);
+                const reviewsList = hasSavedReviews 
+                  ? dbMatch.reviews.filter(rev => rev.checked !== false && rev.enabled !== false) 
+                  : (details.reviews_list || []);
 
                 if (reviewsList.length === 0) return null;
                 return (
@@ -997,7 +1003,9 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = SERVICE_DETAILS_CONTENT[id] || {};
                 const hasSavedFaqs = dbMatch && Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0;
-                const faqsList = hasSavedFaqs ? dbMatch.faqs : (details.faqs || []);
+                const faqsList = hasSavedFaqs 
+                  ? dbMatch.faqs.filter(faq => faq.checked !== false && faq.enabled !== false) 
+                  : (details.faqs || []);
 
                 if (faqsList.length === 0) return null;
                 return (
