@@ -169,13 +169,17 @@ class ServiceRequest(models.Model):
     status   = models.CharField(max_length=30, choices=Status.choices, default=Status.NEW_REQUEST)
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.NORMAL)
 
-    # Workforce Dispatch / Read-only Technician Snapshot
+    # Workforce Dispatch / Real-time Technician Snapshot
     workforce_job_id        = models.CharField(max_length=100, blank=True, null=True, default=None, db_index=True)
     external_assignment_id  = models.CharField(max_length=100, blank=True, null=True, default=None)
     technician_name         = models.CharField(max_length=150, blank=True, default="")
     technician_phone        = models.CharField(max_length=30, blank=True, default="")
     technician_photo        = models.CharField(max_length=500, blank=True, default="")
     technician_rating       = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    technician_latitude     = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    technician_longitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    technician_location_name= models.CharField(max_length=255, blank=True, default="")
+    technician_last_seen_at = models.DateTimeField(null=True, blank=True)
     start_otp               = models.CharField(max_length=10, blank=True, default="")
     otp_verified            = models.BooleanField(default=False)
     # Secure tracking token — unpredictable UUID used to authorize the public

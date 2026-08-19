@@ -62,6 +62,14 @@ async function _executeRequest(path, init = {}, attemptRefresh = true) {
   const headers = new Headers(init.headers ?? {})
   let body = init.body
 
+  // Attach stored access token if present and not already specified
+  try {
+    const token = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
+    if (token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`)
+    }
+  } catch (_) {}
+
   if (init.json !== undefined) {
     body = JSON.stringify(init.json)
     if (!headers.has("Content-Type")) {

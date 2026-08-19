@@ -157,7 +157,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
     // 2. Open WebSocket channel
     try {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-      const host = window.location.hostname === "localhost" ? "localhost:8000" : window.location.host
+      const host = window.location.hostname === "localhost" ? "localhost:8001" : window.location.host
       const rid = booking?.request_id || bookingId
       const wsUrl = `${protocol}//${host}/ws/live/booking/${encodeURIComponent(rid)}/`
 

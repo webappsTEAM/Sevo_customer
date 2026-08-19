@@ -576,10 +576,13 @@ export function MiniTruckBookingHosurPage() {
 
   // Prefill user details if signed in
   useEffect(() => {
-    if (user) {
-      const fullName = user.full_name || user.fullName || user.first_name || user.firstName || user.username
+    let savedPhone = ""
+    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
+    if (user || savedPhone) {
+      const fullName = user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username
       if (fullName && !name) setName(fullName)
-      if (user.phone && !phone) setPhone(user.phone)
+      const ph = user?.phone || user?.mobile || user?.mobile_number || savedPhone
+      if (ph && !phone) setPhone(ph)
     }
   }, [user])
 

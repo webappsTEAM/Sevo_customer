@@ -21,9 +21,6 @@ import {
 import { AuthContext } from "./AuthContext.js"
 
 export function AuthProvider({ children }) {
-  const [isReady, setIsReady] = useState(false)
-  const [user, setUser]       = useState(null)
-
   const formatUser = (data) => {
     if (!data?.username || !data?.role) return null
     return {
@@ -31,11 +28,13 @@ export function AuthProvider({ children }) {
       email:     data.email      ?? "",
       firstName: data.first_name ?? "",
       lastName:  data.last_name  ?? "",
+      fullName:  `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username,
+      full_name: `${data.first_name || ""} ${data.last_name || ""}`.trim() || data.username,
       role:      data.role,
       companyId: data.company,
       companyPermissions: data.company_permissions ?? null,
       bio:       data.bio        ?? "",
-      phone:     data.phone      ?? "",
+      phone:     data.phone      ?? data.mobile_number ?? "",
       timezone:  data.timezone   ?? "Asia/Kolkata",
       language:  data.language   ?? "en",
       avatar_url:data.avatar_url ?? null,
@@ -51,6 +50,18 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const [user, setUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem("caltrack_user")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        return formatUser(parsed)
+      }
+    } catch (_) {}
+    return null
+  })
+  const [isReady, setIsReady] = useState(false)
+
   // ── Rehydrate user state from /auth/me/ ───────────────────────────────────
   const refreshMe = useCallback(async () => {
     let me;
@@ -63,16 +74,25 @@ export function AuthProvider({ children }) {
     const u = formatUser(me)
     if (u) {
       setUser(u)
+      try {
+        localStorage.setItem("caltrack_user", JSON.stringify(me))
+        if (me?.phone || me?.mobile_number) {
+          localStorage.setItem("caltrack_customer_phone", me.phone || me.mobile_number)
+        }
+      } catch (_) {}
       if (me?.company_name) {
         localStorage.setItem("quicktims.orgName", me.company_name)
         window.dispatchEvent(new CustomEvent("quicktims:orgName"))
       }
       return u
     } else {
-      if (me) {
-        console.warn("apiFetchMe returned incomplete user object:", me)
-      }
-      setUser(null)
+      try {
+        const hasToken = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
+        if (!hasToken) {
+          localStorage.removeItem("caltrack_user")
+          setUser(null)
+        }
+      } catch (_) {}
       return null
     }
   }, [])
@@ -88,6 +108,9 @@ export function AuthProvider({ children }) {
         const u = formatUser(res.user)
         if (u) {
           setUser(u)
+          try {
+            localStorage.setItem("caltrack_user", JSON.stringify(res.user))
+          } catch (_) {}
           if (res.user.company_name) {
             localStorage.setItem("quicktims.orgName", res.user.company_name)
             window.dispatchEvent(new CustomEvent("quicktims:orgName"))
@@ -141,6 +164,10 @@ export function AuthProvider({ children }) {
     await apiLogout()
     localStorage.removeItem("quicktims.orgName")
     localStorage.removeItem("caltrack_activation_dossier")
+    localStorage.removeItem("caltrack_access_token")
+    localStorage.removeItem("qt_access")
+    localStorage.removeItem("caltrack_user")
+    localStorage.removeItem("caltrack_customer_phone")
     setUser(null)
   }, [])
 
@@ -148,7 +175,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const fallbackTimer = setTimeout(() => {
       setIsReady(true)
-    }, 6000)
+    }, 4000)
 
     refreshMe()
       .catch((e) => console.error("refreshMe error:", e))
@@ -160,12 +187,35 @@ export function AuthProvider({ children }) {
     return () => clearTimeout(fallbackTimer)
   }, [refreshMe])
 
+  // ── Real-time customer login event listener ───────────────────────────────
+  useEffect(() => {
+    const handleCustomerLogin = (e) => {
+      const payload = e?.detail
+      if (payload?.user) {
+        const u = formatUser(payload.user)
+        if (u) {
+          setUser(u)
+          try {
+            localStorage.setItem("caltrack_user", JSON.stringify(payload.user))
+          } catch (_) {}
+        }
+      }
+      refreshMe().catch(() => {})
+    }
+    window.addEventListener("calservices:customer_login", handleCustomerLogin)
+    return () => window.removeEventListener("calservices:customer_login", handleCustomerLogin)
+  }, [refreshMe])
+
   // ── Session expiry event ──────────────────────────────────────────────────
   useEffect(() => {
     const handle = async () => {
       await apiLogout()
       localStorage.removeItem("quicktims.orgName")
       localStorage.removeItem("caltrack_activation_dossier")
+      localStorage.removeItem("caltrack_access_token")
+      localStorage.removeItem("qt_access")
+      localStorage.removeItem("caltrack_user")
+      localStorage.removeItem("caltrack_customer_phone")
       setUser(null)
     }
     window.addEventListener("quicktims:session-expired", handle)

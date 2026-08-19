@@ -175,31 +175,18 @@ def request_otp(identifier: str, channel: str = OTPChannel.PHONE) -> dict:
 
     now = timezone.now()
 
-    # Rate Limit 1: 60-second gap check
+    # Optional cooldown gap (relaxed in dev/debug mode)
+    min_gap_seconds = 0 if getattr(settings, "DEBUG", True) else 15
     last_request = OTPRequest.objects.filter(identifier=clean_identifier, channel=channel).order_by('-created_at').first()
-    if last_request:
+    if last_request and min_gap_seconds > 0:
         elapsed_seconds = (now - last_request.created_at).total_seconds()
-        if elapsed_seconds < 60:
-            wait_seconds = int(60 - elapsed_seconds)
+        if elapsed_seconds < min_gap_seconds:
+            wait_seconds = int(min_gap_seconds - elapsed_seconds)
             raise RateLimitError(
                 f"Please wait {wait_seconds} seconds before requesting a new OTP.",
                 code="RATE_LIMITED",
                 extra={"resend_after_seconds": wait_seconds}
             )
-
-    # Rate Limit 2: Max 5 sends per rolling hour
-    one_hour_ago = now - timedelta(hours=1)
-    recent_count = OTPRequest.objects.filter(
-        identifier=clean_identifier,
-        channel=channel,
-        created_at__gte=one_hour_ago
-    ).count()
-
-    if recent_count >= 5:
-        raise RateLimitError(
-            "Maximum OTP request limit (5 per hour) reached for this identifier.",
-            code="RATE_LIMITED"
-        )
 
     # Generate 6-digit OTP code & hash it
     otp_code = "".join([str(random.randint(0, 9)) for _ in range(6)])
@@ -351,6 +338,7 @@ def verify_otp(identifier: str, otp_code: str, channel: str = OTPChannel.PHONE) 
 
         tokens = _get_tokens_for_user(customer)
 
+        from .serializers import UserSerializer
         return {
             "success": True,
             "data": {
@@ -358,7 +346,12 @@ def verify_otp(identifier: str, otp_code: str, channel: str = OTPChannel.PHONE) 
                 "profile_complete": customer.profile_complete,
                 "auth_token": tokens["access"],
                 "refresh_token": tokens["refresh"],
-                "customer_id": customer.id
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
+                "customer_id": customer.id,
+                "phone": customer.phone or customer.mobile_number or clean_identifier,
+                "email": customer.email or "",
+                "user": UserSerializer(customer).data,
             },
             "error": None,
             "meta": {}

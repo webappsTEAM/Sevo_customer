@@ -150,9 +150,15 @@ const MODAL_STYLES = `
 
 export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   const [step, setStep] = useState(1)
-  const { refreshMe } = useAuth()
+  const { user: currentAuthUser, refreshMe } = useAuth()
   const [channel, setChannel] = useState("PHONE") // "PHONE" | "EMAIL" — which identifier the customer is logging in with
-  const [mobileNumber, setMobileNumber] = useState("")
+  const [mobileNumber, setMobileNumber] = useState(() => {
+    try {
+      return localStorage.getItem("caltrack_customer_phone") || ""
+    } catch (_) {
+      return ""
+    }
+  })
   const [emailInput, setEmailInput] = useState("")
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""])
   const [customerId, setCustomerId] = useState(null)
@@ -201,27 +207,40 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   }
 
   const handleOtpChange = (index, value) => {
-    if (value.length > 1) {
-      const digits = value.replace(/\D/g, "").slice(0, 6).split("")
+    const clean = value.replace(/\D/g, "")
+    if (!clean) {
       const newDigits = [...otpDigits]
-      digits.forEach((d, i) => { if (index + i < 6) newDigits[index + i] = d })
+      newDigits[index] = ""
       setOtpDigits(newDigits)
-      const nextFocus = Math.min(index + digits.length, 5)
+      return
+    }
+
+    if (clean.length > 1) {
+      const digits = clean.slice(0, 6).split("")
+      const newDigits = [...otpDigits]
+      const startIdx = digits.length >= 6 ? 0 : index
+      digits.forEach((d, i) => {
+        if (startIdx + i < 6) newDigits[startIdx + i] = d
+      })
+      setOtpDigits(newDigits)
+      const nextFocus = Math.min(startIdx + digits.length, 5)
       otpInputRefs.current[nextFocus]?.focus()
-      if (newDigits.every(d => d && d.length === 1)) {
-        setTimeout(() => handleVerifyOTP(newDigits.join("")), 40)
+      const code = newDigits.join("")
+      if (code.length === 6 && newDigits.every(d => Boolean(d))) {
+        setTimeout(() => handleVerifyOTP(code), 40)
       }
       return
     }
-    const clean = value.replace(/\D/g, "")
+
     const newDigits = [...otpDigits]
     newDigits[index] = clean
     setOtpDigits(newDigits)
     if (clean && index < 5) {
       otpInputRefs.current[index + 1]?.focus()
     }
-    if (newDigits.every(d => d && d.length === 1)) {
-      setTimeout(() => handleVerifyOTP(newDigits.join("")), 40)
+    const code = newDigits.join("")
+    if (code.length === 6 && newDigits.every(d => Boolean(d))) {
+      setTimeout(() => handleVerifyOTP(code), 40)
     }
   }
 
@@ -241,15 +260,34 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
       let res = null
       try {
         // 1. Instant WebSocket verification
-        res = await verifyOtpViaWebSocket(mobileNumber, otpCode)
+        res = await verifyOtpViaWebSocket(identifier, otpCode)
       } catch {
         // 2. Seamless REST fallback
-        res = await apiVerifyCustomerMobileOTP(mobileNumber, otpCode)
+        res = await apiVerifyCustomerOTP(identifier, channel, otpCode)
       }
 
       if (res && res.success) {
-        const { is_new_customer, customer_id } = res.data || {}
+        const { is_new_customer, customer_id, auth_token, access, user } = res.data || {}
         setCustomerId(customer_id)
+
+        // Store tokens & persistent identifier in localStorage
+        try {
+          const token = auth_token || access
+          if (token) {
+            localStorage.setItem("caltrack_access_token", token)
+            localStorage.setItem("qt_access", token)
+          }
+          if (channel === "PHONE" && mobileNumber) {
+            localStorage.setItem("caltrack_customer_phone", mobileNumber.trim())
+          }
+          if (user) {
+            localStorage.setItem("caltrack_user", JSON.stringify(user))
+          }
+        } catch (_) {}
+
+        // Dispatch instant event for AuthProvider and components
+        window.dispatchEvent(new CustomEvent("calservices:customer_login", { detail: res.data }))
+
         if (typeof refreshMe === "function") await refreshMe()
         if (is_new_customer) {
           setStep(3)
@@ -259,7 +297,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
         }
       } else {
         if (res?.error?.code === "MAX_ATTEMPTS_EXCEEDED") {
-          setErrorMsg("Too many failed attempts. Please enter mobile number again.")
+          setErrorMsg("Too many failed attempts. Please request a new OTP.")
           setOtpDigits(["", "", "", "", "", ""])
           setStep(1)
         } else {
@@ -482,9 +520,9 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                     <button
                       type="button"
                       onClick={() => {
-                        const digits = devOtp.split("")
+                        const digits = String(devOtp).trim().slice(0, 6).split("")
                         setOtpDigits(digits)
-                        setTimeout(() => handleVerifyOTP(devOtp), 80)
+                        setTimeout(() => handleVerifyOTP(String(devOtp).trim()), 50)
                       }}
                       style={{ background: "#166534", color: "white", border: "none", borderRadius: 8, padding: "4px 10px", fontSize: "0.72rem", fontWeight: 800, cursor: "pointer" }}
                     >

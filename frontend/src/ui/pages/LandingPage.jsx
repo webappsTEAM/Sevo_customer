@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
-import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal } from "./BookingPage.jsx"
+import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
 import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
@@ -1015,6 +1015,7 @@ export function LandingPage() {
   const [vegSearchQuery, setVegSearchQuery] = useState("")
   const [vegApiItems, setVegApiItems] = useState(VEGETABLE_ITEMS)
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
+  const [showCartDrawer, setShowCartDrawer] = useState(false)
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
   const [showLocationPickerModal, setShowLocationPickerModal] = useState(false)
@@ -1647,7 +1648,7 @@ export function LandingPage() {
               {modalCart && modalCart.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })}
+                  onClick={() => setShowCartDrawer(true)}
                   className="relative p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 text-slate-700 hover:text-emerald-700 transition-all cursor-pointer shrink-0"
                   title="View Cart"
                 >
@@ -4252,6 +4253,22 @@ export function LandingPage() {
           if (typeof refreshMe === "function") refreshMe()
         }}
       />
+
+      {/* Cart Summary Drawer Modal */}
+      <AnimatePresence>
+        {showCartDrawer && (
+          <CartDrawerModal
+            isOpen={showCartDrawer}
+            onClose={() => setShowCartDrawer(false)}
+            cart={modalCart}
+            setCart={setModalCart}
+            onProceedToCheckout={() => {
+              setShowCartDrawer(false)
+              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showAccountPortal && (

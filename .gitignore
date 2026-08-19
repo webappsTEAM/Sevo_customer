@@ -50,3 +50,4 @@ frontend/parse_check.cjs
 
 # Runtime data files — should not be version-controlled
 backend/caltrack_activation_dossier.json
+*.zip

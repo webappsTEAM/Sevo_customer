@@ -198,12 +198,12 @@ class WorkforceIntegrationService:
         """
         try:
             url = f"{WORKFORCE_API_BASE_URL}/tracking/{booking_id}/"
-            response = requests.get(url, headers=cls._headers(), timeout=4)
+            response = requests.get(url, headers=cls._headers(), timeout=1.5)
             if response.status_code == 200:
                 data = response.json()
                 if data and isinstance(data, dict) and data.get("technician"):
                     return data
         except Exception as e:
-            logger.info(f"Workforce tracking query fallback: {e}")
+            logger.debug(f"Workforce tracking query fallback: {e}")
 
         return None

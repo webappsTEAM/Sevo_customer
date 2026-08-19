@@ -13,7 +13,7 @@ export const WS_BASE_URL =
   import.meta.env.VITE_WS_BASE_URL ??
   (import.meta.env.PROD
     ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/Caltrack`
-    : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8000`);
+    : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8001`);
 
 export const GOOGLE_MAPS_API_KEY =
   import.meta.env.VITE_GOOGLE_MAPS_API_KEY ??
@@ -26,4 +26,4 @@ export const GOOGLE_CLIENT_ID =
 
 export const MEDIA_BASE_URL =
   import.meta.env.VITE_MEDIA_BASE_URL ??
-  (import.meta.env.PROD ? `${window.location.origin}` : `http://${window.location.hostname}:8000`);
+  (import.meta.env.PROD ? `${window.location.origin}` : `http://${window.location.hostname}:8001`);
