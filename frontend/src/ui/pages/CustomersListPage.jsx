@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react"
 import { useDispatch, useSelector } from "react-redux"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { fetchCustomers, updateFilters } from "../../store/customerAnalyticsSlice.js"
-import { Search, Download, Users, User, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, Download, Users, User, ArrowUpDown, ChevronLeft, ChevronRight, Printer } from "lucide-react"
 
 export function CustomersListPage() {
   const dispatch = useDispatch()
@@ -80,11 +80,79 @@ export function CustomersListPage() {
     Object.entries(filters).forEach(([k, v]) => {
       if (v) query.append(k, v)
     })
+    query.append("export_format", "csv")
     window.open(`/api/customers/export/?${query.toString()}`, "_blank")
   }
 
+  const handleExportPDF = () => {
+    const query = new URLSearchParams()
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v) query.append(k, v)
+    })
+    query.append("export_format", "pdf")
+    window.open(`/api/customers/export/?${query.toString()}`, "_blank")
+  }
+
+  const handlePrint = () => {
+    window.print()
+  }
+
   return (
-    <div className="p-6 md:p-8 space-y-6 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen">
+    <div className="printable-content p-6 md:p-8 space-y-6 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 min-h-screen">
+      <style>{`
+        @media print {
+          @page {
+            size: landscape;
+            margin: 15mm 10mm 15mm 10mm;
+          }
+          
+          /* Hide sidebars, menus, controls, and other non-printable components */
+          aside, nav, header, .no-print, button {
+            display: none !important;
+          }
+
+          /* Reset all parent structures to make layout block-based and full-width */
+          html, body, #root, #root > div, main, .printable-content {
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+            position: static !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+          }
+
+          body {
+            color: #000 !important;
+            background: #fff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          /* Format clean, bordered table styles */
+          table {
+            border-collapse: collapse !important;
+            width: 100% !important;
+            margin-top: 20px !important;
+            font-size: 11px !important;
+          }
+          th, td {
+            border: 1px solid #cbd5e1 !important;
+            padding: 8px 10px !important;
+            text-align: left !important;
+            color: #000 !important;
+          }
+          th {
+            background-color: #f1f5f9 !important;
+            font-weight: bold !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+          }
+        }
+      `}</style>
       
       {/* ── HEADER ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -95,17 +163,35 @@ export function CustomersListPage() {
           </p>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-sm transition-all"
-        >
-          <Download size={14} />
-          <span>Export CSV</span>
-        </button>
+        <div className="flex items-center gap-2 no-print">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm transition-all"
+          >
+            <Download size={14} />
+            <span>CSV</span>
+          </button>
+
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold shadow-sm transition-all"
+          >
+            <Download size={14} />
+            <span>PDF</span>
+          </button>
+
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-extrabold shadow-sm transition-all"
+          >
+            <Printer size={14} />
+            <span>Print</span>
+          </button>
+        </div>
       </div>
 
       {/* ── STICKY FILTER BAR ── */}
-      <div className="sticky top-0 z-10 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800/80 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+      <div className="sticky top-0 z-10 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800/80 shadow-sm flex flex-col md:flex-row gap-4 items-center no-print">
         <div className="relative w-full md:w-72">
           <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
           <input
@@ -249,7 +335,7 @@ export function CustomersListPage() {
 
         {/* ── PAGINATION ── */}
         {numPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10">
+          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10 no-print">
             <div className="text-xs font-bold text-slate-500">
               Showing page {currentPage} of {numPages} ({count} total records)
             </div>

@@ -50,6 +50,12 @@ def default_module_permissions():
         "bookings": { "admin": ["view", "modify"], "manager": ["view", "modify"], "support": ["view", "modify"] },
         "reports": { "admin": ["view"], "manager": ["view"], "support": [] },
         "inventory": { "admin": ["view", "modify"], "manager": ["view", "modify"], "support": ["view"] },
+        "customers": {
+            "admin": ["view", "modify", "export"],
+            "manager": ["view", "modify", "export"],
+            "support": ["view", "export"],
+            "employee": ["view", "export"]
+        },
     }
 
 
