@@ -9,7 +9,7 @@ django.setup()
 
 from accounts.models import User
 
-email = "suryaramya111111@gmail.com"
+email = "calservices05@gmail.com"
 
 # Find ALL matching accounts
 users = User.objects.filter(email__iexact=email)
