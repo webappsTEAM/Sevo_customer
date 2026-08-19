@@ -3702,114 +3702,15 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         const detailRes = await apiRequest(`/customer-care/tickets/${ticket.id}/`)
         const detailData = detailRes?.data || detailRes || ticket
         setSupportTicket(detailData)
-        if (Array.isArray(detailData.messages) && detailData.messages.length > 0) {
-          setSupportMessages(detailData.messages)
-          return
-        }
+        setSupportMessages(Array.isArray(detailData.messages) ? detailData.messages : [])
+      } else {
+        setSupportTicket(null)
+        setSupportMessages([])
       }
-      // Fallback to loaded / standard ticket conversation
-      setSupportMessages([
-        {
-          id: 14,
-          sender_username: user?.username || 'cust_9943033682',
-          sender_persona: 'customer',
-          message: 'i want reschedule. Can u change the time and date?',
-          is_internal_note: false,
-          created_at: new Date(2026, 7, 17, 10, 12).toISOString()
-        },
-        {
-          id: 15,
-          sender_username: user?.username || 'cust_9943033682',
-          sender_persona: 'customer',
-          message: 'i want reschudule . can u change the time?',
-          is_internal_note: false,
-          created_at: new Date(2026, 7, 17, 10, 24).toISOString()
-        },
-        {
-          id: 16,
-          sender_username: 'admin',
-          sender_persona: 'agent',
-          message: 'Sure mam.',
-          is_internal_note: false,
-          created_at: new Date(2026, 7, 17, 10, 26).toISOString()
-        },
-        {
-          id: 17,
-          sender_username: 'admin',
-          sender_persona: 'agent',
-          message: 'which time would you like to change?',
-          is_internal_note: false,
-          created_at: new Date(2026, 7, 17, 10, 27).toISOString()
-        },
-        {
-          id: 18,
-          sender_username: user?.username || 'cust_9943033682',
-          sender_persona: 'customer',
-          message: 'wednesday 10 AM',
-          is_internal_note: false,
-          created_at: new Date(2026, 7, 17, 11, 31).toISOString()
-        },
-        {
-          id: 19,
-          sender_username: 'admin',
-          sender_persona: 'agent',
-          message: 'okayyy',
-          is_internal_note: true,
-          created_at: new Date(2026, 7, 17, 11, 32).toISOString()
-        }
-      ])
     } catch (e) {
       console.warn('Failed to load customer support tickets:', e)
-      setSupportMessages([
-        {
-          id: 14,
-          sender_username: user?.username || 'cust_9943033682',
-          sender_persona: 'customer',
-          message: 'i want reschedule. Can u change the time and date?',
-          is_internal_note: false,
-          created_at: new Date(2026, 7, 17, 10, 12).toISOString()
-        },
-        {
-          id: 15,
-          sender_username: user?.username || 'cust_9943033682',
-          sender_persona: 'customer',
-          message: 'i want reschudule . can u change the time?',
-          is_internal_note: false,
-          created_at: new Date(2026, 7, 17, 10, 24).toISOString()
-        },
-        {
-          id: 16,
-          sender_username: 'admin',
-          sender_persona: 'agent',
-          message: 'Sure mam.',
-          is_internal_note: false,
-          created_at: new Date(2026, 7, 17, 10, 26).toISOString()
-        },
-        {
-          id: 17,
-          sender_username: 'admin',
-          sender_persona: 'agent',
-          message: 'which time would you like to change?',
-          is_internal_note: false,
-          created_at: new Date(2026, 7, 17, 10, 27).toISOString()
-        },
-        {
-          id: 18,
-          sender_username: user?.username || 'cust_9943033682',
-          sender_persona: 'customer',
-          message: 'wednesday 10 AM',
-          is_internal_note: false,
-          created_at: new Date(2026, 7, 17, 11, 31).toISOString()
-        },
-        {
-          id: 19,
-          sender_username: 'admin',
-          sender_persona: 'agent',
-          message: 'okayyy',
-          is_internal_note: true,
-          created_at: new Date(2026, 7, 17, 11, 32).toISOString()
-        }
-      ])
+      setSupportTicket(null)
+      setSupportMessages([])
     } finally {
       setSupportTicketLoading(false)
     }
@@ -3827,60 +3728,46 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     const newMsgText = supportInputMessage.trim()
     setSupportActionLoading(true)
     try {
-      if (supportTicket?.id) {
-        const res = await apiRequest(`/customer-care/tickets/${supportTicket.id}/add_message/`, {
+      let activeTicket = supportTicket
+      if (!activeTicket || !activeTicket.id) {
+        const custName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (user?.username || 'Customer')
+        const createRes = await apiRequest('/customer-care/tickets/', {
+          method: 'POST',
+          json: {
+            category: 'general',
+            priority: 'medium',
+            channel: 'chat',
+            customer_name: custName,
+            phone: user?.phone || '',
+            email: user?.email || ''
+          }
+        })
+        activeTicket = createRes?.data || createRes
+        setSupportTicket(activeTicket)
+      }
+
+      if (activeTicket?.id) {
+        const isAgent = user?.role === 'admin' || user?.role === 'manager' || user?.isCareAgent
+        const res = await apiRequest(`/customer-care/tickets/${activeTicket.id}/add_message/`, {
           method: 'POST',
           json: {
             message: newMsgText,
-            is_internal_note: supportIsInternalNote
+            is_internal_note: isAgent ? supportIsInternalNote : false
           }
         })
         if (res?.data || res?.id) {
           const created = res.data || res
           setSupportMessages(prev => [...prev, created])
         } else {
-          setSupportMessages(prev => [
-            ...prev,
-            {
-              id: Date.now(),
-              sender_username: user?.username || 'Customer',
-              sender_persona: 'customer',
-              message: newMsgText,
-              is_internal_note: supportIsInternalNote,
-              created_at: new Date().toISOString()
-            }
-          ])
+          const detailRes = await apiRequest(`/customer-care/tickets/${activeTicket.id}/`)
+          const detailData = detailRes?.data || detailRes || activeTicket
+          setSupportMessages(detailData.messages || [])
         }
-      } else {
-        setSupportMessages(prev => [
-          ...prev,
-          {
-            id: Date.now(),
-            sender_username: user?.username || 'Customer',
-            sender_persona: 'customer',
-            message: newMsgText,
-            is_internal_note: supportIsInternalNote,
-            created_at: new Date().toISOString()
-          }
-        ])
       }
       setSupportInputMessage('')
       setSupportIsInternalNote(false)
     } catch (err) {
-      console.error(err)
-      setSupportMessages(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          sender_username: user?.username || 'Customer',
-          sender_persona: 'customer',
-          message: newMsgText,
-          is_internal_note: supportIsInternalNote,
-          created_at: new Date().toISOString()
-        }
-      ])
-      setSupportInputMessage('')
-      setSupportIsInternalNote(false)
+      console.error('Failed to send support message:', err)
     } finally {
       setSupportActionLoading(false)
     }
@@ -5282,94 +5169,108 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
               {/* Messages Thread list */}
               <div ref={supportChatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: 14, background: '#ffffff' }}>
-                {(() => {
-                  let lastDateStr = null
-                  return supportMessages.map(msg => {
-                    const msgDate = new Date(msg.created_at || Date.now())
-                    const dateStr = msgDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }).toUpperCase()
-                    let showDivider = false
-                    if (dateStr !== lastDateStr) {
-                      showDivider = true
-                      lastDateStr = dateStr
-                    }
-                    const isCust = msg.sender_persona === "customer"
+                {supportMessages.length === 0 ? (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '3rem 1.5rem', color: '#94a3b8' }}>
+                    <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                      <LifeBuoy size={26} color="#6366f1" />
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a', marginBottom: 6 }}>No Messages Yet</div>
+                    <p style={{ fontSize: '0.82rem', color: '#64748b', maxWidth: 340, lineHeight: 1.5, margin: 0 }}>
+                      {supportTicket ? "Your support ticket is open. Type a message below to connect with our support agents." : "You have not raised any support ticket yet. Type a message below to start a conversation with our support team."}
+                    </p>
+                  </div>
+                ) : (
+                  (() => {
+                    let lastDateStr = null
+                    return supportMessages.map(msg => {
+                      const msgDate = new Date(msg.created_at || Date.now())
+                      const dateStr = msgDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }).toUpperCase()
+                      let showDivider = false
+                      if (dateStr !== lastDateStr) {
+                        showDivider = true
+                        lastDateStr = dateStr
+                      }
+                      const isCust = msg.sender_persona === "customer"
 
-                    return (
-                      <React.Fragment key={msg.id || Math.random()}>
-                        {showDivider && (
-                          <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0', userSelect: 'none' }}>
-                            <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b', background: '#f1f5f9', padding: '4px 14px', borderRadius: 99, border: '1px solid #e2e8f0' }}>
-                              {dateStr}
+                      return (
+                        <React.Fragment key={msg.id || Math.random()}>
+                          {showDivider && (
+                            <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0', userSelect: 'none' }}>
+                              <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b', background: '#f1f5f9', padding: '4px 14px', borderRadius: 99, border: '1px solid #e2e8f0' }}>
+                                {dateStr}
+                              </span>
+                            </div>
+                          )}
+
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            maxWidth: '75%',
+                            alignSelf: isCust ? 'flex-start' : 'flex-end',
+                            alignItems: isCust ? 'flex-start' : 'flex-end'
+                          }}>
+                            {/* Persona & Username badge */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 4, padding: '0 4px' }}>
+                              <span>{msg.sender_username || (isCust ? (user?.username || 'CUSTOMER') : 'ADMIN')}</span>
+                              <span>•</span>
+                              <span>{isCust ? 'CUSTOMER' : (msg.sender_persona === 'employee' ? 'SUPPORT AGENT' : 'AGENT')}</span>
+                            </div>
+
+                            {/* Message Bubble */}
+                            <div style={{
+                              padding: '12px 16px',
+                              borderRadius: 18,
+                              fontSize: '0.85rem',
+                              lineHeight: 1.5,
+                              ...(msg.is_internal_note ? {
+                                background: '#fffbeb',
+                                border: '1.5px solid #fef08a',
+                                color: '#1e293b'
+                              } : isCust ? {
+                                background: '#f1f5f9',
+                                border: '1px solid #e2e8f0',
+                                color: '#1e293b'
+                              } : {
+                                background: '#4f46e5',
+                                border: '1px solid #4338ca',
+                                color: '#ffffff'
+                              })
+                            }}>
+                              {msg.is_internal_note && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', color: '#d97706', marginBottom: 4, paddingBottom: 3, borderBottom: '1px solid #fde68a' }}>
+                                  <Lock size={10} /> INTERNAL NOTE
+                                </div>
+                              )}
+                              <div>{msg.message}</div>
+                            </div>
+
+                            {/* Timestamp */}
+                            <span style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 4, padding: '0 4px' }}>
+                              {msgDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }).toLowerCase()}
                             </span>
                           </div>
-                        )}
-
-                        <div style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          maxWidth: '75%',
-                          alignSelf: isCust ? 'flex-start' : 'flex-end',
-                          alignItems: isCust ? 'flex-start' : 'flex-end'
-                        }}>
-                          {/* Persona & Username badge */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 4, padding: '0 4px' }}>
-                            <span>{msg.sender_username || (isCust ? (user?.username || 'CUST_9943033682') : 'ADMIN')}</span>
-                            <span>•</span>
-                            <span>{isCust ? 'CUSTOMER' : (msg.sender_persona === 'employee' ? 'SUPPORT AGENT' : 'AGENT')}</span>
-                          </div>
-
-                          {/* Message Bubble */}
-                          <div style={{
-                            padding: '12px 16px',
-                            borderRadius: 18,
-                            fontSize: '0.85rem',
-                            lineHeight: 1.5,
-                            ...(msg.is_internal_note ? {
-                              background: '#fffbeb',
-                              border: '1.5px solid #fef08a',
-                              color: '#1e293b'
-                            } : isCust ? {
-                              background: '#f1f5f9',
-                              border: '1px solid #e2e8f0',
-                              color: '#1e293b'
-                            } : {
-                              background: '#4f46e5',
-                              border: '1px solid #4338ca',
-                              color: '#ffffff'
-                            })
-                          }}>
-                            {msg.is_internal_note && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', color: '#d97706', marginBottom: 4, paddingBottom: 3, borderBottom: '1px solid #fde68a' }}>
-                                <Lock size={10} /> INTERNAL NOTE
-                              </div>
-                            )}
-                            <div>{msg.message}</div>
-                          </div>
-
-                          {/* Timestamp */}
-                          <span style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: 4, padding: '0 4px' }}>
-                            {msgDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }).toLowerCase()}
-                          </span>
-                        </div>
-                      </React.Fragment>
-                    )
-                  })
-                })()}
+                        </React.Fragment>
+                      )
+                    })
+                  })()
+                )}
               </div>
 
               {/* Compose Form at Bottom */}
               <form onSubmit={handleSendSupportMessage} style={{ borderTop: '1px solid #f1f5f9', padding: '14px 18px', background: '#fafafa', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 700, color: '#64748b', userSelect: 'none' }}>
-                    <input
-                      type="checkbox"
-                      checked={supportIsInternalNote}
-                      onChange={e => setSupportIsInternalNote(e.target.checked)}
-                      style={{ accentColor: '#4f46e5', cursor: 'pointer' }}
-                    />
-                    <Lock size={13} color={supportIsInternalNote ? "#d97706" : "#94a3b8"} />
-                    <span>Internal Note</span>
-                  </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: (user?.role === 'admin' || user?.role === 'manager' || user?.isCareAgent) ? 'space-between' : 'flex-end', fontSize: '0.78rem' }}>
+                  {(user?.role === 'admin' || user?.role === 'manager' || user?.isCareAgent) && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 700, color: '#64748b', userSelect: 'none' }}>
+                      <input
+                        type="checkbox"
+                        checked={supportIsInternalNote}
+                        onChange={e => setSupportIsInternalNote(e.target.checked)}
+                        style={{ accentColor: '#4f46e5', cursor: 'pointer' }}
+                      />
+                      <Lock size={13} color={supportIsInternalNote ? "#d97706" : "#94a3b8"} />
+                      <span>Internal Note</span>
+                    </label>
+                  )}
 
                   <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: '#4f46e5', fontWeight: 700, fontSize: '0.78rem' }}>
                     <Paperclip size={14} />
@@ -5396,7 +5297,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <input
                     type="text"
-                    placeholder={supportIsInternalNote ? "Type internal agent note (locked)..." : "Reply to customer..."}
+                    placeholder={(user?.role === 'admin' || user?.role === 'manager' || user?.isCareAgent) ? (supportIsInternalNote ? "Type internal agent note (locked)..." : "Reply to customer...") : "Type your message to support..."}
                     value={supportInputMessage}
                     onChange={e => setSupportInputMessage(e.target.value)}
                     style={{
