@@ -107,6 +107,8 @@ class AddOnSerializer(serializers.ModelSerializer):
 
 class PackageSerializer(serializers.ModelSerializer):
     service_name = serializers.CharField(source="service.name", read_only=True)
+    service_slug = serializers.CharField(source="service.slug", read_only=True)
+    category_slug = serializers.CharField(source="service.category.slug", read_only=True)
     add_ons = AddOnSerializer(many=True, read_only=True)
 
     class Meta:
@@ -277,29 +279,27 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     def get_technician_name(self, obj):
         if obj.technician_name:
             return obj.technician_name
-        assigned_employee = getattr(obj, "assigned_employee", None)
-        if assigned_employee:
-            return assigned_employee.full_name or (assigned_employee.user.get_full_name() if getattr(assigned_employee, 'user', None) else None)
+        assigned_emp = getattr(obj, "assigned_employee", None)
+        if assigned_emp:
+            return getattr(assigned_emp, "full_name", None) or (assigned_emp.user.get_full_name() if getattr(assigned_emp, "user", None) else None)
         if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
-            return "Suresh Kumar"
+            return "Service Partner"
         return ""
 
     def get_technician_phone(self, obj):
         if obj.technician_phone:
             return obj.technician_phone
-        assigned_employee = getattr(obj, "assigned_employee", None)
-        if assigned_employee and getattr(assigned_employee, "phone", None):
-            return assigned_employee.phone
-        if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
-            return "9845012345"
+        assigned_emp = getattr(obj, "assigned_employee", None)
+        if assigned_emp and getattr(assigned_emp, "phone", None):
+            return assigned_emp.phone
         return ""
 
     def get_technician_photo(self, obj):
         if obj.technician_photo:
             return obj.technician_photo
-        assigned_employee = getattr(obj, "assigned_employee", None)
-        if assigned_employee and getattr(assigned_employee, "photo", None):
-            return assigned_employee.photo
+        assigned_emp = getattr(obj, "assigned_employee", None)
+        if assigned_emp and getattr(assigned_emp, "photo", None):
+            return assigned_emp.photo
         if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
             return "/mockups/service_plumbing.png"
         return ""
@@ -307,9 +307,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     def get_technician_rating(self, obj):
         if obj.technician_rating:
             return float(obj.technician_rating)
-        assigned_employee = getattr(obj, "assigned_employee", None)
-        if assigned_employee and getattr(assigned_employee, "rating", None):
-            return float(assigned_employee.rating)
+        assigned_emp = getattr(obj, "assigned_employee", None)
+        if assigned_emp and getattr(assigned_emp, "rating", None):
+            return float(assigned_emp.rating)
         if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
             return 4.9
         return None
@@ -318,10 +318,14 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         name = self.get_technician_name(obj)
         if name or obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
             return {
-                "name": name or "Suresh Kumar",
-                "phone": self.get_technician_phone(obj) or "9845012345",
+                "name": name or "Service Partner",
+                "phone": self.get_technician_phone(obj) or "",
                 "photo": self.get_technician_photo(obj) or "/mockups/service_plumbing.png",
                 "rating": self.get_technician_rating(obj) or 4.9,
+                "latitude": float(obj.technician_latitude) if obj.technician_latitude is not None else None,
+                "longitude": float(obj.technician_longitude) if obj.technician_longitude is not None else None,
+                "location_name": obj.technician_location_name or "",
+                "last_seen_at": obj.technician_last_seen_at.isoformat() if obj.technician_last_seen_at else None,
                 "workforce_job_id": obj.workforce_job_id or obj.external_assignment_id or f"WFJ-{obj.request_id or obj.id}",
             }
         return None

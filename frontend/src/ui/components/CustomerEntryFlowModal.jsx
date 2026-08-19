@@ -345,29 +345,42 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
 
   // ── 3. OTP Digit Handling ────────────────────────────────────────────────
   const handleOtpChange = (index, value) => {
-    if (value.length > 1) {
-      const digits = value.replace(/\D/g, "").slice(0, 6).split("")
+    const clean = value.replace(/\D/g, "")
+    if (!clean) {
       const newDigits = [...otpDigits]
-      digits.forEach((d, i) => { if (index + i < 6) newDigits[index + i] = d })
+      newDigits[index] = ""
       setOtpDigits(newDigits)
-      const nextFocus = Math.min(index + digits.length, 5)
+      return
+    }
+
+    if (clean.length > 1) {
+      const digits = clean.slice(0, 6).split("")
+      const newDigits = [...otpDigits]
+      const startIdx = digits.length >= 6 ? 0 : index
+      digits.forEach((d, i) => {
+        if (startIdx + i < 6) newDigits[startIdx + i] = d
+      })
+      setOtpDigits(newDigits)
+      const nextFocus = Math.min(startIdx + digits.length, 5)
       otpInputRefs.current[nextFocus]?.focus()
-      if (newDigits.every(d => d && d.length === 1)) {
-        setTimeout(() => handleVerifyOTP(newDigits.join("")), 40)
+      const code = newDigits.join("")
+      if (code.length === 6 && newDigits.every(d => Boolean(d))) {
+        setTimeout(() => handleVerifyOTP(code), 40)
       }
       return
     }
 
-    const clean = value.replace(/\D/g, "")
+    const singleDigit = clean.slice(-1)
     const newDigits = [...otpDigits]
-    newDigits[index] = clean
+    newDigits[index] = singleDigit
     setOtpDigits(newDigits)
 
-    if (clean && index < 5) {
+    if (singleDigit && index < 5) {
       otpInputRefs.current[index + 1]?.focus()
     }
-    if (newDigits.every(d => d && d.length === 1)) {
-      setTimeout(() => handleVerifyOTP(newDigits.join("")), 40)
+    const code = newDigits.join("")
+    if (code.length === 6 && newDigits.every(d => Boolean(d))) {
+      setTimeout(() => handleVerifyOTP(code), 40)
     }
   }
 
@@ -405,7 +418,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
       const res = await apiVerifyCustomerOTP(identifier, channel, otpCode)
 
       if (res && res.success) {
-        const { is_new_customer, customer_id } = res.data || {}
+        const { is_new_customer, customer_id, auth_token, access, user } = res.data || {}
         setCustomerId(customer_id)
         if (is_new_customer) {
           setStep(3)
@@ -713,7 +726,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
                     <button
                       type="button"
                       onClick={() => {
-                        const digits = devOtp.split("")
+                        const digits = String(devOtp).trim().slice(0, 6).split("")
                         setOtpDigits(digits)
                         setTimeout(() => handleVerifyOTP(devOtp), 60)
                       }}

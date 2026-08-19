@@ -21,6 +21,13 @@ async function fetchJSON(path, options = {}) {
     headers.set("Content-Type", "application/json")
   }
 
+  try {
+    const token = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
+    if (token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`)
+    }
+  } catch (_) {}
+
   const res = await fetch(url, {
     ...options,
     credentials: "include",   // always send/receive cookies
@@ -72,10 +79,26 @@ export async function apiRequestCustomerOTP(identifier, channel) {
 }
 
 export async function apiVerifyCustomerOTP(identifier, channel, otp_code) {
-  return fetchJSON("/auth/customer/otp/verify/", {
+  const data = await fetchJSON("/auth/customer/otp/verify/", {
     method: "POST",
     body: JSON.stringify({ identifier, channel, otp_code })
   })
+  if (data?.success && data?.data) {
+    try {
+      const token = data.data.auth_token || data.data.access
+      if (token) {
+        localStorage.setItem("caltrack_access_token", token)
+        localStorage.setItem("qt_access", token)
+      }
+      if (data.data.phone) {
+        localStorage.setItem("caltrack_customer_phone", data.data.phone)
+      }
+      if (data.data.user) {
+        localStorage.setItem("caltrack_user", JSON.stringify(data.data.user))
+      }
+    } catch (_) {}
+  }
+  return data
 }
 
 export async function apiRequestCustomerPhoneOTP(phone) {
@@ -141,8 +164,15 @@ export async function apiFetchMe() {
   const timeoutId = setTimeout(() => controller.abort(), 15000)
   try {
     const url = `${API_BASE_URL}/auth/me/`
+    const headers = new Headers()
+    try {
+      const token = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
+      if (token) headers.set("Authorization", `Bearer ${token}`)
+    } catch (_) {}
+
     let res = await fetch(url, {
       credentials: "include",
+      headers,
       signal: controller.signal,
     })
 
@@ -150,8 +180,15 @@ export async function apiFetchMe() {
     if (res.status === 401 || res.status === 403) {
       const refreshed = await apiRefreshToken()
       if (refreshed) {
+        const retryHeaders = new Headers()
+        try {
+          const token = localStorage.getItem("caltrack_access_token") || localStorage.getItem("qt_access")
+          if (token) retryHeaders.set("Authorization", `Bearer ${token}`)
+        } catch (_) {}
+
         res = await fetch(url, {
           credentials: "include",
+          headers: retryHeaders,
           signal: controller.signal,
         })
       }

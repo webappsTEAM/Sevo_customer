@@ -33,7 +33,7 @@ export default defineConfig({
     // Change the VITE_DEV_TENANT env var (or the fallback below) to switch tenants.
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: process.env.VITE_BACKEND_URL || "http://127.0.0.1:8000",
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on("proxyReq", (proxyReq) => {
@@ -43,11 +43,11 @@ export default defineConfig({
         },
       },
       "/media": {
-        target: "http://127.0.0.1:8000",
+        target: process.env.VITE_BACKEND_URL || "http://127.0.0.1:8000",
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://127.0.0.1:8000",
+        target: process.env.VITE_WS_BACKEND_URL || "ws://127.0.0.1:8000",
         ws: true,
         changeOrigin: true,
       },
