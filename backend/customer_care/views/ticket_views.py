@@ -132,6 +132,12 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
                     customer = User.objects.get(pk=customer_id)
                 except (User.DoesNotExist, ValueError):
                     return self.error_response(f"User with ID {customer_id} does not exist.")
+            elif request.user.is_authenticated:
+                customer = request.user
+
+            cust_name = request.data.get("customer_name") or (customer.get_full_name() if customer else "") or (customer.username if customer else "")
+            cust_phone = request.data.get("phone") or (getattr(customer, "phone", "") if customer else "")
+            cust_email = request.data.get("email") or (getattr(customer, "email", "") if customer else "")
 
             booking_id = request.data.get("booking")
             from service_requests.models import ServiceRequest
@@ -147,11 +153,11 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
                 created_by=created_by,
                 category=request.data.get("category", "general"),
                 priority=request.data.get("priority", "medium"),
-                channel=request.data.get("channel", "portal"),
+                channel=request.data.get("channel", "chat" if request.user.role == "customer" else "portal"),
                 customer=customer,
-                customer_name=request.data.get("customer_name", ""),
-                phone=request.data.get("phone", ""),
-                email=request.data.get("email", ""),
+                customer_name=cust_name,
+                phone=cust_phone,
+                email=cust_email,
                 booking=booking
             )
             serializer = self.get_serializer(ticket)
