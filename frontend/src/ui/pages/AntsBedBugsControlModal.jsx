@@ -637,8 +637,8 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
         </div>
 
         {/* Right Column: Order Summary */}
-        <div className="w-full lg:w-[320px]">
-          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-48">
+        <div className="w-full lg:w-[320px] shrink-0">
+          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
             <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
               <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
               <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
@@ -775,22 +775,24 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                 );
               })()}
 
-              {/* What does this service include? */}
+              {/* Tools we use */}
               {(() => {
                 const id = selectedServiceDetails.id;
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = SERVICE_DETAILS_CONTENT[id] || {};
-                const hasSavedReady = dbMatch && Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0;
-                const includes = hasSavedReady ? dbMatch.ready.map(r => typeof r === "string" ? r : (r.text || "")) : (details.includes || []);
+                const hasSavedTools = dbMatch && Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0;
+                const tools = hasSavedTools 
+                  ? dbMatch.tools.filter(t => typeof t === "string" ? true : (t.checked !== false && t.enabled !== false)).map(t => typeof t === "string" ? t : (t.text || "")) 
+                  : (details.tools || []);
 
-                if (includes.length === 0) return null;
+                if (tools.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
-                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What does this service include?</h4>
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                     <div className="space-y-2">
-                      {includes.map((item, i) => (
+                      {tools.map((item, i) => (
                         <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                          <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
                           <span className="leading-relaxed">{item}</span>
                         </div>
                       ))}
@@ -799,22 +801,24 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                 );
               })()}
 
-              {/* Tools we use */}
+              {/* What You Need to Keep Ready */}
               {(() => {
                 const id = selectedServiceDetails.id;
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = SERVICE_DETAILS_CONTENT[id] || {};
-                const hasSavedTools = dbMatch && Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0;
-                const tools = hasSavedTools ? dbMatch.tools.map(t => typeof t === "string" ? t : (t.text || "")) : (details.tools || []);
+                const hasSavedReady = dbMatch && Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0;
+                const includes = hasSavedReady 
+                  ? dbMatch.ready.filter(r => typeof r === "string" ? true : (r.checked !== false && r.enabled !== false)).map(r => typeof r === "string" ? r : (r.text || "")) 
+                  : (details.includes || []);
 
-                if (tools.length === 0) return null;
+                if (includes.length === 0) return null;
                 return (
                   <div className="space-y-2.5 border-t border-slate-100 pt-5 text-left">
-                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Chemicals We Use</h4>
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">What You Need to Keep Ready</h4>
                     <div className="space-y-2">
-                      {tools.map((item, i) => (
+                      {includes.map((item, i) => (
                         <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
+                          <span className="text-slate-400 font-bold shrink-0 mt-0.5">•</span>
                           <span className="leading-relaxed">{item}</span>
                         </div>
                       ))}
@@ -829,7 +833,9 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = SERVICE_DETAILS_CONTENT[id] || {};
                 const hasSavedReviews = dbMatch && Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0;
-                const reviews = hasSavedReviews ? dbMatch.reviews : (details.reviews_list || []);
+                const reviews = hasSavedReviews 
+                  ? dbMatch.reviews.filter(rev => rev.checked !== false && rev.enabled !== false) 
+                  : (details.reviews_list || []);
 
                 if (reviews.length === 0) return null;
                 return (
@@ -837,21 +843,17 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Customer Reviews</h4>
                     <div className="space-y-3">
                       {reviews.map((rev, i) => (
-                        <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                          <div className="flex justify-between items-center mb-1.5">
-                            <div className="text-[11px] font-bold text-slate-700">{rev.author || rev.name}</div>
-                            <div className="text-[9px] text-slate-400 font-semibold">{rev.date || "2 days ago"}</div>
+                        <div key={i} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1.5 mb-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-800">{rev.author || rev.name}</span>
+                            <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#7C3AED]">
+                              <Star className="fill-[#7C3AED] text-[#7C3AED]" size={12} />
+                              <span>{parseFloat(rev.rating).toFixed(1)}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-0.5 mb-1.5">
-                            {[...Array(5)].map((_, idx) => (
-                              <Star 
-                                key={idx} 
-                                size={10} 
-                                className={idx < parseFloat(rev.rating) ? "text-yellow-500 fill-yellow-500" : "text-slate-300"} 
-                              />
-                            ))}
-                          </div>
-                          <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">"{rev.comment || rev.text}"</p>
+                          <p className="text-xs text-slate-600 leading-relaxed italic">
+                            "{rev.comment || rev.text}"
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -865,7 +867,9 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = SERVICE_DETAILS_CONTENT[id] || {};
                 const hasSavedFaqs = dbMatch && Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0;
-                const faqs = hasSavedFaqs ? dbMatch.faqs : (details.faqs || []);
+                const faqs = hasSavedFaqs 
+                  ? dbMatch.faqs.filter(faq => faq.checked !== false && faq.enabled !== false) 
+                  : (details.faqs || []);
 
                 if (faqs.length === 0) return null;
                 return (
