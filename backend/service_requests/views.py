@@ -465,6 +465,21 @@ class CustomerBookingCancelView(APIView):
         return _success(data=ServiceRequestDetailSerializer(sr, context={"request": request}).data, message="Booking cancelled successfully.")
 
 
+import math
+
+def _haversine_meters(lat1, lon1, lat2, lon2):
+    try:
+        R = 6371000.0  # meters
+        phi1 = math.radians(float(lat1))
+        phi2 = math.radians(float(lat2))
+        dphi = math.radians(float(lat2) - float(lat1))
+        dlam = math.radians(float(lon2) - float(lon1))
+        a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2.0) ** 2
+        return R * 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    except (ValueError, TypeError):
+        return None
+
+
 def _build_tracking_payload(sr, has_full_access):
     """
     Constructs the canonical live tracking response payload for a booking.
@@ -474,44 +489,213 @@ def _build_tracking_payload(sr, has_full_access):
     dest_lat = float(sr.latitude) if sr.latitude is not None else None
     dest_lng = float(sr.longitude) if sr.longitude is not None else None
 
-    # Fetch technician live tracking snapshot strictly from external Workforce Integration
-    tracking = WorkforceIntegrationService.get_technician_tracking(sr.request_id or sr.id)
+    # 0. Sync and resolve employee details & live GPS from shared tables if missing on ServiceRequest
+    db_heading = 0.0
+    db_speed = 0.0
+    db_accuracy = None
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            # 1. Resolve employee name, phone, photo from employees_employee + accounts_user
+            if not sr.technician_name or not sr.technician_phone:
+                cursor.execute(
+                    """
+                    SELECT e.id, u.first_name, u.last_name, COALESCE(NULLIF(e.phone, ''), u.phone, ''), u.avatar
+                    FROM service_requests_servicerequest sr_inner
+                    JOIN employees_employee e ON e.id = sr_inner.assigned_employee_id
+                    LEFT JOIN accounts_user u ON u.id = e.user_id
+                    WHERE sr_inner.id = %s
+                    """,
+                    [sr.id],
+                )
+                emp_row = cursor.fetchone()
+                if not emp_row:
+                    # Fallback check: employee_id linked via tracking session
+                    cursor.execute(
+                        """
+                        SELECT e.id, u.first_name, u.last_name, COALESCE(NULLIF(e.phone, ''), u.phone, ''), u.avatar
+                        FROM workforce_job_tracking_session sess
+                        JOIN employees_employee e ON e.id = sess.employee_id
+                        LEFT JOIN accounts_user u ON u.id = e.user_id
+                        WHERE sess.job_id = %s
+                        ORDER BY sess.id DESC LIMIT 1
+                        """,
+                        [sr.id],
+                    )
+                    emp_row = cursor.fetchone()
 
-    is_accepted = sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed"]
+                if emp_row:
+                    first_name = emp_row[1] or ""
+                    last_name = emp_row[2] or ""
+                    full_name = f"{first_name} {last_name}".strip()
+                    if full_name and not sr.technician_name:
+                        sr.technician_name = full_name
+                    if emp_row[3] and not sr.technician_phone:
+                        sr.technician_phone = emp_row[3]
+                    if emp_row[4] and not sr.technician_photo:
+                        sr.technician_photo = emp_row[4]
+
+            # 2. Resolve live GPS coordinates & movement from workforce_job_tracking_session or workforce_job_location_point
+            cursor.execute(
+                """
+                SELECT last_latitude, last_longitude, last_captured_at, last_heading, last_speed, last_accuracy
+                FROM workforce_job_tracking_session
+                WHERE job_id = %s
+                ORDER BY id DESC LIMIT 1
+                """,
+                [sr.id],
+            )
+            sess_row = cursor.fetchone()
+            if sess_row and sess_row[0] is not None and sess_row[1] is not None:
+                sr.technician_latitude = float(sess_row[0])
+                sr.technician_longitude = float(sess_row[1])
+                if sess_row[2]:
+                    sr.technician_last_seen_at = sess_row[2]
+                if sess_row[3] is not None:
+                    db_heading = float(sess_row[3])
+                if sess_row[4] is not None:
+                    db_speed = float(sess_row[4])
+                if sess_row[5] is not None:
+                    db_accuracy = float(sess_row[5])
+            else:
+                cursor.execute(
+                    """
+                    SELECT latitude, longitude, captured_at, heading, speed, accuracy
+                    FROM workforce_job_location_point
+                    WHERE job_id = %s
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    [sr.id],
+                )
+                pt_row = cursor.fetchone()
+                if pt_row and pt_row[0] is not None and pt_row[1] is not None:
+                    sr.technician_latitude = float(pt_row[0])
+                    sr.technician_longitude = float(pt_row[1])
+                    if pt_row[2]:
+                        sr.technician_last_seen_at = pt_row[2]
+                    if pt_row[3] is not None:
+                        db_heading = float(pt_row[3])
+                    if pt_row[4] is not None:
+                        db_speed = float(pt_row[4])
+                    if pt_row[5] is not None:
+                        db_accuracy = float(pt_row[5])
+
+        # Persist back to ServiceRequest
+        up_fields = []
+        if sr.technician_name:
+            up_fields.append("technician_name")
+        if sr.technician_phone:
+            up_fields.append("technician_phone")
+        if sr.technician_photo:
+            up_fields.append("technician_photo")
+        if sr.technician_latitude is not None:
+            up_fields.append("technician_latitude")
+        if sr.technician_longitude is not None:
+            up_fields.append("technician_longitude")
+        if sr.technician_last_seen_at:
+            up_fields.append("technician_last_seen_at")
+        if up_fields:
+            sr.save(update_fields=up_fields)
+    except Exception as e:
+        logger.debug(f"DB fallback employee/telemetry resolution: {e}")
+
+    # Fetch technician live tracking snapshot from external Workforce Integration ONLY if missing in DB
+    tracking = None
+    if (sr.technician_latitude is None or not sr.technician_name) and getattr(sr, "workforce_job_id", None):
+        tracking = WorkforceIntegrationService.get_technician_tracking(sr.request_id or sr.id)
+
+    # Authoritative acceptance check
+    is_accepted = sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"] and bool(
+        sr.technician_name or sr.workforce_job_id or sr.external_assignment_id or (tracking and isinstance(tracking, dict) and tracking.get("technician"))
+    )
     is_terminal = sr.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
+    vendor_name = (getattr(sr.company, "company_name", None) or getattr(sr.company, "name", None)) if sr.company else "CalServices Official"
+    vendor_data = {
+        "id": sr.company_id if sr.company_id else None,
+        "name": vendor_name,
+        "phone": sr.company.phone if (sr.company and getattr(sr.company, "phone", None)) else None,
+    }
+
     technician_data = None
+    technician_loc_data = None
+    distance_m = None
+    distance_km = None
+    eta_seconds = None
+    eta_minutes = None
+    freshness = "WAITING_FOR_PROFESSIONAL"
+
     if is_accepted:
         tech_obj = tracking.get("technician") if (tracking and isinstance(tracking, dict) and tracking.get("technician")) else {}
-        tech_name = sr.technician_name or tech_obj.get("name") or tech_obj.get("full_name") or "Suresh Kumar"
-        # Phone returned when caller is fully authorized
-        tech_phone = (sr.technician_phone or tech_obj.get("phone") or "9845012345") if has_full_access else ""
-        tech_photo = sr.technician_photo or tech_obj.get("photo") or "/mockups/service_plumbing.png"
-        tech_rating = float(sr.technician_rating) if sr.technician_rating else (float(tech_obj.get("rating")) if tech_obj.get("rating") else 4.9)
-        tech_jobs = getattr(sr, "technician_jobs_completed", None) or tech_obj.get("jobs_completed") or 142
+
+        # 1. Real technician details strictly from database fields first
+        tech_name = sr.technician_name or tech_obj.get("name") or tech_obj.get("full_name") or ""
+        tech_phone = (sr.technician_phone or tech_obj.get("phone") or "") if has_full_access else ""
+        tech_photo = sr.technician_photo or tech_obj.get("photo") or None
+        tech_rating = float(sr.technician_rating) if sr.technician_rating else (float(tech_obj.get("rating")) if tech_obj.get("rating") else None)
+        tech_jobs = getattr(sr, "technician_jobs_completed", None) or tech_obj.get("jobs_completed") or None
         tech_job_id = sr.workforce_job_id or sr.external_assignment_id or f"WFJ-{sr.request_id or sr.id}"
 
+        # 2. Real live GPS coordinates from database or workforce telemetry
         loc = tracking.get("location") if (tracking and isinstance(tracking, dict)) else {}
-        tech_lat = loc.get("latitude") if (loc and loc.get("latitude")) else None
-        tech_lng = loc.get("longitude") if (loc and loc.get("longitude")) else None
+        if is_terminal:
+            tech_lat = None
+            tech_lng = None
+        else:
+            tech_lat = float(sr.technician_latitude) if sr.technician_latitude is not None else (float(loc.get("latitude")) if (loc and loc.get("latitude")) else None)
+            tech_lng = float(sr.technician_longitude) if sr.technician_longitude is not None else (float(loc.get("longitude")) if (loc and loc.get("longitude")) else None)
+        current_loc_name = sr.technician_location_name or loc.get("location_name") or ""
 
-        if is_accepted and (tech_lat is None or tech_lng is None) and dest_lat is not None and dest_lng is not None:
-            if sr.status in ["arrived", "in_progress", "completed"]:
-                # When arrived or in progress at the customer site: partner is located right outside on the approach road (~55m from house)
-                tech_lat = round(dest_lat - 0.00038, 6)
-                tech_lng = round(dest_lng + 0.00042, 6)
-            elif sr.status in ["on_the_way", "assigned", "accepted"]:
-                # Realistically place partner approaching destination in Hosur (~1.2 km away)
-                tech_lat = round(dest_lat - 0.0112, 6)
-                tech_lng = round(dest_lng - 0.0084, 6)
+        # Heading & speed
+        resolved_heading = db_heading if db_heading > 0 else (float(loc.get("heading")) if loc.get("heading") else 0.0)
+        resolved_speed = db_speed if db_speed > 0 else (float(loc.get("speed")) if loc.get("speed") else 0.0)
 
-        eta = 0 if sr.status == "arrived" else (tracking.get("eta_minutes") if (tracking and isinstance(tracking, dict) and tracking.get("eta_minutes") is not None) else (8 if sr.status in ["on_the_way", "assigned", "accepted"] else None))
-        dist = 0.05 if sr.status == "arrived" else (tracking.get("distance_km") if (tracking and isinstance(tracking, dict) and tracking.get("distance_km") is not None) else (1.2 if sr.status in ["on_the_way", "assigned", "accepted"] else None))
-        current_loc_name = loc.get("location_name") or (
-            "Malli Mariyamman Temple St (At Site)" if sr.status in ["arrived", "in_progress", "completed"]
-            else "Avalapalli Road, Hosur" if sr.status in ["on_the_way", "assigned", "accepted"]
-            else "Hosur Service Hub"
-        )
+        # 3. GPS Freshness calculation
+        if is_terminal:
+            freshness = "COMPLETED" if sr.status not in ["cancelled", "rejected"] else "CANCELLED"
+        elif tech_lat is not None and tech_lng is not None:
+            if sr.status == "arrived":
+                freshness = "LIVE"
+            elif sr.technician_last_seen_at:
+                diff_sec = (timezone.now() - sr.technician_last_seen_at).total_seconds()
+                if diff_sec <= 45:
+                    freshness = "LIVE"
+                elif diff_sec <= 120:
+                    freshness = "UPDATING"
+                elif diff_sec <= 300:
+                    freshness = "DELAYED"
+                else:
+                    freshness = "STALE"
+            else:
+                freshness = "LIVE"
+        else:
+            if sr.status in ["assigned", "accepted"]:
+                freshness = "WAITING_FOR_LOCATION"
+            elif sr.status == "on_the_way":
+                freshness = "LOCATION_LOST"
+            else:
+                freshness = "WAITING_FOR_LOCATION"
+
+        # 4. Truthful Distance and ETA Calculation
+        if sr.status == "arrived":
+            distance_m = 0
+            distance_km = 0.0
+            eta_seconds = 0
+            eta_minutes = 0
+        elif is_terminal or sr.status == "in_progress":
+            distance_m = 0
+            distance_km = 0.0
+            eta_seconds = 0
+            eta_minutes = 0
+        elif tech_lat is not None and tech_lng is not None and dest_lat is not None and dest_lng is not None:
+            raw_meters = _haversine_meters(tech_lat, tech_lng, dest_lat, dest_lng)
+            if raw_meters is not None:
+                distance_m = int(round(raw_meters))
+                distance_km = round(distance_m / 1000.0, 1)
+                # Estimate ~25 km/h urban travel speed
+                eta_mins = max(1, int(round((distance_km / 25.0) * 60)))
+                eta_minutes = eta_mins
+                eta_seconds = eta_mins * 60
 
         technician_data = {
             "id": tech_job_id,
@@ -522,20 +706,35 @@ def _build_tracking_payload(sr, has_full_access):
             "photo": tech_photo,
             "latitude": tech_lat,
             "longitude": tech_lng,
+            "heading": resolved_heading if not is_terminal else 0.0,
+            "speed": resolved_speed if not is_terminal else 0.0,
             "status": sr.status,
-            "eta_minutes": eta,
-            "distance_km": dist,
+            "eta_minutes": eta_minutes,
+            "distance_km": distance_km,
             "jobs_completed": tech_jobs,
             "current_location_name": current_loc_name,
+            "last_seen_at": sr.technician_last_seen_at.isoformat() if (sr.technician_last_seen_at and not is_terminal) else (tracking.get("updated_at") if (tracking and isinstance(tracking, dict) and not is_terminal) else None),
             "updated_at": tracking.get("updated_at") if (tracking and isinstance(tracking, dict)) else timezone.now().isoformat(),
         }
 
-    # OTP is only exposed to authorized callers during active phases, NEVER on terminal states
+        if tech_lat is not None and tech_lng is not None and not is_terminal:
+            technician_loc_data = {
+                "latitude": tech_lat,
+                "longitude": tech_lng,
+                "heading": resolved_heading,
+                "speed": resolved_speed,
+                "accuracy": db_accuracy,
+                "captured_at": sr.technician_last_seen_at.isoformat() if sr.technician_last_seen_at else None,
+                "freshness": freshness,
+            }
+
+    # OTP is only exposed to authorized callers when arrived or during active service
     start_otp = sr.start_otp if (has_full_access and not is_terminal and sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress"]) else None
 
     return {
         "booking_id": sr.id,
         "request_id": sr.request_id,
+        "job_id": sr.id,
         "status": sr.status,
         "is_accepted": is_accepted,
         "service_category": sr.service_category,
@@ -543,13 +742,25 @@ def _build_tracking_payload(sr, has_full_access):
         "preferred_date": str(sr.preferred_date) if sr.preferred_date else "",
         "preferred_time": sr.preferred_time or "",
         "total_amount": float(sr.total_amount),
-        "start_otp": start_otp,
+        "vendor": vendor_data,
+        "service_location": {
+            "address": sr.address,
+            "latitude": dest_lat,
+            "longitude": dest_lng,
+        },
         "destination": {
             "address": sr.address,
             "latitude": dest_lat,
             "longitude": dest_lng,
         },
         "technician": technician_data,
+        "technician_location": technician_loc_data,
+        "freshness": freshness,
+        "distance_m": distance_m,
+        "distance_km": distance_km,
+        "eta_seconds": eta_seconds,
+        "eta_minutes": eta_minutes,
+        "start_otp": start_otp,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
     }
 
@@ -759,7 +970,7 @@ class AdminSRPriorityView(APIView):
 
 
 class AdminSRAssignView(APIView):
-    """PATCH /api/admin/service-requests/<id>/dispatch/ or /assign/ → Dispatches booking to workforce"""
+    """PATCH/POST /api/admin/service-requests/<id>/dispatch/ or /assign/ → Dispatches booking to workforce and persists assigned partner"""
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def patch(self, request, pk):
@@ -777,8 +988,34 @@ class AdminSRAssignView(APIView):
         notes = request.data.get("notes", "")
         with transaction.atomic():
             apply_transition(sr, ServiceRequest.Status.ASSIGNED, actor=request.user)
-            sr.save(update_fields=["status", "updated_at"])
+
+            # Persist technician details passed by admin
+            if request.data.get("technician_name") or request.data.get("employee_name"):
+                sr.technician_name = request.data.get("technician_name") or request.data.get("employee_name")
+            if request.data.get("technician_phone") or request.data.get("employee_phone"):
+                sr.technician_phone = request.data.get("technician_phone") or request.data.get("employee_phone")
+            if request.data.get("technician_photo"):
+                sr.technician_photo = request.data.get("technician_photo")
+            if request.data.get("technician_rating"):
+                sr.technician_rating = request.data.get("technician_rating")
+            if request.data.get("latitude") or request.data.get("technician_latitude"):
+                sr.technician_latitude = request.data.get("latitude") or request.data.get("technician_latitude")
+            if request.data.get("longitude") or request.data.get("technician_longitude"):
+                sr.technician_longitude = request.data.get("longitude") or request.data.get("technician_longitude")
+            if request.data.get("location_name") or request.data.get("technician_location_name"):
+                sr.technician_location_name = request.data.get("location_name") or request.data.get("technician_location_name")
+
+            sr.technician_last_seen_at = timezone.now()
+            sr.save()
             WorkforceIntegrationService.dispatch_job(sr, notes=notes)
+
+        # Broadcast live tracking update to customer
+        try:
+            from .notifications import broadcast_tracking_event
+            full_payload = _build_tracking_payload(sr, has_full_access=True)
+            broadcast_tracking_event(sr, event_type="technician_assigned", custom_data=full_payload)
+        except Exception as b_err:
+            logger.warning(f"Error broadcasting technician_assigned: {b_err}")
 
         return _success(
             data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
@@ -787,6 +1024,62 @@ class AdminSRAssignView(APIView):
 
 
 AdminSRDispatchView = AdminSRAssignView
+
+
+class AdminSRUpdateTechnicianLocationView(APIView):
+    """
+    POST/PATCH /api/admin/service-requests/<pk>/technician-location/
+    Allows admin or field technician app to update live GPS coordinates and partner details.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def patch(self, request, pk=None, identifier=None):
+        return self._handle(request, pk or identifier)
+
+    def post(self, request, pk=None, identifier=None):
+        return self._handle(request, pk or identifier)
+
+    def _handle(self, request, pk):
+        try:
+            if str(pk).isdigit():
+                sr = ServiceRequest.objects.get(pk=int(pk))
+            else:
+                sr = ServiceRequest.objects.get(request_id=pk)
+        except ServiceRequest.DoesNotExist:
+            return _error("Booking not found.", 404)
+
+        if "technician_name" in request.data or "employee_name" in request.data:
+            sr.technician_name = request.data.get("technician_name") or request.data.get("employee_name")
+        if "technician_phone" in request.data or "employee_phone" in request.data:
+            sr.technician_phone = request.data.get("technician_phone") or request.data.get("employee_phone")
+        if "technician_photo" in request.data:
+            sr.technician_photo = request.data.get("technician_photo")
+        if "technician_rating" in request.data:
+            sr.technician_rating = request.data.get("technician_rating")
+        if "latitude" in request.data or "technician_latitude" in request.data or "lat" in request.data:
+            sr.technician_latitude = request.data.get("latitude") or request.data.get("technician_latitude") or request.data.get("lat")
+        if "longitude" in request.data or "technician_longitude" in request.data or "lng" in request.data:
+            sr.technician_longitude = request.data.get("longitude") or request.data.get("technician_longitude") or request.data.get("lng")
+        if "location_name" in request.data or "technician_location_name" in request.data or "current_location_name" in request.data:
+            sr.technician_location_name = request.data.get("location_name") or request.data.get("technician_location_name") or request.data.get("current_location_name")
+        if "status" in request.data and request.data.get("status") in dict(ServiceRequest.Status.choices):
+            sr.status = request.data.get("status")
+
+        sr.technician_last_seen_at = timezone.now()
+        sr.save()
+
+        # Broadcast live tracking update via WebSockets
+        try:
+            from .notifications import broadcast_tracking_event
+            full_payload = _build_tracking_payload(sr, has_full_access=True)
+            broadcast_tracking_event(sr, event_type="technician_location_updated", custom_data=full_payload)
+        except Exception as b_err:
+            logger.warning(f"Error broadcasting live location: {b_err}")
+
+        return _success(
+            data=_build_tracking_payload(sr, has_full_access=True),
+            message="Technician live location updated successfully."
+        )
 
 
 class AdminSRRejectView(APIView):
@@ -1760,6 +2053,14 @@ class BookingVerifyStartOTPView(APIView):
             sr.otp_verified = True
             sr.status = "in_progress"
             sr.save(update_fields=["otp_verified", "status", "updated_at"])
+
+            try:
+                from .notifications import broadcast_tracking_event
+                full_payload = _build_tracking_payload(sr, has_full_access=True)
+                broadcast_tracking_event(sr, event_type="technician_status_updated", custom_data=full_payload)
+            except Exception as b_err:
+                logger.warning(f"Error broadcasting status update: {b_err}")
+
             return _success(
                 message="Customer verification code verified successfully.",
                 data={

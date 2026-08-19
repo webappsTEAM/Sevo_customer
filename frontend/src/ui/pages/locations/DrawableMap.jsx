@@ -174,7 +174,7 @@ function LocationLayers({ locations, onSelect, selectedId }) {
         {marker}
         <Circle
           center={[loc.lat, loc.lng]}
-          radius={loc.geofence_radius || 300}
+          radius={loc.geofence_radius || 5}
           pathOptions={{ color: borderColor, fillColor: color, fillOpacity: 0.1, weight: 1.5 }}
         />
       </React.Fragment>

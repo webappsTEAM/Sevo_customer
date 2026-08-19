@@ -15,10 +15,11 @@ import React, { useReducer, useRef, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   ArrowLeft, MapPin, Home, Briefcase, Tag,
-  User, Phone, Navigation, CheckCircle2, AlertCircle, Loader2,
+  User, Phone, Navigation, CheckCircle2, AlertCircle, Loader2, Lock,
 } from "lucide-react"
 import { useAuth } from "../../../state/auth/useAuth.js"
 import { apiCreateSavedAddress } from "../../../api/addressService.js"
+import { CustomerEntryFlowModal } from "../CustomerEntryFlowModal.jsx"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -144,6 +145,8 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
   const [state, dispatch] = useReducer(reducer, null, () => INIT(addressData, user))
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [pendingPayload, setPendingPayload] = useState(null)
   const flatRef = useRef(null)
 
   // Autofocus flat/house field on mount
@@ -163,6 +166,53 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
   }
   const touched = (name) => !!state.touched[name]
   const err     = (name) => state.errors[name]
+
+  // Sync user info into receiver fields if user logs in while form is open
+  useEffect(() => {
+    if (user) {
+      if (!state.receiver_name && user.firstName) {
+        dispatch({ type: "FIELD", name: "receiver_name", value: [user.firstName, user.lastName].filter(Boolean).join(" ") })
+      }
+      if (!state.receiver_phone && user.phone) {
+        dispatch({ type: "FIELD", name: "receiver_phone", value: user.phone })
+      }
+    }
+  }, [user])
+
+  const doSaveAddress = async (payload) => {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      let saved = null
+      try {
+        const res = await apiCreateSavedAddress(payload)
+        saved = res?.data ?? res
+        console.log("[AddressDetailsForm] saved address:", saved)
+      } catch (err) {
+        console.warn("[AddressDetailsForm] API save address warning, falling back:", err)
+        saved = { ...payload, id: `local_${Date.now()}` }
+      }
+
+      if (typeof onSubmit === "function") {
+        onSubmit(saved || payload)
+      }
+    } catch (err) {
+      console.error("[AddressDetailsForm] save error:", err)
+      const msg = err?.body?.message || err?.body?.detail || err?.message || "Couldn't save address, please try again."
+      setSaveError(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAuthComplete = async () => {
+    setShowAuthModal(false)
+    if (pendingPayload) {
+      const p = pendingPayload
+      setPendingPayload(null)
+      await doSaveAddress(p)
+    }
+  }
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
@@ -190,35 +240,14 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
       receiver_phone:   state.receiver_phone.replace(/\s/g, ""),
     }
 
-    setSaving(true)
-    setSaveError(null)
-    try {
-      let saved = null
-      if (user) {
-        try {
-          const res = await apiCreateSavedAddress(payload)
-          saved = res?.data ?? res
-          console.log("[AddressDetailsForm] saved address:", saved)
-        } catch (err) {
-          console.warn("[AddressDetailsForm] API save address warning, falling back:", err)
-          // Graceful fallback for address selection in current booking
-          saved = { ...payload, id: `local_${Date.now()}` }
-        }
-      } else {
-        // Guest user — pass location payload directly to caller
-        saved = { ...payload, id: `guest_${Date.now()}` }
-      }
-
-      if (typeof onSubmit === "function") {
-        onSubmit(saved || payload)
-      }
-    } catch (err) {
-      console.error("[AddressDetailsForm] save error:", err)
-      const msg = err?.body?.message || err?.body?.detail || err?.message || "Couldn't save address, please try again."
-      setSaveError(msg)
-    } finally {
-      setSaving(false)
+    // Require Customer Login before saving address
+    if (!user) {
+      setPendingPayload(payload)
+      setShowAuthModal(true)
+      return
     }
+
+    await doSaveAddress(payload)
   }
 
   const isFormValid = Object.keys(validate(state)).length === 0 && !saving
@@ -481,6 +510,12 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
         </motion.button>
       </div>
 
+        {/* Customer Entry OTP/Login Modal */}
+        <CustomerEntryFlowModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+          onComplete={handleAuthComplete}
+        />
       </div>
     </div>
   )

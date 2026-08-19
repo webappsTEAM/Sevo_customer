@@ -204,7 +204,6 @@ def request_otp(identifier: str, channel: str = OTPChannel.PHONE) -> dict:
                 code="RATE_LIMITED"
             )
 
-
     # Generate 6-digit OTP code & hash it
     otp_code = "".join([str(random.randint(0, 9)) for _ in range(6)])
     otp_hash = _hash_otp(clean_identifier, otp_code)
@@ -355,6 +354,7 @@ def verify_otp(identifier: str, otp_code: str, channel: str = OTPChannel.PHONE) 
 
         tokens = _get_tokens_for_user(customer)
 
+        from .serializers import UserSerializer
         return {
             "success": True,
             "data": {
@@ -362,7 +362,12 @@ def verify_otp(identifier: str, otp_code: str, channel: str = OTPChannel.PHONE) 
                 "profile_complete": customer.profile_complete,
                 "auth_token": tokens["access"],
                 "refresh_token": tokens["refresh"],
-                "customer_id": customer.id
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
+                "customer_id": customer.id,
+                "phone": customer.phone or customer.mobile_number or clean_identifier,
+                "email": customer.email or "",
+                "user": UserSerializer(customer).data,
             },
             "error": None,
             "meta": {}

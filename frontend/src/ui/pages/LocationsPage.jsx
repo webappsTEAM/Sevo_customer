@@ -843,7 +843,7 @@ export function LocationsPage() {
                       </Marker>
                       <Circle
                         center={[parseFloat(loc.lat), parseFloat(loc.lng)]}
-                        radius={loc.geofence_radius || 300}
+                        radius={loc.geofence_radius || 5}
                         pathOptions={{ color: "#6366F1", fillColor: "#6366F1", fillOpacity: 0.08, weight: 1.5 }}
                       />
                     </React.Fragment>

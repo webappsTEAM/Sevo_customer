@@ -13,7 +13,7 @@ import {
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
   Calculator, PaintRoller, Smartphone, MoreVertical, Truck, Copy, Radio,
-  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send
+  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2
 } from "lucide-react"
 import {
   apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError,
@@ -3336,16 +3336,160 @@ function StepBar({ step, total }) {
   )
 }
 
-/* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
-   MAIN PAGE
-   •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
+/* ── Cart Drawer Modal Component ── */
+export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToCheckout }) {
+  if (!isOpen) return null;
+
+  const itemTotal = (cart || []).reduce((sum, i) => sum + (i.price * (i.quantity || 1)), 0);
+  const totalCount = (cart || []).reduce((sum, i) => sum + (i.quantity || 1), 0);
+  const taxesFee = itemTotal > 0 ? 99 : 0;
+  const grandTotal = itemTotal + taxesFee;
+
+  const updateQuantity = (id, delta) => {
+    if (typeof setCart === "function") {
+      setCart(prev => {
+        if (!prev) return [];
+        return prev.map(item => {
+          if (item.id === id) {
+            const newQty = (item.quantity || 1) + delta;
+            return newQty > 0 ? { ...item, quantity: newQty } : null;
+          }
+          return item;
+        }).filter(Boolean);
+      });
+    }
+  };
+
+  const removeItem = (id) => {
+    if (typeof setCart === "function") {
+      setCart(prev => (prev || []).filter(item => item.id !== id));
+    }
+  };
+
+  const clearCart = () => {
+    if (typeof setCart === "function") {
+      setCart([]);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10060] bg-slate-900/60 backdrop-blur-sm flex justify-end" onClick={onClose}>
+      <motion.div
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", damping: 30, stiffness: 300 }}
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-md bg-white h-full flex flex-col shadow-2xl overflow-hidden font-sans"
+      >
+        {/* Top Header */}
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+              <ShoppingCart size={18} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base leading-tight">Your Cart Details</h3>
+              <p className="text-xs font-bold text-slate-500">{totalCount} {totalCount === 1 ? "service" : "services"} added</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors cursor-pointer">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Scrollable Cart Items Body */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {(!cart || cart.length === 0) ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+              <ShoppingCart size={48} className="mb-3 opacity-30 stroke-[1.5]" />
+              <p className="font-extrabold text-slate-700 text-base">Your cart is empty</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs">Explore our service packages and add items to your cart to get started.</p>
+            </div>
+          ) : (
+            <>
+              {/* Item Cards List */}
+              <div className="space-y-3">
+                {cart.map((item, idx) => (
+                  <div key={item.id || idx} className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm line-clamp-1">{item.name || item.displayName}</h4>
+                      <p className="text-xs font-black text-indigo-600 mt-0.5">₹{item.price}</p>
+                    </div>
+
+                    {/* Quantity Adjustment Buttons */}
+                    <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2 py-1 shadow-2xs shrink-0">
+                      <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 rounded-lg hover:bg-slate-100 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">
+                        -
+                      </button>
+                      <span className="text-xs font-black text-slate-900 min-w-[16px] text-center">{item.quantity || 1}</span>
+                      <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 rounded-lg hover:bg-slate-100 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">
+                        +
+                      </button>
+                    </div>
+
+                    {/* Remove Item Button */}
+                    <button onClick={() => removeItem(item.id)} className="text-slate-400 hover:text-rose-600 p-1.5 transition-colors cursor-pointer" title="Remove item">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pricing Breakdown Summary */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 text-xs font-bold text-slate-600">
+                <div className="flex justify-between">
+                  <span>Item Total</span>
+                  <span className="font-black text-slate-900">₹{itemTotal}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Taxes & Fee (incl. GST)</span>
+                  <span className="font-black text-slate-900">₹{taxesFee}</span>
+                </div>
+                <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-black text-slate-900">
+                  <span>Total Amount</span>
+                  <span className="text-indigo-600">₹{grandTotal}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        {cart && cart.length > 0 && (
+          <div className="p-4 border-t border-slate-100 bg-white space-y-2">
+            <button
+              onClick={() => {
+                onClose();
+                if (typeof onProceedToCheckout === "function") {
+                  onProceedToCheckout();
+                }
+              }}
+              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer active:scale-[0.98] transition-all uppercase tracking-wider"
+            >
+              <span>Proceed to Checkout</span>
+              <ChevronRight size={16} strokeWidth={3} />
+            </button>
+
+            <button
+              onClick={clearCart}
+              className="w-full py-2 text-xs font-bold text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-center"
+            >
+              Clear Cart
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
 
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    CUSTOMER ACCOUNT MODAL
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 
 export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChangeTab }) {
-  const { user, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
+  const { user, logout, refreshMe, loginWithGoogle, loginWithCustomerGoogle } = useAuth()
   const [internalTab, setInternalTab] = useState(propActiveTab || "My Profile")
   const activeTab = propActiveTab || internalTab
   const setActiveTab = (tab) => {
@@ -3359,8 +3503,31 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [loginError, setLoginError] = useState('')
 
   const handleLogout = async () => {
-    await apiLogout()
-    await refreshMe()
+    try {
+      if (typeof logout === "function") {
+        await logout()
+      } else {
+        await apiLogout()
+      }
+    } catch (err) {
+      console.warn("Logout warning:", err)
+    } finally {
+      // Clear all customer tokens & storage
+      try {
+        localStorage.removeItem("caltrack_customer_phone")
+        localStorage.removeItem("caltrack_user")
+        localStorage.removeItem("calservice_customer_token")
+        sessionStorage.removeItem("calservice_customer_token")
+        sessionStorage.removeItem("calservice_last_booking")
+        sessionStorage.removeItem("calservice_active_tracking_id")
+      } catch (_) {}
+      if (typeof onClose === "function") {
+        onClose()
+      }
+      if (typeof refreshMe === "function") {
+        await refreshMe().catch(() => {})
+      }
+    }
   }
 
   const googleLoginHandler = useGoogleLogin({
@@ -4357,17 +4524,17 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Assigned Technician</div>
                             <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              👤 {(b.technician?.name || b.technician_name || b.assigned_employee?.full_name || b.assigned_employee?.user?.first_name || (['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) ? 'Suresh Kumar' : 'Not assigned yet'))}
+                              👤 {(b.technician?.name || b.technician_name || b.assigned_employee?.full_name || (['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) ? 'Service Partner' : 'Not assigned yet'))}
                               {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (
                                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>✓ Verified Partner</span>
                               )}
                             </div>
-                            {(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone || (['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress'].includes(b.status) ? '9845012345' : null)) && (
+                            {(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone) && (
                               <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <a href={`tel:${b.technician?.phone || b.technician_phone || b.assigned_employee?.phone || '9845012345'}`} style={{ color: '#059669', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  <Phone size={12} /> {b.technician?.phone || b.technician_phone || b.assigned_employee?.phone || '9845012345'}
+                                <a href={`tel:${b.technician?.phone || b.technician_phone || b.assigned_employee?.phone}`} style={{ color: '#059669', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <Phone size={12} /> {b.technician?.phone || b.technician_phone || b.assigned_employee?.phone}
                                 </a>
-                                <a href={`https://wa.me/91${(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone || '9845012345').replace(/\D/g,'')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <a href={`https://wa.me/91${(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone).replace(/\D/g,'')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <MessageSquare size={12} /> WhatsApp
                                 </a>
                               </div>
@@ -8115,6 +8282,7 @@ export function BookingPage() {
   })
   const [loading, setLoading] = useState(false)
   const [showCartMenu, setShowCartMenu] = useState(false)
+  const [showCartDrawer, setShowCartDrawer] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [error, setError] = useState(null)
   const [successData, setSuccessData] = useState(() => {
@@ -8174,15 +8342,26 @@ export function BookingPage() {
 
   // Auto-sync customer name, phone, and email from authenticated user session
   useEffect(() => {
-    if (user) {
+    let savedPhone = ""
+    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
+    if (user || savedPhone) {
       setFormData(prev => ({
         ...prev,
-        customer_name: prev.customer_name || user.full_name || user.fullName || user.first_name || user.username || "Customer",
-        phone: prev.phone || user.phone || user.mobile || "9150632938",
-        email: prev.email || user.email || ""
+        customer_name: (prev.customer_name && prev.customer_name !== "Customer") ? prev.customer_name : (user?.full_name || user?.fullName || user?.first_name || user?.username || "Customer"),
+        phone: prev.phone || user?.phone || user?.mobile || user?.mobile_number || savedPhone || "",
+        email: prev.email || user?.email || ""
       }))
     }
   }, [user])
+
+  // ALWAYS enforce Login / Signup first before proceeding through Checkout
+  useEffect(() => {
+    let savedPhone = ""
+    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
+    if (!user && !savedPhone && step > 0 && !trackParam) {
+      setShowCustomerEntryModal(true)
+    }
+  }, [user, step, trackParam])
 
   useEffect(() => { contentRef.current?.scrollTo({ top: 0, behavior: "smooth" }) }, [step])
 
@@ -8537,13 +8716,39 @@ export function BookingPage() {
         {showCustomerEntryModal && (
           <CustomerEntryFlowModal
             isOpen={showCustomerEntryModal}
-            onClose={() => setShowCustomerEntryModal(false)}
+            onClose={() => {
+              setShowCustomerEntryModal(false)
+              let savedPhone = ""
+              try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
+              if (!user && !savedPhone && step > 0 && !trackParam) {
+                navigate(routes.landing || "/home", { replace: true })
+              }
+            }}
             onComplete={(locData) => {
               setShowCustomerEntryModal(false)
               // After login, sync user data into booking form
               setTimeout(() => {
                 refreshMe && refreshMe()
               }, 200)
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Cart Summary Drawer Modal */}
+      <AnimatePresence>
+        {showCartDrawer && (
+          <CartDrawerModal
+            isOpen={showCartDrawer}
+            onClose={() => setShowCartDrawer(false)}
+            cart={cart}
+            setCart={setCart}
+            onProceedToCheckout={() => {
+              setShowCartDrawer(false)
+              setStep(3)
+              if (!user) {
+                setShowCustomerEntryModal(true)
+              }
             }}
           />
         )}
@@ -8582,13 +8787,13 @@ export function BookingPage() {
           <div className="flex items-center gap-3">
             {cart?.length > 0 && (
               <button
-                onClick={() => setStep(3)}
+                onClick={() => setShowCartDrawer(true)}
                 className="relative p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 text-slate-700 hover:text-indigo-600 transition-all cursor-pointer"
                 title="View Cart"
               >
                 <ShoppingCart size={18} />
                 <span className="absolute -top-1.5 -right-1.5 bg-indigo-600 text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
-                  {cart.length}
+                  {cart.reduce((sum, item) => sum + (item.quantity || 1), 0)}
                 </span>
               </button>
             )}
