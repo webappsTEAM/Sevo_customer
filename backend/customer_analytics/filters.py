@@ -126,8 +126,13 @@ def get_annotated_customers(request):
     params = request.query_params
     company = getattr(request, "company", None)
     
+    from django.db.models.functions import Coalesce
+    
     # Base query from customer_users table
     qs = CustomerUser.objects.all()
+    qs = qs.annotate(
+        display_customer_id=Coalesce("user__customer_identity__id", "id")
+    )
     if company:
         qs = qs.filter(company=company)
         
@@ -212,15 +217,21 @@ def get_annotated_customers(request):
             )
             
     # Sorting
-    sort_param = params.get("sort", "-last_booking_date")
-    if sort_param == "-bookings":
-        qs = qs.order_by("-total_bookings", "-id")
+    sort_param = params.get("sort", "-last_booking_at")
+    if sort_param == "bookings":
+        qs = qs.order_by("total_bookings", "display_customer_id")
+    elif sort_param == "-bookings":
+        qs = qs.order_by("-total_bookings", "-display_customer_id")
+    elif sort_param == "value":
+        qs = qs.order_by("total_spent", "display_customer_id")
     elif sort_param == "-value":
-        qs = qs.order_by("-total_spent", "-id")
+        qs = qs.order_by("-total_spent", "-display_customer_id")
+    elif sort_param == "last_booking_at":
+        qs = qs.order_by("last_booking_date", "display_customer_id")
     elif sort_param == "-last_booking_at":
-        qs = qs.order_by("-last_booking_date", "-id")
+        qs = qs.order_by("-last_booking_date", "-display_customer_id")
     else:
         # Default fallback
-        qs = qs.order_by("-last_booking_date", "-id")
+        qs = qs.order_by("-last_booking_date", "-display_customer_id")
         
     return qs

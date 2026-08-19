@@ -158,10 +158,18 @@ class CustomerAnalyticsTests(APITestCase):
         Tests GET /api/customers/export/ endpoint.
         """
         url = reverse("customer-export")
+        
+        # Test CSV export
         res = self.client.get(url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res["Content-Type"], "text/csv")
         self.assertTrue(res.has_header("Content-Disposition"))
+
+        # Test PDF export
+        res_pdf = self.client.get(f"{url}?export_format=pdf")
+        self.assertEqual(res_pdf.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_pdf["Content-Type"], "application/pdf")
+        self.assertTrue(res_pdf.has_header("Content-Disposition"))
 
     def test_customer_merge_and_unmerge(self):
         """
