@@ -1865,6 +1865,7 @@ export function CatalogPackagesPage() {
   const [toast, showToast] = useToast()
   const [serviceCustomizing, setServiceCustomizing] = useState(null)
   const [customizerTab, setCustomizerTab] = useState("general")
+  const [editingField, setEditingField] = useState({ field: null, index: null })
 
   const loadData = async () => {
     setLoading(true)
@@ -2901,55 +2902,81 @@ export function CatalogPackagesPage() {
       customization: {
         rating: cust.rating || defaults.rating || "4.8",
         reviews: cust.reviews || defaults.reviews || "15K",
-        points: Array.isArray(cust.points) && cust.points.length > 0 
+        points: (Array.isArray(cust.points) && cust.points.length > 0 
                   ? cust.points 
-                  : (Array.isArray(defaults.points) ? defaults.points : []),
-        benefits: Array.isArray(cust.benefits) && cust.benefits.length > 0 
+                  : (Array.isArray(defaults.points) ? defaults.points : [])).map(pt => typeof pt === "string" ? { text: pt, checked: true } : pt),
+        benefits: (Array.isArray(cust.benefits) && cust.benefits.length > 0 
                   ? cust.benefits 
-                  : (Array.isArray(defaults.benefits) ? defaults.benefits : []),
+                  : (Array.isArray(defaults.benefits) ? defaults.benefits : [])).map(b => {
+                    const bTitle = typeof b === "string" ? b : (b.title || "");
+                    const bIcon = typeof b === "string" ? "award" : (b.icon || "award");
+                    const bChecked = typeof b === "string" ? true : (b.checked !== false);
+                    return { title: bTitle, icon: bIcon, checked: bChecked };
+                  }),
         includes_heading: cust.includes_heading || defaults.includes_heading || "WHAT'S INCLUDED",
-        includes: Array.isArray(cust.includes) && cust.includes.length > 0 
+        includes: (Array.isArray(cust.includes) && cust.includes.length > 0 
                   ? cust.includes 
-                  : (Array.isArray(defaults.includes) ? defaults.includes : []),
+                  : (Array.isArray(defaults.includes) ? defaults.includes : [])).map(item => typeof item === "string" ? { text: item, checked: true } : item),
         free_inspection_heading: cust.free_inspection_heading || defaults.free_inspection_heading || "FREE SITE INSPECTION INCLUDED",
         free_inspection_enabled: cust.free_inspection_enabled !== undefined 
                   ? cust.free_inspection_enabled 
                   : (defaults.free_inspection_enabled !== undefined ? defaults.free_inspection_enabled : true),
-        inspection_highlights: Array.isArray(cust.inspection_highlights) && cust.inspection_highlights.length > 0 
+        inspection_highlights: (Array.isArray(cust.inspection_highlights) && cust.inspection_highlights.length > 0 
                   ? cust.inspection_highlights 
-                  : (Array.isArray(defaults.inspection_highlights) ? defaults.inspection_highlights : []),
+                  : (Array.isArray(defaults.inspection_highlights) ? defaults.inspection_highlights : [])).map(item => typeof item === "string" ? { text: item, checked: true } : item),
         excludes_heading: cust.excludes_heading || defaults.excludes_heading || "WHAT'S NOT INCLUDED",
         excludes_enabled: cust.excludes_enabled !== undefined 
                   ? cust.excludes_enabled 
                   : (defaults.excludes_enabled !== undefined ? defaults.excludes_enabled : true),
-        excludes: Array.isArray(cust.excludes) && cust.excludes.length > 0 
+        excludes: (Array.isArray(cust.excludes) && cust.excludes.length > 0 
                   ? cust.excludes 
-                  : (Array.isArray(defaults.excludes) ? defaults.excludes : []),
+                  : (Array.isArray(defaults.excludes) ? defaults.excludes : [])).map(item => typeof item === "string" ? { text: item, checked: true } : item),
         steps_heading: cust.steps_heading || defaults.steps_heading || "HOW IT WORKS",
-        steps: Array.isArray(cust.steps) && cust.steps.length > 0 
+        steps: (Array.isArray(cust.steps) && cust.steps.length > 0 
                   ? cust.steps 
-                  : (Array.isArray(defaults.steps) ? defaults.steps : []),
-        faqs: Array.isArray(cust.faqs) && cust.faqs.length > 0 
+                  : (Array.isArray(defaults.steps) ? defaults.steps : [])).map(s => ({
+                    title: s.title || "",
+                    icon: s.icon || "",
+                    desc: s.desc || "",
+                    checked: s.checked !== false
+                  })),
+        faqs_heading: cust.faqs_heading || defaults.faqs_heading || "Frequently Asked Questions",
+        faqs: (Array.isArray(cust.faqs) && cust.faqs.length > 0 
                   ? cust.faqs 
-                  : (Array.isArray(defaults.faqs) ? defaults.faqs : []),
+                  : (Array.isArray(defaults.faqs) ? defaults.faqs : [])).map(f => ({
+                    q: f.q || f.question || "",
+                    a: f.a || f.answer || "",
+                    checked: f.checked !== false
+                  })),
         starting_fare: cust.starting_fare || defaults.starting_fare || "",
         button_text: cust.button_text || defaults.button_text || "View details",
         estimate_cta: cust.estimate_cta || defaults.estimate_cta || "Get Estimate",
         suboptions_heading: cust.suboptions_heading || defaults.suboptions_heading || "",
-        faqs_heading: cust.faqs_heading || defaults.faqs_heading || "",
         reviews_heading: cust.reviews_heading || defaults.reviews_heading || "",
-        price_list: Array.isArray(cust.price_list) && cust.price_list.length > 0
-                  ? cust.price_list
-                  : (Array.isArray(defaults.price_list) ? defaults.price_list : []),
-        paint_types: Array.isArray(cust.paint_types) && cust.paint_types.length > 0
-                  ? cust.paint_types
-                  : (Array.isArray(defaults.paint_types) ? defaults.paint_types : []),
+        price_list: (Array.isArray(cust.price_list) && cust.price_list.length > 0 
+                  ? cust.price_list 
+                  : (Array.isArray(defaults.price_list) ? defaults.price_list : [])).map(p => ({
+                    type: p.type || "",
+                    price: p.price || "",
+                    checked: p.checked !== false
+                  })),
+        paint_types: (Array.isArray(cust.paint_types) && cust.paint_types.length > 0 
+                  ? cust.paint_types 
+                  : (Array.isArray(defaults.paint_types) ? defaults.paint_types : [])).map(pt => ({
+                    id: pt.id || "",
+                    name: pt.name || "",
+                    price: pt.price || 0,
+                    type: pt.type || "",
+                    image: pt.image || "",
+                    checked: pt.checked !== false
+                  })),
         reviews_list: Array.isArray(cust.reviews_list) && cust.reviews_list.length > 0
                   ? cust.reviews_list
                   : (Array.isArray(defaults.reviews_list) ? defaults.reviews_list : []),
       }
     })
     setCustomizerTab("general")
+    setEditingField({ field: null, index: null })
   }
 
   const handleServiceCustomizerSave = async (e) => {
@@ -3652,51 +3679,54 @@ export function CatalogPackagesPage() {
           onClose={() => setServiceCustomizing(null)}
         >
           <form onSubmit={handleServiceCustomizerSave} className="flex flex-col gap-6 font-sans text-left text-slate-800 dark:text-slate-200">
-            {/* Header Banner */}
-            <div className={`p-5 bg-gradient-to-r ${
-              activeCategoryKey === "paintings" 
-                ? "from-emerald-600 via-emerald-550 to-teal-600" 
-                : (activeCategoryKey === "mason" ? "from-amber-600 via-amber-550 to-yellow-600" : "from-indigo-650 via-indigo-600 to-violet-600")
-            } rounded-3xl border border-white/10 text-white flex items-center justify-between shadow-md`}>
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center backdrop-blur-md">
-                  {React.createElement(ActiveIcon || Palette, { className: "w-6 h-6 text-white" })}
+            {/* Sticky Header Section */}
+            <div className="sticky -top-6 sm:-top-7 bg-white dark:bg-slate-900 z-50 pt-6 sm:pt-7 pb-4 -mx-6 sm:-mx-7 px-6 sm:px-7 flex flex-col gap-4 border-b border-slate-100 dark:border-slate-800">
+              {/* Header Banner */}
+              <div className={`p-5 bg-gradient-to-r ${
+                activeCategoryKey === "paintings" 
+                  ? "from-emerald-600 via-emerald-550 to-teal-600" 
+                  : (activeCategoryKey === "mason" ? "from-amber-600 via-amber-550 to-yellow-600" : "from-indigo-650 via-indigo-600 to-violet-600")
+              } rounded-3xl border border-white/10 text-white flex items-center justify-between shadow-md`}>
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center backdrop-blur-md">
+                    {React.createElement(ActiveIcon || Palette, { className: "w-6 h-6 text-white" })}
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black text-white/80 uppercase tracking-widest leading-none">Sub-Service Page Settings</span>
+                    <div className="text-base md:text-lg font-black mt-0.5 tracking-tight">{activePillar.name}: {serviceCustomizing.name}</div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[10px] font-black text-white/80 uppercase tracking-widest leading-none">Sub-Service Page Settings</span>
-                  <div className="text-base md:text-lg font-black mt-0.5 tracking-tight">{activePillar.name}: {serviceCustomizing.name}</div>
-                </div>
+                <span className="px-3.5 py-1.5 bg-white/20 text-white text-[10px] font-black uppercase tracking-wider rounded-xl backdrop-blur-md border border-white/10 shadow-xs">
+                  {activeCategoryKey === "paintings" ? "Painting Customizer" : (activeCategoryKey === "mason" ? "Masonry Customizer" : `${activePillar.shortName.split(" ")[0]} Customizer`)}
+                </span>
               </div>
-              <span className="px-3.5 py-1.5 bg-white/20 text-white text-[10px] font-black uppercase tracking-wider rounded-xl backdrop-blur-md border border-white/10 shadow-xs">
-                {activeCategoryKey === "paintings" ? "Painting Customizer" : (activeCategoryKey === "mason" ? "Masonry Customizer" : `${activePillar.shortName.split(" ")[0]} Customizer`)}
-              </span>
-            </div>
 
-            {/* Pill Tabs Selector */}
-            <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100/70 dark:bg-slate-900/60 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 no-print">
-              {[
-                { id: "general", label: "Card & General Settings", icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
-                { id: "content", label: "Includes & Excludes", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
-                { id: "details", label: "Badges, Steps & FAQs", icon: <Layers className="w-3.5 h-3.5" /> },
-                { id: "pricing", label: "Price List & Materials", icon: <DollarSign className="w-3.5 h-3.5" /> },
-              ].map((t) => {
-                const isSelected = customizerTab === t.id
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setCustomizerTab(t.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
-                      isSelected
-                        ? "bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 shadow-xs border border-slate-200/50 dark:border-slate-700/50"
-                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                    }`}
-                  >
-                    {t.icon}
-                    <span>{t.label}</span>
-                  </button>
-                )
-              })}
+              {/* Pill Tabs Selector */}
+              <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100/70 dark:bg-slate-900/60 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 no-print">
+                {[
+                  { id: "general", label: "Card & General Settings", icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
+                  { id: "content", label: "Includes & Excludes", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+                  { id: "details", label: "Badges, Steps & FAQs", icon: <Layers className="w-3.5 h-3.5" /> },
+                  { id: "pricing", label: "Price List & Materials", icon: <DollarSign className="w-3.5 h-3.5" /> },
+                ].map((t) => {
+                  const isSelected = customizerTab === t.id
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setCustomizerTab(t.id)}
+                      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 shadow-xs border border-slate-200/50 dark:border-slate-700/50"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      {t.icon}
+                      <span>{t.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             {/* Tab 1: General & Card settings */}
@@ -3786,7 +3816,7 @@ export function CatalogPackagesPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Input
                     label="Marketing Rating"
-                    value={serviceCustomizing.customization.rating || "4.8"}
+                    value={serviceCustomizing.customization.rating ?? ""}
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, rating: e.target.value };
                       setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
@@ -3795,7 +3825,7 @@ export function CatalogPackagesPage() {
                   <Input
                     label="Marketing Rating Count"
                     placeholder="e.g. 15K Ratings, 2.5 Lakhs"
-                    value={serviceCustomizing.customization.reviews || "15K"}
+                    value={serviceCustomizing.customization.reviews ?? ""}
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, reviews: e.target.value };
                       setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
@@ -3803,7 +3833,7 @@ export function CatalogPackagesPage() {
                   />
                   <Input
                     label="Ratings & Reviews Section Heading"
-                    value={serviceCustomizing.customization.reviews_heading || "Ratings & Reviews"}
+                    value={serviceCustomizing.customization.reviews_heading ?? ""}
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, reviews_heading: e.target.value };
                       setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
@@ -3814,7 +3844,7 @@ export function CatalogPackagesPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Input
                     label="View Details Button Text"
-                    value={serviceCustomizing.customization.button_text || "View details"}
+                    value={serviceCustomizing.customization.button_text ?? ""}
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, button_text: e.target.value };
                       setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
@@ -3822,7 +3852,7 @@ export function CatalogPackagesPage() {
                   />
                   <Input
                     label="Get Estimate Button CTA"
-                    value={serviceCustomizing.customization.estimate_cta || "Get Estimate"}
+                    value={serviceCustomizing.customization.estimate_cta ?? ""}
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, estimate_cta: e.target.value };
                       setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
@@ -3831,7 +3861,7 @@ export function CatalogPackagesPage() {
                   <Input
                     label="Override Starting Fare"
                     type="number"
-                    value={serviceCustomizing.customization.starting_fare || ""}
+                    value={serviceCustomizing.customization.starting_fare ?? ""}
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, starting_fare: e.target.value };
                       setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
@@ -3858,18 +3888,62 @@ export function CatalogPackagesPage() {
                     {serviceCustomizing.customization.points.map((pt, idx) => (
                       <div key={idx} className="flex items-center gap-2">
                         <input
-                          type="text"
-                          value={pt}
+                          type="checkbox"
+                          checked={pt.checked !== false}
                           onChange={(e) => {
                             const updated = [...serviceCustomizing.customization.points];
-                            updated[idx] = e.target.value;
+                            updated[idx] = { ...pt, checked: e.target.checked };
                             setServiceCustomizing({
                               ...serviceCustomizing,
                               customization: { ...serviceCustomizing.customization, points: updated }
                             });
                           }}
-                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
                         />
+                        <input
+                          id={`input-points-${idx}`}
+                          type="text"
+                          readOnly={editingField.field !== "points" || editingField.index !== idx}
+                          value={pt.text || ""}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.points];
+                            updated[idx] = { ...pt, text: e.target.value };
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, points: updated }
+                            });
+                          }}
+                          className={`flex-1 text-xs border rounded-lg px-2.5 py-1.5 transition-all ${
+                            editingField.field === "points" && editingField.index === idx
+                              ? "border-blue-500 bg-white ring-2 ring-blue-100"
+                              : "border-slate-200 bg-slate-50 text-slate-700 select-none cursor-not-allowed"
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (editingField.field === "points" && editingField.index === idx) {
+                              setEditingField({ field: null, index: null });
+                            } else {
+                              setEditingField({ field: "points", index: idx });
+                              setTimeout(() => {
+                                document.getElementById(`input-points-${idx}`)?.focus();
+                              }, 50);
+                            }
+                          }}
+                          title={editingField.field === "points" && editingField.index === idx ? "Save item" : "Edit item"}
+                          className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+                            editingField.field === "points" && editingField.index === idx
+                              ? "text-green-600 hover:bg-green-50"
+                              : "text-slate-400 hover:text-blue-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          {editingField.field === "points" && editingField.index === idx ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Edit2 className="w-4 h-4" />
+                          )}
+                        </button>
                         <button
                           type="button"
                           onClick={() => {
@@ -3892,13 +3966,18 @@ export function CatalogPackagesPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      const newIndex = serviceCustomizing.customization.points.length;
                       setServiceCustomizing({
                         ...serviceCustomizing,
                         customization: {
                           ...serviceCustomizing.customization,
-                          points: [...serviceCustomizing.customization.points, ""]
+                          points: [...serviceCustomizing.customization.points, { text: "", checked: true }]
                         }
                       });
+                      setEditingField({ field: "points", index: newIndex });
+                      setTimeout(() => {
+                        document.getElementById(`input-points-${newIndex}`)?.focus();
+                      }, 50);
                     }}
                     className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
                   >
@@ -3916,7 +3995,7 @@ export function CatalogPackagesPage() {
                   <span className="text-xs font-bold text-slate-800">Sub-Options List Heading (e.g. What would you like to inspect?)</span>
                   <Input
                     label="Section Heading"
-                    value={serviceCustomizing.customization.suboptions_heading || ""}
+                    value={serviceCustomizing.customization.suboptions_heading ?? ""}
                     placeholder="What Would You Like to Inspect?"
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, suboptions_heading: e.target.value };
@@ -3932,7 +4011,7 @@ export function CatalogPackagesPage() {
                   </div>
                   <Input
                     label="Section Heading"
-                    value={serviceCustomizing.customization.includes_heading || "WHAT'S INCLUDED"}
+                    value={serviceCustomizing.customization.includes_heading ?? ""}
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, includes_heading: e.target.value };
                       setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
@@ -3942,18 +4021,62 @@ export function CatalogPackagesPage() {
                     {serviceCustomizing.customization.includes.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-2">
                         <input
-                          type="text"
-                          value={item}
+                          type="checkbox"
+                          checked={item.checked !== false}
                           onChange={(e) => {
                             const updated = [...serviceCustomizing.customization.includes];
-                            updated[idx] = e.target.value;
+                            updated[idx] = { ...item, checked: e.target.checked };
                             setServiceCustomizing({
                               ...serviceCustomizing,
                               customization: { ...serviceCustomizing.customization, includes: updated }
                             });
                           }}
-                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
                         />
+                        <input
+                          id={`input-includes-${idx}`}
+                          type="text"
+                          readOnly={editingField.field !== "includes" || editingField.index !== idx}
+                          value={item.text || ""}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.includes];
+                            updated[idx] = { ...item, text: e.target.value };
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, includes: updated }
+                            });
+                          }}
+                          className={`flex-1 text-xs border rounded-lg px-2.5 py-1.5 transition-all ${
+                            editingField.field === "includes" && editingField.index === idx
+                              ? "border-blue-500 bg-white ring-2 ring-blue-100"
+                              : "border-slate-200 bg-slate-50 text-slate-700 select-none cursor-not-allowed"
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (editingField.field === "includes" && editingField.index === idx) {
+                              setEditingField({ field: null, index: null });
+                            } else {
+                              setEditingField({ field: "includes", index: idx });
+                              setTimeout(() => {
+                                document.getElementById(`input-includes-${idx}`)?.focus();
+                              }, 50);
+                            }
+                          }}
+                          title={editingField.field === "includes" && editingField.index === idx ? "Save item" : "Edit item"}
+                          className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+                            editingField.field === "includes" && editingField.index === idx
+                              ? "text-green-600 hover:bg-green-50"
+                              : "text-slate-400 hover:text-blue-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          {editingField.field === "includes" && editingField.index === idx ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Edit2 className="w-4 h-4" />
+                          )}
+                        </button>
                         <button
                           type="button"
                           onClick={() => {
@@ -3976,13 +4099,18 @@ export function CatalogPackagesPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      const newIndex = serviceCustomizing.customization.includes.length;
                       setServiceCustomizing({
                         ...serviceCustomizing,
                         customization: {
                           ...serviceCustomizing.customization,
-                          includes: [...serviceCustomizing.customization.includes, ""]
+                          includes: [...serviceCustomizing.customization.includes, { text: "", checked: true }]
                         }
                       });
+                      setEditingField({ field: "includes", index: newIndex });
+                      setTimeout(() => {
+                        document.getElementById(`input-includes-${newIndex}`)?.focus();
+                      }, 50);
                     }}
                     className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
                   >
@@ -4010,7 +4138,7 @@ export function CatalogPackagesPage() {
                   <Input
                     label="Section Heading"
                     disabled={!serviceCustomizing.customization.excludes_enabled}
-                    value={serviceCustomizing.customization.excludes_heading || "WHAT'S NOT INCLUDED"}
+                    value={serviceCustomizing.customization.excludes_heading ?? ""}
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, excludes_heading: e.target.value };
                       setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
@@ -4020,19 +4148,65 @@ export function CatalogPackagesPage() {
                     {serviceCustomizing.customization.excludes.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-2">
                         <input
-                          type="text"
+                          type="checkbox"
                           disabled={!serviceCustomizing.customization.excludes_enabled}
-                          value={item}
+                          checked={item.checked !== false}
                           onChange={(e) => {
                             const updated = [...serviceCustomizing.customization.excludes];
-                            updated[idx] = e.target.value;
+                            updated[idx] = { ...item, checked: e.target.checked };
                             setServiceCustomizing({
                               ...serviceCustomizing,
                               customization: { ...serviceCustomizing.customization, excludes: updated }
                             });
                           }}
-                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600 disabled:opacity-50"
                         />
+                        <input
+                          id={`input-excludes-${idx}`}
+                          type="text"
+                          disabled={!serviceCustomizing.customization.excludes_enabled}
+                          readOnly={editingField.field !== "excludes" || editingField.index !== idx}
+                          value={item.text || ""}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.excludes];
+                            updated[idx] = { ...item, text: e.target.value };
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, excludes: updated }
+                            });
+                          }}
+                          className={`flex-1 text-xs border rounded-lg px-2.5 py-1.5 transition-all ${
+                            editingField.field === "excludes" && editingField.index === idx
+                              ? "border-blue-500 bg-white ring-2 ring-blue-100"
+                              : "border-slate-200 bg-slate-50 text-slate-700 select-none cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          disabled={!serviceCustomizing.customization.excludes_enabled}
+                          onClick={() => {
+                            if (editingField.field === "excludes" && editingField.index === idx) {
+                              setEditingField({ field: null, index: null });
+                            } else {
+                              setEditingField({ field: "excludes", index: idx });
+                              setTimeout(() => {
+                                document.getElementById(`input-excludes-${idx}`)?.focus();
+                              }, 50);
+                            }
+                          }}
+                          title={editingField.field === "excludes" && editingField.index === idx ? "Save item" : "Edit item"}
+                          className={`p-1.5 rounded-lg cursor-pointer transition-colors disabled:opacity-50 ${
+                            editingField.field === "excludes" && editingField.index === idx
+                              ? "text-green-600 hover:bg-green-50"
+                              : "text-slate-400 hover:text-blue-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          {editingField.field === "excludes" && editingField.index === idx ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Edit2 className="w-4 h-4" />
+                          )}
+                        </button>
                         <button
                           type="button"
                           disabled={!serviceCustomizing.customization.excludes_enabled}
@@ -4057,13 +4231,18 @@ export function CatalogPackagesPage() {
                     type="button"
                     disabled={!serviceCustomizing.customization.excludes_enabled}
                     onClick={() => {
+                      const newIndex = serviceCustomizing.customization.excludes.length;
                       setServiceCustomizing({
                         ...serviceCustomizing,
                         customization: {
                           ...serviceCustomizing.customization,
-                          excludes: [...serviceCustomizing.customization.excludes, ""]
+                          excludes: [...serviceCustomizing.customization.excludes, { text: "", checked: true }]
                         }
                       });
+                      setEditingField({ field: "excludes", index: newIndex });
+                      setTimeout(() => {
+                        document.getElementById(`input-excludes-${newIndex}`)?.focus();
+                      }, 50);
                     }}
                     className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer disabled:opacity-50"
                   >
@@ -4091,7 +4270,7 @@ export function CatalogPackagesPage() {
                   <Input
                     label="Section Heading"
                     disabled={!serviceCustomizing.customization.free_inspection_enabled}
-                    value={serviceCustomizing.customization.free_inspection_heading || "FREE SITE INSPECTION INCLUDED"}
+                    value={serviceCustomizing.customization.free_inspection_heading ?? ""}
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, free_inspection_heading: e.target.value };
                       setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
@@ -4101,19 +4280,65 @@ export function CatalogPackagesPage() {
                     {serviceCustomizing.customization.inspection_highlights.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-2">
                         <input
-                          type="text"
+                          type="checkbox"
                           disabled={!serviceCustomizing.customization.free_inspection_enabled}
-                          value={item}
+                          checked={item.checked !== false}
                           onChange={(e) => {
                             const updated = [...serviceCustomizing.customization.inspection_highlights];
-                            updated[idx] = e.target.value;
+                            updated[idx] = { ...item, checked: e.target.checked };
                             setServiceCustomizing({
                               ...serviceCustomizing,
                               customization: { ...serviceCustomizing.customization, inspection_highlights: updated }
                             });
                           }}
-                          className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600 disabled:opacity-50"
                         />
+                        <input
+                          id={`input-highlights-${idx}`}
+                          type="text"
+                          disabled={!serviceCustomizing.customization.free_inspection_enabled}
+                          readOnly={editingField.field !== "highlights" || editingField.index !== idx}
+                          value={item.text || ""}
+                          onChange={(e) => {
+                            const updated = [...serviceCustomizing.customization.inspection_highlights];
+                            updated[idx] = { ...item, text: e.target.value };
+                            setServiceCustomizing({
+                              ...serviceCustomizing,
+                              customization: { ...serviceCustomizing.customization, inspection_highlights: updated }
+                            });
+                          }}
+                          className={`flex-1 text-xs border rounded-lg px-2.5 py-1.5 transition-all ${
+                            editingField.field === "highlights" && editingField.index === idx
+                              ? "border-blue-500 bg-white ring-2 ring-blue-100"
+                              : "border-slate-200 bg-slate-50 text-slate-700 select-none cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          disabled={!serviceCustomizing.customization.free_inspection_enabled}
+                          onClick={() => {
+                            if (editingField.field === "highlights" && editingField.index === idx) {
+                              setEditingField({ field: null, index: null });
+                            } else {
+                              setEditingField({ field: "highlights", index: idx });
+                              setTimeout(() => {
+                                document.getElementById(`input-highlights-${idx}`)?.focus();
+                              }, 50);
+                            }
+                          }}
+                          title={editingField.field === "highlights" && editingField.index === idx ? "Save item" : "Edit item"}
+                          className={`p-1.5 rounded-lg cursor-pointer transition-colors disabled:opacity-50 ${
+                            editingField.field === "highlights" && editingField.index === idx
+                              ? "text-green-600 hover:bg-green-50"
+                              : "text-slate-400 hover:text-blue-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          {editingField.field === "highlights" && editingField.index === idx ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Edit2 className="w-4 h-4" />
+                          )}
+                        </button>
                         <button
                           type="button"
                           disabled={!serviceCustomizing.customization.free_inspection_enabled}
@@ -4138,13 +4363,18 @@ export function CatalogPackagesPage() {
                     type="button"
                     disabled={!serviceCustomizing.customization.free_inspection_enabled}
                     onClick={() => {
+                      const newIndex = serviceCustomizing.customization.inspection_highlights.length;
                       setServiceCustomizing({
                         ...serviceCustomizing,
                         customization: {
                           ...serviceCustomizing.customization,
-                          inspection_highlights: [...serviceCustomizing.customization.inspection_highlights, ""]
+                          inspection_highlights: [...serviceCustomizing.customization.inspection_highlights, { text: "", checked: true }]
                         }
                       });
+                      setEditingField({ field: "highlights", index: newIndex });
+                      setTimeout(() => {
+                        document.getElementById(`input-highlights-${newIndex}`)?.focus();
+                      }, 50);
                     }}
                     className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer disabled:opacity-50"
                   >
@@ -4162,49 +4392,96 @@ export function CatalogPackagesPage() {
                   <span className="text-xs font-bold text-slate-800 block">Feature Badges (Switch Board popup badges)</span>
                   <div className="space-y-3 max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
                     {serviceCustomizing.customization.benefits.map((badge, idx) => {
-                      const bTitle = typeof badge === 'string' ? badge : (badge.title || "");
-                      const bIcon = typeof badge === 'string' ? "award" : (badge.icon || "award");
+                      const bTitle = badge.title || "";
+                      const bIcon = badge.icon || "award";
+                      const bChecked = badge.checked !== false;
+                      const inputId = `input-benefits-${idx}`;
                       return (
                         <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
-                          <div className="grid grid-cols-2 gap-3">
-                            <Input
-                              label="Badge Title"
-                              value={bTitle}
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={bChecked}
                               onChange={(e) => {
                                 const updated = [...serviceCustomizing.customization.benefits];
-                                updated[idx] = { title: e.target.value, icon: bIcon };
+                                updated[idx] = { ...badge, checked: e.target.checked };
                                 setServiceCustomizing({
                                   ...serviceCustomizing,
                                   customization: { ...serviceCustomizing.customization, benefits: updated }
                                 });
                               }}
+                              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600 mt-5"
                             />
-                            <Input
-                              label="Badge Icon (e.g. star, shield, award, cpu)"
-                              value={bIcon}
-                              onChange={(e) => {
-                                const updated = [...serviceCustomizing.customization.benefits];
-                                updated[idx] = { title: bTitle, icon: e.target.value };
-                                setServiceCustomizing({
-                                  ...serviceCustomizing,
-                                  customization: { ...serviceCustomizing.customization, benefits: updated }
-                                });
-                              }}
-                            />
+                            <div className="grid grid-cols-2 gap-3 flex-1">
+                              <Input
+                                id={inputId}
+                                label="Badge Title"
+                                value={bTitle}
+                                readOnly={editingField.field !== "benefits" || editingField.index !== idx}
+                                onChange={(e) => {
+                                  const updated = [...serviceCustomizing.customization.benefits];
+                                  updated[idx] = { ...badge, title: e.target.value };
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, benefits: updated }
+                                  });
+                                }}
+                              />
+                              <Input
+                                label="Badge Icon (e.g. star, shield, award, cpu)"
+                                value={bIcon}
+                                readOnly={editingField.field !== "benefits" || editingField.index !== idx}
+                                onChange={(e) => {
+                                  const updated = [...serviceCustomizing.customization.benefits];
+                                  updated[idx] = { ...badge, icon: e.target.value };
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, benefits: updated }
+                                  });
+                                }}
+                              />
+                            </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = serviceCustomizing.customization.benefits.filter((_, i) => i !== idx);
-                              setServiceCustomizing({
-                               ...serviceCustomizing,
-                               customization: { ...serviceCustomizing.customization, benefits: updated }
-                              });
-                            }}
-                            className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="absolute top-1 right-1 flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editingField.field === "benefits" && editingField.index === idx) {
+                                  setEditingField({ field: null, index: null });
+                                } else {
+                                  setEditingField({ field: "benefits", index: idx });
+                                  setTimeout(() => {
+                                    document.getElementById(inputId)?.focus();
+                                  }, 50);
+                                }
+                              }}
+                              title={editingField.field === "benefits" && editingField.index === idx ? "Save item" : "Edit item"}
+                              className={`p-1 rounded-lg cursor-pointer transition-colors ${
+                                editingField.field === "benefits" && editingField.index === idx
+                                  ? "text-green-600 hover:bg-green-50"
+                                  : "text-slate-400 hover:text-blue-600"
+                              }`}
+                            >
+                              {editingField.field === "benefits" && editingField.index === idx ? (
+                                <Check className="w-3.5 h-3.5" />
+                              ) : (
+                                <Edit2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = serviceCustomizing.customization.benefits.filter((_, i) => i !== idx);
+                                setServiceCustomizing({
+                                 ...serviceCustomizing,
+                                 customization: { ...serviceCustomizing.customization, benefits: updated }
+                                });
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -4215,13 +4492,18 @@ export function CatalogPackagesPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      const newIndex = serviceCustomizing.customization.benefits.length;
                       setServiceCustomizing({
                         ...serviceCustomizing,
                         customization: {
                           ...serviceCustomizing.customization,
-                          benefits: [...serviceCustomizing.customization.benefits, { title: "", icon: "award" }]
+                          benefits: [...serviceCustomizing.customization.benefits, { title: "", icon: "award", checked: true }]
                         }
                       });
+                      setEditingField({ field: "benefits", index: newIndex });
+                      setTimeout(() => {
+                        document.getElementById(`input-benefits-${newIndex}`)?.focus();
+                      }, 50);
                     }}
                     className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
                   >
@@ -4234,69 +4516,118 @@ export function CatalogPackagesPage() {
                   <span className="text-xs font-bold text-slate-800 block">How it Works Section</span>
                   <Input
                     label="Section Heading"
-                    value={serviceCustomizing.customization.steps_heading || "HOW PAINTING WORKS"}
+                    value={serviceCustomizing.customization.steps_heading ?? ""}
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, steps_heading: e.target.value };
                       setServiceCustomizing({ ...serviceCustomizing, customization: updatedCust });
                     }}
                   />
                   <div className="space-y-3 max-h-56 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
-                    {serviceCustomizing.customization.steps.map((step, idx) => (
-                      <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
-                        <div className="grid grid-cols-2 gap-3">
-                          <Input
-                            label="Step Title"
-                            value={step.title || ""}
+                    {serviceCustomizing.customization.steps.map((step, idx) => {
+                      const inputId = `input-step-${idx}`;
+                      return (
+                        <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={step.checked !== false}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.steps];
+                                updated[idx] = { ...step, checked: e.target.checked };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, steps: updated }
+                                });
+                              }}
+                              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600 mt-5"
+                            />
+                            <div className="grid grid-cols-2 gap-3 flex-1">
+                              <Input
+                                id={inputId}
+                                label="Step Title"
+                                value={step.title || ""}
+                                readOnly={editingField.field !== "steps" || editingField.index !== idx}
+                                onChange={(e) => {
+                                  const updated = [...serviceCustomizing.customization.steps];
+                                  updated[idx] = { ...step, title: e.target.value };
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, steps: updated }
+                                  });
+                                }}
+                              />
+                              <Input
+                                label="Step Icon (e.g. calendar, cpu, paint-roller, check-circle)"
+                                value={step.icon || ""}
+                                readOnly={editingField.field !== "steps" || editingField.index !== idx}
+                                onChange={(e) => {
+                                  const updated = [...serviceCustomizing.customization.steps];
+                                  updated[idx] = { ...step, icon: e.target.value };
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, steps: updated }
+                                  });
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <TextArea
+                            label="Step Description"
+                            rows={2}
+                            value={step.desc || ""}
+                            readOnly={editingField.field !== "steps" || editingField.index !== idx}
                             onChange={(e) => {
                               const updated = [...serviceCustomizing.customization.steps];
-                              updated[idx] = { ...step, title: e.target.value };
+                              updated[idx] = { ...step, desc: e.target.value };
                               setServiceCustomizing({
                                 ...serviceCustomizing,
                                 customization: { ...serviceCustomizing.customization, steps: updated }
                               });
                             }}
                           />
-                          <Input
-                            label="Step Icon (e.g. calendar, cpu, paint-roller, check-circle)"
-                            value={step.icon || ""}
-                            onChange={(e) => {
-                              const updated = [...serviceCustomizing.customization.steps];
-                              updated[idx] = { ...step, icon: e.target.value };
-                              setServiceCustomizing({
-                                ...serviceCustomizing,
-                                customization: { ...serviceCustomizing.customization, steps: updated }
-                              });
-                            }}
-                          />
+                          <div className="absolute top-1 right-1 flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editingField.field === "steps" && editingField.index === idx) {
+                                  setEditingField({ field: null, index: null });
+                                } else {
+                                  setEditingField({ field: "steps", index: idx });
+                                  setTimeout(() => {
+                                    document.getElementById(inputId)?.focus();
+                                  }, 50);
+                                }
+                              }}
+                              title={editingField.field === "steps" && editingField.index === idx ? "Save item" : "Edit item"}
+                              className={`p-1 rounded-lg cursor-pointer transition-colors ${
+                                editingField.field === "steps" && editingField.index === idx
+                                  ? "text-green-600 hover:bg-green-50"
+                                  : "text-slate-400 hover:text-blue-600"
+                              }`}
+                            >
+                              {editingField.field === "steps" && editingField.index === idx ? (
+                                <Check className="w-3.5 h-3.5" />
+                              ) : (
+                                <Edit2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = serviceCustomizing.customization.steps.filter((_, i) => i !== idx);
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, steps: updated }
+                                });
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <TextArea
-                          label="Step Description"
-                          rows={2}
-                          value={step.desc || ""}
-                          onChange={(e) => {
-                            const updated = [...serviceCustomizing.customization.steps];
-                            updated[idx] = { ...step, desc: e.target.value };
-                            setServiceCustomizing({
-                              ...serviceCustomizing,
-                              customization: { ...serviceCustomizing.customization, steps: updated }
-                            });
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = serviceCustomizing.customization.steps.filter((_, i) => i !== idx);
-                            setServiceCustomizing({
-                              ...serviceCustomizing,
-                              customization: { ...serviceCustomizing.customization, steps: updated }
-                            });
-                          }}
-                          className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {serviceCustomizing.customization.steps.length === 0 && (
                       <p className="text-[11px] text-slate-400 italic">No steps configured. Default fallbacks will be used.</p>
                     )}
@@ -4304,13 +4635,18 @@ export function CatalogPackagesPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      const newIndex = serviceCustomizing.customization.steps.length;
                       setServiceCustomizing({
                         ...serviceCustomizing,
                         customization: {
                           ...serviceCustomizing.customization,
-                          steps: [...serviceCustomizing.customization.steps, { title: "", desc: "", icon: "paint-roller" }]
+                          steps: [...serviceCustomizing.customization.steps, { title: "", desc: "", icon: "paint-roller", checked: true }]
                         }
                       });
+                      setEditingField({ field: "steps", index: newIndex });
+                      setTimeout(() => {
+                        document.getElementById(`input-step-${newIndex}`)?.focus();
+                      }, 50);
                     }}
                     className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
                   >
@@ -4323,7 +4659,7 @@ export function CatalogPackagesPage() {
                   <span className="text-xs font-bold text-slate-800 block">Frequently Asked Questions (FAQ)</span>
                   <Input
                     label="FAQ Section Heading"
-                    value={serviceCustomizing.customization.faqs_heading || ""}
+                    value={serviceCustomizing.customization.faqs_heading ?? ""}
                     placeholder="Frequently Asked Questions"
                     onChange={(e) => {
                       const updatedCust = { ...serviceCustomizing.customization, faqs_heading: e.target.value };
@@ -4331,48 +4667,98 @@ export function CatalogPackagesPage() {
                     }}
                   />
                   <div className="space-y-3 max-h-56 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
-                    {serviceCustomizing.customization.faqs.map((faq, idx) => (
-                      <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
-                        <Input
-                          label="Question"
-                          value={faq.q || faq.question || ""}
-                          onChange={(e) => {
-                            const updated = [...serviceCustomizing.customization.faqs];
-                            updated[idx] = { ...faq, q: e.target.value, question: e.target.value };
-                            setServiceCustomizing({
-                              ...serviceCustomizing,
-                              customization: { ...serviceCustomizing.customization, faqs: updated }
-                            });
-                          }}
-                        />
-                        <TextArea
-                          label="Answer"
-                          rows={2}
-                          value={faq.a || faq.answer || ""}
-                          onChange={(e) => {
-                            const updated = [...serviceCustomizing.customization.faqs];
-                            updated[idx] = { ...faq, a: e.target.value, answer: e.target.value };
-                            setServiceCustomizing({
-                              ...serviceCustomizing,
-                              customization: { ...serviceCustomizing.customization, faqs: updated }
-                            });
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = serviceCustomizing.customization.faqs.filter((_, i) => i !== idx);
-                            setServiceCustomizing({
-                              ...serviceCustomizing,
-                              customization: { ...serviceCustomizing.customization, faqs: updated }
-                            });
-                          }}
-                          className="absolute top-1 right-1 p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                    {serviceCustomizing.customization.faqs.map((faq, idx) => {
+                      const inputId = `input-faq-${idx}`;
+                      return (
+                        <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-lg p-2.5 space-y-2 relative">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={faq.checked !== false}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.faqs];
+                                updated[idx] = { ...faq, checked: e.target.checked };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, faqs: updated }
+                                });
+                              }}
+                              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600 mt-5"
+                            />
+                            <div className="flex-1">
+                              <Input
+                                id={inputId}
+                                label="Question"
+                                value={faq.q || faq.question || ""}
+                                readOnly={editingField.field !== "faqs" || editingField.index !== idx}
+                                onChange={(e) => {
+                                  const updated = [...serviceCustomizing.customization.faqs];
+                                  updated[idx] = { ...faq, q: e.target.value, question: e.target.value };
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, faqs: updated }
+                                  });
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <TextArea
+                            label="Answer"
+                            rows={2}
+                            value={faq.a || faq.answer || ""}
+                            readOnly={editingField.field !== "faqs" || editingField.index !== idx}
+                            onChange={(e) => {
+                              const updated = [...serviceCustomizing.customization.faqs];
+                              updated[idx] = { ...faq, a: e.target.value, answer: e.target.value };
+                              setServiceCustomizing({
+                                ...serviceCustomizing,
+                                customization: { ...serviceCustomizing.customization, faqs: updated }
+                              });
+                            }}
+                          />
+                          <div className="absolute top-1 right-1 flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editingField.field === "faqs" && editingField.index === idx) {
+                                  setEditingField({ field: null, index: null });
+                                } else {
+                                  setEditingField({ field: "faqs", index: idx });
+                                  setTimeout(() => {
+                                    document.getElementById(inputId)?.focus();
+                                  }, 50);
+                                }
+                              }}
+                              title={editingField.field === "faqs" && editingField.index === idx ? "Save item" : "Edit item"}
+                              className={`p-1 rounded-lg cursor-pointer transition-colors ${
+                                editingField.field === "faqs" && editingField.index === idx
+                                  ? "text-green-600 hover:bg-green-50"
+                                  : "text-slate-400 hover:text-blue-600"
+                              }`}
+                            >
+                              {editingField.field === "faqs" && editingField.index === idx ? (
+                                <Check className="w-3.5 h-3.5" />
+                              ) : (
+                                <Edit2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = serviceCustomizing.customization.faqs.filter((_, i) => i !== idx);
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, faqs: updated }
+                                });
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                     {serviceCustomizing.customization.faqs.length === 0 && (
                       <p className="text-[11px] text-slate-400 italic">No FAQs configured. Default fallbacks will be used.</p>
                     )}
@@ -4380,13 +4766,18 @@ export function CatalogPackagesPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      const newIndex = serviceCustomizing.customization.faqs.length;
                       setServiceCustomizing({
                         ...serviceCustomizing,
                         customization: {
                           ...serviceCustomizing.customization,
-                          faqs: [...serviceCustomizing.customization.faqs, { q: "", a: "", active: true }]
+                          faqs: [...serviceCustomizing.customization.faqs, { q: "", a: "", active: true, checked: true }]
                         }
                       });
+                      setEditingField({ field: "faqs", index: newIndex });
+                      setTimeout(() => {
+                        document.getElementById(`input-faq-${newIndex}`)?.focus();
+                      }, 50);
                     }}
                     className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
                   >
@@ -4406,11 +4797,16 @@ export function CatalogPackagesPage() {
                       type="button"
                       onClick={() => {
                         const updatedList = [...(serviceCustomizing.customization.price_list || [])];
-                        updatedList.push({ type: "", price: "" });
+                        const newIndex = updatedList.length;
+                        updatedList.push({ type: "", price: "", checked: true });
                         setServiceCustomizing({
                           ...serviceCustomizing,
                           customization: { ...serviceCustomizing.customization, price_list: updatedList }
                         });
+                        setEditingField({ field: "price_list", index: newIndex });
+                        setTimeout(() => {
+                          document.getElementById(`input-price-list-${newIndex}`)?.focus();
+                        }, 50);
                       }}
                       className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-750 border border-indigo-200 text-[10px] font-bold rounded-xl cursor-pointer"
                     >
@@ -4421,49 +4817,93 @@ export function CatalogPackagesPage() {
                     {(!serviceCustomizing.customization.price_list || serviceCustomizing.customization.price_list.length === 0) ? (
                       <span className="text-xs text-slate-400 block text-center py-2">No custom prices configured. Default fallbacks will be used.</span>
                     ) : (
-                      serviceCustomizing.customization.price_list.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-2.5 bg-slate-50/40 border border-slate-200 p-2 rounded-xl relative">
-                          <Input
-                            label="Paint/Service Type"
-                            placeholder="e.g. Economy Exterior"
-                            value={item.type || ""}
-                            onChange={(e) => {
-                              const updated = [...serviceCustomizing.customization.price_list];
-                              updated[idx] = { ...item, type: e.target.value };
-                              setServiceCustomizing({
-                                ...serviceCustomizing,
-                                customization: { ...serviceCustomizing.customization, price_list: updated }
-                              });
-                            }}
-                          />
-                          <Input
-                            label="Rate Label"
-                            placeholder="e.g. ₹15/sq.ft"
-                            value={item.price || ""}
-                            onChange={(e) => {
-                              const updated = [...serviceCustomizing.customization.price_list];
-                              updated[idx] = { ...item, price: e.target.value };
-                              setServiceCustomizing({
-                                ...serviceCustomizing,
-                                customization: { ...serviceCustomizing.customization, price_list: updated }
-                              });
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = serviceCustomizing.customization.price_list.filter((_, i) => i !== idx);
-                              setServiceCustomizing({
-                                ...serviceCustomizing,
-                                customization: { ...serviceCustomizing.customization, price_list: updated }
-                              });
-                            }}
-                            className="p-1.5 mt-4 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))
+                      serviceCustomizing.customization.price_list.map((item, idx) => {
+                        const inputId = `input-price-list-${idx}`;
+                        return (
+                          <div key={idx} className="flex items-center gap-2.5 bg-slate-50/40 border border-slate-200 p-2 rounded-xl relative">
+                            <input
+                              type="checkbox"
+                              checked={item.checked !== false}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.price_list];
+                                updated[idx] = { ...item, checked: e.target.checked };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, price_list: updated }
+                                });
+                              }}
+                              className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600 mt-4 ml-1"
+                            />
+                            <Input
+                              id={inputId}
+                              label="Paint/Service Type"
+                              placeholder="e.g. Economy Exterior"
+                              value={item.type || ""}
+                              readOnly={editingField.field !== "price_list" || editingField.index !== idx}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.price_list];
+                                updated[idx] = { ...item, type: e.target.value };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, price_list: updated }
+                                });
+                              }}
+                            />
+                            <Input
+                              label="Rate Label"
+                              placeholder="e.g. ₹15/sq.ft"
+                              value={item.price || ""}
+                              readOnly={editingField.field !== "price_list" || editingField.index !== idx}
+                              onChange={(e) => {
+                                const updated = [...serviceCustomizing.customization.price_list];
+                                updated[idx] = { ...item, price: e.target.value };
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, price_list: updated }
+                                });
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editingField.field === "price_list" && editingField.index === idx) {
+                                  setEditingField({ field: null, index: null });
+                                } else {
+                                  setEditingField({ field: "price_list", index: idx });
+                                  setTimeout(() => {
+                                    document.getElementById(inputId)?.focus();
+                                  }, 50);
+                                }
+                              }}
+                              title={editingField.field === "price_list" && editingField.index === idx ? "Save item" : "Edit item"}
+                              className={`p-1.5 mt-4 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors ${
+                                editingField.field === "price_list" && editingField.index === idx
+                                  ? "text-green-600"
+                                  : "text-slate-400 hover:text-blue-600"
+                              }`}
+                            >
+                              {editingField.field === "price_list" && editingField.index === idx ? (
+                                <Check className="w-3.5 h-3.5" />
+                              ) : (
+                                <Edit2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = serviceCustomizing.customization.price_list.filter((_, i) => i !== idx);
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...serviceCustomizing.customization, price_list: updated }
+                                });
+                              }}
+                              className="p-1.5 mt-4 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -4476,11 +4916,16 @@ export function CatalogPackagesPage() {
                       type="button"
                       onClick={() => {
                         const updatedList = [...(serviceCustomizing.customization.paint_types || [])];
-                        updatedList.push({ id: "", name: "", price: 0, type: "", image: "" });
+                        const newIndex = updatedList.length;
+                        updatedList.push({ id: "", name: "", price: 0, type: "", image: "", checked: true });
                         setServiceCustomizing({
                           ...serviceCustomizing,
                           customization: { ...serviceCustomizing.customization, paint_types: updatedList }
                         });
+                        setEditingField({ field: "paint_types", index: newIndex });
+                        setTimeout(() => {
+                          document.getElementById(`input-paint-type-${newIndex}`)?.focus();
+                        }, 50);
                       }}
                       className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-750 border border-indigo-200 text-[10px] font-bold rounded-xl cursor-pointer"
                     >
@@ -4491,81 +4936,131 @@ export function CatalogPackagesPage() {
                     {(!serviceCustomizing.customization.paint_types || serviceCustomizing.customization.paint_types.length === 0) ? (
                       <span className="text-xs text-slate-400 block text-center py-2">No custom material options configured. Default fallbacks will be used.</span>
                     ) : (
-                      serviceCustomizing.customization.paint_types.map((item, idx) => (
-                        <div key={idx} className="bg-slate-50/30 border border-slate-200 p-3 rounded-xl space-y-2 relative">
-                          <div className="grid grid-cols-2 gap-2.5">
-                            <Input
-                              label="Material Name"
-                              placeholder="e.g. Tractor UNO"
-                              value={item.name || ""}
-                              onChange={(e) => {
-                                const updated = [...serviceCustomizing.customization.paint_types];
-                                const autoId = e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-                                updated[idx] = { ...item, name: e.target.value, id: autoId };
-                                setServiceCustomizing({
-                                  ...serviceCustomizing,
-                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
-                                });
-                              }}
-                            />
-                            <Input
-                              label="Grade / Category Label"
-                              placeholder="e.g. Economy, Premium"
-                              value={item.type || ""}
-                              onChange={(e) => {
-                                const updated = [...serviceCustomizing.customization.paint_types];
-                                updated[idx] = { ...item, type: e.target.value };
-                                setServiceCustomizing({
-                                  ...serviceCustomizing,
-                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
-                                });
-                              }}
-                            />
+                      serviceCustomizing.customization.paint_types.map((item, idx) => {
+                        const inputId = `input-paint-type-${idx}`;
+                        return (
+                          <div key={idx} className="bg-slate-50/30 border border-slate-200 p-3 rounded-xl space-y-2 relative">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={item.checked !== false}
+                                onChange={(e) => {
+                                  const updated = [...serviceCustomizing.customization.paint_types];
+                                  updated[idx] = { ...item, checked: e.target.checked };
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                  });
+                                }}
+                                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600 mt-5"
+                              />
+                              <div className="grid grid-cols-2 gap-2.5 flex-1">
+                                <Input
+                                  id={inputId}
+                                  label="Material Name"
+                                  placeholder="e.g. Tractor UNO"
+                                  value={item.name || ""}
+                                  readOnly={editingField.field !== "paint_types" || editingField.index !== idx}
+                                  onChange={(e) => {
+                                    const updated = [...serviceCustomizing.customization.paint_types];
+                                    const autoId = e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                                    updated[idx] = { ...item, name: e.target.value, id: autoId };
+                                    setServiceCustomizing({
+                                      ...serviceCustomizing,
+                                      customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                    });
+                                  }}
+                                />
+                                <Input
+                                  label="Grade / Category Label"
+                                  placeholder="e.g. Economy, Premium"
+                                  value={item.type || ""}
+                                  readOnly={editingField.field !== "paint_types" || editingField.index !== idx}
+                                  onChange={(e) => {
+                                    const updated = [...serviceCustomizing.customization.paint_types];
+                                    updated[idx] = { ...item, type: e.target.value };
+                                    setServiceCustomizing({
+                                      ...serviceCustomizing,
+                                      customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                    });
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2.5 pl-7">
+                              <Input
+                                label="Rate per sq.ft (Number)"
+                                type="number"
+                                placeholder="e.g. 7"
+                                value={item.price || ""}
+                                readOnly={editingField.field !== "paint_types" || editingField.index !== idx}
+                                onChange={(e) => {
+                                  const updated = [...serviceCustomizing.customization.paint_types];
+                                  updated[idx] = { ...item, price: parseFloat(e.target.value) || 0 };
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                  });
+                                }}
+                              />
+                              <Input
+                                label="Image URL"
+                                placeholder="e.g. /tractor-uno.png"
+                                value={item.image || ""}
+                                readOnly={editingField.field !== "paint_types" || editingField.index !== idx}
+                                onChange={(e) => {
+                                  const updated = [...serviceCustomizing.customization.paint_types];
+                                  updated[idx] = { ...item, image: e.target.value };
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                  });
+                                }}
+                              />
+                            </div>
+                            <div className="absolute top-2 right-2 flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (editingField.field === "paint_types" && editingField.index === idx) {
+                                    setEditingField({ field: null, index: null });
+                                  } else {
+                                    setEditingField({ field: "paint_types", index: idx });
+                                    setTimeout(() => {
+                                      document.getElementById(inputId)?.focus();
+                                    }, 50);
+                                  }
+                                }}
+                                title={editingField.field === "paint_types" && editingField.index === idx ? "Save item" : "Edit item"}
+                                className={`p-1 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors ${
+                                  editingField.field === "paint_types" && editingField.index === idx
+                                    ? "text-green-600"
+                                    : "text-slate-400 hover:text-blue-600"
+                                }`}
+                              >
+                                {editingField.field === "paint_types" && editingField.index === idx ? (
+                                  <Check className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = serviceCustomizing.customization.paint_types.filter((_, i) => i !== idx);
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, paint_types: updated }
+                                  });
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-2.5">
-                            <Input
-                              label="Rate per sq.ft (Number)"
-                              type="number"
-                              placeholder="e.g. 7"
-                              value={item.price || ""}
-                              onChange={(e) => {
-                                const updated = [...serviceCustomizing.customization.paint_types];
-                                updated[idx] = { ...item, price: parseFloat(e.target.value) || 0 };
-                                setServiceCustomizing({
-                                  ...serviceCustomizing,
-                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
-                                });
-                              }}
-                            />
-                            <Input
-                              label="Image URL"
-                              placeholder="e.g. /tractor-uno.png"
-                              value={item.image || ""}
-                              onChange={(e) => {
-                                const updated = [...serviceCustomizing.customization.paint_types];
-                                updated[idx] = { ...item, image: e.target.value };
-                                setServiceCustomizing({
-                                  ...serviceCustomizing,
-                                  customization: { ...serviceCustomizing.customization, paint_types: updated }
-                                });
-                              }}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = serviceCustomizing.customization.paint_types.filter((_, i) => i !== idx);
-                              setServiceCustomizing({
-                                ...serviceCustomizing,
-                                customization: { ...serviceCustomizing.customization, paint_types: updated }
-                              });
-                            }}
-                            className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

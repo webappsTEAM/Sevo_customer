@@ -1125,7 +1125,7 @@ export default function CustomerCarePage() {
                       <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Priority</th>
                       <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Status</th>
                       <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Assigned</th>
-                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">SLA Due</th>
+                      <th className="py-3.5 px-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Created At</th>
                       <th className="py-3.5 px-4 text-right"></th>
                     </tr>
                   </thead>
@@ -1177,7 +1177,7 @@ export default function CustomerCarePage() {
                               </span>
                             ) : (
                               <span className="text-xs font-medium text-slate-500">
-                                {t.sla_due_at ? new Date(t.sla_due_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                                {t.created_at ? new Date(t.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                               </span>
                             )}
                           </td>
