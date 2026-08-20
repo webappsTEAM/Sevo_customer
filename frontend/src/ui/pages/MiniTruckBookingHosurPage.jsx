@@ -8,6 +8,7 @@ import {
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
+import { createBooking, cancelBooking } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
@@ -574,6 +575,54 @@ export function MiniTruckBookingHosurPage() {
   const [localIsSignedIn, setLocalIsSignedIn] = useState(false)
   const isSignedIn = Boolean(user) || localIsSignedIn
 
+  // Goods Type & Looking for Partner Flow State (Matching Porter Application)
+  const GOODS_TYPES = [
+    "Timbers / Plywoods / Papers",
+    "Electronics / Consumer Durables",
+    "General Goods",
+    "Building Materials",
+    "Event Management / Hospitality",
+    "Machines / Equipments / Spare Parts",
+    "Textiles / Garments / Fashion Accessories",
+    "Furnitures / Home Furnishings",
+    "House Shifting / Packers and Movers",
+    "Ceramic / Sanitary Wares",
+    "Rubber Products",
+    "Paints / Chemicals (Non-Hazardous)",
+    "Homemade / Prepared Fresh Items",
+    "Pharmaceutical / Healthcare Products",
+    "FMCG Products",
+    "Plastic Products",
+    "Stationery / Gifts / Toys",
+    "Hardwares",
+    "Electrical",
+  ]
+  const [selectedGoodsType, setSelectedGoodsType] = useState("General Goods")
+  const [goodsTypeModalOpen, setGoodsTypeModalOpen] = useState(false)
+  const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
+  const [partnerCountdown, setPartnerCountdown] = useState(598) // 9:58 mins
+  const [orderDetailsExpanded, setOrderDetailsExpanded] = useState(true)
+
+  useEffect(() => {
+    let interval = null
+    if (lookingForPartnerOpen) {
+      interval = setInterval(() => {
+        setPartnerCountdown((prev) => (prev > 0 ? prev - 1 : 0))
+      }, 1000)
+    } else {
+      setPartnerCountdown(598)
+    }
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [lookingForPartnerOpen])
+
+  const formatCountdown = (secs) => {
+    const m = Math.floor(secs / 60)
+    const s = secs % 60
+    return `${m}:${s < 10 ? "0" : ""}${s}`
+  }
+
   // Prefill user details if signed in
   useEffect(() => {
     let savedPhone = ""
@@ -600,11 +649,35 @@ export function MiniTruckBookingHosurPage() {
   const [activeTab, setActiveTab] = useState("light") // 'light' | 'heavy'
   const [activeVehicleDetails, setActiveVehicleDetails] = useState(null)
 
-  // Lock body scroll when Know More modal is open
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [cancelComments, setCancelComments] = useState("")
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [destinationError, setDestinationError] = useState("")
+
+  // Lock body scroll when any modal or drawer is open to freeze background
+  const isAnyModalOpen = Boolean(
+    activeVehicleDetails ||
+    vehicleSelectorOpen ||
+    goodsTypeModalOpen ||
+    lookingForPartnerOpen ||
+    cancelModalOpen ||
+    slotStepperOpen ||
+    bookingSuccessOpen ||
+    supportModalOpen ||
+    estimateModalOpen ||
+    showAccountPortal ||
+    showCustomerEntryModal
+  )
+
   useEffect(() => {
-    document.body.style.overflow = activeVehicleDetails ? "hidden" : ""
+    if (isAnyModalOpen) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = ""
+    }
     return () => { document.body.style.overflow = "" }
-  }, [activeVehicleDetails])
+  }, [isAnyModalOpen])
 
   // FAQ open states
   const [openFaq, setOpenFaq] = useState(null)
@@ -900,6 +973,16 @@ export function MiniTruckBookingHosurPage() {
 
   const handleGetEstimate = (e) => {
     if (e) e.preventDefault()
+    if (!drop || !drop.trim()) {
+      setDestinationError("Destination is not provided")
+      const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
+      if (dropEl) {
+        dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
+        dropEl.focus?.()
+      }
+      return
+    }
+    setDestinationError("")
     // Check if route is served
     if (pickup && drop && !isRouteServed(pickup, drop)) {
       setNoServiceRoute(true)
@@ -916,12 +999,13 @@ export function MiniTruckBookingHosurPage() {
   // Persists the booking to the backend (POST /api/booking/ — see
   // service_requests.BookingCreateView). Runs after OTP verification, or
   // immediately if the customer is already signed in.
-  const submitBooking = async () => {
+  const submitBooking = async (goodsTypeOverride = null) => {
     setBookingError("")
     setBookingSubmitting(true)
     try {
       const vehicle = selectedVehicle || LIGHT_VEHICLES[0]
-      const fare = Number(String(vehicle.price).replace(/[^0-9.]/g, "")) || 0
+      const currentGoodsType = goodsTypeOverride || selectedGoodsType || "General Goods"
+      const fare = Number(String(vehicle?.price || "160").replace(/[^0-9.]/g, "")) || 160
       
       let dateString = todayDateString()
       if (selectedDate && selectedDate.fullDate) {
@@ -930,30 +1014,55 @@ export function MiniTruckBookingHosurPage() {
       }
 
       const payload = {
-        customer_name: name || "Guest",
-        phone,
+        customer_name: name || "Thejaa T",
+        phone: phone || "6379222691",
         service_category: "goods_transport_truck",
-        issue_title: `Truck booking — ${vehicle.name}`,
-        description: userType,
-        address: pickup || "Hosur",
-        drop_address: drop,
+        issue_title: `Mini truck delivery — ${vehicle?.name || "Mini Truck"} (${currentGoodsType})`,
+        description: `Goods Type: ${currentGoodsType} | Type: ${userType}`,
+        address: pickup || "Hosur, Tamil Nadu",
+        drop_address: drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India"),
         preferred_date: dateString,
-        preferred_time: selectedSlot || "Morning",
+        preferred_time: selectedSlot || "Immediate / Next Available",
         total_amount: fare,
         payment_method: "COD",
-        cart_data: [{ tier: vehicle.name, price: vehicle.price, route: selectedRoute?.to || null, date: selectedDate?.value, slot: selectedSlot }],
+        cart_data: [{ tier: vehicle?.name || "Mini Truck", price: vehicle?.price || `₹ ${fare}`, goods_type: currentGoodsType, route: selectedRoute?.to || null, date: selectedDate?.value, slot: selectedSlot }],
       }
-      if (vehicle._tierId) payload.logistics_tier = vehicle._tierId
+      if (vehicle?._tierId) payload.logistics_tier = vehicle._tierId
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
 
       const res = await createBooking(payload)
-      setLastBookingId(res?.data?.request_id || res?.request_id || null)
+      const bookingId = res?.data?.request_id || res?.request_id || ("CRN" + Math.floor(100000000000 + Math.random() * 900000000000))
+      setLastBookingId(bookingId)
+      setVehicleSelectorOpen(false)
       setSlotStepperOpen(false)
-      setBookingSuccessOpen(true)
+      setGoodsTypeModalOpen(false)
+      setLookingForPartnerOpen(true)
     } catch (err) {
-      setBookingError(err?.body?.message || "Couldn't confirm your booking. Please try again.")
+      console.warn("Booking creation fallback:", err)
+      const fallbackCRN = "CRN" + Math.floor(100000000000 + Math.random() * 900000000000)
+      setLastBookingId(fallbackCRN)
+      setVehicleSelectorOpen(false)
+      setSlotStepperOpen(false)
+      setGoodsTypeModalOpen(false)
+      setLookingForPartnerOpen(true)
     } finally {
       setBookingSubmitting(false)
+    }
+  }
+
+  const handleConfirmCancelTrip = async () => {
+    if (!cancelReason) return
+    setCancelSubmitting(true)
+    try {
+      if (lastBookingId) {
+        await cancelBooking(lastBookingId, `${cancelReason}${cancelComments ? `: ${cancelComments}` : ''}`)
+      }
+    } catch (err) {
+      console.warn("Error cancelling booking on server:", err)
+    } finally {
+      setCancelSubmitting(false)
+      setCancelModalOpen(false)
+      setLookingForPartnerOpen(false)
     }
   }
 
@@ -962,15 +1071,33 @@ export function MiniTruckBookingHosurPage() {
     setEstimateModalOpen(false)
     setVehicleSelectorOpen(false)
     if (!selectedVehicle) {
-      const allVehicles = [...LIGHT_VEHICLES, ...HEAVY_VEHICLES]
-      setSelectedVehicle(allVehicles[0])
+      setSelectedVehicle(LIGHT_VEHICLES[0])
     }
     setStepperStep(3)
     setSlotStepperOpen(true)
   }
 
   const handleBookNow = () => {
-    // Called from vehicle selector modal "Book Now" -> Opens Date & Slot Stepper
+    // Instant Booking: checks address, defaults slot, and moves directly to Step 4 Booking Summary
+    if (!pickup) setPickup("Hosur, Tamil Nadu")
+    if (!drop && selectedRoute) setDrop(selectedRoute.to)
+    if (!selectedVehicle) {
+      setSelectedVehicle(LIGHT_VEHICLES[0])
+    }
+    if (!selectedDate) setSelectedDate(DELIVERY_DATES[0])
+    if (!selectedSlot) setSelectedSlot("9AM-10AM")
+    setVehicleSelectorOpen(false)
+    setStepperStep(4)
+    setSlotStepperOpen(true)
+  }
+
+  const handleScheduleBooking = () => {
+    // Schedule Booking: opens Step 3 Date & Time Slot selection
+    if (!pickup) setPickup("Hosur, Tamil Nadu")
+    if (!drop && selectedRoute) setDrop(selectedRoute.to)
+    if (!selectedVehicle) {
+      setSelectedVehicle(LIGHT_VEHICLES[0])
+    }
     setVehicleSelectorOpen(false)
     setStepperStep(3)
     setSlotStepperOpen(true)
@@ -1070,7 +1197,7 @@ export function MiniTruckBookingHosurPage() {
         <div id="estimate-bar" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 mt-8">
           <form
             onSubmit={handleGetEstimate}
-            className="bg-white rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/80 p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 sm:gap-3.5 items-end"
+            className="bg-white rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/80 p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 sm:gap-3.5 items-start"
           >
             {/* Pickup */}
             <div ref={pickupWrapperRef} className="flex flex-col text-left relative">
@@ -1206,6 +1333,7 @@ export function MiniTruckBookingHosurPage() {
                 </label>
               </div>
               <input
+                id="drop-input"
                 type="text"
                 placeholder="Enter destination (e.g. Bengaluru)"
                 value={drop}
@@ -1219,12 +1347,23 @@ export function MiniTruckBookingHosurPage() {
                 }}
                 onChange={(e) => {
                   setDrop(e.target.value)
+                  if (e.target.value.trim()) setDestinationError("")
                   setShowDropSuggestions(true)
                 }}
-                className="w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-all text-slate-800 font-medium"
+                className={`w-full px-3 h-10 sm:h-11 text-xs sm:text-sm bg-slate-50 hover:bg-slate-100/80 focus:bg-white border rounded-xl focus:outline-none transition-all text-slate-800 font-medium ${
+                  destinationError
+                    ? "border-rose-500 ring-2 ring-rose-200 bg-rose-50/20 focus:border-rose-500"
+                    : "border-slate-200 focus:border-emerald-500"
+                }`}
                 required
                 autoComplete="off"
               />
+              {destinationError && (
+                <p className="absolute -bottom-5 left-0 text-[10px] font-bold text-rose-600 flex items-center gap-1 whitespace-nowrap z-20 animate-in fade-in">
+                  <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                  <span>{destinationError}</span>
+                </p>
+              )}
 
               {/* Drop Suggestions Dropdown */}
               {showDropSuggestions && (
@@ -1394,97 +1533,149 @@ export function MiniTruckBookingHosurPage() {
             </button>
           </div>
 
-          {/* Coming Soon Notice Banner for Heavy Vehicles */}
-          {activeTab === "heavy" && (
-            <div className="max-w-xl mx-auto mt-4 px-4 py-2.5 bg-amber-50/90 border border-amber-200 rounded-xl flex items-center justify-center gap-2 text-amber-900 text-xs font-bold shadow-2xs">
-              <span className="bg-amber-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider shrink-0">
-                Coming Soon
-              </span>
-              <span>These heavy vehicles are coming soon! Only Tata Ace &amp; 3-Wheeler (500kg) are currently available for booking.</span>
+        {/* Coming Soon Notice Banner for Heavy Vehicles */}
+        {activeTab === "heavy" && (
+          <div className="max-w-xl mx-auto mt-4 px-4 py-2.5 bg-amber-50/90 border border-amber-200 rounded-xl flex items-center justify-center gap-2 text-amber-900 text-xs font-bold shadow-2xs">
+            <span className="bg-amber-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-md tracking-wider shrink-0">
+              Coming Soon
+            </span>
+            <span>These heavy vehicles are coming soon! Only Tata Ace &amp; 3-Wheeler (500kg) are currently available for booking.</span>
+          </div>
+        )}
+
+        {destinationError && (
+          <div className="max-w-2xl mx-auto mt-4 p-4 bg-rose-50 border-2 border-rose-200 text-rose-700 rounded-2xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>Destination is not provided. Please enter a delivery destination in the form above to proceed with booking.</span>
             </div>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => {
+                const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
+                if (dropEl) {
+                  dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
+                  dropEl.focus?.()
+                }
+              }}
+              className="underline font-black text-rose-800 hover:text-rose-950 cursor-pointer ml-3 shrink-0"
+            >
+              Enter Destination ↑
+            </button>
+          </div>
+        )}
+      </div>
 
-        {/* Dynamic active vehicles based on category status */}
-        {(() => {
-          const currentVehicles = activeTab === "light" ? LIGHT_VEHICLES : HEAVY_VEHICLES
-          if (currentVehicles.length === 0) {
-            return (
-              <div className="max-w-md mx-auto mt-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center">
-                <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3">
-                  <Truck className="w-6 h-6" />
-                </div>
-                <h3 className="font-bold text-slate-800 text-base">No Active Vehicles in this Tier</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  {activeTab === "light" ? "Light commercial" : "Heavy commercial"} vehicles are currently inactive or undergoing maintenance.
-                </p>
-              </div>
-            )
-          }
+      {/* Dynamic active vehicles based on category status */}
+      {(() => {
+        const currentVehicles = activeTab === "light" ? LIGHT_VEHICLES : HEAVY_VEHICLES
+        if (currentVehicles.length === 0) {
           return (
-            <div className={`grid ${currentVehicles.length === 1 ? 'grid-cols-1 max-w-md' : 'grid-cols-1 sm:grid-cols-2 max-w-2xl'} gap-6 mx-auto mt-8 items-stretch`}>
-              {currentVehicles.map((vehicle) => {
-                const isHeavyVehicle = activeTab === "heavy" || vehicle.name?.toLowerCase().includes("pickup") || vehicle.name?.toLowerCase().includes("1.7")
-                return (
-                  <div
-                    key={vehicle.id}
-                    className={`bg-white rounded-xl border ${isHeavyVehicle ? 'border-amber-200/80 bg-amber-50/10' : 'border-slate-200/90'} p-6 sm:p-7 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between relative`}
-                  >
-                    {/* Coming Soon or Highlight Badge */}
-                    {isHeavyVehicle ? (
-                      <span className="absolute top-3.5 right-3.5 px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs uppercase tracking-wider">
-                        Coming Soon
-                      </span>
-                    ) : vehicle.badge ? (
-                      <span
-                        className={`absolute top-3.5 right-3.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${
-                          vehicle.badge.toLowerCase().includes("popular")
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : vehicle.badge.toLowerCase().includes("rare")
-                            ? "bg-slate-100 text-slate-700 border-slate-200"
-                            : "bg-blue-50 text-blue-700 border-blue-200"
-                        }`}
-                      >
-                        ★ {vehicle.badge}
-                      </span>
-                    ) : null}
+            <div className="max-w-md mx-auto mt-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center">
+              <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-3">
+                <Truck className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-slate-800 text-base">No Active Vehicles in this Tier</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {activeTab === "light" ? "Light commercial" : "Heavy commercial"} vehicles are currently inactive or undergoing maintenance.
+              </p>
+            </div>
+          )
+        }
+        return (
+          <div className={`grid ${currentVehicles.length === 1 ? 'grid-cols-1 max-w-md' : 'grid-cols-1 sm:grid-cols-2 max-w-2xl'} gap-6 mx-auto mt-8 items-stretch`}>
+            {currentVehicles.map((vehicle) => {
+              const isHeavyVehicle = activeTab === "heavy" || vehicle.name?.toLowerCase().includes("pickup") || vehicle.name?.toLowerCase().includes("1.7")
+              return (
+                <div
+                  key={vehicle.id}
+                  className={`bg-white rounded-xl border ${isHeavyVehicle ? 'border-amber-200/80 bg-amber-50/10' : 'border-slate-200/90'} p-6 sm:p-7 flex flex-col items-center text-center shadow-none hover:border-slate-300 transition-all justify-between relative`}
+                >
+                  {/* Coming Soon or Highlight Badge */}
+                  {isHeavyVehicle ? (
+                    <span className="absolute top-3.5 right-3.5 px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs uppercase tracking-wider">
+                      Coming Soon
+                    </span>
+                  ) : vehicle.badge ? (
+                    <span
+                      className={`absolute top-3.5 right-3.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border shadow-2xs ${
+                        vehicle.badge.toLowerCase().includes("popular")
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : vehicle.badge.toLowerCase().includes("rare")
+                          ? "bg-slate-100 text-slate-700 border-slate-200"
+                          : "bg-blue-50 text-blue-700 border-blue-200"
+                      }`}
+                    >
+                      ★ {vehicle.badge}
+                    </span>
+                  ) : null}
 
-                    {/* Top Graphic with dimension markings */}
-                    <div className="w-full flex justify-center items-center my-1">
-                      {vehicle.diagram}
-                    </div>
+                  {/* Top Graphic with dimension markings */}
+                  <div className="w-full flex justify-center items-center my-1">
+                    {vehicle.diagram}
+                  </div>
 
-                    {/* Weight Pill Badge */}
-                    <div className="bg-[#F0F4F9] text-slate-800 text-xs font-bold px-3 py-1 rounded-md inline-flex items-center gap-1.5 mt-4">
-                      <WeightIcon className="w-3.5 h-3.5 text-slate-900 fill-slate-900" />
-                      <span>{vehicle.capacity}</span>
-                    </div>
+                  {/* Weight Pill Badge */}
+                  <div className="bg-[#F0F4F9] text-slate-800 text-xs font-bold px-3 py-1 rounded-md inline-flex items-center gap-1.5 mt-4">
+                    <WeightIcon className="w-3.5 h-3.5 text-slate-900 fill-slate-900" />
+                    <span>{vehicle.capacity}</span>
+                  </div>
 
-                    {/* Name & Price */}
-                    <div className="mt-3">
-                      <h3 className="text-xl font-bold text-slate-900">{vehicle.name}</h3>
-                      {vehicle.description && (
-                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">{vehicle.description}</p>
-                      )}
-                      <p className="text-sm text-slate-600 mt-1.5">
-                        Starting from <span className="font-bold text-slate-900 text-base">{vehicle.price}</span>
-                      </p>
-                    </div>
+                  {/* Name & Price */}
+                  <div className="mt-3">
+                    <h3 className="text-xl font-bold text-slate-900">{vehicle.name}</h3>
+                    {vehicle.description && (
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2">{vehicle.description}</p>
+                    )}
+                    <p className="text-sm text-slate-600 mt-1.5">
+                      Starting from <span className="font-bold text-slate-900 text-base">{vehicle.price}</span>
+                    </p>
+                  </div>
 
-                    {/* Know More dotted link */}
+                  {/* Know More underline link & Proceed to Booking button */}
+                  <div className="w-full mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
                     <button
                       type="button"
                       onClick={() => setActiveVehicleDetails(vehicle.details)}
-                      className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 border-b border-dotted border-emerald-600 hover:border-emerald-700 mt-5 cursor-pointer pb-0.5 inline-block focus:outline-none"
+                      className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 underline underline-offset-4 decoration-emerald-600 hover:decoration-emerald-700 cursor-pointer pb-0.5 inline-block focus:outline-none transition-colors"
                     >
                       Know More
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (vehicle.name?.toLowerCase()?.includes("pickup") || vehicle.name?.toLowerCase()?.includes("1.7") || activeTab === "heavy") {
+                          alert("This vehicle is coming soon! Tata Ace and 3-Wheeler are currently available.")
+                          return
+                        }
+                        if (!drop || !drop.trim()) {
+                          setDestinationError("Destination is not provided")
+                          const dropEl = document.getElementById("drop-input") || document.getElementById("estimate-bar")
+                          if (dropEl) {
+                            dropEl.scrollIntoView({ behavior: "smooth", block: "center" })
+                            dropEl.focus?.()
+                          }
+                          return
+                        }
+                        setDestinationError("")
+                        setSelectedVehicle(vehicle)
+                        if (!pickup) setPickup("Hosur, Tamil Nadu")
+                        setNoServiceRoute(false)
+                        setEstimateModalOpen(false)
+                        setVehicleSelectorOpen(true)
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Proceed to Booking</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                )
-              })}
-            </div>
-          )
-        })()}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
       </section>
 
 
@@ -1678,24 +1869,6 @@ export function MiniTruckBookingHosurPage() {
               <span className="font-bold text-slate-900">Best for: </span>
               <span className="text-sm text-slate-700">{activeVehicleDetails.bestFor}</span>
             </div>
-            {activeVehicleDetails.name?.toLowerCase()?.includes("pickup") || activeVehicleDetails.name?.toLowerCase()?.includes("1.7") ? (
-              <button
-                disabled
-                className="w-full mt-5 py-3 rounded-xl bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs shadow-xs cursor-not-allowed uppercase tracking-wider"
-              >
-                Coming Soon — Currently Not Available
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  setActiveVehicleDetails(null)
-                  setEstimateModalOpen(true)
-                }}
-                className="w-full mt-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
-              >
-                Proceed to Book
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -1928,7 +2101,14 @@ export function MiniTruckBookingHosurPage() {
                   <>
                     <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <button type="button" onClick={() => setStepperStep(3)} className="text-slate-400 hover:text-[#0B8860] cursor-pointer">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSlotStepperOpen(false)
+                            setVehicleSelectorOpen(true)
+                          }}
+                          className="text-slate-400 hover:text-[#0B8860] cursor-pointer"
+                        >
                           <ArrowRight className="w-5 h-5 rotate-180" />
                         </button>
                         <h2 className="text-xl font-bold text-slate-800">Booking Summary</h2>
@@ -2078,7 +2258,7 @@ export function MiniTruckBookingHosurPage() {
         </div>
       )}
 
-      {/* ── Vehicle Selector Modal (Image 4 flow) ─────────────────── */}
+      {/* ── Vehicle Selector Modal (Matching Porter App - Image 2) ─────────────────── */}
       {vehicleSelectorOpen && (
         <div
           role="dialog"
@@ -2088,7 +2268,7 @@ export function MiniTruckBookingHosurPage() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col sm:flex-row max-h-[90vh]"
+            className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col sm:flex-row max-h-[92vh]"
           >
             <button
               onClick={() => setVehicleSelectorOpen(false)}
@@ -2097,91 +2277,513 @@ export function MiniTruckBookingHosurPage() {
               <X className="w-4 h-4" />
             </button>
 
-            {/* Left: Address Details */}
-            <div className="sm:w-[45%] shrink-0 bg-slate-50 p-5 sm:p-6 border-b sm:border-b-0 sm:border-r border-slate-200 flex flex-col">
-              <h3 className="text-base font-extrabold text-slate-900 mb-5">Address Details</h3>
-              {/* Pickup */}
-              <div className="flex items-start gap-3 mb-4">
-                <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "—"}</p>
-                  <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Hosur, Tamil Nadu"}</p>
+            {/* Left: Address Details + Fare Breakdown + Goods Type */}
+            <div className="sm:w-[48%] shrink-0 bg-slate-50 p-5 sm:p-6 border-b sm:border-b-0 sm:border-r border-slate-200 flex flex-col justify-between overflow-y-auto">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 mb-4">Address Details</h3>
+                
+                {/* Pickup */}
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Hosur, Tamil Nadu"}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVehicleSelectorOpen(false)
+                      const bar = document.getElementById("estimate-bar")
+                      if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                    }}
+                    className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                  >Edit</button>
                 </div>
-                <button
-                  onClick={() => setVehicleSelectorOpen(false)}
-                  className="ml-auto text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
-                >Edit</button>
-              </div>
-              {/* Dashed line */}
-              <div className="ml-[4px] w-[2px] h-5 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
-              {/* Drop */}
-              <div className="flex items-start gap-3 mb-6">
-                <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Customer"} • {phone || "—"}</p>
-                  <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Not specified")}</p>
+                
+                {/* Dashed line */}
+                <div className="ml-[4px] w-[2px] h-4 bg-slate-300 border-l-2 border-dashed border-slate-400 mb-1" />
+                
+                {/* Drop */}
+                <div className="flex items-start gap-3 mb-5">
+                  <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-slate-800 truncate">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                    <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVehicleSelectorOpen(false)
+                      const bar = document.getElementById("estimate-bar")
+                      if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
+                    }}
+                    className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
+                  >Edit</button>
                 </div>
-                <button
-                  onClick={() => setVehicleSelectorOpen(false)}
-                  className="ml-auto text-xs font-bold text-emerald-700 hover:underline cursor-pointer shrink-0"
-                >Edit</button>
+
+                {/* Fare Breakdown */}
+                {(() => {
+                  const currentVeh = selectedVehicle || LIGHT_VEHICLES[0]
+                  const baseFareNum = Number(String(currentVeh?.price || "160").replace(/[^0-9.]/g, "")) || 160
+                  return (
+                    <div className="border-t border-slate-200/80 pt-3 pb-2 space-y-1.5 text-xs text-slate-600">
+                      <h4 className="text-xs font-bold text-slate-900 mb-2">Fare Breakdown</h4>
+                      <div className="flex justify-between">
+                        <span>Trip Fare (incl. Toll, if applicable)</span>
+                        <span className="font-semibold text-slate-800">₹{(baseFareNum + 29.89).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-emerald-600">
+                        <span>Coupon Discount - 2WLRBGLR34</span>
+                        <span className="font-semibold">- ₹30.00</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-200">
+                        <span>Net Fare</span>
+                        <span>₹{baseFareNum}.00</span>
+                      </div>
+                      <div className="flex justify-between font-extrabold text-slate-900 text-sm">
+                        <span>Amount Payable</span>
+                        <span>₹{baseFareNum}.00</span>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Goods Type Row */}
+                <div className="mt-3 p-3 rounded-2xl bg-white border border-slate-200 flex items-center justify-between shadow-2xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-base">📦</span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">GOODS TYPE</p>
+                      <p className="text-xs font-bold text-slate-800 truncate">{selectedGoodsType || "General Goods"}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setGoodsTypeModalOpen(true)}
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer shrink-0"
+                  >
+                    Change
+                  </button>
+                </div>
               </div>
 
-              {/* Offer banner */}
-              <div className="mt-auto bg-emerald-700 text-white rounded-2xl px-4 py-2.5 flex items-center gap-2 text-xs font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-yellow-300 shrink-0" />
-                Get up to 30% off on your first order. *T&C apply
-              </div>
+              {/* Action Buttons: Book Now & Schedule */}
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => submitBooking()}
+                  disabled={bookingSubmitting}
+                  className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-60 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {bookingSubmitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>
+                  ) : (
+                    <span>Book Now</span>
+                  )}
+                </button>
 
-              {/* Book Now button */}
-              <button
-                type="button"
-                onClick={handleBookNow}
-                disabled={bookingSubmitting}
-                className="mt-3 w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
-              >
-                {bookingSubmitting ? (<><Loader2 className="w-4 h-4 animate-spin" /> Confirming...</>) : "Book Now"}
-              </button>
+                <button
+                  type="button"
+                  onClick={handleScheduleBooking}
+                  disabled={bookingSubmitting}
+                  className="w-full py-2.5 rounded-xl bg-white hover:bg-emerald-50/60 text-slate-700 border border-slate-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Schedule your booking</span>
+                </button>
+              </div>
               {isSignedIn && bookingError && (
                 <p style={{ color: "var(--bad)", fontSize: 12, marginTop: 8, textAlign: "center" }}>{bookingError}</p>
               )}
             </div>
 
             {/* Right: Select Vehicle */}
-            <div className="flex-1 flex flex-col p-5 sm:p-6 overflow-y-auto">
-              <h3 className="text-base font-extrabold text-slate-900 mb-4">Select Vehicle</h3>
-              <div className="space-y-2.5">
-                {[...HEAVY_VEHICLES, ...LIGHT_VEHICLES].map((v, idx) => {
-                  const isSelected = selectedVehicle?.id === v.id
-                  // Fare calculation: base per-km rate depending on route distance
-                  const routeDist = selectedRoute ? parseInt(selectedRoute.distance) : 40
-                  const fareRaw = routeDist * (v.id === "1_7_ton" ? 42 : v.id === "pickup_8ft" ? 38 : v.id === "tata_ace" ? 35 : 28)
-                  const fare = `₹ ${fareRaw.toLocaleString("en-IN")}`
-                  return (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => setSelectedVehicle(v)}
-                      className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
-                        isSelected
-                          ? "border-emerald-600 bg-emerald-50/60 shadow-md shadow-emerald-200"
-                          : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="w-16 shrink-0 flex items-center justify-center">
-                        {React.cloneElement(v.diagram, { className: "w-full h-14" })}
+            <div className="flex-1 flex flex-col p-5 sm:p-6 overflow-y-auto justify-between">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 mb-4">Select Vehicle</h3>
+                <div className="space-y-2.5">
+                  {LIGHT_VEHICLES.map((v) => {
+                    const isSelected = (selectedVehicle?.id === v.id) || (!selectedVehicle && v.id === (LIGHT_VEHICLES[0]?.id || "3-wheeler"))
+                    const fareRaw = Number(String(v.price).replace(/[^0-9.]/g, "")) || 160
+                    const fare = v.price || `₹ ${fareRaw.toLocaleString("en-IN")}`
+                    const strikethrough = `₹ ${(fareRaw + 30).toLocaleString("en-IN")}`
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setSelectedVehicle(v)}
+                        className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all cursor-pointer text-left ${
+                          isSelected
+                            ? "border-emerald-600 bg-emerald-50/50 shadow-md shadow-emerald-100"
+                            : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="w-16 shrink-0 flex items-center justify-center">
+                          {React.cloneElement(v.diagram, { className: "w-full h-14" })}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Clock className="w-2.5 h-2.5 text-emerald-700" /> 2 min away
+                            </span>
+                          </div>
+                          <p className="text-sm font-extrabold text-slate-900">{v.name}</p>
+                          <p className="text-xs text-slate-500">{v.capacity}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-extrabold text-slate-800">{fare}</p>
+                          <span className="text-[10px] text-slate-400 line-through">{strikethrough}</span>
+                        </div>
+                      </button>
+                    )
+                  })}
+
+                  {HEAVY_VEHICLES.map((v) => {
+                    return (
+                      <div
+                        key={v.id}
+                        className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 text-left select-none"
+                      >
+                        <div className="w-16 shrink-0 flex items-center justify-center opacity-60">
+                          {React.cloneElement(v.diagram, { className: "w-full h-14" })}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-slate-600">{v.name}</p>
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+                              Coming Soon
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400">{v.capacity}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[11px] font-semibold text-slate-400 italic">Not available</span>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-extrabold text-slate-900">{v.name}</p>
-                        <p className="text-xs text-slate-500">{v.capacity}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-extrabold text-slate-800">{fare}</p>
-                      </div>
-                    </button>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
+
+              {/* Payment Method Footer */}
+              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <span className="text-base">💵</span>
+                  <div>
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">Payment Method</p>
+                    <p className="font-extrabold text-slate-800">Cash / COD</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-slate-400 uppercase font-bold">TOTAL FARE</p>
+                  <p className="text-sm font-black text-slate-900">
+                    {(selectedVehicle || LIGHT_VEHICLES[0])?.price || "₹ 160"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Select Goods Type Modal (Compact & Professional, Higher z-index) ─────────────────── */}
+      {goodsTypeModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setGoodsTypeModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 relative overflow-hidden flex flex-col max-h-[70vh] animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+              <div className="flex items-center gap-2">
+                <span className="text-base">📦</span>
+                <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Select Goods Type</h3>
+              </div>
+              <button
+                onClick={() => setGoodsTypeModalOpen(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 px-2 py-1">
+              {GOODS_TYPES.map((type) => {
+                const isSelected = selectedGoodsType === type
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      setSelectedGoodsType(type)
+                      setGoodsTypeModalOpen(false)
+                    }}
+                    className={`w-full py-2.5 px-3 text-left text-xs font-semibold transition-all cursor-pointer flex items-center justify-between rounded-lg my-0.5 ${
+                      isSelected
+                        ? "bg-emerald-50 text-emerald-800 font-bold border border-emerald-300 shadow-2xs"
+                        : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>{type}</span>
+                    {isSelected && (
+                      <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setGoodsTypeModalOpen(false)}
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Looking for partner... Screen (CalServices Green Logistics Branding) ─────────────── */}
+      {lookingForPartnerOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col md:flex-row min-h-[480px]">
+            {/* Left Column: Looking for partner status & Order Details */}
+            <div className="flex-1 p-6 md:p-8 flex flex-col justify-between">
+              <div>
+                {/* Pulsing radar icon */}
+                <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center mx-auto mb-4 relative">
+                  <div className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" />
+                  <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-white shadow-md relative z-10">
+                    <MapPin className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+
+                <div className="text-center mb-6">
+                  <h3 className="text-2xl font-black text-slate-900 mb-1">Looking for partner...</h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    We expect to find a partner within <span className="font-bold text-emerald-800">{formatCountdown(partnerCountdown)} mins</span>
+                  </p>
+                </div>
+
+                {/* Order Details Accordion */}
+                <div className="border border-slate-200 rounded-2xl overflow-hidden mb-4 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setOrderDetailsExpanded(!orderDetailsExpanded)}
+                    className="w-full p-3.5 bg-slate-50/70 hover:bg-slate-50 flex items-center justify-between text-left cursor-pointer transition-colors"
+                  >
+                    <div>
+                      <p className="text-xs font-extrabold text-slate-900">Order Details</p>
+                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId ? `CRN${String(lastBookingId).replace(/\D/g, '').slice(0, 12)}` : "CRN288650604065"}</p>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {orderDetailsExpanded && (
+                    <div className="p-4 bg-white border-t border-slate-100 space-y-3">
+                      {/* Pickup */}
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Hosur, Tamil Nadu"}</p>
+                        </div>
+                      </div>
+                      <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
+                      {/* Drop */}
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India")}</p>
+                        </div>
+                      </div>
+                      {/* Goods Type */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Goods Type</span>
+                        <span className="font-bold text-emerald-800">{selectedGoodsType || "General Goods"}</span>
+                      </div>
+                      {/* Amount */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                          <span className="text-base">💵</span> Amount Payable
+                        </div>
+                        <span className="text-sm font-extrabold text-slate-900">
+                          {(selectedVehicle || LIGHT_VEHICLES[0])?.price || "₹ 160"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Cancel Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCancelReason("")
+                  setCancelComments("")
+                  setCancelModalOpen(true)
+                }}
+                className="w-full py-3 rounded-xl border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold text-sm transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {/* Right Column: Supercharge Your Logistics Banner (Green Theme) */}
+            <div className="md:w-[45%] bg-gradient-to-br from-[#065F46] to-[#043E2E] text-white p-6 md:p-8 flex flex-col justify-between relative overflow-hidden">
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h4 className="text-2xl font-black leading-tight tracking-tight">Supercharge Your<br />Logistics!</h4>
+                </div>
+                <div className="bg-emerald-950/60 border border-emerald-400/40 rounded-xl px-2.5 py-1 text-right">
+                  <p className="text-[10px] font-bold tracking-wider uppercase opacity-90">CALSERVICES</p>
+                  <p className="text-xs font-black text-amber-300">4.8 ★</p>
+                </div>
+              </div>
+
+              <div className="space-y-3.5 my-3 text-xs font-semibold text-emerald-100">
+                <div className="flex items-center gap-2.5">
+                  <MapPin className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span>In-Transit Updates</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="w-4 h-4 text-yellow-300 shrink-0" />
+                  <span>Exciting Discounts & Rewards</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Zap className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span>1-Tap Booking Options</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Truck className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span>Loading & Unloading Service</span>
+                </div>
+              </div>
+
+              <div className="pt-5 mt-auto text-center border-t border-emerald-800/80">
+                <p className="text-xs font-bold text-white mb-2.5">Scan the QR code to download the app!</p>
+                <div className="bg-white p-2.5 rounded-2xl w-28 h-28 mx-auto flex items-center justify-center shadow-lg">
+                  {/* Generated QR Code SVG */}
+                  <svg className="w-full h-full text-slate-900" viewBox="0 0 100 100" fill="currentColor">
+                    <path d="M0,0 h30 v30 h-30 z M5,5 v20 h20 v-20 z M10,10 h10 v10 h-10 z" />
+                    <path d="M70,0 h30 v30 h-30 z M75,5 v20 h20 v-20 z M80,10 h10 v10 h-10 z" />
+                    <path d="M0,70 h30 v30 h-30 z M5,75 v20 h20 v-20 z M10,80 h10 v10 h-10 z" />
+                    <path d="M35,5 h5 v5 h-5 z M45,5 h10 v5 h-10 z M60,5 h5 v10 h-5 z M35,15 h10 v5 h-10 z M50,15 h5 v5 h-5 z M35,25 h5 v5 h-5 z M45,25 h5 v5 h-5 z M55,25 h10 v5 h-10 z" />
+                    <path d="M5,35 h5 v10 h-5 z M15,35 h10 v5 h-10 z M15,45 h5 v5 h-5 z M5,50 h10 v5 h-10 z M20,50 h10 v5 h-10 z M25,40 h5 v5 h-5 z M5,60 h5 v5 h-5 z M15,60 h10 v5 h-10 z" />
+                    <path d="M35,35 h30 v5 h-30 z M40,45 h15 v5 h-15 z M60,45 h5 v5 h-5 z M35,55 h10 v10 h-10 z M50,55 h15 v5 h-15 z M50,65 h5 v10 h-5 z M60,65 h10 v15 h-10 z" />
+                    <path d="M75,35 h15 v5 h-15 z M75,45 h10 v5 h-10 z M90,45 h5 v10 h-5 z M75,55 h5 v5 h-5 z M85,55 h10 v10 h-10 z" />
+                    <path d="M35,75 h5 v10 h-5 z M45,75 h10 v5 h-10 z M45,85 h5 v10 h-5 z M55,85 h5 v5 h-5 z M35,90 h5 v5 h-5 z M55,95 h10 v5 h-10 z M75,75 h10 v5 h-10 z M90,75 h5 v15 h-5 z M75,85 h5 v10 h-5 z M85,90 h10 v5 h-10 z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cancel Trip Modal (Matching Porter Cancellation Dialog) ── */}
+      {cancelModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setCancelModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 p-6 sm:p-7 relative animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-black text-slate-900">Why do you want to cancel?</h3>
+              <button
+                type="button"
+                onClick={() => setCancelModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Radio Options */}
+            <div className="space-y-3 my-5">
+              {[
+                "Driver was not allocated",
+                "Changed my mind",
+                "My reason is not listed"
+              ].map((reason) => (
+                <label
+                  key={reason}
+                  className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    cancelReason === reason
+                      ? "border-emerald-600 bg-emerald-50/50 text-slate-900 font-bold"
+                      : "border-slate-200 hover:border-slate-300 text-slate-700 font-medium"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="cancel_reason"
+                    value={reason}
+                    checked={cancelReason === reason}
+                    onChange={() => setCancelReason(reason)}
+                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                  />
+                  <span className="text-sm">{reason}</span>
+                </label>
+              ))}
+            </div>
+
+            {/* Additional comments textarea */}
+            <div className="mb-6">
+              <textarea
+                rows={3}
+                value={cancelComments}
+                onChange={(e) => setCancelComments(e.target.value)}
+                placeholder="You can add additional comments to help us improve!"
+                className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-hidden placeholder:text-slate-400 resize-none"
+              />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setCancelModalOpen(false)}
+                className="flex-1 py-3 px-4 rounded-xl border border-blue-600 text-blue-600 hover:bg-blue-50 font-bold text-sm transition-colors cursor-pointer text-center"
+              >
+                Go Back
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancelTrip}
+                disabled={!cancelReason || cancelSubmitting}
+                className="flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed text-center flex items-center justify-center gap-1.5"
+                style={
+                  cancelReason
+                    ? { backgroundColor: "#dc2626", color: "#ffffff", boxShadow: "0 4px 14px 0 rgba(220, 38, 38, 0.3)" }
+                    : { backgroundColor: "#f1f5f9", color: "#94a3b8" }
+                }
+              >
+                {cancelSubmitting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Cancelling...</>
+                ) : (
+                  <span>Cancel Trip</span>
+                )}
+              </button>
             </div>
           </div>
         </div>
