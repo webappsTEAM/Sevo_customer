@@ -1130,14 +1130,18 @@ export function PackersMoversBookingHosurPage() {
         dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       }
 
+      const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
       const payload = {
         customer_name: name || "Guest",
         phone,
+        email: customerEmail,
         service_category: "packers_movers",
         issue_title: `Packers & Movers — ${pkg.name}`,
         description: userType,
-        address: pickup || "Hosur",
+        address: pickup || "Hosur, Tamil Nadu",
         drop_address: drop,
+        latitude: 12.7409,
+        longitude: 77.8253,
         preferred_date: dateString,
         preferred_time: selectedSlot || "Morning",
         total_amount: fare,
