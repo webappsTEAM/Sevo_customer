@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { MapContainer, TileLayer, Marker, Popup, Circle, Polygon, useMap, useMapEvents } from "react-leaflet"
-import { Search, MapPin, X, ChevronDown, Info, Archive, Layers, UserCheck, Map, Activity, Loader2, Plus, Globe, Navigation2, Target, Save, Building2 } from "lucide-react"
+import { Search, MapPin, X, ChevronDown, Info, Archive, Layers, UserCheck, Map, Activity, Loader2, Plus, Globe, Navigation2, Target, Save, Building2, Shield } from "lucide-react"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
-
 import { apiRequest, unwrapResults } from "../../api/client.js"
 import { getAddress } from "../../api/geocoding"
 import { Pill, Button, Card, Input, Select, TextArea } from "../components/kit.jsx"
@@ -11,6 +10,7 @@ import { ZonesPanel } from "./locations/ZonesPanel.jsx"
 import { AssignmentsPanel } from "./locations/AssignmentsPanel.jsx"
 import { MapOverview } from "./locations/MapOverview.jsx"
 import { GeofenceEditorModal } from "./locations/GeofenceEditorModal.jsx"
+import { ServiceAreasPanel } from "./locations/ServiceAreasPanel.jsx"
 import { getPosition } from "../../hooks/useLocation.js"
 
 /* ── Fix default Leaflet icons ────────────────────────────────── */
@@ -132,7 +132,7 @@ export function LocationsPage() {
   const [viewMode, setViewMode] = useState("map")
 
   /* ── Active tab ────────────────────────────────────────────── */
-  const [activeTab, setActiveTab] = useState("map") // "map" | "zones" | "assignments"
+  const [activeTab, setActiveTab] = useState("service-areas") // "service-areas" | "map" | "overview" | "zones" | "assignments"
 
   function MapClickHandler() {
     useMapEvents({
@@ -574,8 +574,9 @@ export function LocationsPage() {
       <div className="flex items-center justify-between px-8 py-4 bg-surface dark:bg-slate-900/60 border-b border-stroke dark:border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2 bg-bg dark:bg-slate-950/40 p-1.5 rounded-2xl border border-stroke dark:border-slate-800">
           {[
-            { id: "overview", label: "Overview", Icon: Activity },
+            { id: "service-areas", label: "Service Areas", Icon: Shield },
             { id: "map", label: "Map & Sites", Icon: Map },
+            { id: "overview", label: "Overview", Icon: Activity },
             { id: "zones", label: "Zones", Icon: Layers },
             { id: "assignments", label: "Assignments", Icon: UserCheck },
           ].map(({ id, label, Icon }) => {
@@ -615,6 +616,12 @@ export function LocationsPage() {
       {activeTab === "assignments" && (
         <div className="flex-1 overflow-hidden animate-in fade-in duration-500">
           <AssignmentsPanel locations={savedLocations} />
+        </div>
+      )}
+
+      {activeTab === "service-areas" && (
+        <div className="flex-1 overflow-hidden animate-in fade-in duration-500">
+          <ServiceAreasPanel />
         </div>
       )}
 

@@ -5,10 +5,10 @@
 
 import React, { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { MapPin, Home, Briefcase, Star, MoreVertical, Edit2, ChevronRight } from "lucide-react"
+import { MapPin, Home, Briefcase, Star, MoreVertical, Edit2, ChevronRight, AlertTriangle, ShieldAlert } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 
-export function AddressBottomSheet({ address, loading, error, onConfirm, onManualSearch, onUseCurrentLocation, onEditDetails }) {
+export function AddressBottomSheet({ address, loading, error, zoneStatus, onConfirm, onManualSearch, onUseCurrentLocation, onEditDetails }) {
   const [savedAddresses, setSavedAddresses] = useState([])
   const [selectedSavedId, setSelectedSavedId] = useState(null)
 
@@ -19,7 +19,6 @@ export function AddressBottomSheet({ address, loading, error, onConfirm, onManua
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
           setSavedAddresses(res.data)
         } else {
-          // No saved addresses from API
           setSavedAddresses([])
         }
       } catch (e) {
@@ -30,7 +29,8 @@ export function AddressBottomSheet({ address, loading, error, onConfirm, onManua
   }, [])
 
   const hasAddress = !!address?.formatted_address
-  const confirmEnabled = (hasAddress || selectedSavedId) && !loading && !error
+  const isOutOfZone = zoneStatus && zoneStatus.inZone === false
+  const confirmEnabled = (hasAddress || selectedSavedId) && !loading && !error && !isOutOfZone
 
   // Format clean primary & secondary location display
   let cleanPrimary = "Detecting location..."
@@ -41,7 +41,6 @@ export function AddressBottomSheet({ address, loading, error, onConfirm, onManua
       .split(",")
       .map(s => s.trim())
       .filter(Boolean)
-      // Filter out administrative noise (state, country, district labels)
       .filter(s => !/\b(india)\b/i.test(s))
 
     if (rawParts.length >= 2) {
@@ -61,13 +60,16 @@ export function AddressBottomSheet({ address, loading, error, onConfirm, onManua
       cleanSecondary = ""
     }
 
-    // Ensure we don't show empty secondary
     if (!cleanSecondary.trim()) {
       cleanSecondary = [address.locality, address.city, address.state].filter(Boolean).join(", ")
     }
   }
 
   const handleConfirmClick = () => {
+    if (isOutOfZone) {
+      alert("⚠️ We are not yet available at this location. Please select an address within our active service area.")
+      return
+    }
     if (!confirmEnabled) return
     if (selectedSavedId) {
       const match = savedAddresses.find(a => a.id === selectedSavedId)
@@ -86,6 +88,23 @@ export function AddressBottomSheet({ address, loading, error, onConfirm, onManua
 
       {/* Scrollable sheet body */}
       <div style={styles.scrollBody} className="no-scrollbar">
+
+        {/* Out-of-zone validation warning card */}
+        {isOutOfZone && (
+          <div style={styles.outOfZoneWarning}>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <AlertTriangle size={18} style={{ color: "#dc2626", flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#991b1b" }}>
+                  Outside Operational Service Area
+                </div>
+                <div style={{ fontSize: 11, color: "#b91c1c", marginTop: 2, lineHeight: 1.4 }}>
+                  {zoneStatus.message || "Currently we only provide services within our configured service boundaries. Please drag the pin inside an active zone."}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Deliver to section */}
         <div style={styles.deliverToWrap}>
@@ -175,13 +194,13 @@ export function AddressBottomSheet({ address, loading, error, onConfirm, onManua
         <motion.button
           style={{
             ...styles.deliverHereBtn,
-            ...(confirmEnabled ? styles.deliverHereBtnActive : styles.deliverHereBtnDisabled),
+            ...(confirmEnabled ? styles.deliverHereBtnActive : isOutOfZone ? styles.deliverHereBtnOutOfZone : styles.deliverHereBtnDisabled),
           }}
           onClick={handleConfirmClick}
-          disabled={!confirmEnabled}
+          disabled={!confirmEnabled && !isOutOfZone}
           whileTap={confirmEnabled ? { scale: 0.98 } : {}}
         >
-          Deliver here
+          {isOutOfZone ? "⚠️ Outside Service Area" : "Deliver here"}
         </motion.button>
       </div>
 
@@ -372,5 +391,19 @@ const styles = {
     background: "#f1f5f9",
     color: "#94a3b8",
     cursor: "not-allowed",
+  },
+  deliverHereBtnOutOfZone: {
+    background: "#fee2e2",
+    color: "#dc2626",
+    border: "1.5px solid #fca5a5",
+    cursor: "pointer",
+    boxShadow: "0 4px 12px rgba(220,38,38,0.15)",
+  },
+  outOfZoneWarning: {
+    padding: "10px 14px",
+    background: "#fef2f2",
+    border: "1.5px solid #fecaca",
+    borderRadius: 14,
+    marginBottom: "12px",
   },
 }

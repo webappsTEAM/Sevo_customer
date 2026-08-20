@@ -87,28 +87,18 @@ class WorkforceIntegrationService:
             response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
             if response.status_code in [200, 201]:
                 data = response.json()
-                workforce_job_id = data.get("workforce_job_id") or data.get("job_id") or f"WFJ-{uuid.uuid4().hex[:8].upper()}"
+                workforce_job_id = data.get("workforce_job_id") or data.get("job_id")
+                if not workforce_job_id:
+                    return {"success": False, "status": "workforce_unavailable", "message": "Missing workforce_job_id in response", "retryable": True}
                 sr.workforce_job_id = workforce_job_id
-                if data.get("status") in ["assigned", "accepted"]:
-                    sr.status = data.get("status")
-                    if data.get("technician"):
-                        tech = data.get("technician")
-                        sr.technician_name = tech.get("name", "")
-                        sr.technician_phone = tech.get("phone", "")
-                        sr.technician_photo = tech.get("photo", "")
-                        sr.technician_rating = tech.get("rating")
-                sr.save(update_fields=["workforce_job_id", "status", "technician_name", "technician_phone", "technician_photo", "technician_rating", "updated_at"])
+                sr.save(update_fields=["workforce_job_id", "updated_at"])
                 return {"success": True, "workforce_job_id": workforce_job_id, "data": data}
             else:
                 logger.warning(f"Workforce API responded with status {response.status_code}: {response.text}")
+                return {"success": False, "status": "workforce_unavailable", "message": f"Workforce API error ({response.status_code})", "retryable": True}
         except Exception as e:
-            logger.info(f"Workforce API dispatch mock fallback (external service offline): {e}")
-
-        # Resilient fallback: Generate integration ID and record dispatch status, keeping status="confirmed" (waiting for partner)
-        workforce_job_id = f"WFJ-{uuid.uuid4().hex[:8].upper()}"
-        sr.workforce_job_id = workforce_job_id
-        sr.save(update_fields=["workforce_job_id", "updated_at"])
-        return {"success": True, "workforce_job_id": workforce_job_id, "fallback": True}
+            logger.info(f"Workforce API dispatch failed: {e}")
+            return {"success": False, "status": "workforce_unavailable", "message": "Workforce service unreachable", "retryable": True}
 
     @classmethod
     def cancel_workforce_job(cls, service_request, reason: str = "") -> dict:
@@ -207,3 +197,60 @@ class WorkforceIntegrationService:
             logger.debug(f"Workforce tracking query fallback: {e}")
 
         return None
+
+    @classmethod
+    def notify_extension_decision(cls, service_request, extension_id: int, decision: str, notes: str = "") -> dict:
+        """
+        Notifies Workforce system whether customer approved or declined an on-site work extension.
+        """
+        sr = cls._resolve_sr(service_request)
+        if not sr or not sr.workforce_job_id:
+            return {"success": True, "fallback": True}
+
+        payload = {
+            "workforce_job_id": sr.workforce_job_id,
+            "booking_id": sr.request_id,
+            "extension_id": extension_id,
+            "decision": decision,  # 'accepted' | 'declined'
+            "notes": notes,
+            "decided_at": timezone.now().isoformat(),
+        }
+
+        try:
+            url = f"{WORKFORCE_API_BASE_URL}/jobs/{sr.workforce_job_id}/extension-decision/"
+            response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+            if response.status_code in [200, 201, 204]:
+                return {"success": True}
+        except Exception as e:
+            logger.info(f"Workforce extension decision notification fallback: {e}")
+
+        return {"success": True, "fallback": True}
+
+    @classmethod
+    def send_technician_feedback(cls, service_request, technician_id: str, rating: float, comments: str = "") -> dict:
+        """
+        Dispatches customer verified rating and feedback score to the Workforce employee profile.
+        """
+        sr = cls._resolve_sr(service_request)
+        if not sr or not technician_id:
+            return {"success": True, "fallback": True}
+
+        payload = {
+            "booking_id": sr.request_id,
+            "workforce_job_id": sr.workforce_job_id or "",
+            "technician_id": str(technician_id),
+            "rating": float(rating),
+            "comments": comments,
+            "submitted_at": timezone.now().isoformat(),
+        }
+
+        try:
+            url = f"{WORKFORCE_API_BASE_URL}/technicians/{technician_id}/feedback/"
+            response = requests.post(url, json=payload, headers=cls._headers(), timeout=5)
+            if response.status_code in [200, 201, 204]:
+                return {"success": True}
+        except Exception as e:
+            logger.info(f"Workforce feedback push fallback: {e}")
+
+        return {"success": True, "fallback": True}
+

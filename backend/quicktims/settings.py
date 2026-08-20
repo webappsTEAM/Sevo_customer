@@ -55,6 +55,14 @@ INSTALLED_APPS = [
     "customer_analytics",
 ]
 
+ASGI_APPLICATION = "quicktims.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
+}
+
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.gzip.GZipMiddleware",
@@ -76,8 +84,16 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 # ---------------------------------------------------------------------------
 
 USE_POSTGRES = os.getenv("DB_NAME") or os.getenv("DB_HOST")
+IS_TESTING = "test" in sys.argv or os.getenv("DJANGO_TEST_SQLITE") == "1"
 
-if USE_POSTGRES:
+if IS_TESTING:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
+elif USE_POSTGRES:
     _db_options = {}
     _sslmode = os.getenv("DB_SSLMODE", "")
     if _sslmode:

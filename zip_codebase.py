@@ -12,6 +12,9 @@ from pathlib import Path
 import sys
 import zipfile
 
+# Determine project root directory (directory where this script is located)
+SCRIPT_DIR = Path(__file__).resolve().parent
+
 # Default directory patterns to exclude
 DEFAULT_EXCLUDE_DIRS = {
     ".git",
@@ -28,6 +31,7 @@ DEFAULT_EXCLUDE_DIRS = {
     ".idea",
     ".gemini",
     ".claude",
+    ".system_generated",
     "scratch",
     "mnt",
     "staticfiles",
@@ -63,21 +67,22 @@ SENSITIVE_FILES = {
 
 
 def parse_args():
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    default_output = SCRIPT_DIR / f"calservices_backup_{timestamp}.zip"
+
     parser = argparse.ArgumentParser(
         description="Pack the codebase into a clean, portable zip archive.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    default_name = f"calservices_backup_{timestamp}.zip"
 
     parser.add_argument(
         "-o", "--output",
-        default=default_name,
+        default=str(default_output),
         help="Name or path of the output zip file",
     )
     parser.add_argument(
         "--root",
-        default=".",
+        default=str(SCRIPT_DIR),
         help="Root directory of the codebase to zip",
     )
     parser.add_argument(
@@ -144,12 +149,12 @@ def main():
     if args.include_node_modules:
         exclude_dirs.discard("node_modules")
 
+    print("\n" + "=" * 60)
+    print("         CalServices Codebase Packaging Utility")
     print("=" * 60)
-    print("Codebase Packaging Utility")
-    print("=" * 60)
-    print(f"Source Directory : {root_dir}")
-    print(f"Output File      : {output_path}")
-    print(f"Dry Run Mode     : {'Enabled' if args.dry_run else 'Disabled'}")
+    print(f" Source Root : {root_dir}")
+    print(f" Destination : {output_path}")
+    print(f" Dry Run     : {'Enabled' if args.dry_run else 'Disabled'}")
     print("-" * 60)
 
     files_to_zip = []
@@ -159,7 +164,6 @@ def main():
 
     for current_root, dirs, files in os.walk(root_dir):
         current_path = Path(current_root)
-        rel_current_path = current_path.relative_to(root_dir)
 
         # Filter out directories to avoid descending into them
         filtered_dirs = []
@@ -172,10 +176,13 @@ def main():
 
         for f in files:
             file_path = current_path / f
-            rel_file_path = file_path.relative_to(root_dir)
+            try:
+                rel_file_path = file_path.relative_to(root_dir)
+            except ValueError:
+                continue
 
-            # Never zip the output zip file itself
-            if file_path.resolve() == output_path:
+            # Never zip the output zip file itself or any existing zip backups
+            if file_path.resolve() == output_path or f.endswith(".zip"):
                 continue
 
             # Check exclusions
@@ -199,48 +206,51 @@ def main():
             files_to_zip.append((file_path, rel_file_path, file_size))
             total_uncompressed_bytes += file_size
 
-    print(f"Files found to archive : {len(files_to_zip):,}")
-    print(f"Total uncompressed size: {format_size(total_uncompressed_bytes)}")
-    print(f"Skipped items          : {skipped_dirs_count} dirs, {skipped_files_count} files")
+    print(f" Files Found  : {len(files_to_zip):,} files to pack")
+    print(f" Source Size  : {format_size(total_uncompressed_bytes)}")
+    print(f" Filtered Out : {skipped_dirs_count} folders, {skipped_files_count} excluded files")
     print("-" * 60)
 
     if args.dry_run:
-        print("Files that would be included (first 50 shown):")
-        for idx, (_, rel_path, size) in enumerate(files_to_zip[:50], start=1):
-            print(f"  {idx:3d}. {rel_path} ({format_size(size)})")
-        if len(files_to_zip) > 50:
-            print(f"  ... and {len(files_to_zip) - 50} more files.")
-        print("\nDry run completed. No zip file was created.")
+        print(" Preview of files to include (first 30 shown):")
+        for idx, (_, rel_path, size) in enumerate(files_to_zip[:30], start=1):
+            print(f"   {idx:3d}. {rel_path} ({format_size(size)})")
+        if len(files_to_zip) > 30:
+            print(f"   ... and {len(files_to_zip) - 30} more files.")
+        print("\n [OK] Dry run completed. No archive was generated.")
         return
 
     # Ensure parent folder for output zip exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print("Compressing files...")
+    print(" [1/2] Archiving files into compressed zip...")
     start_time = datetime.now()
 
     with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zipf:
+        total_files = len(files_to_zip)
+        step = max(1, total_files // 10)
         for index, (abs_path, rel_path, _) in enumerate(files_to_zip, start=1):
             zipf.write(abs_path, arcname=str(rel_path))
-            if index % 200 == 0 or index == len(files_to_zip):
-                pct = (index / len(files_to_zip)) * 100
-                print(f"  [{pct:5.1f}%] {index:,}/{len(files_to_zip):,} files processed...", end="\r")
+            if index % step == 0 or index == total_files:
+                pct = (index / total_files) * 100
+                print(f"   -> Progress: {pct:5.1f}% ({index:,}/{total_files:,} files)")
 
-    print("\nCompression complete!")
     elapsed = (datetime.now() - start_time).total_seconds()
     zip_size = output_path.stat().st_size
     saved_pct = ((total_uncompressed_bytes - zip_size) / total_uncompressed_bytes * 100) if total_uncompressed_bytes > 0 else 0
 
+    print(" [2/2] Archive successfully generated!")
     print("=" * 60)
-    print("Archive Summary")
+    print("                    Archive Summary")
     print("=" * 60)
-    print(f"Created Archive  : {output_path.name}")
-    print(f"Archive Location : {output_path}")
-    print(f"Compressed Size  : {format_size(zip_size)}")
-    print(f"Space Saved      : {saved_pct:.1f}%")
-    print(f"Time Taken       : {elapsed:.2f} seconds")
-    print("=" * 60)
+    print(f" Archive Name    : {output_path.name}")
+    print(f" Saved Location  : {output_path}")
+    print(f" Compressed Size : {format_size(zip_size)}")
+    print(f" Space Reduction : {saved_pct:.1f}% saved")
+    print(f" Total Duration  : {elapsed:.2f}s")
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":
     main()
+

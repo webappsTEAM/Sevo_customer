@@ -952,22 +952,47 @@ function Logo() {
   )
 }
 
-// ── Location dropdown (fixed city list) ───────────────────────────────────
-const CITIES = ["Hosur", "Coimbatore", "Chennai"]
+// ── Location dropdown (Operating Cities Selector) ─────────────────────────
+const OPERATING_CITIES = [
+  { name: "Hosur", state: "Tamil Nadu", isHub: true },
+  { name: "Coimbatore", state: "Tamil Nadu", isHub: false },
+  { name: "Chennai", state: "Tamil Nadu", isHub: false },
+  { name: "Bengaluru", state: "Karnataka", isHub: false },
+  { name: "Salem", state: "Tamil Nadu", isHub: false }
+]
 
-function LocationDropdown({ className = "" }) {
-  const [city, setCity] = useState(CITIES[0])
+function LocationDropdown({ className = "", activeCity, onCityChange }) {
+  const [selectedCity, setSelectedCity] = useState(() => {
+    return activeCity || localStorage.getItem("calservice_user_city") || "Hosur"
+  })
+
+  useEffect(() => {
+    if (activeCity) setSelectedCity(activeCity)
+  }, [activeCity])
+
+  const handleChange = (e) => {
+    const newCity = e.target.value
+    setSelectedCity(newCity)
+    localStorage.setItem("calservice_user_city", newCity)
+    if (typeof onCityChange === 'function') {
+      onCityChange(newCity)
+    }
+    window.dispatchEvent(new CustomEvent("calservices:city_changed", { detail: newCity }))
+  }
+
   return (
     <div className={`relative flex items-center gap-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-full pl-3 pr-2 py-1.5 hover:border-slate-300 ${className}`}>
       <MapPin className="w-4 h-4 text-orange-500 shrink-0" />
       <select
-        value={city}
-        onChange={(e) => setCity(e.target.value)}
-        className="bg-transparent outline-none appearance-none pr-4 cursor-pointer"
+        value={selectedCity}
+        onChange={handleChange}
+        className="bg-transparent outline-none appearance-none pr-4 cursor-pointer font-bold text-slate-800"
       >
-        {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+        {OPERATING_CITIES.map((c) => (
+          <option key={c.name} value={c.name}>{c.name}</option>
+        ))}
       </select>
-      <ChevronDown className="w-3.5 h-3.5 absolute right-2 pointer-events-none" />
+      <ChevronDown className="w-3.5 h-3.5 absolute right-2 pointer-events-none text-slate-400" />
     </div>
   )
 }
@@ -1022,7 +1047,29 @@ export function LandingPage() {
   const [activeLocationLabel, setActiveLocationLabel] = useState(() => {
     return localStorage.getItem("calservice_user_location") || null;
   })
+  const [zoneCheckResult, setZoneCheckResult] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("calservice_zone_result") || "null")
+    } catch { return null }
+  })
   const [packagesData, setPackagesData] = useState(null)
+
+  // Verify service zone for customer coordinates
+  const verifyServiceZone = async (lat, lng, label) => {
+    if (lat == null || lng == null) return
+    try {
+      const zoneRes = await apiRequest("/settings/service-zones/check/", {
+        method: "POST",
+        json: { lat, lng }
+      })
+      setZoneCheckResult(zoneRes)
+      localStorage.setItem("calservice_zone_result", JSON.stringify(zoneRes))
+    } catch (e) {
+      // Fail open if endpoint is down
+      const openRes = { in_zone: true, open_access: true, zone: null, available_services: [] }
+      setZoneCheckResult(openRes)
+    }
+  }
 
   useEffect(() => {
     async function loadCatalog() {
@@ -1092,6 +1139,7 @@ export function LandingPage() {
               setActiveLocationLabel(display)
               localStorage.setItem("calservice_user_location", display)
             }
+            await verifyServiceZone(lat, lng, display)
           } catch (e) { }
         },
         (err) => {
@@ -1402,11 +1450,25 @@ export function LandingPage() {
                 <button
                   type="button"
                   onClick={() => setShowLocationPickerModal(true)}
-                  className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[320px] truncate"
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-extrabold transition-all cursor-pointer shadow-2xs max-w-[240px] sm:max-w-[340px] truncate ${
+                    zoneCheckResult && zoneCheckResult.in_zone === false
+                      ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                      : "border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-slate-800"
+                  }`}
                   title="Select Location"
                 >
-                  <MapPin className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <MapPin className={`w-4 h-4 shrink-0 ${zoneCheckResult && zoneCheckResult.in_zone === false ? "text-red-500" : "text-indigo-600"}`} />
                   <span className="truncate">{displayLocationText}</span>
+                  {zoneCheckResult && zoneCheckResult.in_zone === false && (
+                    <span className="text-[9px] bg-red-200 text-red-800 font-black px-1.5 py-0.5 rounded-full shrink-0">
+                      Outside Area
+                    </span>
+                  )}
+                  {zoneCheckResult && zoneCheckResult.in_zone === true && zoneCheckResult.zone?.name && (
+                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-black px-1.5 py-0.5 rounded-full shrink-0">
+                      ✓ {zoneCheckResult.zone.name}
+                    </span>
+                  )}
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-auto" />
                 </button>
               </div>
@@ -1612,16 +1674,22 @@ export function LandingPage() {
         {showLocationPickerModal && (
           <AddAddressSearchModal
             onClose={() => setShowLocationPickerModal(false)}
-            onSelectLocation={async (locStr) => {
+            onSelectLocation={async (locStr, coords) => {
               setShowLocationPickerModal(false)
               if (locStr) {
                 const labelStr = typeof locStr === "string" ? locStr : (locStr?.formatted_address || locStr?.locality || locStr?.city || "")
                 setActiveLocationLabel(labelStr)
                 localStorage.setItem("calservice_user_location", labelStr)
+                if (coords?.lat && coords?.lng) {
+                  localStorage.setItem("calservice_user_coords", JSON.stringify(coords))
+                  await verifyServiceZone(coords.lat, coords.lng, labelStr)
+                }
                 if (user) {
                   try {
                     await apiUpdateCustomerLastLocation({
                       label: labelStr,
+                      latitude: coords?.lat,
+                      longitude: coords?.lng,
                       detected_at: new Date().toISOString()
                     })
                   } catch (e) { }
@@ -1661,10 +1729,14 @@ export function LandingPage() {
               <button
                 type="button"
                 onClick={() => setShowLocationPickerModal(true)}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-xs font-extrabold text-slate-800 transition-all cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[320px] truncate"
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-extrabold transition-all cursor-pointer shadow-2xs max-w-[240px] sm:max-w-[340px] truncate ${
+                  zoneCheckResult && zoneCheckResult.in_zone === false
+                    ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                    : "border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-slate-800"
+                }`}
                 title="Select Location"
               >
-                <MapPin className="w-4 h-4 text-indigo-600 shrink-0" />
+                <MapPin className={`w-4 h-4 shrink-0 ${zoneCheckResult && zoneCheckResult.in_zone === false ? "text-red-500" : "text-indigo-600"}`} />
                 <span className="truncate">
                   {(() => {
                     if (activeLocationLabel) return activeLocationLabel
@@ -1677,6 +1749,16 @@ export function LandingPage() {
                     return "Hosur, Tamil Nadu, India"
                   })()}
                 </span>
+                {zoneCheckResult && zoneCheckResult.in_zone === false && (
+                  <span className="text-[9px] bg-red-200 text-red-800 font-black px-1.5 py-0.5 rounded-full shrink-0">
+                    Outside Area
+                  </span>
+                )}
+                {zoneCheckResult && zoneCheckResult.in_zone === true && zoneCheckResult.zone?.name && (
+                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-black px-1.5 py-0.5 rounded-full shrink-0">
+                    ✓ {zoneCheckResult.zone.name}
+                  </span>
+                )}
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-auto" />
               </button>
 
@@ -1747,6 +1829,34 @@ export function LandingPage() {
           </div>
         </header>
 
+        {/* ── Service Area Availability Banner ─────────────────────────────── */}
+        {zoneCheckResult && zoneCheckResult.in_zone === false && (
+          <div className="max-w-7xl mx-auto px-6 pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between gap-4 shadow-sm">
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600 shrink-0 font-bold text-xl">
+                  🚫
+                </div>
+                <div>
+                  <div className="font-black text-xs sm:text-sm text-red-900">
+                    Doorstep Service is Currently Unavailable in Your Area
+                  </div>
+                  <div className="text-[11px] sm:text-xs text-red-700 mt-0.5 leading-snug">
+                    We don't serve <strong className="text-red-900">{activeLocationLabel || "your selected location"}</strong> yet. Please select an address within our service areas to book.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLocationPickerModal(true)}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shrink-0 cursor-pointer shadow-md transition-all active:scale-95"
+              >
+                Change Location
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Hero ───────────────────────────────────────────── */}
         <section id="home" className="max-w-7xl mx-auto px-6 pt-14 pb-16 grid lg:grid-cols-2 gap-12 items-center">
           <div>
@@ -1772,7 +1882,14 @@ export function LandingPage() {
                 placeholder={homeConfig.hero?.searchPlaceholder || "What service do you need?"}
                 className="flex-1 bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-slate-400"
               />
-              <LocationDropdown className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3" />
+              <LocationDropdown
+                className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3"
+                activeCity={activeLocationLabel ? (activeLocationLabel.includes("Hosur") ? "Hosur" : activeLocationLabel.includes("Coimbatore") ? "Coimbatore" : activeLocationLabel.includes("Chennai") ? "Chennai" : activeLocationLabel.includes("Bengaluru") ? "Bengaluru" : activeLocationLabel.includes("Salem") ? "Salem" : activeLocationLabel.split(",")[0]) : undefined}
+                onCityChange={(newCity) => {
+                  setActiveLocationLabel(newCity)
+                  localStorage.setItem("calservice_user_location", newCity)
+                }}
+              />
               <button
                 type="submit"
                 aria-label="Search services"
@@ -4371,16 +4488,22 @@ export function LandingPage() {
       {showLocationPickerModal && (
         <AddAddressSearchModal
           onClose={() => setShowLocationPickerModal(false)}
-          onSelectLocation={async (locStr) => {
+          onSelectLocation={async (locStr, coords) => {
             setShowLocationPickerModal(false)
             if (locStr) {
               const labelStr = typeof locStr === "string" ? locStr : (locStr?.formatted_address || locStr?.locality || locStr?.city || "")
               setActiveLocationLabel(labelStr)
               localStorage.setItem("calservice_user_location", labelStr)
+              if (coords?.lat && coords?.lng) {
+                localStorage.setItem("calservice_user_coords", JSON.stringify(coords))
+                await verifyServiceZone(coords.lat, coords.lng, labelStr)
+              }
               if (user) {
                 try {
                   await apiUpdateCustomerLastLocation({
                     label: labelStr,
+                    latitude: coords?.lat,
+                    longitude: coords?.lng,
                     detected_at: new Date().toISOString()
                   })
                 } catch (e) { }

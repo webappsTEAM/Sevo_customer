@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
             database_operations=[
                 migrations.RunSQL(
                     sql="""
-                    DROP TABLE IF EXISTS service_requests_package_service CASCADE;
+                    DROP TABLE IF EXISTS service_requests_package_service;
                     """,
                     reverse_sql=""
                 ),

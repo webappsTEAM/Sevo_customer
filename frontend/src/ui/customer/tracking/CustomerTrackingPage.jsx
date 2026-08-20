@@ -222,6 +222,9 @@ export function CustomerTrackingPage() {
             freshness={freshness}
             etaMinutes={etaMins}
             distanceKm={distKm}
+            startOtp={startOtp}
+            vendorName={vendorName}
+            requestId={data?.request_id || activeIdentifier}
           />
 
           {/* Unified Floating Overlay Card */}

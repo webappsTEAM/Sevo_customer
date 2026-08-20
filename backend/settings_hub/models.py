@@ -243,3 +243,137 @@ class HomePageMedia(models.Model):
 
     def __str__(self):
         return f"[{self.section}] {self.image_path} ({self.cleanup_status})"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Service Area Geofencing
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ServiceZone(models.Model):
+    """
+    Admin-defined geographic zone that controls which services are available
+    in a specific area. Supports circle (Haversine) and polygon (ray-casting)
+    point-in-zone checks without requiring GeoDjango.
+    """
+    ZONE_TYPE_CHOICES = [
+        ("circle", "Circle (Radius)"),
+        ("polygon", "Polygon (Drawn)"),
+    ]
+
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        related_name="service_zones",
+    )
+    created_by = models.ForeignKey(
+        AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_service_zones",
+    )
+
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True)
+    color = models.CharField(max_length=20, default="#4F46E5")  # hex colour for map
+    is_active = models.BooleanField(default=True)
+
+    zone_type = models.CharField(max_length=10, choices=ZONE_TYPE_CHOICES, default="circle")
+
+    # Circle zone fields
+    center_lat = models.FloatField(null=True, blank=True)
+    center_lng = models.FloatField(null=True, blank=True)
+    radius_meters = models.FloatField(default=5000.0)  # metres
+
+    # Polygon zone field — stores GeoJSON Polygon geometry
+    # e.g. { "type": "Polygon", "coordinates": [[[lng,lat], ...]] }
+    polygon = models.JSONField(null=True, blank=True)
+
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Service Zone"
+        verbose_name_plural = "Service Zones"
+
+    def __str__(self):
+        return f"{self.name} ({self.zone_type})"
+
+    # ── Geometry helpers (no GeoDjango) ────────────────────────────────────
+
+    @staticmethod
+    def _haversine(lat1, lng1, lat2, lng2):
+        """Return distance in metres between two WGS-84 points."""
+        import math
+        R = 6_371_000  # Earth radius in metres
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlam = math.radians(lng2 - lng1)
+        a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    @staticmethod
+    def _ray_cast(lat, lng, polygon_coords):
+        """
+        Ray-casting point-in-polygon test.
+        polygon_coords: list of [lng, lat] pairs (GeoJSON order).
+        Returns True if (lat, lng) is inside the polygon.
+        """
+        x, y = lng, lat
+        inside = False
+        ring = polygon_coords
+        n = len(ring)
+        j = n - 1
+        for i in range(n):
+            xi, yi = ring[i][0], ring[i][1]
+            xj, yj = ring[j][0], ring[j][1]
+            intersect = ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi + 1e-15) + xi)
+            if intersect:
+                inside = not inside
+            j = i
+        return inside
+
+    def contains_point(self, lat, lng):
+        """Return True if (lat, lng) falls inside this zone."""
+        if self.zone_type == "circle":
+            if self.center_lat is None or self.center_lng is None:
+                return False
+            dist = self._haversine(lat, lng, self.center_lat, self.center_lng)
+            return dist <= self.radius_meters
+        elif self.zone_type == "polygon":
+            if not self.polygon:
+                return False
+            try:
+                coords = self.polygon.get("coordinates", [])
+                if not coords:
+                    return False
+                # Use the outer ring (index 0)
+                outer_ring = coords[0]
+                return self._ray_cast(lat, lng, outer_ring)
+            except Exception:
+                return False
+        return False
+
+
+class ServiceZoneService(models.Model):
+    """
+    Links a ServiceZone to specific service slugs that are available inside it.
+    If no entries exist for a zone, all services are considered available.
+    """
+    zone = models.ForeignKey(
+        ServiceZone,
+        on_delete=models.CASCADE,
+        related_name="zone_services",
+    )
+    service_slug = models.CharField(max_length=100, help_text="Service slug/key from catalog")
+    service_name = models.CharField(max_length=150, blank=True)
+    is_available = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = [("zone", "service_slug")]
+        ordering = ["service_slug"]
+
+    def __str__(self):
+        status = "✓" if self.is_available else "✗"
+        return f"{self.zone.name} — {self.service_slug} {status}"
