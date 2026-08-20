@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { Smartphone, Phone, Mail, Clock } from "lucide-react";
 import { CalTrackLogo } from "./CalTrackLogo.jsx";
 import { BkStyles } from "../pages/BookingPage.jsx";
@@ -59,7 +60,7 @@ export function AppBannerAndFooter() {
               <div className="uc-paint-app-banner-text">
                 <span className="uc-paint-app-banner-tag">Book on the go!</span>
                 <h4 className="uc-paint-app-banner-title">Download the CalServices App</h4>
-                <p className="uc-paint-app-banner-desc">Faster booking, real-time tracking & exclusive app offers.</p>
+                <p className="uc-paint-app-banner-desc">Faster booking, real-time tracking &amp; exclusive app offers.</p>
               </div>
             </div>
             <div className="uc-paint-app-banner-right">
@@ -72,14 +73,18 @@ export function AppBannerAndFooter() {
         {/* Main Links Footer */}
         <div className="uc-paint-main-footer" style={{ backgroundColor: "#0B1225" }}>
           <div className="uc-paint-container uc-paint-main-footer-inner" style={{ padding: "0 1.5rem" }}>
-            {/* Col 1 */}
+            {/* Col 1: Brand & Corporate */}
             <div className="uc-paint-footer-col">
               <div className="uc-paint-footer-logo-row">
                 <CalTrackLogo size={24} />
                 <span className="uc-paint-footer-brand">CalServices</span>
               </div>
               <p className="uc-paint-footer-brand-desc">
-                Your trusted partner for all home services. Quality you can count on.
+                Your trusted partner for doorstep home and commercial services. Quality, verified professionals, and transparent pricing.
+              </p>
+              <p style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "0.5rem", lineHeight: 1.4 }}>
+                CALDIM ENGINEERING PRIVATE LIMITED<br />
+                CIN: U72900KA2026PTC123456 • GSTIN: 33AAGCC4916J1ZP
               </p>
               <div className="uc-paint-footer-socials">
                 <span className="uc-paint-social-icon"><FacebookMark style={{ width: 16, height: 16 }} /></span>
@@ -89,31 +94,33 @@ export function AppBannerAndFooter() {
               </div>
             </div>
 
-            {/* Col 2 */}
+            {/* Col 2: Services */}
             <div className="uc-paint-footer-col">
               <h5 className="uc-paint-footer-col-title">Services</h5>
               <ul className="uc-paint-footer-links">
-                <li>Home Services & Pest Control</li>
-                <li>Paintings</li>
-                <li>Mason</li>
-                <li>AC & Appliance</li>
+                <li><Link to="/home" style={{ color: "inherit", textDecoration: "none" }}>Home Cleaning &amp; Pest Control</Link></li>
+                <li><Link to="/home" style={{ color: "inherit", textDecoration: "none" }}>Paintings &amp; Waterproofing</Link></li>
+                <li><Link to="/home" style={{ color: "inherit", textDecoration: "none" }}>Masonry &amp; Civil Works</Link></li>
+                <li><Link to="/home" style={{ color: "inherit", textDecoration: "none" }}>AC &amp; Appliance Repair</Link></li>
+                <li><Link to="/trucks/hosur" style={{ color: "inherit", textDecoration: "none" }}>Goods &amp; Transports</Link></li>
               </ul>
             </div>
 
-            {/* Col 3 */}
+            {/* Col 3: Legal & Policies */}
             <div className="uc-paint-footer-col">
-              <h5 className="uc-paint-footer-col-title">Company</h5>
+              <h5 className="uc-paint-footer-col-title">Legal &amp; Policies</h5>
               <ul className="uc-paint-footer-links">
-                <li>About Us</li>
-                <li>Careers</li>
-                <li>Blog</li>
-                <li>Become a Partner</li>
+                <li><Link to="/terms" style={{ color: "inherit", textDecoration: "none" }}>Terms &amp; Conditions</Link></li>
+                <li><Link to="/privacy" style={{ color: "inherit", textDecoration: "none" }}>Privacy Policy</Link></li>
+                <li><Link to="/service-delivery" style={{ color: "inherit", textDecoration: "none" }}>Service Delivery Policy</Link></li>
+                <li><Link to="/cancellation-refund" style={{ color: "inherit", textDecoration: "none" }}>Cancellation &amp; Refund</Link></li>
+                <li><Link to="/help" style={{ color: "inherit", textDecoration: "none" }}>Help &amp; Support</Link></li>
               </ul>
             </div>
 
-            {/* Col 4 */}
+            {/* Col 4: Contact & Help */}
             <div className="uc-paint-footer-col">
-              <h5 className="uc-paint-footer-col-title">Need Help?</h5>
+              <h5 className="uc-paint-footer-col-title">Customer Care</h5>
               <ul className="uc-paint-footer-contact">
                 <li>
                   <Phone size={14} />
@@ -121,11 +128,16 @@ export function AppBannerAndFooter() {
                 </li>
                 <li>
                   <Mail size={14} />
-                  <span>support@calservices.com</span>
+                  <a href="mailto:support@caldimengg.com" style={{ color: "inherit", textDecoration: "none" }}>support@caldimengg.com</a>
                 </li>
                 <li>
                   <Clock size={14} />
-                  <span>Mon - Sun (8 AM - 8 PM)</span>
+                  <span>Mon – Sun (8 AM – 8 PM)</span>
+                </li>
+                <li style={{ marginTop: "0.5rem" }}>
+                  <Link to="/contact" style={{ color: "#34d399", fontWeight: 700, textDecoration: "none" }}>
+                    Contact Us / Grievance →
+                  </Link>
                 </li>
               </ul>
             </div>

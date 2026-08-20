@@ -24,9 +24,7 @@ import { routes } from "../routes.js"
 import { CATEGORIES } from "./categoriesData.js"
 import { apiRequest } from "../../api/client.js"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
-import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
-import { LocationPermissionHandler } from "../components/AddressPicker/index.js"
-import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { LocationPermissionHandler, MapPickerScreen } from "../components/AddressPicker/index.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
@@ -269,655 +267,54 @@ function SummaryBar({ category, cart, date, time, step }) {
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    /* ─────────────────────────────────────────────────────────────
-   SAVED ADDRESSES MODAL (Urban-style Address Selector)
+   UNIFIED LOCATION PICKER WRAPPERS (Delegates to MapPickerScreen)
    ───────────────────────────────────────────────────────────── */
 
-function SavedAddressesModal({
+export function SavedAddressesModal({
   onClose,
   onSelectAddress,
   currentAddress,
-  onAddNewAddress
+  serviceSlug = "",
+  initialCoords
 }) {
-  const [addresses, setAddresses] = useState([])
-  const [selectedId, setSelectedId] = useState(null)
-
-  useEffect(() => {
-    async function loadSavedAddresses() {
-      try {
-        const res = await apiRequest("/auth/customer/addresses/")
-        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-          const list = res.data.map(a => ({
-            id: String(a.id),
-            title: a.label || a.address_type || "Saved Address",
-            text: a.formatted_address || [a.locality, a.city, a.state].filter(Boolean).join(", ")
-          }))
-          setAddresses(list)
-          const found = list.find(a => a.text === currentAddress)
-          setSelectedId(found ? found.id : list[0].id)
-        } else {
-          setAddresses([])
-        }
-      } catch (err) {
-        console.warn("Failed to fetch saved addresses:", err)
-        setAddresses([])
-      }
-    }
-    loadSavedAddresses()
-  }, [currentAddress])
-
-  const [menuOpenId, setMenuOpenId] = useState(null)
-
-  const handleProceed = () => {
-    const sel = addresses.find(a => a.id === selectedId)
-    if (sel) {
-      onSelectAddress(sel.text)
-    }
-    onClose()
-  }
-
   return (
-    <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose}>
-      <motion.div
-        className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-100 relative max-h-[90vh] flex flex-col font-sans text-slate-800"
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Floating Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-white hover:bg-slate-100 text-slate-800 flex items-center justify-center shadow-lg border border-slate-200 transition-transform active:scale-95 cursor-pointer z-10"
-        >
-          <X size={20} />
-        </button>
-
-        {/* Title */}
-        <h3 className="text-xl font-black text-slate-900 mb-4">
-          Saved addresses
-        </h3>
-
-        {/* Add another address button */}
-        <button
-          onClick={() => {
-            onAddNewAddress()
-          }}
-          className="flex items-center gap-2 text-indigo-600 font-extrabold text-sm hover:underline mb-4 py-1 text-left cursor-pointer"
-        >
-          <Plus size={18} className="stroke-[3]" /> Add another address
-        </button>
-
-        <div className="h-px bg-slate-100 -mx-6 mb-4" />
-
-        {/* Address List */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1 divide-y divide-slate-100">
-          {addresses.map((item) => {
-            const isSelected = selectedId === item.id
-            return (
-              <div
-                key={item.id}
-                onClick={() => setSelectedId(item.id)}
-                className={`pt-3 first:pt-0 flex items-start gap-3 cursor-pointer group`}
-              >
-                {/* Custom Radio Circle */}
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${isSelected ? "border-slate-900 bg-white" : "border-slate-300 group-hover:border-slate-400"
-                  }`}>
-                  {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />}
-                </div>
-
-                {/* Address Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-black text-slate-900 block">
-                      {item.title}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setMenuOpenId(menuOpenId === item.id ? null : item.id)
-                      }}
-                      className="text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-100"
-                    >
-                      <MoreVertical size={16} />
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500 font-medium leading-relaxed mt-0.5 pr-2">
-                    {item.text}
-                  </p>
-
-                  {/* 3-dots popup options */}
-                  {menuOpenId === item.id && (
-                    <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-2 flex gap-3 text-xs font-bold">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onAddNewAddress()
-                        }}
-                        className="text-indigo-600 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setAddresses(prev => prev.filter(a => a.id !== item.id))
-                          setMenuOpenId(null)
-                        }}
-                        className="text-rose-600 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Sticky Proceed Button */}
-        <div className="pt-5 border-t border-slate-100 mt-4">
-          <button
-            onClick={handleProceed}
-            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99] cursor-pointer"
-          >
-            Proceed
-          </button>
-        </div>
-      </motion.div>
-    </div>
+    <MapPickerScreen
+      initialCoords={initialCoords}
+      serviceSlug={serviceSlug}
+      onClose={onClose}
+      onConfirm={(resolvedAddr) => {
+        if (typeof onSelectAddress === "function") {
+          onSelectAddress(resolvedAddr)
+        }
+        if (typeof onClose === "function") {
+          onClose()
+        }
+      }}
+    />
   )
 }
-
-/* ─────────────────────────────────────────────────────────────
-   ADD ADDRESS SEARCH MODAL (Urban-style "Add another address" flow)
-   ───────────────────────────────────────────────────────────── */
 
 export function AddAddressSearchModal({
   onClose,
   onSelectLocation,
   onUseCurrentLocation,
-  savedAddresses: initialSaved = []
+  serviceSlug = "",
+  initialCoords
 }) {
-  const [query, setQuery] = useState("")
-  const [showMapPicker, setShowMapPicker] = useState(false)
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState([])
-  const [isGeoLoading, setIsGeoLoading] = useState(false)
-  const [geoError, setGeoError] = useState("")
-  const [savedAddrs, setSavedAddrs] = useState(initialSaved)
-  // Service zone availability gate
-  const [zoneCheckResult, setZoneCheckResult] = useState(null) // null | { in_zone, zone, message }
-  const [zoneChecking, setZoneChecking] = useState(false)
-
-  // Auto fetch saved addresses on mount if logged in
-  useEffect(() => {
-    async function loadSaved() {
-      try {
-        const res = await apiRequest('/auth/customer/addresses/')
-        if (res && res.success && Array.isArray(res.data)) {
-          setSavedAddrs(res.data)
-        }
-      } catch (e) {
-        // guest or non-auth
-      }
-    }
-    loadSaved()
-  }, [])
-
-  // Helper: save a location selection to recents in localStorage
-  const saveToRecents = (title, details) => {
-    try {
-      const existing = JSON.parse(localStorage.getItem("calservices_recent_locations") || "[]")
-      const newEntry = { title, details }
-      // Remove duplicates, add to front, keep max 10
-      const filtered = existing.filter(e => e.details !== details)
-      const updated = [newEntry, ...filtered].slice(0, 10)
-      localStorage.setItem("calservices_recent_locations", JSON.stringify(updated))
-      setRecents(updated)
-    } catch (e) { }
-  }
-
-  // Debounced geocoding search via Google Places Autocomplete
-  const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-  useEffect(() => {
-    if (!query || query.length < 3) {
-      setSearchResults([])
-      setIsSearching(false)
-      return
-    }
-    setIsSearching(true)
-    const delayDebounce = setTimeout(async () => {
-      try {
-        if (googleApiKey) {
-          // Use Google Places Autocomplete API
-          const gRes = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${googleApiKey}`
-          )
-          const gData = await gRes.json()
-          if (gData.status === "OK" && gData.results) {
-            const formatted = gData.results.slice(0, 5).map(result => {
-              const comps = result.address_components || []
-              let name = ""
-              for (const c of comps) {
-                if (c.types.includes("sublocality_level_1") || c.types.includes("sublocality") || c.types.includes("locality")) {
-                  name = c.long_name
-                  break
-                }
-              }
-              return {
-                title: name || result.formatted_address.split(",")[0],
-                details: result.formatted_address,
-                lat: result.geometry?.location?.lat,
-                lon: result.geometry?.location?.lng
-              }
-            })
-            setSearchResults(formatted)
-          } else {
-            setSearchResults([])
-          }
-        } else {
-          setSearchResults([])
-        }
-      } catch (err) {
-        console.error(err)
-      }
-      setIsSearching(false)
-    }, 400)
-    return () => clearTimeout(delayDebounce)
-  }, [query])
-
-  // ── Shared zone check helper ─────────────────────────────────────────────
-  // Called for ALL location selection methods (GPS, saved address, map-picker,
-  // search result with known coords). Returns true if booking may proceed.
-  // Backend remains the authoritative gate — this is UX-layer feedback only.
-  const checkZoneForCoords = async (lat, lng) => {
-    if (lat == null || lng == null) return true  // No coords → let backend decide
-    try {
-      setZoneChecking(true)
-      const zoneRes = await apiRequest("/settings/service-zones/check/", {
-        method: "POST",
-        json: { lat, lng },
-      })
-      setZoneCheckResult(zoneRes)
-      return zoneRes?.in_zone !== false  // false means blocked; null/true → allow
-    } catch {
-      // Network error / endpoint down → allow (open access fallback)
-      setZoneCheckResult({ in_zone: true, zone: null, open_access: true, message: "Zone check unavailable." })
-      return true
-    } finally {
-      setZoneChecking(false)
-    }
-  }
-  // ── End zone check helper ────────────────────────────────────────────────
-
-  const handleUseCurrentLocationClick = () => {
-    if (!navigator.geolocation) {
-      setGeoError("Geolocation is not supported by your browser.")
-      return
-    }
-    setIsGeoLoading(true)
-    setGeoError("")
-    setZoneCheckResult(null)
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = parseFloat(pos.coords.latitude.toFixed(6))
-        const lng = parseFloat(pos.coords.longitude.toFixed(6))
-        const acc = pos.coords.accuracy
-
-        try {
-          // ── Step 1: Check service zone availability ─────────────────
-          try {
-            setZoneChecking(true)
-            const zoneRes = await apiRequest("/settings/service-zones/check/", {
-              method: "POST",
-              json: { lat, lng },
-            })
-            setZoneCheckResult(zoneRes)
-            if (zoneRes && zoneRes.in_zone === false) {
-              // Customer is outside all service zones — block booking
-              setIsGeoLoading(false)
-              setZoneChecking(false)
-              return
-            }
-          } catch (zoneErr) {
-            // Zone check failed (network / no zones) → allow booking (open access)
-            setZoneCheckResult({ in_zone: true, zone: null, message: "Zone check unavailable — open access." })
-          } finally {
-            setZoneChecking(false)
-          }
-
-          // ── Step 2: Reverse-geocode the coordinates ─────────────────
-          let readableLocation = ""
-          try {
-            const backendDetect = await apiDetectCustomerLocation(lat, lng, acc)
-            if (backendDetect && backendDetect.success && backendDetect.data) {
-              const d = backendDetect.data
-              readableLocation = [d.area, d.city, d.state].filter(Boolean).join(", ")
-            }
-          } catch (e) { }
-
-          if (!readableLocation) {
-            try {
-              readableLocation = await getAddress(lat, lng)
-            } catch (e) { }
-          }
-
-          if (!readableLocation) readableLocation = `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
-
-          onSelectLocation(readableLocation)
-          onClose()
-        } catch (e) {
-          setGeoError("Unable to detect location. Please try again.")
-        } finally {
-          setIsGeoLoading(false)
-        }
-      },
-      (err) => {
-        setIsGeoLoading(false)
-        if (err.code === 1) {
-          setGeoError("Location permission denied. Please allow location access.")
-        } else if (err.code === 2) {
-          setGeoError("Unable to detect high-accuracy GPS position.")
-        } else if (err.code === 3) {
-          setGeoError("Location request timed out.")
-        } else {
-          setGeoError("Failed to detect location.")
-        }
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    )
-  }
-
-  // Load recent searches from localStorage (no hardcoded locations)
-  const [recents, setRecents] = useState(() => {
-    try {
-      const stored = localStorage.getItem("calservices_recent_locations")
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
-      }
-    } catch (e) { }
-    return []
-  })
-
   return (
-    <div className="fixed inset-0 z-[10002] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose}>
-      <motion.div
-        className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-100 relative max-h-[90vh] flex flex-col font-sans text-slate-800"
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Top Header: Arrow + Search Input */}
-        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 mb-4">
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors shrink-0 cursor-pointer"
-            title="Back"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="Search for your location/society/apartment"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-indigo-600 focus:bg-white focus:ring-2 focus:ring-indigo-600/10 transition-all placeholder:text-slate-400"
-              autoFocus
-            />
-            {query ? (
-              <button
-                onClick={() => setQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
-              >
-                <X size={14} />
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Use current location option */}
-        <button
-          onClick={() => {
-            setShowMapPicker(true)
-          }}
-          disabled={isGeoLoading}
-          className="flex items-center gap-3 text-purple-700 hover:text-purple-800 font-extrabold text-xs py-2.5 px-1 rounded-xl transition-colors cursor-pointer group mb-3 hover:bg-purple-50/50"
-        >
-          <div className="w-7 h-7 rounded-full bg-purple-100/70 flex items-center justify-center text-purple-700 shrink-0 group-hover:bg-purple-200/70 transition-colors">
-            {isGeoLoading ? (
-              <RefreshCw size={15} className="animate-spin text-purple-700" />
-            ) : (
-              <Compass size={15} className="stroke-[2.5]" />
-            )}
-          </div>
-          <div>
-            <span className="block text-purple-700 font-extrabold text-xs">
-              {isGeoLoading ? "Detecting location..." : "Use current location"}
-            </span>
-            <span className="block text-[10px] text-purple-600/70 font-medium">Using GPS for exact address</span>
-          </div>
-        </button>
-
-        {geoError && (
-          <div className="mb-3 px-3 py-2 bg-red-50 border border-red-100 rounded-xl text-[11px] font-bold text-red-600 flex items-center gap-2">
-            <AlertCircle size={14} className="shrink-0" />
-            <span>{geoError}</span>
-          </div>
-        )}
-
-        {/* ── Service Zone Gate Banner ─────────────────────────────────────────── */}
-        {zoneCheckResult && zoneCheckResult.in_zone === false && (
-          <div style={{
-            marginBottom: 12,
-            borderRadius: 14,
-            background: "linear-gradient(135deg, #fff1f2, #fff7ed)",
-            border: "1.5px solid #fca5a5",
-            padding: "14px 16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <span style={{ fontSize: 18 }}>🚫</span>
-              </div>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 13, color: "#991b1b" }}>Service Not Available in Your Area</div>
-                <div style={{ fontSize: 11, color: "#b91c1c", marginTop: 1 }}>We currently don't serve your location.</div>
-              </div>
-            </div>
-            <div style={{ fontSize: 11, color: "#7f1d1d", lineHeight: 1.5, padding: "8px 10px", borderRadius: 8, background: "rgba(239,68,68,0.07)" }}>
-              📍 Your GPS location is outside our current service zones. Please try a different address or check back later as we expand.
-            </div>
-            <button
-              onClick={() => { setZoneCheckResult(null); setGeoError("") }}
-              style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 700, color: "#4F46E5", background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 2 }}
-            >
-              ↩ Try a different location
-            </button>
-          </div>
-        )}
-
-        {/* ── Zone Available Confirmation Badge ────────────────────────── */}
-        {zoneCheckResult && zoneCheckResult.in_zone === true && zoneCheckResult.zone && (
-          <div style={{
-            marginBottom: 10,
-            padding: "8px 12px",
-            borderRadius: 10,
-            background: "#ecfdf5",
-            border: "1px solid #a7f3d0",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: 11,
-            fontWeight: 700,
-            color: "#065f46",
-          }}>
-            <span style={{ fontSize: 14 }}>✅</span>
-            Service available in <strong style={{ color: "#047857" }}>{zoneCheckResult.zone.name}</strong>
-          </div>
-        )}
-
-        {/* Content Body: Search Results OR (Saved + Recents) */}
-        <div className="flex-1 overflow-y-auto space-y-5 pr-1 text-slate-800">
-          {query.length >= 3 ? (
-            <div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">
-                Search Results
-              </span>
-              {isSearching ? (
-                <div className="py-6 text-center text-xs font-bold text-indigo-600 flex items-center justify-center gap-2">
-                  <RefreshCw size={14} className="animate-spin" />
-                  <span>Searching locations...</span>
-                </div>
-              ) : searchResults.length > 0 ? (
-                <div className="divide-y divide-slate-100">
-                  {searchResults.map((item, idx) => (
-                    <div
-                      key={idx}
-                      onClick={async () => {
-                        if (item.lat != null && item.lon != null) {
-                          const ok = await checkZoneForCoords(item.lat, item.lon)
-                          if (!ok) return
-                        }
-                        saveToRecents(item.title, item.details)
-                        onSelectLocation(item.details, (item.lat != null && item.lon != null) ? { lat: item.lat, lng: item.lon } : undefined)
-                      }}
-                      className="py-3 flex items-start gap-3 cursor-pointer hover:bg-slate-50 rounded-xl px-2 transition-colors"
-                    >
-                      <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                      <div>
-                        <span className="text-xs font-black text-slate-900 block">{item.title}</span>
-                        <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{item.details}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-6 text-center text-xs text-slate-400">
-                  No matching locations found.
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              {/* Saved Section */}
-              {savedAddrs && savedAddrs.length > 0 ? (
-                <div>
-                  <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Saved</h4>
-                  <div className="space-y-3">
-                    {savedAddrs.map((addr, idx) => {
-                      const displayAddr = [addr.address_line1, addr.address_line2, addr.city, addr.state, addr.pincode].filter(Boolean).join(", ")
-                      return (
-                        <div
-                          key={addr.id || idx}
-                          onClick={async () => {
-                            if (addr.latitude != null && addr.longitude != null) {
-                              const ok = await checkZoneForCoords(addr.latitude, addr.longitude)
-                              if (!ok) return
-                            }
-                            onSelectLocation(displayAddr, { lat: addr.latitude, lng: addr.longitude })
-                          }}
-                          className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
-                        >
-                          <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
-                            <Home size={15} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-black text-slate-900 capitalize group-hover:text-purple-700 transition-colors">
-                                {addr.label_display || addr.label || "Home"}
-                              </span>
-                              {addr.is_default && (
-                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-md">
-                                  Default
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5 truncate">
-                              {displayAddr}
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <button onClick={() => { onClose(); onSelectLocation("") }} className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
-                    View more
-                  </button>
-                </div>
-              ) : null}
-
-              {/* Recents Section — only shown when user has actual recent searches */}
-              {recents.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Recents</h4>
-                  <div className="space-y-3">
-                    {recents.map((item, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => { saveToRecents(item.title, item.details); onSelectLocation(item.details) }}
-                        className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
-                      >
-                        <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
-                          <Clock size={15} />
-                        </div>
-                        <div>
-                          <span className="text-xs font-black text-slate-900 block group-hover:text-purple-700 transition-colors">
-                            {item.title}
-                          </span>
-                          <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5">
-                            {item.details}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
-                    View more
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Footer info */}
-        <div className="pt-3 border-t border-slate-100 mt-3 flex items-center justify-center gap-1.5 text-[10px] text-slate-400 font-semibold">
-          <span>powered by</span>
-          <span className="font-bold text-slate-600">Google</span>
-        </div>
-
-        {/* Swiggy/Zomato style Map Picker overlay */}
-        {showMapPicker && (
-          <LocationPermissionHandler
-            onClose={() => setShowMapPicker(false)}
-            onManualSearch={() => setShowMapPicker(false)}
-            onLocationConfirmed={async (addressData) => {
-              const locStr = typeof addressData === "string"
-                ? addressData
-                : addressData?.formatted_address || [addressData?.flat_house_no, addressData?.locality, addressData?.city].filter(Boolean).join(", ")
-              const lat = addressData?.latitude
-              const lng = addressData?.longitude
-              if (lat != null && lng != null) {
-                const ok = await checkZoneForCoords(lat, lng)
-                if (!ok) return
-              }
-              setShowMapPicker(false)
-              if (typeof onSelectLocation === "function") {
-                onSelectLocation(locStr || addressData, { lat, lng })
-              }
-              onClose()
-            }}
-          />
-        )}
-      </motion.div>
-    </div>
+    <MapPickerScreen
+      initialCoords={initialCoords}
+      serviceSlug={serviceSlug}
+      onClose={onClose}
+      onConfirm={(resolvedAddr) => {
+        if (typeof onSelectLocation === "function") {
+          onSelectLocation(resolvedAddr, { lat: resolvedAddr.latitude, lng: resolvedAddr.longitude })
+        }
+        if (typeof onClose === "function") {
+          onClose()
+        }
+      }}
+    />
   )
 }
 
@@ -2401,7 +1798,9 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
         {/* Agreement */}
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 18 }}>
           <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ accentColor: '#7C3AED', marginTop: 2, flexShrink: 0 }} />
-          <span style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.5 }}>I agree to the <a href="#" className="uc-link">Terms of Service</a> and <a href="#" className="uc-link">Privacy Policy</a>. The technician will arrive at the scheduled time.</span>
+          <span style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.5 }}>
+            I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="uc-link" onClick={(e) => e.stopPropagation()}>Terms of Service</a>, <a href="/privacy" target="_blank" rel="noopener noreferrer" className="uc-link" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>, and <a href="/cancellation-refund" target="_blank" rel="noopener noreferrer" className="uc-link" onClick={(e) => e.stopPropagation()}>Cancellation &amp; Refund Policy</a>.
+          </span>
         </label>
 
         {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
@@ -2854,7 +2253,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const rawDate = selDate || liveData?.preferred_date || successData?.preferred_date || ""
   const displayDate = rawDate ? new Date(rawDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : ""
   const rawTime = selTime || liveData?.preferred_time || successData?.preferred_time || ""
-  const displayTime = rawTime ? (TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === rawTime)?.l || rawTime) : ""
+  const displayTime = rawTime || ""
 
   // Real-Time WebSocket Connection + Resilient 3s Polling Backup
   useEffect(() => {
@@ -2883,21 +2282,27 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     }
   }, [rid, successData?.tracking_token])
 
-  const isAccepted = Boolean(
-    liveData?.is_accepted ||
-    (["accepted", "in_progress", "on_the_way", "arrived", "completed"].includes(liveData?.status) && (liveData?.technician?.name || liveData?.technician_name))
+  const isCompleted = Boolean(
+    liveData?.status && ["completed", "closed", "reviewed", "feedback_received"].includes(liveData.status.toLowerCase())
   )
-  const empInfo = isAccepted ? (liveData?.technician || successData?.technician || liveData?.assigned_employee) : null
-  const techName = isAccepted ? (empInfo?.name || liveData?.technician_name || successData?.technician_name || "") : ""
-  const techPhone = isAccepted ? (empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || "") : ""
-  const techPhoto = isAccepted ? (empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null) : null
-  const techRating = isAccepted ? (empInfo?.rating || liveData?.technician_rating || successData?.technician_rating || null) : null
-  const techJobs = isAccepted ? (empInfo?.jobs_completed || empInfo?.total_jobs || null) : null
+
+  const isAccepted = Boolean(
+    !isCompleted && (
+      liveData?.is_accepted ||
+      (["accepted", "in_progress", "on_the_way", "arrived"].includes(liveData?.status) && (liveData?.technician?.name || liveData?.technician_name))
+    )
+  )
+  const empInfo = isAccepted || isCompleted ? (liveData?.technician || successData?.technician || liveData?.assigned_employee) : null
+  const techName = isAccepted || isCompleted ? (empInfo?.name || liveData?.technician_name || successData?.technician_name || "") : ""
+  const techPhone = isAccepted || isCompleted ? (empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || "") : ""
+  const techPhoto = isAccepted || isCompleted ? (empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null) : null
+  const techRating = isAccepted || isCompleted ? (empInfo?.rating || liveData?.technician_rating || successData?.technician_rating || null) : null
+  const techJobs = isAccepted || isCompleted ? (empInfo?.jobs_completed || empInfo?.total_jobs || null) : null
 
   const isCancelled = liveData?.status === "cancelled"
   const cancellationReason = liveData?.cancellation_reason || (liveData?.description && liveData.description.includes("[Cancellation Reason]:") ? liveData.description.split("[Cancellation Reason]:")[1].trim() : "")
   const graceSecs = liveData?.cancellation_grace_remaining_seconds ?? (isAccepted ? 300 : 9999)
-  const canCancel = !isCancelled && (liveData?.can_cancel !== false && (!isAccepted || graceSecs > 0))
+  const canCancel = !isCancelled && !isCompleted && (liveData?.can_cancel !== false && (!isAccepted || graceSecs > 0))
 
   const etaMinutes = liveData?.technician?.eta_minutes || liveData?.eta_minutes || null
   const distKm = liveData?.technician?.distance_km || liveData?.distance_km || null
@@ -2920,7 +2325,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     longitude: liveData?.destination?.longitude || formData?.longitude,
     address: liveData?.destination?.address || formData?.address,
     start_otp: startOtp,
-    status: liveData?.status || (isAccepted ? "assigned" : "confirmed"),
+    status: liveData?.status || (isCompleted ? "completed" : isAccepted ? "assigned" : "confirmed"),
     can_cancel: canCancel,
     cancellation_grace_remaining_seconds: graceSecs,
   }
@@ -2937,6 +2342,147 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     const m = Math.floor(sec / 60)
     const s = sec % 60
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+  }
+
+  /* ─────────────────── CASE 0A: BOOKING COMPLETED STATE ─────────────────── */
+  if (isCompleted) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{ maxWidth: 620, margin: "0 auto", padding: "1.5rem 1rem", textAlign: "center" }}
+      >
+        <div style={{
+          width: 76,
+          height: 76,
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #10B981, #059669)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "0 auto 1.2rem",
+          boxShadow: "0 8px 24px rgba(16, 185, 129, 0.35)",
+        }}>
+          <CheckCircle2 size={44} color="white" />
+        </div>
+
+        <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", margin: "0 0 0.35rem" }}>
+          Service Completed! 🎉
+        </h2>
+        <p style={{ color: "#64748b", fontSize: "0.9rem", margin: "0 0 1.25rem" }}>
+          Your service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been finished successfully.
+        </p>
+
+        {/* Serviced By Partner Card */}
+        {techName && (
+          <div style={{
+            background: "white",
+            borderRadius: 18,
+            padding: "1rem 1.25rem",
+            marginBottom: "1rem",
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            textAlign: "left",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+          }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #dcfce7, #bbf7d0)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "1.2rem",
+              fontWeight: 800,
+              color: "#15803d",
+              border: "2px solid #22c55e",
+              flexShrink: 0,
+            }}>
+              {techPhoto ? (
+                <img src={techPhoto} alt={techName} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+              ) : (
+                (techName || "P").charAt(0).toUpperCase()
+              )}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#16a34a", textTransform: "uppercase" }}>Serviced By</div>
+              <div style={{ fontSize: "0.98rem", fontWeight: 900, color: "#0f172a" }}>{techName}</div>
+              <div style={{ fontSize: "0.76rem", color: "#64748b" }}>Verified Professional • CalServices</div>
+            </div>
+            <span style={{
+              fontSize: "0.72rem",
+              fontWeight: 800,
+              background: "#ecfdf5",
+              color: "#059669",
+              padding: "4px 8px",
+              borderRadius: 8,
+              border: "1px solid #a7f3d0",
+            }}>
+              ✓ Finished
+            </span>
+          </div>
+        )}
+
+        {/* Real Bill / Order Details */}
+        <div style={{
+          background: "white",
+          borderRadius: 20,
+          padding: "1.25rem",
+          marginBottom: "1.5rem",
+          border: "1px solid #e2e8f0",
+          textAlign: "left",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, borderBottom: "1px solid #f1f5f9", paddingBottom: 8 }}>
+            <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Bill Summary</span>
+            <span style={{ fontSize: "0.76rem", fontWeight: 800, color: "#15803d", background: "#f0fdf4", padding: "2px 8px", borderRadius: 6 }}>Paid</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: "0.88rem" }}>
+            <span style={{ color: "#475569" }}>Total Amount:</span>
+            <span style={{ fontWeight: 900, color: "#0f172a" }}>₹{Number(displayTotal || 0).toLocaleString("en-IN")}</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: "0.82rem" }}>
+            <span style={{ color: "#64748b" }}>Payment Mode:</span>
+            <span style={{ fontWeight: 700, color: "#334155" }}>{paymentMethod === "ONLINE" ? "Online Payment" : "Cash on Delivery"}</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
+            <span style={{ color: "#64748b" }}>Delivered To:</span>
+            <span style={{ fontWeight: 600, color: "#334155", maxWidth: "60%", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {displayAddress}
+            </span>
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <button
+          onClick={onBookAgain}
+          style={{
+            width: "100%",
+            padding: "0.95rem",
+            background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
+            color: "white",
+            fontWeight: 800,
+            fontSize: "0.95rem",
+            border: "none",
+            borderRadius: 14,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            boxShadow: "0 4px 14px rgba(124, 58, 237, 0.35)",
+          }}
+        >
+          <Home size={16} /> Book Another Service
+        </button>
+      </motion.div>
+    )
   }
 
   /* ─────────────────── CASE 0: BOOKING CANCELLED STATE ─────────────────── */
@@ -3132,18 +2678,24 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName || "Assigned Partner"}</span>
+                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName || "Service Partner"}</span>
                 <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
                   ✓ Verified
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
-                  <Star size={13} fill="#d97706" /> {techRating ? Number(techRating).toFixed(1) : "4.9"}
-                </span>
-                <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
-                  • {techJobs ? `${techJobs}+ jobs completed` : "Verified Partner"}
-                </span>
+                {techRating != null ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
+                    <Star size={13} fill="#d97706" /> {Number(techRating).toFixed(1)}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '0.76rem', color: '#64748b' }}>New partner</span>
+                )}
+                {techJobs != null && (
+                  <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                    • {techJobs}+ jobs completed
+                  </span>
+                )}
               </div>
             </div>
 
@@ -3157,10 +2709,15 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 <div style={{ fontSize: '1.1rem', fontWeight: 900 }}>{distKm}</div>
                 <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>KM AWAY</div>
               </div>
-            ) : (
+            ) : liveData?.technician_location?.latitude != null ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
                 <div style={{ fontSize: '0.88rem', fontWeight: 900 }}>Live GPS</div>
-                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>EN ROUTE</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ACTIVE</div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #64748b, #475569)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 900 }}>Assigned</div>
+                <div style={{ fontSize: '0.58rem', fontWeight: 800 }}>WAITING GPS</div>
               </div>
             )}
           </div>
@@ -3194,49 +2751,74 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             >
               <MapPin size={15} /> Track on Live Map
             </button>
-            <a
-              href={`tel:${techPhone}`}
-              style={{
-                flex: 1,
-                padding: '0.75rem',
-                background: '#f1f5f9',
-                color: '#0f172a',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: 'none',
-                borderRadius: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                textDecoration: 'none',
-              }}
-            >
-              <Phone size={14} color="#0f172a" /> Call Pro
-            </a>
-            <button
-              onClick={() => {
-                const msg = encodeURIComponent(`Hi ${techName}, following up on my CalServices booking #${rid}.`)
-                window.open(`https://wa.me/91${techPhone.replace(/\D/g, '')}?text=${msg}`, '_blank')
-              }}
-              style={{
-                padding: '0.75rem 0.9rem',
-                background: '#ecfdf5',
-                color: '#059669',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: '1px solid #a7f3d0',
-                borderRadius: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-              }}
-            >
-              <MessageSquare size={14} color="#059669" />
-            </button>
+
+            {techPhone ? (
+              <>
+                <a
+                  href={`tel:${techPhone}`}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem',
+                    background: '#f1f5f9',
+                    color: '#0f172a',
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    border: 'none',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 5,
+                    textDecoration: 'none',
+                  }}
+                >
+                  <Phone size={14} color="#0f172a" /> Call Pro
+                </a>
+                <button
+                  onClick={() => {
+                    const msg = encodeURIComponent(`Hi ${techName || 'Partner'}, following up on my CalServices booking #${rid}.`)
+                    window.open(`https://wa.me/91${techPhone.replace(/\D/g, '')}?text=${msg}`, '_blank')
+                  }}
+                  style={{
+                    padding: '0.75rem 0.9rem',
+                    background: '#ecfdf5',
+                    color: '#059669',
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    border: '1px solid #a7f3d0',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                  }}
+                  title="WhatsApp Partner"
+                >
+                  <MessageSquare size={14} color="#059669" />
+                </button>
+              </>
+            ) : (
+              <span
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  background: '#f8fafc',
+                  color: '#94a3b8',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  border: '1px dashed #e2e8f0',
+                  borderRadius: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 5,
+                }}
+              >
+                <Phone size={14} color="#94a3b8" /> Call Unavailable
+              </span>
+            )}
           </div>
 
           {/* 5-Minute Grace Period Live Status Pill (Post-Acceptance) */}
@@ -7847,7 +7429,7 @@ function StepWorkflowCheckout({
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold text-slate-500">Address</span>
                   <button
-                    onClick={() => setShowSavedAddrModal(true)}
+                    onClick={() => setShowMapModal(true)}
                     className="border border-slate-200 rounded-lg px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
                   >
                     Edit
@@ -8249,66 +7831,24 @@ function StepWorkflowCheckout({
 
       </div>
 
-      {showSavedAddrModal && (
-        <SavedAddressesModal
-          onClose={() => setShowSavedAddrModal(false)}
-          currentAddress={formData.address}
-          onSelectAddress={(addrObj) => {
-            if (typeof addrObj === "object" && addrObj !== null) {
-              const fullAddr = addrObj.formatted_address || [addrObj.address_line1, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(", ");
+      {showMapModal && (
+        <MapPickerScreen
+          initialCoords={{
+            lat: Number(formData.latitude) || 12.754598,
+            lng: Number(formData.longitude) || 77.834477,
+          }}
+          serviceSlug={category?.id || categoryKey || "general"}
+          onClose={() => setShowMapModal(false)}
+          onConfirm={(addrObj) => {
+            if (addrObj) {
+              const fullAddr = addrObj.formatted_address || [addrObj.address_line1, addrObj.locality, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(", ");
               onChange({ target: { name: "address", value: fullAddr } });
               if (addrObj.latitude) onChange({ target: { name: "latitude", value: String(addrObj.latitude) } });
               if (addrObj.longitude) onChange({ target: { name: "longitude", value: String(addrObj.longitude) } });
-            } else if (typeof addrObj === "string") {
-              onChange({ target: { name: "address", value: addrObj } });
+              if (typeof setLocation === "function") setLocation(fullAddr);
+              try { localStorage.setItem("calservice_user_location", fullAddr); } catch (e) {}
             }
-          }}
-          onAddNewAddress={() => {
-            setShowSavedAddrModal(false)
-            setShowAddSearchModal(true)
-          }}
-        />
-      )}
-
-      {showAddSearchModal && (
-        <AddAddressSearchModal
-          onClose={() => setShowAddSearchModal(false)}
-          onSelectLocation={(loc, coords) => {
-            setShowAddSearchModal(false)
-            if (loc) {
-              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
-              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
-              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
-              onChange({ target: { name: "address", value: addrStr } });
-              if (latVal) onChange({ target: { name: "latitude", value: String(latVal) } });
-              if (lngVal) onChange({ target: { name: "longitude", value: String(lngVal) } });
-              if (typeof setLocation === "function") setLocation(addrStr)
-              localStorage.setItem("calservice_user_location", addrStr)
-            }
-          }}
-          onUseCurrentLocation={() => {
-            setShowAddSearchModal(false)
-            if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(async (pos) => {
-                try {
-                  const lat = pos.coords.latitude;
-                  const lng = pos.coords.longitude;
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
-                  const data = await res.json();
-                  if (data?.features?.[0]?.properties) {
-                    const p = data.features[0].properties;
-                    const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
-                    if (display) {
-                      onChange({ target: { name: "address", value: display } });
-                      onChange({ target: { name: "latitude", value: String(lat) } });
-                      onChange({ target: { name: "longitude", value: String(lng) } });
-                      if (typeof setLocation === "function") setLocation(display);
-                      localStorage.setItem("calservice_user_location", display);
-                    }
-                  }
-                } catch (e) { }
-              });
-            }
+            setShowMapModal(false);
           }}
         />
       )}
@@ -21079,6 +20619,20 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   const activeServices = getActiveServices();
 
+  const zoneResult = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("calservice_zone_result") || "null");
+    } catch { return null; }
+  })();
+
+  const isZoneServiceAllowed = (() => {
+    if (!zoneResult || zoneResult.open_access) return true;
+    if (zoneResult.in_zone === false) return false;
+    const allowed = zoneResult.available_services;
+    if (!allowed || !Array.isArray(allowed) || allowed.length === 0) return true;
+    return allowed.some(a => a.toLowerCase().includes("kitchen"));
+  })();
+
   return (
     <div className="w-full text-slate-700 bg-white">
       {/* Sticky Header + Tabs */}
@@ -21092,8 +20646,19 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               <ChevronLeft size={14} /> Back to Services
             </button>
             <h2 className="text-xl font-black text-slate-900">Kitchen Cleaning</h2>
+            {!isZoneServiceAllowed && (
+              <span className="text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                Unavailable in Area
+              </span>
+            )}
           </div>
         </div>
+        {!isZoneServiceAllowed && (
+          <div className="my-2 p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-bold flex items-center gap-2">
+            <AlertCircle size={15} className="text-rose-600 shrink-0" />
+            <span>Kitchen Cleaning is currently unavailable in {zoneResult?.zone?.name || 'your area'}. Bookings are temporarily paused for this zone.</span>
+          </div>
+        )}
         <div className="flex gap-5 pb-3 pt-2 border-b border-slate-100 justify-start">
           {KITCHEN_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
@@ -21120,7 +20685,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col lg:flex-row flex-1 pt-4">
+      <div className="flex flex-col lg:flex-row items-start gap-6 flex-1 pt-4">
 
         {/* Left Column */}
         <div className="flex-1 space-y-5">
@@ -21290,8 +20855,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           </div>
         </div>
 
-        {/* Right Column: Order Summary */}
-        <div className="w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between lg:sticky lg:top-32 h-fit space-y-4 mt-6 lg:mt-0 rounded-2xl">
+        {/* Right Column: Order Summary (Sticky/Frozen on scroll below header tabs) */}
+        <div className="w-full lg:w-[350px] shrink-0 sticky top-[210px] self-start bg-slate-50 border border-slate-100 p-5 flex flex-col justify-between space-y-4 mt-6 lg:mt-0 rounded-2xl shadow-sm z-10">
           <div className="space-y-4">
             <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
               <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
@@ -21341,11 +20906,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
           <div className="pt-4 mt-4 border-t border-slate-200/60">
             <button
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || !isZoneServiceAllowed}
               onClick={onCheckout}
               className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all"
             >
-              Proceed to Schedule
+              {!isZoneServiceAllowed ? "Service Unavailable in Area" : "Proceed to Schedule"}
             </button>
           </div>
         </div>

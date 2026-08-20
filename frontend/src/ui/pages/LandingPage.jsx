@@ -8,10 +8,11 @@ import {
   Star, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight,
   Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart,
-  Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2,
+  Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2, AlertCircle,
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
 import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
@@ -1053,6 +1054,7 @@ export function LandingPage() {
     } catch { return null }
   })
   const [packagesData, setPackagesData] = useState(null)
+  const [serviceAlertMessage, setServiceAlertMessage] = useState("")
 
   // Verify service zone for customer coordinates
   const verifyServiceZone = async (lat, lng, label) => {
@@ -1069,6 +1071,89 @@ export function LandingPage() {
       const openRes = { in_zone: true, open_access: true, zone: null, available_services: [] }
       setZoneCheckResult(openRes)
     }
+  }
+
+  // Initial zone check on mount
+  useEffect(() => {
+    const storedCoords = localStorage.getItem("calservice_user_coords")
+    if (storedCoords) {
+      try {
+        const parsed = JSON.parse(storedCoords)
+        if (parsed?.lat && parsed?.lng) {
+          verifyServiceZone(parsed.lat, parsed.lng)
+          return
+        }
+      } catch (e) {}
+    }
+    // Fallback default coordinates (Hosur / Bangalore Hub)
+    verifyServiceZone(12.754598, 77.834477)
+  }, [])
+
+  // Check if a service is enabled in customer's current zone
+  const isServiceAvailableInZone = useCallback((serviceNameOrSlug) => {
+    if (!zoneCheckResult) return true
+    if (zoneCheckResult.open_access) return true
+    if (zoneCheckResult.in_zone === false) return false
+
+    const allowed = zoneCheckResult.available_services
+    if (!allowed || !Array.isArray(allowed) || allowed.length === 0) return true
+
+    const slug = (serviceNameOrSlug || "")
+      .toLowerCase()
+      .trim()
+      .replace(/_/g, "-")
+      .replace(/\s+/g, "-")
+      .replace(/&/g, "and")
+
+    const SLUG_MAPPINGS = {
+      "kitchen-cleaning": ["kitchen-cleaning", "kitchen"],
+      "sofa-cleaning": ["sofa-cleaning", "sofa"],
+      "bathroom-cleaning": ["bathroom-cleaning", "bathroom"],
+      "full-house-cleaning": ["full-house-cleaning", "full-home-deep-clean", "cleaning", "occupied-apartment"],
+      "full-house-deep-cleaning": ["full-house-cleaning", "full-home-deep-clean"],
+      "cockroach-and-termite-control": ["cockroach-control", "termite-control"],
+      "cockroach-control": ["cockroach-control"],
+      "termite-control": ["termite-control"],
+      "ants-and-bed-bugs-control": ["ants-bed-bugs-control"],
+      "ants-bed-bugs-control": ["ants-bed-bugs-control"],
+      "plumbing": ["plumbing"],
+      "electrician": ["electrician"],
+      "carpentry": ["carpentry"],
+      "ac-and-appliance": ["ac-service-cleaning", "ac-repair", "refrigerator", "washing-machine", "tv-display", "microwave"],
+      "interior-painting": ["interior-painting"],
+      "exterior-painting": ["exterior-painting"],
+      "waterproofing": ["waterproofing"],
+      "wood-and-metal": ["wood-metal"],
+      "texture-decor": ["texture-decor"],
+      "brick-and-block-work": ["brick-block-work"],
+      "plastering-and-wall-repair": ["plastering-wall-repair"],
+      "wall-and-partition-construction": ["wall-partition-construction"],
+      "wall-breaking-and-demolition": ["wall-breaking-demolition"],
+      "house-shifting": ["packers-movers", "truck"],
+      "single-item-transport": ["two-wheeler", "truck"],
+      "truck": ["truck"],
+      "mini-truck-(hosur)": ["truck"],
+      "two-wheeler": ["two-wheeler"],
+      "2-wheeler-(hosur)": ["two-wheeler"],
+      "packers-and-movers": ["packers-movers"],
+      "packers-and-movers-(hosur)": ["packers-movers"],
+      "vegetables": ["vegetables"],
+      "groceries": ["groceries"],
+    }
+
+    const targetList = SLUG_MAPPINGS[slug] || [slug]
+    return targetList.some(target =>
+      allowed.some(allowedSlug => {
+        const aNorm = allowedSlug.toLowerCase().replace(/_/g, "-")
+        return aNorm === target || aNorm.includes(target) || target.includes(aNorm)
+      })
+    )
+  }, [zoneCheckResult])
+
+  const showUnavailableServiceAlert = (serviceName) => {
+    const zoneName = zoneCheckResult?.zone?.name || "your area"
+    setServiceAlertMessage(`⚠️ ${serviceName} is currently not available in ${zoneName}. Please choose another service or update your location.`)
+    setTimeout(() => setServiceAlertMessage(""), 5000)
   }
 
   useEffect(() => {
@@ -2022,14 +2107,36 @@ export function LandingPage() {
                 </button>
 
                 {/* Modal Title */}
-                <div className="text-left mb-6">
+                <div className="text-left mb-4">
                   <h3
                     id="homepest-modal-title"
                     className="text-lg sm:text-xl font-extrabold text-slate-900"
                   >
                     Home Cleaning &amp; Pest Control
                   </h3>
+                  {zoneCheckResult?.zone?.name && (
+                    <div className="text-[11px] font-bold text-slate-400 mt-0.5">
+                      Service area: <span className="text-emerald-700 font-extrabold">📍 {zoneCheckResult.zone.name}</span>
+                    </div>
+                  )}
                 </div>
+
+                {/* Service Alert Message (When clicking unavailable service) */}
+                {serviceAlertMessage && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                      <span>{serviceAlertMessage}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setServiceAlertMessage("")}
+                      className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
 
                 {/* Cleaning Section */}
                 <div className="mb-6">
@@ -2037,40 +2144,51 @@ export function LandingPage() {
                     Home Cleaning
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {HOME_SERVICES_SUB.map((item) => (
-                      <button
-                        key={item.name}
-                        type="button"
-                        onClick={() => {
-                          setIsHomePestModalOpen(false)
-                          document.body.style.overflow = "unset"
-                          if (item.name === "Kitchen Cleaning") {
-                            navigate(`?category=kitchen_cleaning`)
-                          } else if (item.name === "Sofa Cleaning") {
-                            navigate(`?category=sofa_cleaning`)
-                          } else if (item.name === "Bathroom Cleaning") {
-                            navigate(`?category=bathroom_cleaning`)
-                          } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
-                            navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
-                          } else {
-                            navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
-                          }
-                        }}
-                        className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                      >
-                        <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                          <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                          {item.badge && (
-                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                              {item.badge}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                          {item.name}
-                        </span>
-                      </button>
-                    ))}
+                    {HOME_SERVICES_SUB.map((item) => {
+                      const isAvailable = isServiceAvailableInZone(item.name)
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => {
+                            if (!isAvailable) {
+                              showUnavailableServiceAlert(item.name)
+                              return
+                            }
+                            setIsHomePestModalOpen(false)
+                            document.body.style.overflow = "unset"
+                            if (item.name === "Kitchen Cleaning") {
+                              navigate(`?category=kitchen_cleaning`)
+                            } else if (item.name === "Sofa Cleaning") {
+                              navigate(`?category=sofa_cleaning`)
+                            } else if (item.name === "Bathroom Cleaning") {
+                              navigate(`?category=bathroom_cleaning`)
+                            } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
+                              navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
+                            } else {
+                              navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                            }
+                          }}
+                          className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
+                        >
+                          <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
+                            <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                            {!isAvailable ? (
+                              <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                                Not Available
+                              </div>
+                            ) : item.badge && (
+                              <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
+                                {item.badge}
+                              </div>
+                            )}
+                          </div>
+                          <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
+                            {item.name}
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -2080,30 +2198,41 @@ export function LandingPage() {
                     Pest Control
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {PEST_CONTROL_SUB.map((item) => (
-                      <button
-                        key={item.name}
-                        type="button"
-                        onClick={() => {
-                          setIsHomePestModalOpen(false)
-                          document.body.style.overflow = "unset"
-                          navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
-                        }}
-                        className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                      >
-                        <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                          <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                          {item.badge && (
-                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                              {item.badge}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                          {item.name}
-                        </span>
-                      </button>
-                    ))}
+                    {PEST_CONTROL_SUB.map((item) => {
+                      const isAvailable = isServiceAvailableInZone(item.name)
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => {
+                            if (!isAvailable) {
+                              showUnavailableServiceAlert(item.name)
+                              return
+                            }
+                            setIsHomePestModalOpen(false)
+                            document.body.style.overflow = "unset"
+                            navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                          }}
+                          className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
+                        >
+                          <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
+                            <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                            {!isAvailable ? (
+                              <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                                Not Available
+                              </div>
+                            ) : item.badge && (
+                              <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
+                                {item.badge}
+                              </div>
+                            )}
+                          </div>
+                          <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
+                            {item.name}
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
@@ -2629,25 +2758,8 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* ── App download banner ────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-6 pb-14">
-          <div className="bg-gradient-to-r from-rose-500 to-amber-500 rounded-3xl px-8 py-7 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-white/25 flex items-center justify-center text-white shrink-0">
-                <Smartphone className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-white">Book on the go!</p>
-                <p className="text-lg font-extrabold text-white">Download the CalServices App</p>
-                <p className="text-xs text-rose-100">Faster booking, real-time tracking &amp; exclusive app offers.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Get it on Google Play</button>
-              <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Download on App Store</button>
-            </div>
-          </div>
-        </section>
+        {/* ── App Download Banner & Full Footer with Legal & Support Links ── */}
+        {!activeCategory && <AppBannerAndFooter />}
 
 
       <BkStyles />
@@ -2780,14 +2892,36 @@ export function LandingPage() {
               </button>
 
               {/* Modal Title */}
-              <div className="text-left mb-6">
+              <div className="text-left mb-4">
                 <h3
                   id="homepest-modal-title"
                   className="text-lg sm:text-xl font-extrabold text-slate-900"
                 >
                   Home Cleaning &amp; Pest Control
                 </h3>
+                {zoneCheckResult?.zone?.name && (
+                  <div className="text-[11px] font-bold text-slate-400 mt-0.5">
+                    Service area: <span className="text-emerald-700 font-extrabold">📍 {zoneCheckResult.zone.name}</span>
+                  </div>
+                )}
               </div>
+
+              {/* Service Alert Message (When clicking unavailable service) */}
+              {serviceAlertMessage && (
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                    <span>{serviceAlertMessage}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setServiceAlertMessage("")}
+                    className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
 
               {/* Cleaning Section */}
               <div className="mb-6">
@@ -2795,40 +2929,51 @@ export function LandingPage() {
                   Home Cleaning
                 </h4>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                  {HOME_SERVICES_SUB.map((item) => (
-                    <button
-                      key={item.name}
-                      type="button"
-                      onClick={() => {
-                        setIsHomePestModalOpen(false)
-                        document.body.style.overflow = "unset"
-                        if (item.name === "Kitchen Cleaning") {
-                          navigate(`?category=kitchen_cleaning`)
-                        } else if (item.name === "Sofa Cleaning") {
-                          navigate(`?category=sofa_cleaning`)
-                        } else if (item.name === "Bathroom Cleaning") {
-                          navigate(`?category=bathroom_cleaning`)
-                        } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
-                          navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
-                        } else {
-                          navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
-                        }
-                      }}
-                      className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                    >
-                      <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                        <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                        {item.badge && (
-                          <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                            {item.badge}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                        {item.name}
-                      </span>
-                    </button>
-                  ))}
+                  {HOME_SERVICES_SUB.map((item) => {
+                    const isAvailable = isServiceAvailableInZone(item.name)
+                    return (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => {
+                          if (!isAvailable) {
+                            showUnavailableServiceAlert(item.name)
+                            return
+                          }
+                          setIsHomePestModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          if (item.name === "Kitchen Cleaning") {
+                            navigate(`?category=kitchen_cleaning`)
+                          } else if (item.name === "Sofa Cleaning") {
+                            navigate(`?category=sofa_cleaning`)
+                          } else if (item.name === "Bathroom Cleaning") {
+                            navigate(`?category=bathroom_cleaning`)
+                          } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
+                            navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
+                          } else {
+                            navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                          }
+                        }}
+                        className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
+                      >
+                        <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
+                          <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                          {!isAvailable ? (
+                            <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                              Not Available
+                            </div>
+                          ) : item.badge && (
+                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
+                              {item.badge}
+                            </div>
+                          )}
+                        </div>
+                        <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
+                          {item.name}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -2838,30 +2983,41 @@ export function LandingPage() {
                   Pest Control
                 </h4>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                  {PEST_CONTROL_SUB.map((item) => (
-                    <button
-                      key={item.name}
-                      type="button"
-                      onClick={() => {
-                        setIsHomePestModalOpen(false)
-                        document.body.style.overflow = "unset"
-                        navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
-                      }}
-                      className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                    >
-                      <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                        <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                        {item.badge && (
-                          <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                            {item.badge}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                        {item.name}
-                      </span>
-                    </button>
-                  ))}
+                  {PEST_CONTROL_SUB.map((item) => {
+                    const isAvailable = isServiceAvailableInZone(item.name)
+                    return (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => {
+                          if (!isAvailable) {
+                            showUnavailableServiceAlert(item.name)
+                            return
+                          }
+                          setIsHomePestModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                        }}
+                        className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
+                      >
+                        <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
+                          <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                          {!isAvailable ? (
+                            <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                              Not Available
+                            </div>
+                          ) : item.badge && (
+                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
+                              {item.badge}
+                            </div>
+                          )}
+                        </div>
+                        <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
+                          {item.name}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>

@@ -56,4 +56,18 @@ export const routes = {
   customers_detail: "/customers/:id",
   customers_payments: "/customers/payments",
   customers_merges: "/customers/merges",
+  // Public Legal & Policies
+  terms: "/terms",
+  terms_and_conditions: "/terms-and-conditions",
+  privacy: "/privacy",
+  privacy_policy: "/privacy-policy",
+  service_delivery: "/service-delivery",
+  service_delivery_policy: "/service-delivery-policy",
+  cancellation_refund: "/cancellation-refund",
+  cancellation_refund_policy: "/cancellation-and-refund-policy",
+  contact: "/contact",
+  contact_us: "/contact-us",
+  help: "/help",
+  help_and_support: "/help-and-support",
 }
+

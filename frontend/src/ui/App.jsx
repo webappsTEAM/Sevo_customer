@@ -126,6 +126,26 @@ const LiveTrackingPage = lazy(() =>
   import("./pages/LiveTrackingPage.jsx").then(m => ({ default: m.LiveTrackingPage || m.default }))
 )
 
+// Public Legal & Customer Policy Pages
+const TermsPage = lazy(() =>
+  import("./pages/legal/TermsPage.jsx").then(m => ({ default: m.TermsPage || m.default }))
+)
+const PrivacyPage = lazy(() =>
+  import("./pages/legal/PrivacyPage.jsx").then(m => ({ default: m.PrivacyPage || m.default }))
+)
+const ServiceDeliveryPage = lazy(() =>
+  import("./pages/legal/ServiceDeliveryPage.jsx").then(m => ({ default: m.ServiceDeliveryPage || m.default }))
+)
+const CancellationRefundPage = lazy(() =>
+  import("./pages/legal/CancellationRefundPage.jsx").then(m => ({ default: m.CancellationRefundPage || m.default }))
+)
+const ContactUsPage = lazy(() =>
+  import("./pages/legal/ContactUsPage.jsx").then(m => ({ default: m.ContactUsPage || m.default }))
+)
+const HelpSupportPage = lazy(() =>
+  import("./pages/legal/HelpSupportPage.jsx").then(m => ({ default: m.HelpSupportPage || m.default }))
+)
+
 function RequireAdmin() {
   const { user } = useAuth()
   const { isAdmin } = useRole()
@@ -303,6 +323,25 @@ export function App() {
           <Route path={routes.live_tracking} element={<LiveTrackingPage />} />
           <Route path="/track/:jobId" element={<LiveTrackingPage />} />
           <Route path="/tracking/:token" element={<LiveTrackingPage />} />
+
+          {/* ── Public Legal & Customer Policy Routes ── */}
+          <Route path={routes.terms} element={<TermsPage />} />
+          <Route path={routes.terms_and_conditions} element={<TermsPage />} />
+          <Route path="/terms-of-service" element={<TermsPage />} />
+          <Route path={routes.privacy} element={<PrivacyPage />} />
+          <Route path={routes.privacy_policy} element={<PrivacyPage />} />
+          <Route path={routes.service_delivery} element={<ServiceDeliveryPage />} />
+          <Route path={routes.service_delivery_policy} element={<ServiceDeliveryPage />} />
+          <Route path={routes.cancellation_refund} element={<CancellationRefundPage />} />
+          <Route path={routes.cancellation_refund_policy} element={<CancellationRefundPage />} />
+          <Route path="/refund-policy" element={<CancellationRefundPage />} />
+          <Route path="/cancellation-policy" element={<CancellationRefundPage />} />
+          <Route path={routes.contact} element={<ContactUsPage />} />
+          <Route path={routes.contact_us} element={<ContactUsPage />} />
+          <Route path={routes.help} element={<HelpSupportPage />} />
+          <Route path={routes.help_and_support} element={<HelpSupportPage />} />
+          <Route path="/support" element={<HelpSupportPage />} />
+          <Route path="/faq" element={<HelpSupportPage />} />
 
           {/* ── Authenticated Shell ── */}
           <Route

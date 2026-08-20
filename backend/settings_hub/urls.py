@@ -29,9 +29,13 @@ from .views_service_zones import (
     ServiceZoneDetailView,
     ServiceZoneCheckView,
 )
+from .views_legal import PublicLegalConfigAPIView
 from service_requests.payment_views import InvoiceDownloadView
 
 urlpatterns = [
+    # Legal & Public Policy Config
+    path("legal/", PublicLegalConfigAPIView.as_view(), name="settings-public-legal"),
+
     # Homepage Config & Storage APIs
     path("homepage/", HomePageConfigAPIView.as_view(), name="settings-homepage-config"),
     path("homepage/upload-image/", HomePageImageUploadAPIView.as_view(), name="settings-homepage-upload-image"),

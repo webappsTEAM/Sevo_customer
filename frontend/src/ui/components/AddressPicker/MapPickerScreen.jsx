@@ -1,24 +1,12 @@
-/**
- * MapPickerScreen.jsx
- * Slice 2 of 4 — Full-screen map with fixed-center pin + live reverse geocoding
- *
- * Map library: react-leaflet + leaflet (already in project — no new dependency)
- * Tiles: OpenStreetMap (free, no API key required)
- *
- * Key behaviours (Slice 2 additions):
- *  • Reverse geocoding via useReverseGeocode hook (debounced 500ms, AbortController)
- *  • AddressBottomSheet receives live address/loading/error state
- *  • Confirm button enabled only when address is resolved
- *  • Initial GPS coords trigger geocoding immediately on mount
- */
-
 import React, { useState, useRef, useCallback, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { MapContainer, TileLayer, useMapEvents, Circle, Polygon } from "react-leaflet"
-import { ArrowLeft, MapPin, Loader2, Navigation, Target, Plus, Minus, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, MapPin, Loader2, Navigation, Target, Plus, Minus, AlertTriangle, CheckCircle2, Search, X } from "lucide-react"
 import { AddressBottomSheet } from "./AddressBottomSheet"
+import { AddressDetailsForm } from "./AddressDetailsForm"
 import { useReverseGeocode } from "./useReverseGeocode"
 import { apiRequest } from "../../../api/client.js"
+import { searchPlaces } from "../../../services/locationService.js"
 import "leaflet/dist/leaflet.css"
 
 // ─── Internal: map event bridge ───────────────────────────────────────────────
@@ -45,28 +33,25 @@ function MapEventBridge({ onDragStart, onMoveEnd, onMapClick }) {
 
 // ─── Fixed-center pin ─────────────────────────────────────────────────────────
 
-/**
- * Absolutely-positioned CSS pin overlaid on the map container.
- * The pin never moves on screen — the map pans beneath it.
- *
- * Animation:
- *  lifted  → pin floats up 10px, shadow grows (drag in progress)
- *  dropped → spring bounce back to rest position (after moveend)
- */
-function FixedCenterPin({ lifted, isOutOfZone }) {
-  const pinColor = isOutOfZone ? "#DC2626" : "#FF5200"
+function FixedCenterPin({ lifted, isOutOfZone, isServiceBlocked }) {
+  const isAlert = isOutOfZone || isServiceBlocked
+  const pinColor = isOutOfZone ? "#DC2626" : isServiceBlocked ? "#D97706" : "#FF5200"
 
   return (
     <div style={pinStyles.wrapper} aria-hidden>
       {/* Floating Status Warning Popup right above the Pin */}
-      {isOutOfZone && (
+      {isAlert && (
         <motion.div
           initial={{ opacity: 0, y: 6, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          style={pinStyles.warningBubble}
+          style={{
+            ...pinStyles.warningBubble,
+            background: isOutOfZone ? "#dc2626" : "#d97706",
+            boxShadow: isOutOfZone ? "0 4px 14px rgba(220,38,38,0.4)" : "0 4px 14px rgba(217,119,6,0.4)",
+          }}
         >
           <span style={{ fontSize: 13 }}>⚠️</span>
-          <span>Outside Service Area</span>
+          <span>{isOutOfZone ? "Outside Service Area" : "Service Unavailable Here"}</span>
         </motion.div>
       )}
 
@@ -74,8 +59,8 @@ function FixedCenterPin({ lifted, isOutOfZone }) {
       <motion.div
         style={{
           ...pinStyles.radarPulse,
-          background: isOutOfZone ? "rgba(220, 38, 38, 0.15)" : "rgba(59, 130, 246, 0.2)",
-          border: isOutOfZone ? "1.5px solid rgba(220, 38, 38, 0.4)" : "1.5px solid rgba(59, 130, 246, 0.4)",
+          background: isOutOfZone ? "rgba(220, 38, 38, 0.15)" : isServiceBlocked ? "rgba(217, 119, 6, 0.15)" : "rgba(59, 130, 246, 0.2)",
+          border: isOutOfZone ? "1.5px solid rgba(220, 38, 38, 0.4)" : isServiceBlocked ? "1.5px solid rgba(217, 119, 6, 0.4)" : "1.5px solid rgba(59, 130, 246, 0.4)",
         }}
         animate={{ scale: lifted ? 0.8 : [0.9, 1.1, 0.9], opacity: lifted ? 0.2 : [0.3, 0.6, 0.3] }}
         transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
@@ -84,14 +69,14 @@ function FixedCenterPin({ lifted, isOutOfZone }) {
       {/* Live GPS dot */}
       <div style={{
         ...pinStyles.blueDot,
-        background: isOutOfZone ? "#dc2626" : "#2563eb",
+        background: isOutOfZone ? "#dc2626" : isServiceBlocked ? "#d97706" : "#2563eb",
       }} />
 
       {/* The pin itself */}
       <motion.div
         style={{
           ...pinStyles.pin,
-          filter: isOutOfZone ? "drop-shadow(0 6px 12px rgba(220,38,38,0.55))" : "drop-shadow(0 6px 12px rgba(255,82,0,0.45))",
+          filter: isOutOfZone ? "drop-shadow(0 6px 12px rgba(220,38,38,0.55))" : isServiceBlocked ? "drop-shadow(0 6px 12px rgba(217,119,6,0.55))" : "drop-shadow(0 6px 12px rgba(255,82,0,0.45))",
         }}
         animate={{ y: lifted ? -14 : 0 }}
         transition={{ type: "spring", damping: 18, stiffness: 280 }}
@@ -125,7 +110,6 @@ const pinStyles = {
     borderRadius: 20,
     fontSize: "0.74rem",
     fontWeight: 800,
-    boxShadow: "0 4px 14px rgba(220,38,38,0.4)",
     whiteSpace: "nowrap",
     zIndex: 850,
   },
@@ -215,26 +199,37 @@ const pillStyle = {
   boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main Unified Component ───────────────────────────────────────────────────
 
-/**
- * @param {object}   props
- * @param {{ lat: number, lng: number }} props.initialCoords  — GPS fix
- * @param {Function} props.onClose         — navigate back
- * @param {Function} [props.onManualSearch] — search modal opener
- * @param {Function} [props.onCenterChange] — callback (lat, lng, address)
- */
-export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCenterChange }) {
+export function MapPickerScreen({
+  initialCoords,
+  serviceSlug = "",
+  onClose,
+  onConfirm,
+  onCenterChange
+}) {
+  const [step, setStep]                   = useState("map") // "map" | "details"
+  const [selectedAddressData, setSelectedAddressData] = useState(null)
   const [mapReady, setMapReady]           = useState(false)
   const [pinLifted, setPinLifted]         = useState(false)
   const [isDragging, setIsDragging]       = useState(false)
   const [isLocating, setIsLocating]       = useState(false)
   const [serviceZones, setServiceZones]   = useState([])
-  const [zoneStatus, setZoneStatus]       = useState({ inZone: true, zoneName: null, message: "" })
-  const [currentCenter, setCurrentCenter] = useState(initialCoords || { lat: 12.7409, lng: 77.8253 })
+  const [zoneStatus, setZoneStatus]       = useState({ inZone: true, serviceAllowed: true, zoneName: null, message: "" })
+  const [currentCenter, setCurrentCenter] = useState(() => {
+    const lat = Number(initialCoords?.lat || initialCoords?.latitude) || 12.754598
+    const lng = Number(initialCoords?.lng || initialCoords?.longitude) || 77.834477
+    return { lat, lng }
+  })
   const mapRef                            = useRef(null)
 
-  // ── Load active service zones ──────────────────────────────────
+  // ── Top Search Bar State ───────────────────────────────────────
+  const [searchQuery, setSearchQuery]     = useState("")
+  const [searchResults, setSearchResults] = useState([])
+  const [isSearching, setIsSearching]     = useState(false)
+  const [showSearchBox, setShowSearchBox] = useState(false)
+
+  // ── Load active service zones from backend ─────────────────────
   useEffect(() => {
     async function loadZones() {
       try {
@@ -247,28 +242,60 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
     loadZones()
   }, [])
 
-  // ── Reverse geocoding ──────────────────────────────────────────
+  // ── Live Geocoding Search Auto-suggest ─────────────────────────
+  useEffect(() => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+      setSearchResults([])
+      return
+    }
+    let active = true
+    setIsSearching(true)
+    const searchTimer = setTimeout(async () => {
+      try {
+        const places = await searchPlaces(searchQuery)
+        if (active) {
+          setSearchResults(places || [])
+        }
+      } catch {
+        if (active) setSearchResults([])
+      } finally {
+        if (active) setIsSearching(false)
+      }
+    }, 350)
+
+    return () => {
+      active = false
+      clearTimeout(searchTimer)
+    }
+  }, [searchQuery])
+
+  // ── Reverse geocoding of current map center ────────────────────
   const { address, loading: geoLoading, error: geoError } = useReverseGeocode(currentCenter)
 
-  // ── Real-time service zone check on pin movement ───────────────
+  // ── Real-time service-specific zone check on pin movement ──────
   useEffect(() => {
     let active = true
     const timer = setTimeout(async () => {
       try {
         const res = await apiRequest("/settings/service-zones/check/", {
           method: "POST",
-          json: { lat: currentCenter.lat, lng: currentCenter.lng }
+          json: {
+            lat: currentCenter.lat,
+            lng: currentCenter.lng,
+            service_slug: serviceSlug || ""
+          }
         })
         if (active && res) {
           setZoneStatus({
             inZone: res.in_zone !== false,
+            serviceAllowed: res.service_allowed !== false && res.in_zone !== false,
             zoneName: res.zone?.name || null,
             message: res.message || "",
             errorCode: res.error_code || "",
           })
         }
       } catch {
-        if (active) setZoneStatus({ inZone: true, zoneName: null, message: "" })
+        if (active) setZoneStatus({ inZone: true, serviceAllowed: true, zoneName: null, message: "" })
       }
     }, 300)
 
@@ -276,9 +303,9 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
       active = false
       clearTimeout(timer)
     }
-  }, [currentCenter.lat, currentCenter.lng])
+  }, [currentCenter.lat, currentCenter.lng, serviceSlug])
 
-  // ── "Re-center on me" / Live GPS fetch ──────
+  // ── "Re-center on me" / Live GPS fetch ─────────────────────────
   const handleRecenter = useCallback(() => {
     if (navigator.geolocation) {
       setIsLocating(true)
@@ -296,8 +323,12 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
           console.warn("Geolocation positioning error:", err)
           setIsLocating(false)
           if (initialCoords && mapRef.current) {
-            mapRef.current.flyTo([initialCoords.lat, initialCoords.lng], 17, { animate: true })
-            setCurrentCenter(initialCoords)
+            const initLat = Number(initialCoords.lat || initialCoords.latitude)
+            const initLng = Number(initialCoords.lng || initialCoords.longitude)
+            if (initLat && initLng) {
+              mapRef.current.flyTo([initLat, initLng], 17, { animate: true })
+              setCurrentCenter({ lat: initLat, lng: initLng })
+            }
           }
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -305,14 +336,32 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
     }
   }, [initialCoords])
 
-  // Automatically request live GPS location on mount if not already present
-  useEffect(() => {
-    if (!initialCoords) {
-      handleRecenter()
+  // ── Select Search Suggestion ───────────────────────────────────
+  const handleSelectSearchResult = (result) => {
+    if (result.lat && result.lng) {
+      setCurrentCenter({ lat: result.lat, lng: result.lng })
+      if (mapRef.current) {
+        mapRef.current.flyTo([result.lat, result.lng], 17, { animate: true, duration: 1 })
+      }
     }
-  }, [initialCoords, handleRecenter])
+    setSearchResults([])
+    setSearchQuery("")
+    setShowSearchBox(false)
+  }
 
-  // ── Map Zoom Handlers ────────────────────────────────────────────────
+  // ── Select Saved Address ───────────────────────────────────────
+  const handleSelectSavedAddress = (savedItem) => {
+    const lat = Number(savedItem.latitude || savedItem.lat)
+    const lng = Number(savedItem.longitude || savedItem.lng)
+    if (lat && lng) {
+      setCurrentCenter({ lat, lng })
+      if (mapRef.current) {
+        mapRef.current.flyTo([lat, lng], 17, { animate: true, duration: 1 })
+      }
+    }
+  }
+
+  // ── Map Zoom Handlers ──────────────────────────────────────────
   const handleZoomIn = () => {
     if (mapRef.current) {
       mapRef.current.zoomIn()
@@ -325,7 +374,7 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
     }
   }
 
-  // ── Map event handlers ──────────────────────────────────────────────
+  // ── Map event handlers ────────────────────────────────────────
   const handleDragStart = useCallback(() => {
     setPinLifted(true)
     setIsDragging(true)
@@ -345,6 +394,69 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
   }, [])
 
   const isOutOfZone = zoneStatus.inZone === false
+  const isServiceBlocked = zoneStatus.inZone === true && zoneStatus.serviceAllowed === false
+
+  const handleConfirmLocation = (resolvedAddr) => {
+    const finalObj = {
+      ...resolvedAddr,
+      formatted_address: resolvedAddr?.formatted_address || address?.formatted_address || "Custom Location",
+      address_line1: resolvedAddr?.address_line1 || address?.address_line1 || address?.locality || "",
+      locality: resolvedAddr?.locality || address?.locality || "",
+      city: resolvedAddr?.city || address?.city || "",
+      state: resolvedAddr?.state || address?.state || "",
+      pincode: resolvedAddr?.pincode || address?.pincode || "",
+      latitude: currentCenter.lat,
+      longitude: currentCenter.lng,
+      zone_id: zoneStatus.zoneName ? 2 : null,
+      zone_name: zoneStatus.zoneName || null,
+    }
+    setSelectedAddressData(finalObj)
+    setStep("details")
+  }
+
+  if (step === "details") {
+    return (
+      <div style={screenStyles.overlay} onClick={onClose}>
+        <div style={screenStyles.modalBox} onClick={e => e.stopPropagation()}>
+          <AddressDetailsForm
+            addressData={selectedAddressData || {
+              ...address,
+              latitude: currentCenter.lat,
+              longitude: currentCenter.lng,
+            }}
+            onBack={() => setStep("map")}
+            onSubmit={(finalPayload) => {
+              const fullDisplay = [
+                finalPayload.flat_house_no,
+                finalPayload.landmark,
+                finalPayload.formatted_address || [finalPayload.locality, finalPayload.city, finalPayload.state, finalPayload.pincode].filter(Boolean).join(", ")
+              ].filter(Boolean).join(", ")
+
+              const confirmedData = {
+                ...finalPayload,
+                formatted_address: fullDisplay,
+                address_line1: [finalPayload.flat_house_no, finalPayload.landmark].filter(Boolean).join(", "),
+                latitude: currentCenter.lat,
+                longitude: currentCenter.lng,
+                zone_id: zoneStatus.zoneName ? 2 : null,
+                zone_name: zoneStatus.zoneName || null,
+              }
+              if (typeof onConfirm === "function") {
+                onConfirm(confirmedData)
+              }
+              if (typeof onCenterChange === "function") {
+                onCenterChange(currentCenter.lat, currentCenter.lng, confirmedData)
+              }
+              if (typeof onClose === "function") {
+                onClose()
+              }
+            }}
+            onClose={onClose}
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={screenStyles.overlay} onClick={onClose}>
@@ -353,37 +465,98 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
         {/* ── Top Header & Search Bar ───────────────────────────────────────── */}
         <div style={screenStyles.headerContainer}>
           <div style={screenStyles.topBar}>
-            <button style={screenStyles.backBtn} onClick={onClose} id="map-picker-back-btn">
+            <button style={screenStyles.backBtn} onClick={onClose} id="map-picker-back-btn" title="Back">
               <ArrowLeft size={18} />
             </button>
-            <span style={screenStyles.topBarTitle}>Select delivery location</span>
-            <div style={{ width: 36 }} />
+            <span style={screenStyles.topBarTitle}>Select Delivery Location</span>
+            <button
+              style={screenStyles.searchToggleBtn}
+              onClick={() => setShowSearchBox(!showSearchBox)}
+              title="Search Location"
+            >
+              <Search size={18} color="#0f172a" />
+            </button>
           </div>
 
+          {/* Search Input Row */}
           <div style={screenStyles.searchBarRow}>
-            <div style={{
-              ...screenStyles.searchPill,
-              borderColor: isOutOfZone ? "#fca5a5" : "#fed7aa",
-              background: isOutOfZone ? "#fef2f2" : "#fff",
-            }}>
-              <MapPin size={16} style={{ color: isOutOfZone ? "#dc2626" : "#ff5200" }} />
-              <span style={screenStyles.searchPillText}>
-                {address?.city ? [address.city, address.state].filter(Boolean).join(", ") : (address?.formatted_address ? address.formatted_address.split(",").slice(0, 2).join(", ") : "Detecting Location...")}
-              </span>
-              <button
-                style={screenStyles.changeBtn}
-                onClick={() => typeof onManualSearch === "function" && onManualSearch()}
+            {showSearchBox ? (
+              <div style={screenStyles.searchInputContainer}>
+                <Search size={16} color="#64748b" />
+                <input
+                  type="text"
+                  placeholder="Search apartment, street, area, pincode..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  style={screenStyles.searchInput}
+                  autoFocus
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery("")} style={screenStyles.clearBtn}>
+                    <X size={14} color="#64748b" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  ...screenStyles.searchPill,
+                  borderColor: isOutOfZone ? "#fca5a5" : isServiceBlocked ? "#fde68a" : "#fed7aa",
+                  background: isOutOfZone ? "#fef2f2" : isServiceBlocked ? "#fffbeb" : "#fff",
+                }}
+                onClick={() => setShowSearchBox(true)}
               >
-                Change
-              </button>
-            </div>
+                <MapPin size={16} style={{ color: isOutOfZone ? "#dc2626" : isServiceBlocked ? "#d97706" : "#ff5200" }} />
+                <span style={screenStyles.searchPillText}>
+                  {address?.city ? [address.city, address.state].filter(Boolean).join(", ") : (address?.formatted_address ? address.formatted_address.split(",").slice(0, 2).join(", ") : "Detecting Location...")}
+                </span>
+                <span style={screenStyles.changeBtn}>
+                  Search
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Out of zone banner beneath search */}
+          {/* Auto-suggest Search Results Dropdown */}
+          <AnimatePresence>
+            {searchResults.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                style={screenStyles.searchResultsDropdown}
+              >
+                {searchResults.map((item, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleSelectSearchResult(item)}
+                    style={screenStyles.searchResultItem}
+                  >
+                    <div style={screenStyles.resultIconBadge}>
+                      <MapPin size={15} color="#ff5200" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={screenStyles.resultName}>{item.name}</div>
+                      <div style={screenStyles.resultSub}>{item.subtitle || item.fullAddress}</div>
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Out of zone / blocked service warning banner */}
           {isOutOfZone && (
             <div style={screenStyles.topWarningBanner}>
               <AlertTriangle size={14} style={{ color: "#dc2626", flexShrink: 0 }} />
-              <span>Location is outside admin-defined service area ({zoneStatus.zoneName || "service boundaries"})</span>
+              <span>Services are not available at this location yet ({zoneStatus.zoneName || "Outside active boundaries"})</span>
+            </div>
+          )}
+
+          {isServiceBlocked && (
+            <div style={screenStyles.topAmberBanner}>
+              <AlertTriangle size={14} style={{ color: "#d97706", flexShrink: 0 }} />
+              <span>Selected service is currently not available at this location</span>
             </div>
           )}
         </div>
@@ -394,8 +567,12 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
           {/* Loading skeleton */}
           {!mapReady && <MapLoadingSkeleton />}
 
-          {/* Fixed-center CSS pin with out-of-zone indicator */}
-          <FixedCenterPin lifted={pinLifted} isOutOfZone={isOutOfZone} />
+          {/* Fixed-center CSS pin with out-of-zone & blocked indicator */}
+          <FixedCenterPin
+            lifted={pinLifted}
+            isOutOfZone={isOutOfZone}
+            isServiceBlocked={isServiceBlocked}
+          />
 
           {/* "Updating…" pill while dragging */}
           <LocatingPill visible={isDragging} />
@@ -450,8 +627,8 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
 
           {/* Leaflet map */}
           <MapContainer
-            center={[currentCenter?.lat || 12.7409, currentCenter?.lng || 77.8253]}
-            zoom={17}
+            center={[currentCenter?.lat || 12.754598, currentCenter?.lng || 77.834477]}
+            zoom={16}
             style={{ width: "100%", height: "100%" }}
             zoomControl={false}
             attributionControl={false}
@@ -509,24 +686,17 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
           </MapContainer>
         </div>
 
-        {/* ── Address bottom sheet with zone validation ── */}
+        {/* ── Address bottom sheet with unified saved addresses, GPS & confirm ── */}
         <AddressBottomSheet
           address={address}
           loading={geoLoading}
           error={geoError}
           zoneStatus={zoneStatus}
-          onConfirm={(resolvedAddress) => {
-            if (typeof onCenterChange === "function") {
-              onCenterChange(currentCenter.lat, currentCenter.lng, resolvedAddress)
-            }
-          }}
-          onManualSearch={onManualSearch}
+          onConfirm={handleConfirmLocation}
+          onManualSearch={() => setShowSearchBox(true)}
           onUseCurrentLocation={handleRecenter}
-          onEditDetails={() => {
-            if (typeof onCenterChange === "function") {
-              onCenterChange(currentCenter.lat, currentCenter.lng, address)
-            }
-          }}
+          onSelectSavedAddress={handleSelectSavedAddress}
+          onEditDetails={handleConfirmLocation}
         />
 
       </div>
@@ -543,6 +713,18 @@ const screenStyles = {
     borderTop: "1px solid #fecaca",
     borderBottom: "1px solid #fecaca",
     color: "#991b1b",
+    fontSize: "0.74rem",
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  topAmberBanner: {
+    padding: "6px 14px",
+    background: "#fffbeb",
+    borderTop: "1px solid #fde68a",
+    borderBottom: "1px solid #fde68a",
+    color: "#92400e",
     fontSize: "0.74rem",
     fontWeight: 700,
     display: "flex",
@@ -568,7 +750,8 @@ const screenStyles = {
     background: "#fff",
     borderBottom: "1px solid #f1f5f9",
     flexShrink: 0,
-    zIndex: 10,
+    zIndex: 20,
+    position: "relative",
   },
   topBar: {
     height: 52, flexShrink: 0,
@@ -581,11 +764,57 @@ const screenStyles = {
     display: "flex", alignItems: "center", justifyContent: "center",
     cursor: "pointer", color: "#334155", transition: "background 0.15s",
   },
+  searchToggleBtn: {
+    width: 36, height: 36, borderRadius: "50%",
+    border: "1px solid #e2e8f0", background: "#f8fafc",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    cursor: "pointer",
+  },
   topBarTitle: {
     fontSize: "1rem", fontWeight: 800, color: "#0f172a",
   },
   searchBarRow: {
     padding: "0 1.25rem 0.75rem",
+  },
+  searchInputContainer: {
+    display: "flex", alignItems: "center", gap: 8,
+    padding: "0.5rem 0.85rem",
+    background: "#f8fafc",
+    border: "1.5px solid #4f46e5",
+    borderRadius: 14,
+  },
+  searchInput: {
+    flex: 1, border: "none", background: "transparent",
+    outline: "none", fontSize: "0.84rem", fontWeight: 600,
+    color: "#0f172a",
+  },
+  clearBtn: {
+    background: "none", border: "none", cursor: "pointer",
+    padding: 2, display: "flex", alignItems: "center",
+  },
+  searchResultsDropdown: {
+    position: "absolute", top: "100%", left: 0, right: 0,
+    background: "#fff", borderBottom: "1px solid #e2e8f0",
+    boxShadow: "0 12px 28px rgba(0,0,0,0.14)",
+    maxHeight: 220, overflowY: "auto",
+    zIndex: 999,
+  },
+  searchResultItem: {
+    display: "flex", alignItems: "center", gap: 10,
+    padding: "10px 18px", borderBottom: "1px solid #f8fafc",
+    cursor: "pointer",
+  },
+  resultIconBadge: {
+    width: 30, height: 30, borderRadius: "50%",
+    background: "#fff7ed", display: "flex",
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  resultName: {
+    fontSize: "0.82rem", fontWeight: 800, color: "#0f172a",
+  },
+  resultSub: {
+    fontSize: "0.72rem", color: "#64748b", marginTop: 2,
+    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
   },
   searchPill: {
     display: "flex", alignItems: "center", gap: 10,
@@ -594,6 +823,7 @@ const screenStyles = {
     border: "1.5px solid #fed7aa",
     borderRadius: 16,
     boxShadow: "0 2px 8px rgba(255,82,0,0.06)",
+    cursor: "pointer",
   },
   searchPillText: {
     flex: 1, fontSize: "0.88rem", fontWeight: 800, color: "#0f172a",
