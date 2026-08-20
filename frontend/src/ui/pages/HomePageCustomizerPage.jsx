@@ -91,9 +91,17 @@ export default function HomePageCustomizerPage() {
     }))
   }
 
+  const updateVendorBanner = (field, value) => {
+    setConfig(prev => ({
+      ...prev,
+      vendorBanner: { ...prev.vendorBanner, [field]: value }
+    }))
+  }
+
   const navWorkflowSteps = [
     { id: "hero", label: "Hero Banner", icon: Globe, color: "text-amber-600 bg-amber-50" },
     { id: "categories", label: "Browse Categories", icon: Layers, color: "text-blue-600 bg-blue-50" },
+    { id: "vendorBanner", label: "Vendor Hire Banner", icon: Users, color: "text-teal-600 bg-teal-50" },
     { id: "offers", label: "Promotional Offers", icon: Gift, color: "text-pink-600 bg-pink-50" },
     { id: "trust", label: "Why Choose Us", icon: ShieldCheck, color: "text-emerald-600 bg-emerald-50" },
     { id: "workflow", label: "How It Works", icon: Repeat2, color: "text-purple-600 bg-purple-50" },
@@ -689,6 +697,301 @@ export default function HomePageCustomizerPage() {
               </div>
             </div>
           )}
+
+          {/* TAB: VENDOR HIRE BANNER */}
+          {activeTab === "vendorBanner" && (() => {
+            const vendorBanner = config.vendorBanner || {}
+            return (
+              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+                <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-teal-600" />
+                      Vendor Hire Banner
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Manage top banner headline, subtext, badges, features, benefit list items and links for the booking page.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-500 mr-1">Banner Visibility</span>
+                    <button
+                      onClick={() => {
+                        updateVendorBanner("enabled", !(vendorBanner.enabled !== false))
+                      }}
+                      className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5`}
+                      style={{
+                        backgroundColor: (vendorBanner.enabled !== false) ? "#f0fdf4" : "#f1f5f9",
+                        color: (vendorBanner.enabled !== false) ? "#16a34a" : "#475569",
+                        borderColor: (vendorBanner.enabled !== false) ? "#bbf7d0" : "#cbd5e1"
+                      }}
+                    >
+                      {(vendorBanner.enabled !== false) ? "Visible on Landing Page" : "Hidden"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Main Text Content Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Badge text */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Badge Icon (Emoji)</label>
+                    <input
+                      type="text"
+                      value={vendorBanner.badgeIcon ?? ""}
+                      placeholder="🤝"
+                      onChange={(e) => updateVendorBanner("badgeIcon", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Badge Text</label>
+                    <input
+                      type="text"
+                      value={vendorBanner.badgeText ?? ""}
+                      placeholder="We're Looking for Professionals"
+                      onChange={(e) => updateVendorBanner("badgeText", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+
+                  {/* Title parts */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Title Prefix</label>
+                    <input
+                      type="text"
+                      value={vendorBanner.titlePrefix ?? ""}
+                      placeholder="We Hire"
+                      onChange={(e) => updateVendorBanner("titlePrefix", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Title Highlight (Emerald Color)</label>
+                    <input
+                      type="text"
+                      value={vendorBanner.titleHighlight ?? ""}
+                      placeholder="Technicians, Employees"
+                      onChange={(e) => updateVendorBanner("titleHighlight", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Title Suffix</label>
+                    <input
+                      type="text"
+                      value={vendorBanner.titleSuffix ?? ""}
+                      placeholder="& Vendors"
+                      onChange={(e) => updateVendorBanner("titleSuffix", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+
+                  {/* Banner Image */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Technician Image URL</label>
+                    <input
+                      type="text"
+                      value={vendorBanner.image ?? ""}
+                      placeholder="https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top"
+                      onChange={(e) => updateVendorBanner("image", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+
+                  {/* Description Subtitle */}
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Subtitle Description</label>
+                    <textarea
+                      rows={2}
+                      value={vendorBanner.subtitle ?? ""}
+                      placeholder="Join our team of skilled professionals and be part of a growing service community that works with trust and quality."
+                      onChange={(e) => updateVendorBanner("subtitle", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+
+                  {/* CTA text and url */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">CTA Button Text</label>
+                    <input
+                      type="text"
+                      value={vendorBanner.ctaText ?? ""}
+                      placeholder="Join as a Professional"
+                      onChange={(e) => updateVendorBanner("ctaText", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">CTA Redirect URL</label>
+                    <input
+                      type="text"
+                      value={vendorBanner.ctaUrl ?? ""}
+                      placeholder="https://calservices-vendor.vercel.app"
+                      onChange={(e) => updateVendorBanner("ctaUrl", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+
+                  {/* Learn more text and url */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Learn More Link Text</label>
+                    <input
+                      type="text"
+                      value={vendorBanner.learnMoreText ?? ""}
+                      placeholder="Learn more"
+                      onChange={(e) => updateVendorBanner("learnMoreText", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Learn More Redirect URL</label>
+                    <input
+                      type="text"
+                      value={vendorBanner.learnMoreUrl ?? ""}
+                      placeholder="https://calservices-vendor.vercel.app"
+                      onChange={(e) => updateVendorBanner("learnMoreUrl", e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium"
+                    />
+                  </div>
+                </div>
+
+
+                {/* Dynamic Feature Highlights List (Left Side) */}
+                <div className="border-t border-slate-100 pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Left-Side Feature Highlights</h3>
+                      <p className="text-[11px] text-slate-500">Add up to 3 quick feature items displayed on the left column.</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const list = vendorBanner.features || []
+                        if (list.length >= 3) {
+                          alert("You can add up to 3 highlights only.")
+                          return
+                        }
+                        const newItem = { id: `vf-${Date.now()}`, icon: "⚡", label: "New Feature" }
+                        updateVendorBanner("features", [...list, newItem])
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-semibold transition flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Highlight
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {(vendorBanner.features || [
+                      { id: "vf-1", icon: "📅", label: "Flexible Timings" },
+                      { id: "vf-2", icon: "💼", label: "Stable Work" },
+                      { id: "vf-3", icon: "🤝", label: "Team Support" }
+                    ]).map((f, fIdx) => (
+                      <div key={f.id || fIdx} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center gap-3">
+                        <input
+                          type="text"
+                          value={f.icon}
+                          onChange={(e) => {
+                            const list = [...(vendorBanner.features || [])]
+                            list[fIdx] = { ...list[fIdx], icon: e.target.value }
+                            updateVendorBanner("features", list)
+                          }}
+                          placeholder="Icon"
+                          className="w-10 px-1 py-1.5 rounded-lg border border-slate-200 text-center text-sm"
+                        />
+                        <input
+                          type="text"
+                          value={f.label}
+                          onChange={(e) => {
+                            const list = [...(vendorBanner.features || [])]
+                            list[fIdx] = { ...list[fIdx], label: e.target.value }
+                            updateVendorBanner("features", list)
+                          }}
+                          placeholder="Label"
+                          className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium"
+                        />
+                        <button
+                          onClick={() => {
+                            const list = (vendorBanner.features || []).filter((_, i) => i !== fIdx)
+                            updateVendorBanner("features", list)
+                          }}
+                          className="text-slate-400 hover:text-rose-600 p-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Dynamic Benefits List (Right Side) */}
+                <div className="border-t border-slate-100 pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Right-Side Benefit Points</h3>
+                      <p className="text-[11px] text-slate-500">Add up to 4 trust points displayed on the right column.</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const list = vendorBanner.benefits || []
+                        if (list.length >= 4) {
+                          alert("You can add up to 4 benefits only.")
+                          return
+                        }
+                        const newItem = { id: `vb-${Date.now()}`, icon: "✅", text: "New Benefit Point" }
+                        updateVendorBanner("benefits", [...list, newItem])
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-semibold transition flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Benefit Point
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {(vendorBanner.benefits || [
+                      { id: "vb-1", icon: "✅", text: "Verified & trusted customers" },
+                      { id: "vb-2", icon: "🕐", text: "On-time service & support" },
+                      { id: "vb-3", icon: "📍", text: "Work close to your area" },
+                      { id: "vb-4", icon: "🌟", text: "Recognition for quality work" }
+                    ]).map((p, pIdx) => (
+                      <div key={p.id || pIdx} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 flex items-center gap-3">
+                        <input
+                          type="text"
+                          value={p.icon}
+                          onChange={(e) => {
+                            const list = [...(vendorBanner.benefits || [])]
+                            list[pIdx] = { ...list[pIdx], icon: e.target.value }
+                            updateVendorBanner("benefits", list)
+                          }}
+                          placeholder="Icon"
+                          className="w-10 px-1 py-1.5 rounded-lg border border-slate-200 text-center text-sm"
+                        />
+                        <input
+                          type="text"
+                          value={p.text}
+                          onChange={(e) => {
+                            const list = [...(vendorBanner.benefits || [])]
+                            list[pIdx] = { ...list[pIdx], text: e.target.value }
+                            updateVendorBanner("benefits", list)
+                          }}
+                          placeholder="Benefit Text"
+                          className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium"
+                        />
+                        <button
+                          onClick={() => {
+                            const list = (vendorBanner.benefits || []).filter((_, i) => i !== pIdx)
+                            updateVendorBanner("benefits", list)
+                          }}
+                          className="text-slate-400 hover:text-rose-600 p-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* TAB 3: PROMOTIONAL OFFERS */}
           {activeTab === "offers" && (

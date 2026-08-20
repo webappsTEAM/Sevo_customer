@@ -1693,24 +1693,7 @@ export function LandingPage() {
                     navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
                   }}
                 />
-              ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.slug === "masons" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase() === "mason" || activeCategory.name?.toLowerCase() === "masonry") ? (
-                <MasonPackageModal
-                  category={activeCategory}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  packagesData={packagesData}
-                  onClose={handleCloseCategory}
-                  onCheckout={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(cleanConsultationItems(finalCart));
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-                  }}
-                  onGetEstimate={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(cleanConsultationItems(finalCart));
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
-                  }}
-                />
+
               ) : (activeCategory.id === "pest_control" || activeCategory.slug === "pest_control" || activeSubTabParam === "Cockroach & Termite Control" || activeSubTabParam === "Cockroach Control" || activeSubTabParam === "Termite Control") && (activeSubTabParam !== "Ants & Bed Bugs Control" && activeSubTabParam !== "Ants Control" && activeSubTabParam !== "Bedbugs Control" && activeSubTabParam !== "Ants and bed bugs control") ? (
                 <CockroachControlModal
                   category={{ id: "pest_control", name: "Pest Control" }}
@@ -2080,6 +2063,96 @@ export function LandingPage() {
             })}
           </div>
         </section>
+
+        {/* ── We Hire Technicians, Employees & Vendors Banner ── */}
+        {homeConfig.vendorBanner?.enabled !== false && (
+          <section className="max-w-7xl mx-auto px-6 pb-10">
+            <div className="relative flex items-stretch gap-0 bg-gradient-to-r from-emerald-50 via-sky-50 to-violet-50 border border-emerald-100 rounded-3xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 group min-h-[140px]">
+              {/* Subtle animated background blobs */}
+              <div className="absolute -top-10 -left-10 w-48 h-48 bg-emerald-200/30 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-10 right-1/3 w-40 h-40 bg-violet-200/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-8 right-0 w-36 h-36 bg-sky-200/20 rounded-full blur-2xl pointer-events-none" />
+
+              {/* Left: Person illustration */}
+              <div className="relative flex-shrink-0 hidden sm:flex items-end justify-center w-40 self-stretch overflow-hidden bg-gradient-to-b from-emerald-100/60 to-emerald-200/80">
+                <img
+                  src={homeConfig.vendorBanner?.image_url || homeConfig.vendorBanner?.image || "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top"}
+                  onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top" }}
+                  alt="Professional Technician"
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: 'center 5%' }}
+                />
+              </div>
+
+              {/* Center-Left: Feature highlights */}
+              <div className="hidden md:flex flex-col justify-center gap-3 flex-shrink-0 px-6 py-7 min-w-[150px] border-r border-emerald-100/60">
+                {(homeConfig.vendorBanner?.features || [
+                  { icon: "📅", label: "Flexible Timings" },
+                  { icon: "💼", label: "Stable Work" },
+                  { icon: "🤝", label: "Team Support" }
+                ]).map((f, idx) => (
+                  <div key={f.id || idx} className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                    <span className="text-lg leading-none">{f.icon}</span>
+                    <span>{f.label}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Center: Heading + description */}
+              <div className="flex-1 flex flex-col justify-center px-6 py-7 min-w-0">
+                <div className="inline-flex items-center gap-1.5 bg-white border border-emerald-400 text-emerald-600 text-[11px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full mb-3 w-fit">
+                  {homeConfig.vendorBanner?.badgeIcon || "🤝"} {homeConfig.vendorBanner?.badgeText || "We're Looking for Professionals"}
+                </div>
+                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight mb-2">
+                  {homeConfig.vendorBanner?.titlePrefix || "We Hire"}{" "}
+                  <span className="text-emerald-600">{homeConfig.vendorBanner?.titleHighlight || "Technicians, Employees"}</span>{" "}
+                  {homeConfig.vendorBanner?.titleSuffix || "& Vendors"}
+                </h2>
+                <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-sm">
+                  {homeConfig.vendorBanner?.subtitle || "Join our team of skilled professionals and be part of a growing service community that works with trust and quality."}
+                </p>
+              </div>
+
+              {/* Center-Right: Benefit points */}
+              <div className="hidden lg:flex flex-col justify-center gap-2.5 flex-shrink-0 px-6 py-7 border-l border-emerald-100/60">
+                {(homeConfig.vendorBanner?.benefits || [
+                  { icon: "✅", text: "Verified & trusted customers" },
+                  { icon: "🕐", text: "On-time service & support" },
+                  { icon: "📍", text: "Work close to your area" },
+                  { icon: "🌟", text: "Recognition for quality work" }
+                ]).map((p, idx) => (
+                  <div key={p.id || idx} className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                    <span className="text-base leading-none w-5 text-center">{p.icon}</span>
+                    <span>{p.text}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right: CTA */}
+              <div className="flex-shrink-0 flex flex-col items-center justify-center gap-2.5 px-6 sm:px-8 py-7 bg-gradient-to-b from-slate-900/0 to-slate-900/0">
+                <a
+                  href={homeConfig.vendorBanner?.ctaUrl || "https://calservices-vendor.vercel.app"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  id="lp-vendor-join-cta"
+                  className="inline-flex items-center gap-2 bg-slate-900 hover:bg-emerald-600 text-white text-sm font-extrabold px-5 py-3 rounded-xl whitespace-nowrap shadow-lg hover:shadow-emerald-300/50 transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                >
+                  {homeConfig.vendorBanner?.ctaText || "Join as a Professional"}
+                  <span className="text-lg font-light">›</span>
+                </a>
+                <a
+                  href={homeConfig.vendorBanner?.learnMoreUrl || "https://calservices-vendor.vercel.app"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-semibold text-slate-400 hover:text-emerald-600 transition-colors flex items-center gap-1"
+                >
+                  {homeConfig.vendorBanner?.learnMoreText || "Learn more"} →
+                </a>
+              </div>
+            </div>
+          </section>
+        )}
+
 
         {/* ── Home Services & Pest Control Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
         {isHomePestModalOpen &&
@@ -2806,24 +2879,7 @@ export function LandingPage() {
               navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
             }}
           />
-        ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.slug === "masons" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase() === "mason" || activeCategory.name?.toLowerCase() === "masonry") ? (
-          <MasonPackageModal
-            category={activeCategory}
-            cart={modalCart}
-            setCart={setModalCart}
-            packagesData={packagesData}
-            onClose={() => navigate("/home")}
-            onCheckout={(customCart) => {
-              const finalCart = resolveCartArg(customCart);
-              setModalCart(cleanConsultationItems(finalCart));
-              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-            }}
-            onGetEstimate={(customCart) => {
-              const finalCart = resolveCartArg(customCart);
-              setModalCart(cleanConsultationItems(finalCart));
-              navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
-            }}
-          />
+
         ) : (activeCategory.id === "pest_control" || activeCategory.slug === "pest_control" || activeSubTabParam === "Cockroach & Termite Control" || activeSubTabParam === "Cockroach Control" || activeSubTabParam === "Termite Control") && (activeSubTabParam !== "Ants & Bed Bugs Control" && activeSubTabParam !== "Ants Control" && activeSubTabParam !== "Bedbugs Control" && activeSubTabParam !== "Ants and bed bugs control") ? (
           <CockroachControlModal
             category={{ id: "pest_control", name: "Pest Control" }}
@@ -4534,24 +4590,7 @@ export function LandingPage() {
             navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
           }}
         />
-      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.slug === "masons" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase() === "mason" || activeCategory.name?.toLowerCase() === "masonry") ? (
-        <MasonPackageModal
-          category={activeCategory}
-          cart={modalCart}
-          setCart={setModalCart}
-          packagesData={packagesData}
-          onClose={() => navigate("/home")}
-          onCheckout={(customCart) => {
-            const finalCart = resolveCartArg(customCart);
-            setModalCart(cleanConsultationItems(finalCart));
-            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-          }}
-          onGetEstimate={(customCart) => {
-            const finalCart = resolveCartArg(customCart);
-            setModalCart(cleanConsultationItems(finalCart));
-            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
-          }}
-        />
+
       ) : (
         <CustomCleaningPackageModal
           category={activeCategory}
