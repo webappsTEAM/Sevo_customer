@@ -40,6 +40,8 @@ import { getAddress } from "../../api/geocoding.js";
 
 let BOOKING_CURRENCY_SYMBOL = "₹";
 
+const extractTextList = (items) => Array.isArray(items) && items.length > 0 ? items.map(i => typeof i === "string" ? i : (typeof i === "object" && i !== null ? (i.text || i.title || "") : "")).filter(Boolean) : [];
+
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    DATA
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
@@ -3414,6 +3416,11 @@ export function CartDrawerModal({ isOpen, onClose, cart, setCart, onProceedToChe
                   <div key={item.id || idx} className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm line-clamp-1">{item.name || item.displayName}</h4>
+                      {item.selectedSubOptions && item.selectedSubOptions.length > 0 && (
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, paddingLeft: '2px', marginTop: '4px', textAlign: 'left' }}>
+                          Areas: {item.selectedSubOptions.join(", ")}
+                        </div>
+                      )}
                       <p className="text-xs font-black text-indigo-600 mt-0.5">₹{item.price}</p>
                     </div>
 
@@ -7805,27 +7812,34 @@ function StepWorkflowCheckout({
                 </div>
               ) : (
                 items.map(item => (
-                  <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
-                    <span className="font-bold text-slate-800 flex-1">{item.name}</span>
+                  <div key={item.id} className="flex flex-col gap-1 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-bold text-slate-800 flex-1">{item.name}</span>
 
-                    {/* Quantity controls */}
-                    <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2 py-0.5 bg-slate-50 font-bold">
-                      <button type="button" onClick={() => removeItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold cursor-pointer px-1">-</button>
-                      <span className="text-slate-800 font-black">{item.quantity}</span>
-                      <button type="button" onClick={() => addItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold cursor-pointer px-1">+</button>
-                    </div>
+                      {/* Quantity controls */}
+                      <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-2 py-0.5 bg-slate-50 font-bold">
+                        <button type="button" onClick={() => removeItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold cursor-pointer px-1">-</button>
+                        <span className="text-slate-800 font-black">{item.quantity}</span>
+                        <button type="button" onClick={() => addItem(item.id)} className="hover:text-indigo-600 text-slate-500 font-extrabold cursor-pointer px-1">+</button>
+                      </div>
 
-                    {/* Price */}
-                    <div className="text-right">
-                      <span className="font-black text-slate-900 block">
-                        ₹{(item.price * item.quantity).toLocaleString("en-IN")}
-                      </span>
-                      {origTotal > itemTotal && (
-                        <span className="text-[10px] text-slate-400 line-through block">
-                          ₹{(origTotal * item.quantity).toLocaleString("en-IN")}
+                      {/* Price */}
+                      <div className="text-right">
+                        <span className="font-black text-slate-900 block">
+                          ₹{(item.price * item.quantity).toLocaleString("en-IN")}
                         </span>
-                      )}
+                        {origTotal > itemTotal && (
+                          <span className="text-[10px] text-slate-400 line-through block">
+                            ₹{(origTotal * item.quantity).toLocaleString("en-IN")}
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    {item.selectedSubOptions && item.selectedSubOptions.length > 0 && (
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, paddingLeft: '2px', marginTop: '4px', textAlign: 'left' }}>
+                        Areas: {item.selectedSubOptions.join(", ")}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -9742,43 +9756,70 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
     return item ? item.quantity : 0;
   }
 
+  const getSubOptionNameAndParentId = (subOptId) => {
+    for (const svc of PAINTING_SERVICES) {
+      const found = svc.subOptions.find(o => o.id === subOptId);
+      if (found) {
+        return { name: found.name, parentId: `serv-paint-estimate-${svc.id}`, parentService: svc };
+      }
+    }
+    return null;
+  }
+
   const addSubOptionToCart = (subOpt, parentService) => {
     setCart(prev => {
-      const existing = prev.find(c => c.id === subOpt.id);
-      if (existing) {
-        return prev.map(c => c.id === subOpt.id ? { ...c, quantity: c.quantity + 1 } : c);
+      const parentId = `serv-paint-estimate-${parentService.id}`;
+      const existingParent = prev.find(c => c.id === parentId);
+      
+      let updatedParent;
+      if (existingParent) {
+        const subOpts = existingParent.selectedSubOptions || [];
+        const updatedSubOpts = subOpts.includes(subOpt.name) ? subOpts : [...subOpts, subOpt.name];
+        updatedParent = {
+          ...existingParent,
+          selectedSubOptions: updatedSubOpts
+        };
+      } else {
+        updatedParent = {
+          id: parentId,
+          name: `${parentService.name} (Site Consultation)`,
+          price: 49,
+          quantity: 1,
+          categoryName: "Painting",
+          selectedSubOptions: [subOpt.name]
+        };
       }
-      return [...prev, {
-        id: subOpt.id,
-        name: `${parentService.name}: ${subOpt.name}`,
-        shortName: subOpt.name,
-        price: subOpt.price,
-        parentId: parentService.id,
-        parentName: parentService.name,
-        quantity: 1,
-        categoryName: "Painting"
-      }];
+      
+      const filtered = prev.filter(c => c.id !== parentId && c.parentId !== parentService.id && c.id !== subOpt.id);
+      return [...filtered, updatedParent];
     });
   }
 
   const removeSubOptionFromCart = (subOptId) => {
+    const info = getSubOptionNameAndParentId(subOptId);
+    if (!info) return;
     setCart(prev => {
-      const existing = prev.find(c => c.id === subOptId);
-      if (!existing) return prev;
-      if (existing.quantity === 1) {
-        return prev.filter(c => c.id !== subOptId);
+      const parent = prev.find(c => c.id === info.parentId);
+      if (!parent) return prev;
+      const updatedSubOpts = (parent.selectedSubOptions || []).filter(name => name !== info.name);
+      if (updatedSubOpts.length === 0) {
+        return prev.filter(c => c.id !== info.parentId);
       }
-      return prev.map(c => c.id === subOptId ? { ...c, quantity: c.quantity - 1 } : c);
+      return prev.map(c => c.id === info.parentId ? { ...c, selectedSubOptions: updatedSubOpts } : c);
     });
   }
 
   const getSubOptionCartCount = (subOptId) => {
-    const item = cart.find(c => c.id === subOptId);
-    return item ? item.quantity : 0;
+    const info = getSubOptionNameAndParentId(subOptId);
+    if (!info) return 0;
+    const parent = cart.find(c => c.id === info.parentId);
+    if (!parent) return 0;
+    return (parent.selectedSubOptions || []).includes(info.name) ? 1 : 0;
   }
 
   const getParentCartCount = (parentId) => {
-    return cart.reduce((sum, item) => item.parentId === parentId ? sum + item.quantity : sum, 0);
+    const parent = cart.find(c => c.id === `serv-paint-estimate-${parentId}`);
+    return parent ? (parent.selectedSubOptions || []).length : 0;
   }
 
   const toggleExpand = (id) => {
@@ -10373,27 +10414,25 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                     <div>
                       <div className="uc-paint-cart-items">
                         {cart.map(item => (
-                          <div key={item.id} className="uc-paint-cart-item">
-                            <div className="uc-paint-cart-item-info">
-                              <span className="uc-paint-cart-item-name">
-                                {item.parentId ? (
-                                  <>
-                                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, lineHeight: 1.2 }}>{item.parentName}</div>
-                                    <div style={{ fontSize: '0.82rem', color: '#1e293b', fontWeight: 700, marginTop: '2px' }}>{item.shortName}</div>
-                                  </>
-                                ) : (
-                                  item.name
+                          <div key={item.id} className="uc-paint-cart-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '6px', paddingBottom: '10px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                              <div className="uc-paint-cart-item-info" style={{ flex: 1 }}>
+                                <span className="uc-paint-cart-item-name">{item.name}</span>
+                                {item.price > 0 && (
+                                  <span className="uc-paint-cart-item-price">{BOOKING_CURRENCY_SYMBOL}{item.price.toLocaleString()}</span>
                                 )}
-                              </span>
-                              {item.price > 0 && (
-                                <span className="uc-paint-cart-item-price">{BOOKING_CURRENCY_SYMBOL}{item.price.toLocaleString()}</span>
-                              )}
+                              </div>
+                              <div className="uc-paint-cart-item-qty">
+                                <button onClick={() => removeFromCart(item.id)}>−</button>
+                                <span>{item.quantity}</span>
+                                <button onClick={() => addToCart(item)}>+</button>
+                              </div>
                             </div>
-                            <div className="uc-paint-cart-item-qty">
-                              <button onClick={() => item.parentId ? removeSubOptionFromCart(item.id) : removeFromCart(item.id)}>−</button>
-                              <span>{item.quantity}</span>
-                              <button onClick={() => item.parentId ? addSubOptionToCart({ id: item.id, name: item.shortName, price: item.price }, { id: item.parentId, name: item.parentName }) : addToCart(item)}>+</button>
-                            </div>
+                            {item.selectedSubOptions && item.selectedSubOptions.length > 0 && (
+                              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, paddingLeft: '2px', marginTop: '4px', textAlign: 'left' }}>
+                                Areas: {item.selectedSubOptions.join(", ")}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -14566,6 +14605,21 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       const pName = (p.name || "").toLowerCase();
       const tab = (activeSubTab || "").toLowerCase();
 
+      if (normalizedKey === "mason") {
+        if (tab.includes("partition") || tab.includes("construction") || tab.includes("wall")) {
+          return sSlug.includes("part") || sSlug.includes("construction") || sName.includes("partition") || sName.includes("construction") || sName.includes("wall") || pName.includes("construction") || pName.includes("partition");
+        }
+        if (tab.includes("brick") || tab.includes("block")) {
+          return sSlug.includes("brick") || sSlug.includes("block") || sName.includes("brick") || sName.includes("block");
+        }
+        if (tab.includes("plastering") || tab.includes("repair")) {
+          return sSlug.includes("plaster") || sName.includes("plaster") || sName.includes("repair");
+        }
+        if (tab.includes("breaking") || tab.includes("demolition") || tab.includes("removal")) {
+          return sSlug.includes("demo") || sName.includes("demolition") || sName.includes("breaking") || sName.includes("removal");
+        }
+      }
+
       // 1. Refrigerator subtabs
       if (tab.includes("refrigerator") || tab.includes("fridge")) {
         const isRef = sSlug.includes("ref") || sSlug.includes("refrigerator") || sName.includes("refrigerator");
@@ -14690,7 +14744,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         price: Math.round(Number(dbMatch.base_price) || plan.price),
         duration: dbMatch.duration || plan.duration,
         description: dbMatch.description || plan.description,
-        includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes : plan.includes,
+        includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? extractTextList(dbMatch.includes) : plan.includes,
         image: dbMatch.image || plan.image,
         badge: dbMatch.tag || plan.badge,
         tools: dbMatch.tools,
@@ -14709,6 +14763,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       const eff = (effectiveKey || "").toLowerCase();
       const tab = (activeSubTab || "").toLowerCase();
 
+      if (eff === "mason") return true;
       const matchesService = sSlug === eff || sName.includes(eff) || eff.includes(sSlug);
       const matchesTab = sName.includes(tab) || tab.includes(sName) || pName.includes(tab) || tab.includes(pName);
       return matchesService || matchesTab;
@@ -14718,7 +14773,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       price: Math.round(Number(p.base_price) || 0),
       duration: p.duration || "30 mins",
       description: p.description || "",
-      includes: Array.isArray(p.includes) ? p.includes : [],
+      includes: Array.isArray(p.includes) ? extractTextList(p.includes) : [],
       image: p.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
       badge: p.tag || "Standard",
       badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
@@ -14858,12 +14913,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     e.target.onerror = null;
                     e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
                   }}
-                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${isSelected
-                    ? "scale-[1.05] shadow-md border-2 border-slate-800"
-                    : "opacity-80 group-hover:opacity-100 group-hover:scale-105"
+                  className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 border-2 ${isSelected
+                    ? "scale-[1.05] shadow-md border-emerald-500"
+                    : "border-transparent opacity-80 group-hover:opacity-100 group-hover:scale-105 group-hover:border-emerald-500/50"
                     }`}
                 />
-                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
+                <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${isSelected ? "text-emerald-600 font-extrabold" : "text-slate-600 font-bold group-hover:text-emerald-600"
                   }`}>
                   {tab.name}
                 </span>
@@ -15393,6 +15448,11 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                     <div key={item.id} className="flex justify-between items-start text-[11px] gap-2">
                       <div className="flex-1">
                         <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
+                        {item.selectedSubOptions && item.selectedSubOptions.length > 0 && (
+                          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, display: 'block', marginTop: '4px', textAlign: 'left' }}>
+                            Areas: {item.selectedSubOptions.join(", ")}
+                          </span>
+                        )}
                         {item.duration && <span className="text-[9px] text-slate-400 block mt-0.5">{item.duration}</span>}
                       </div>
                       <div className="text-right flex items-center gap-2">
