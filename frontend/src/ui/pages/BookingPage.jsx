@@ -21143,7 +21143,13 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   {isFirst && (
                     <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4 border border-slate-100/60">
                       <img
-                        src={activeTab === "packages" ? "/mockups/kitchen_top_new.png" : activeTab === "appliance" ? "/mockups/appliance_cleaning_hero.png" : activeTab === "cabinet_tile" ? "/mockups/kitchen_cleaning_hero.png" : "/mockups/quick_extra_services_hero.png"}
+                        src={(() => {
+                          const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
+                          if (activeTab === "packages") return customB.packages || "/mockups/kitchen_top_new.png";
+                          if (activeTab === "appliance") return customB.appliance || "/mockups/appliance_cleaning_hero.png";
+                          if (activeTab === "cabinet_tile") return customB.cabinet_tile || "/mockups/kitchen_cleaning_hero.png";
+                          return customB.addons || "/mockups/quick_extra_services_hero.png";
+                        })()}
                         alt={service.name}
                         className="w-full h-full object-cover object-center"
                       />
