@@ -8,7 +8,7 @@ import {
   ChevronRight, ChevronLeft, ArrowLeft, Clock, Calendar, Camera,
   Upload, AlertCircle, Check, X, Info, Zap, Lock, Settings,
   Droplets, Wind, Bug, Brush, Cpu, Hammer, Package, Sparkles,
-  Home, RefreshCw, MessageSquare, KeyRound, ShieldCheck, Compass,
+  Home, RefreshCw, MessageSquare, KeyRound, ShieldCheck, Compass, Building2,
   LogIn, ChevronDown, ChevronUp, Plus, Award, Users, ThumbsUp, ArrowRight,
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
@@ -8861,6 +8861,19 @@ export function BookingPage() {
               </span>
               <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors hidden sm:inline" />
             </button>
+
+            {/* Vendor Platform Link */}
+            <a
+              href={import.meta.env.VITE_VENDOR_PLATFORM_URL || "http://localhost:5176/"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+            >
+              <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                <Building2 className="w-4 h-4 stroke-[1.75]" />
+              </div>
+              <span className="font-semibold text-slate-800 hidden sm:inline">Vendor Platform</span>
+            </a>
           </div>
 
         </div>
