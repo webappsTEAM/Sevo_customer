@@ -254,6 +254,9 @@ class BookingCreateView(APIView):
 
         _lat = serializer.validated_data.get("latitude")
         _lng = serializer.validated_data.get("longitude")
+        if _lat is None or _lng is None:
+            _lat = 12.7409
+            _lng = 77.8253
         _service_slug = (serializer.validated_data.get("service_category") or "").strip().lower()
 
         zone_result = check_booking_eligibility(
@@ -334,9 +337,18 @@ class BookingCreateView(APIView):
                     if not customer_user and email_clean:
                         customer_user = User.objects.filter(email__iexact=email_clean).first()
 
+        # Resolve email if missing in validated_data but present on customer_user
+        final_email = serializer.validated_data.get("email")
+        if not final_email:
+            if customer_user and customer_user.email:
+                final_email = customer_user.email
+            elif request.user and request.user.is_authenticated and request.user.email:
+                final_email = request.user.email
+
         sr = serializer.save(
             company=company,
             customer=customer_user,
+            email=final_email,
             status=initial_status,
             payment_method=payment_method,
             payment_status=initial_payment_status,

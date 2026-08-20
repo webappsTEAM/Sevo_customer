@@ -732,14 +732,18 @@ export function TwoWheelerBookingHosurPage() {
         dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       }
 
+      const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
       const payload = {
         customer_name: name || "Thejaa T",
         phone: phone || "6379222691",
+        email: customerEmail,
         service_category: "goods_transport_two_wheeler",
         issue_title: `Two-wheeler delivery — ${vehicle.name} (${currentGoodsType})`,
         description: `Goods Type: ${currentGoodsType} | Type: ${userType}`,
-        address: pickup || "Bengaluru, Karnataka, India",
+        address: pickup || "Hosur, Tamil Nadu",
         drop_address: drop || (selectedRoute ? selectedRoute.to : "Channasandra, Bengaluru, Karnataka, India"),
+        latitude: 12.7409,
+        longitude: 77.8253,
         preferred_date: dateString,
         preferred_time: selectedSlot || "Immediate / Next Available",
         total_amount: fare,
@@ -1913,7 +1917,7 @@ export function TwoWheelerBookingHosurPage() {
                   >
                     <div>
                       <p className="text-xs font-extrabold text-slate-900">Order Details</p>
-                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId ? `CRN${String(lastBookingId).replace(/\D/g, '').slice(0, 12)}` : "CRN288650604065"}</p>
+                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "CRN288650604065"}</p>
                     </div>
                     <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
                   </button>
