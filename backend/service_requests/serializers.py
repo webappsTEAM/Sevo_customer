@@ -109,6 +109,7 @@ class PackageSerializer(serializers.ModelSerializer):
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_slug = serializers.CharField(source="service.slug", read_only=True)
     service_image = serializers.CharField(source="service.image", read_only=True, allow_null=True, allow_blank=True)
+    service_customization = serializers.JSONField(source="service.customization", read_only=True)
     category_slug = serializers.CharField(source="service.category.slug", read_only=True)
     add_ons = AddOnSerializer(many=True, read_only=True)
 
