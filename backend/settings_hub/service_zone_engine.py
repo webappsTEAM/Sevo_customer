@@ -97,52 +97,73 @@ def validate_coordinates(lat, lng):
     return lat, lng
 
 
+def _norm_slug(s: str) -> str:
+    if not s:
+        return ""
+    return s.strip().lower().replace("_", "-").replace(" ", "-").replace("&", "and")
+
+
 def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_name: str = "") -> bool:
     """
-    Checks if a requested slug, category, or service title matches an allowed service slug/name in the zone.
-    Supports exact matching, category-to-service expansions, prefix matching, and fuzzy normalization.
+    Checks if a requested slug or service title matches an allowed service slug/name in the zone.
+    Uses exact matching and specific service alias mapping, preventing false-positive cross matches.
     """
     if not requested_slug or requested_slug in ("general", "all", "service-booking", "services-added"):
         return True
 
-    r_norm = requested_slug.strip().lower().replace("_", "-")
-    c_norm = candidate_slug.strip().lower().replace("_", "-")
-    name_norm = candidate_name.strip().lower()
+    r = _norm_slug(requested_slug)
+    c = _norm_slug(candidate_slug)
+    n = _norm_slug(candidate_name) if candidate_name else ""
 
-    if r_norm == c_norm:
+    if r == c or (n and r == n):
         return True
 
-    if r_norm in c_norm or c_norm in r_norm:
-        return True
-
-    if name_norm and (r_norm in name_norm or any(part in name_norm for part in r_norm.split("-") if len(part) > 2)):
-        return True
-
-    # Category and keyword expansions for catalog services
-    CAT_MAP = {
-        "ac": ["ac", "air", "hvac", "cooling", "jet", "foam"],
-        "ac-heating": ["ac", "air", "hvac", "cooling", "heating", "foam", "jet"],
-        "ac-and-appliance": ["ac", "air", "appliance", "washing", "refrigerator", "microwave", "tv"],
-        "appliance": ["washing", "refrigerator", "fridge", "microwave", "tv", "appliance", "display"],
-        "appliances": ["washing", "refrigerator", "fridge", "microwave", "tv", "appliance", "display"],
-        "cleaning": ["clean", "sofa", "bathroom", "kitchen", "house", "deep-clean"],
-        "home-cleaning": ["clean", "sofa", "bathroom", "kitchen", "house", "deep-clean"],
-        "plumbing": ["plumb", "tap", "pipe", "drain", "water", "leak", "tank"],
-        "electrical": ["electr", "wire", "switch", "socket", "light", "mcb", "fan"],
-        "carpentry": ["carpent", "wood", "metal", "door", "lock", "furniture", "handle"],
-        "painting": ["paint", "waterproof", "texture", "primer", "wall"],
-        "masonry": ["mason", "brick", "block", "plaster", "demolition", "wall-breaking", "construction", "tile"],
-        "pest-control": ["termite", "bed-bugs", "cockroach", "ants", "pest"],
-        "logistics": ["truck", "two-wheeler", "packers-movers", "groceries", "vegetables"],
-        "packers-movers": ["packer", "mover", "truck"],
-        "two-wheeler": ["two-wheeler", "bike", "scooter"],
-        "truck": ["truck", "mini-truck"],
+    # Exact alias mapping for catalog services
+    ALIASES = {
+        "kitchen-cleaning": {"kitchen-cleaning", "kitchen", "kitchen-clean"},
+        "sofa-cleaning": {"sofa-cleaning", "sofa", "sofa-clean"},
+        "bathroom-cleaning": {"bathroom-cleaning", "bathroom", "bathroom-clean"},
+        "full-house-cleaning": {"full-house-cleaning", "full-house", "occupied-apartment", "cleaning", "full-home-cleaning"},
+        "full-home-deep-clean": {"full-home-deep-clean", "deep-cleaning", "deep-clean"},
+        "cockroach-control": {"cockroach-control", "cockroach", "cockroach-and-termite-control"},
+        "termite-control": {"termite-control", "termite", "cockroach-and-termite-control"},
+        "ants-bed-bugs-control": {"ants-bed-bugs-control", "ants-control", "bedbugs-control", "ants-and-bed-bugs-control", "bed-bugs"},
+        "plumbing": {"plumbing", "plumber"},
+        "electrician": {"electrician", "electrical"},
+        "carpentry": {"carpentry", "carpenter"},
+        "ac-service-cleaning": {"ac-service-cleaning", "ac-service", "ac"},
+        "ac-repair": {"ac-repair", "ac-diagnostics"},
+        "ac-gas-refill": {"ac-gas-refill", "ac-gas"},
+        "ac-installation": {"ac-installation", "ac-install"},
+        "refrigerator": {"refrigerator", "fridge"},
+        "washing-machine": {"washing-machine"},
+        "tv-display": {"tv-display", "tv", "tv-and-display"},
+        "microwave": {"microwave", "microwave-oven"},
+        "interior-painting": {"interior-painting"},
+        "exterior-painting": {"exterior-painting"},
+        "waterproofing": {"waterproofing", "wall-waterproofing"},
+        "wood-metal": {"wood-metal", "wood-and-metal-polish", "wood-and-metal"},
+        "texture-decor": {"texture-decor"},
+        "brick-block-work": {"brick-block-work"},
+        "plastering-wall-repair": {"plastering-wall-repair"},
+        "wall-partition-construction": {"wall-partition-construction"},
+        "wall-breaking-demolition": {"wall-breaking-demolition"},
+        "home-construction": {"home-construction"},
+        "full-house-construction": {"full-house-construction"},
+        "truck": {"truck", "mini-truck"},
+        "two-wheeler": {"two-wheeler", "bike"},
+        "packers-movers": {"packers-movers", "house-shifting"},
+        "vegetables": {"vegetables", "farm-fresh-vegetable", "farm-fresh-vegetables"},
+        "groceries": {"groceries"},
     }
 
-    for cat_key, keywords in CAT_MAP.items():
-        if r_norm == cat_key or cat_key in r_norm or r_norm in cat_key:
-            if any(kw in c_norm or kw in name_norm for kw in keywords):
-                return True
+    allowed_set = ALIASES.get(c, {c})
+    if r in allowed_set:
+        return True
+
+    req_set = ALIASES.get(r, {r})
+    if c in req_set or (n and n in req_set):
+        return True
 
     return False
 

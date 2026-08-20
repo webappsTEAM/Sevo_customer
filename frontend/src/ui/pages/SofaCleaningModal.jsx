@@ -405,7 +405,7 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col lg:flex-row flex-1 pt-4">
+      <div className="flex flex-col lg:flex-row items-start gap-6 flex-1 pt-4">
 
         {/* Left Column */}
         <div className="flex-1 space-y-5 lg:pr-6">
@@ -515,8 +515,8 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
           </div>
         </div>
 
-        {/* Right Column: Order Summary */}
-        <div className="w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between lg:sticky lg:top-32 h-fit space-y-4 mt-6 lg:mt-0 rounded-2xl">
+        {/* Right Column: Order Summary (Sticky/Frozen on scroll below header tabs) */}
+        <div className="w-full lg:w-[350px] shrink-0 sticky top-[210px] self-start bg-slate-50 border border-slate-100 p-5 flex flex-col justify-between space-y-4 mt-6 lg:mt-0 rounded-2xl shadow-sm z-10">
           <div className="space-y-4">
             <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
               <div className="border-b border-slate-100 pb-2 flex justify-between items-center">

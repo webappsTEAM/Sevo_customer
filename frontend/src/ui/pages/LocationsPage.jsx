@@ -6,8 +6,6 @@ import "leaflet/dist/leaflet.css"
 import { apiRequest, unwrapResults } from "../../api/client.js"
 import { getAddress } from "../../api/geocoding"
 import { Pill, Button, Card, Input, Select, TextArea } from "../components/kit.jsx"
-import { ZonesPanel } from "./locations/ZonesPanel.jsx"
-import { AssignmentsPanel } from "./locations/AssignmentsPanel.jsx"
 import { MapOverview } from "./locations/MapOverview.jsx"
 import { GeofenceEditorModal } from "./locations/GeofenceEditorModal.jsx"
 import { ServiceAreasPanel } from "./locations/ServiceAreasPanel.jsx"
@@ -577,8 +575,6 @@ export function LocationsPage() {
             { id: "service-areas", label: "Service Areas", Icon: Shield },
             { id: "map", label: "Map & Sites", Icon: Map },
             { id: "overview", label: "Overview", Icon: Activity },
-            { id: "zones", label: "Zones", Icon: Layers },
-            { id: "assignments", label: "Assignments", Icon: UserCheck },
           ].map(({ id, label, Icon }) => {
             const isActive = activeTab === id
             return (
@@ -604,18 +600,6 @@ export function LocationsPage() {
       {activeTab === "overview" && (
         <div className="flex-1 overflow-hidden animate-in fade-in duration-500">
           <MapOverview />
-        </div>
-      )}
-
-      {activeTab === "zones" && (
-        <div className="flex-1 overflow-hidden animate-in fade-in duration-500">
-          <ZonesPanel locations={savedLocations} />
-        </div>
-      )}
-
-      {activeTab === "assignments" && (
-        <div className="flex-1 overflow-hidden animate-in fade-in duration-500">
-          <AssignmentsPanel locations={savedLocations} />
         </div>
       )}
 
