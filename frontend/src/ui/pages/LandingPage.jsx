@@ -1730,6 +1730,19 @@ export function LandingPage() {
                   </button>
                 </div>
               )}
+
+              {/* Vendor Platform Link */}
+              <a
+                href={import.meta.env.VITE_VENDOR_PLATFORM_URL || "http://localhost:5176/"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                  <Building2 className="w-4 h-4 stroke-[1.75]" />
+                </div>
+                <span className="font-semibold text-slate-800">Vendor Platform</span>
+              </a>
             </div>
           </div>
         </header>
