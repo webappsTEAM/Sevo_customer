@@ -2119,7 +2119,7 @@ function PostBookingFlow({ bookingData, onDone }) {
 export function RunningServiceManRadar() {
   return (
     <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      
+
       {/* Simple Soft Outer Pulse Ring */}
       <motion.div
         animate={{ scale: [1, 1.35, 1], opacity: [0.4, 0.15, 0.4] }}
@@ -3375,12 +3375,12 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         sessionStorage.removeItem("calservice_customer_token")
         sessionStorage.removeItem("calservice_last_booking")
         sessionStorage.removeItem("calservice_active_tracking_id")
-      } catch (_) {}
+      } catch (_) { }
       if (typeof onClose === "function") {
         onClose()
       }
       if (typeof refreshMe === "function") {
-        await refreshMe().catch(() => {})
+        await refreshMe().catch(() => { })
       }
     }
   }
@@ -4337,7 +4337,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                 <a href={`tel:${b.technician?.phone || b.technician_phone || b.assigned_employee?.phone}`} style={{ color: '#059669', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <Phone size={12} /> {b.technician?.phone || b.technician_phone || b.assigned_employee?.phone}
                                 </a>
-                                <a href={`https://wa.me/91${(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone).replace(/\D/g,'')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <a href={`https://wa.me/91${(b.technician?.phone || b.technician_phone || b.assigned_employee?.phone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#25D366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <MessageSquare size={12} /> WhatsApp
                                 </a>
                               </div>
@@ -4430,8 +4430,8 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             {(Array.isArray(b.available_actions)
                               ? b.available_actions
                               : (b.available_actions && typeof b.available_actions === 'object')
-                              ? Object.keys(b.available_actions).filter(k => b.available_actions[k]).map(k => k.replace(/^can_/, ''))
-                              : [
+                                ? Object.keys(b.available_actions).filter(k => b.available_actions[k]).map(k => k.replace(/^can_/, ''))
+                                : [
                                   b.payment_status === 'FAILED' ? 'retry_payment' : null,
                                   Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) ? 'track' : null,
                                   ['pending', 'confirmed'].includes(b.status) ? 'reschedule' : null,
@@ -7846,7 +7846,7 @@ function StepWorkflowCheckout({
               if (addrObj.latitude) onChange({ target: { name: "latitude", value: String(addrObj.latitude) } });
               if (addrObj.longitude) onChange({ target: { name: "longitude", value: String(addrObj.longitude) } });
               if (typeof setLocation === "function") setLocation(fullAddr);
-              try { localStorage.setItem("calservice_user_location", fullAddr); } catch (e) {}
+              try { localStorage.setItem("calservice_user_location", fullAddr); } catch (e) { }
             }
             setShowMapModal(false);
           }}
@@ -8113,7 +8113,7 @@ export function BookingPage() {
       const rawCatKey = (category.id || category.slug || "").toLowerCase();
       if (rawCatKey.includes("painting") || rawCatKey.includes("mason")) {
         console.log("DEBUG: [BookingPage] Hot-reloading catalog and customizations for category:", rawCatKey);
-        
+
         // 1. Fetch fresh services catalog
         apiRequest("/catalog/services/")
           .then(svcRes => {
@@ -8172,7 +8172,7 @@ export function BookingPage() {
   // Auto-sync customer name, phone, and email from authenticated user session
   useEffect(() => {
     let savedPhone = ""
-    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) {}
+    try { savedPhone = localStorage.getItem("caltrack_customer_phone") || "" } catch (_) { }
     if (user || savedPhone) {
       setFormData(prev => ({
         ...prev,
@@ -8848,7 +8848,7 @@ export function BookingPage() {
           (() => {
             const isPainting = category.id === "painting" || category.slug === "painting" || category.slug === "paintings" || String(category.id) === "17" || category.name?.toLowerCase() === "painting" || category.name?.toLowerCase() === "paintings";
             const isMason = category.id === "mason" || category.slug === "mason" || category.slug === "masons" || String(category.id) === "11" || category.name?.toLowerCase() === "mason" || category.name?.toLowerCase() === "masonry";
-            
+
             if (isPainting) {
               return (
                 <PaintingPackageModal
@@ -9292,7 +9292,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
   const paintingKey = React.useMemo(() => {
     if (!packagesData) return null;
-    return Object.keys(packagesData).find(key => 
+    return Object.keys(packagesData).find(key =>
       packagesData[key] && packagesData[key].some(p => p.category_slug === "painting" || p.category_slug === "paintings" || String(p.category) === "paintings" || String(p.category) === "17")
     ) || null;
   }, [packagesData]);
@@ -9448,45 +9448,45 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
             rating: cust.rating || service.rating,
             reviews: cust.reviews || service.reviews,
             points: Array.isArray(cust.points) && cust.points.length > 0
-                      ? cust.points.map(p => typeof p === "string" ? { text: p, checked: true } : p)
-                                   .filter(p => p && p.checked !== false && p.text)
-                                   .map(p => p.text)
-                      : service.points,
+              ? cust.points.map(p => typeof p === "string" ? { text: p, checked: true } : p)
+                .filter(p => p && p.checked !== false && p.text)
+                .map(p => p.text)
+              : service.points,
             benefits: Array.isArray(cust.benefits) && cust.benefits.length > 0
-                      ? cust.benefits.map(b => typeof b === "string" ? { title: b, checked: true } : b)
-                                     .filter(b => b && b.checked !== false && b.title)
-                                     .map(b => b.title)
-                      : service.benefits,
+              ? cust.benefits.map(b => typeof b === "string" ? { title: b, checked: true } : b)
+                .filter(b => b && b.checked !== false && b.title)
+                .map(b => b.title)
+              : service.benefits,
             includes: Array.isArray(cust.includes) && cust.includes.length > 0
-                      ? cust.includes.map(i => typeof i === "string" ? { text: i, checked: true } : i)
-                                     .filter(i => i && i.checked !== false && i.text)
-                                     .map(i => i.text)
-                      : service.includes,
+              ? cust.includes.map(i => typeof i === "string" ? { text: i, checked: true } : i)
+                .filter(i => i && i.checked !== false && i.text)
+                .map(i => i.text)
+              : service.includes,
             excludes: Array.isArray(cust.excludes) && cust.excludes.length > 0
-                      ? cust.excludes.map(e => typeof e === "string" ? { text: e, checked: true } : e)
-                                     .filter(e => e && e.checked !== false && e.text)
-                                     .map(e => e.text)
-                      : service.excludes,
+              ? cust.excludes.map(e => typeof e === "string" ? { text: e, checked: true } : e)
+                .filter(e => e && e.checked !== false && e.text)
+                .map(e => e.text)
+              : service.excludes,
             inspectionHighlights: Array.isArray(cust.inspection_highlights) && cust.inspection_highlights.length > 0
-                      ? cust.inspection_highlights.map(h => typeof h === "string" ? { text: h, checked: true } : h)
-                                                   .filter(h => h && h.checked !== false && h.text)
-                                                   .map(h => h.text)
-                      : service.inspectionHighlights,
+              ? cust.inspection_highlights.map(h => typeof h === "string" ? { text: h, checked: true } : h)
+                .filter(h => h && h.checked !== false && h.text)
+                .map(h => h.text)
+              : service.inspectionHighlights,
             steps: Array.isArray(cust.steps) && cust.steps.length > 0
-                      ? cust.steps.filter(s => s && s.checked !== false)
-                      : service.steps,
+              ? cust.steps.filter(s => s && s.checked !== false)
+              : service.steps,
             faqs: Array.isArray(cust.faqs) && cust.faqs.length > 0
-                      ? cust.faqs.filter(f => f && f.checked !== false)
-                                 .map(f => ({ q: f.q || f.question || "", a: f.a || f.answer || "" }))
-                      : service.faqs,
+              ? cust.faqs.filter(f => f && f.checked !== false)
+                .map(f => ({ q: f.q || f.question || "", a: f.a || f.answer || "" }))
+              : service.faqs,
             reviews_list: cust.reviews_list || [],
             button_text: cust.button_text || "View details",
             price_list: Array.isArray(cust.price_list) && cust.price_list.length > 0
-                      ? cust.price_list.filter(p => p && p.checked !== false)
-                      : [],
+              ? cust.price_list.filter(p => p && p.checked !== false)
+              : [],
             paint_types: Array.isArray(cust.paint_types) && cust.paint_types.length > 0
-                      ? cust.paint_types.filter(pt => pt && pt.checked !== false)
-                      : [],
+              ? cust.paint_types.filter(pt => pt && pt.checked !== false)
+              : [],
             subOptions: dynamicSubOptions
           };
         }
@@ -10422,7 +10422,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                     const minPriceObj = paintTypes.reduce((prev, curr) => (parseFloat(prev.price) || 0) < (parseFloat(curr.price) || 0) ? prev : curr, paintTypes[0] || {});
                     const minPrice = parseFloat(minPriceObj.price) || 0;
                     startingRateText = activeDetailService.starting_fare || `Starting from ₹${minPrice}/sq.ft`;
-                    
+
                     if (serviceId === "paint-waterproofing") {
                       tableHeaderType = "Waterproofing Service";
                       chooseTypeTitle = "💧 Choose Treatment Type";
@@ -10843,7 +10843,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                   border: "#a5f3fc"
                                 }
                               ];
-                              
+
                               const steps = Array.isArray(activeDetailService.steps) && activeDetailService.steps.length > 0
                                 ? activeDetailService.steps
                                 : staticSteps;
@@ -11599,7 +11599,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
   const masonKey = React.useMemo(() => {
     if (!packagesData) return null;
-    const foundKey = Object.keys(packagesData).find(key => 
+    const foundKey = Object.keys(packagesData).find(key =>
       packagesData[key] && packagesData[key].some(p => p.category_slug === "mason" || p.category_slug === "masons" || String(p.category) === "mason" || String(p.category) === "11")
     );
     return foundKey || null;
@@ -11620,7 +11620,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
         else if (rawSlug === "wall-partition-construction") cId = "partition";
         else if (rawSlug === "wall-breaking-demolition") cId = "demolition";
         else if (rawSlug.startsWith("mason-")) cId = rawSlug.replace("mason-", "");
-        
+
         const sName = pkg.service_name || pkg.service?.name || "Masonry Work";
         if (!distinct.some(c => c.id === cId)) {
           const iconMap = {
@@ -11638,7 +11638,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
             "construction": "🏗️",
           };
           let icon = iconMap[cId] || iconMap[rawSlug] || "🧱";
-          
+
           distinct.push({
             id: cId,
             name: sName,
@@ -13505,14 +13505,14 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   if (subtabParam === "Full bungalow/duplex") subtabParam = "Occupied Bungalow/duplex";
 
   const [activeSubTab, setActiveSubTab] = useState(() => {
-    if (subtabParam === "AC Service & Repair" || subtabParam === "AC & Heating" || subtabParam === "hvac" || subtabParam === "Air Conditioner") return "AC Service & Cleaning";
+    if (subtabParam === "AC Service & Repair" || subtabParam === "AC Repair & Service" || subtabParam === "AC & Heating" || subtabParam === "hvac" || subtabParam === "Air Conditioner" || subtabParam === "Air Conditioner Services" || subtabParam === "AC Service") return "AC Service & Cleaning";
     if (subtabParam === "TV & Display") return "TV Service & Repair";
-    if (subtabParam === "Washing Machine") return "Washing Machine Jet Service";
-    if (subtabParam === "Refrigerator & Fridge") return "Refrigerator Service & Repair";
+    if (subtabParam === "Washing Machine" || subtabParam === "Washing Machine Service & Repair") return "Washing Machine Jet Service";
+    if (subtabParam === "Refrigerator & Fridge" || subtabParam === "Refrigerator" || subtabParam === "Refrigerator Repair") return "Refrigerator Service & Repair";
     if (subtabParam === "Microwave & Purifier" || subtabParam === "Microwave Repair" || subtabParam === "microwave") return "Microwave Repair";
-    if (subtabParam === "Electrician" || subtabParam === "electrical") return "Switches & Sockets";
-    if (subtabParam === "Plumber" || subtabParam === "plumbing") return "Tap & Mixer";
-    if (subtabParam === "Carpentry" || subtabParam === "carpentry") return "Lock & Handle";
+    if (subtabParam === "Electrician" || subtabParam === "electrical" || subtabParam === "Electrician Services") return "Switches & Sockets";
+    if (subtabParam === "Plumber" || subtabParam === "plumbing" || subtabParam === "Plumber Services" || subtabParam === "Taps & Mixers") return "Tap & Mixer";
+    if (subtabParam === "Carpentry" || subtabParam === "carpentry" || subtabParam === "Carpenter Services") return "Lock & Handle";
     if (subtabParam === "Full House Cleaning" || subtabParam === "Full House Deep Cleaning" || subtabParam === "Full house cleaning" || subtabParam === "Home Cleaning" || subtabParam === "cleaning") return "Occupied Apartment";
     if (subtabParam) return subtabParam;
     // No URL param — derive default from normalizedKey / category / cart
@@ -13524,34 +13524,36 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (nk === "refrigerator" || cn.includes("fridge") || cn.includes("refrigerator")) return "Refrigerator Service & Repair";
     if (nk === "washing_machine" || cn.includes("washing")) return "Washing Machine Jet Service";
     if (nk === "tv_display" || cn.includes("tv")) return "TV Service & Repair";
-    if (nk === "hvac" || cn.includes("ac") || cn.includes("heating")) return "AC Service & Cleaning";
+    if (nk === "hvac" || cn.includes("ac") || cn.includes("heating") || cn.includes("air conditioner")) return "AC Service & Cleaning";
     if (nk === "cleaning" || cn.includes("clean")) return "Occupied Apartment";
 
     if (cart && cart.length > 0) {
       const itemStr = (cart[0].id + " " + cart[0].name + " " + (cart[0].categoryName || "")).toLowerCase();
       if (itemStr.includes("carp") || itemStr.includes("lock") || itemStr.includes("handle") || itemStr.includes("door") || itemStr.includes("furniture")) return "Lock & Handle";
       if (itemStr.includes("elec") || itemStr.includes("switch") || itemStr.includes("socket") || itemStr.includes("fan")) return "Switches & Sockets";
-      if (itemStr.includes("plumb") || itemStr.includes("tap") || itemStr.includes("drain")) return "Taps & Mixers";
-      if (itemStr.includes("ac") || itemStr.includes("foam") || itemStr.includes("jet")) return "AC Service & Repair";
+      if (itemStr.includes("plumb") || itemStr.includes("tap") || itemStr.includes("drain")) return "Tap & Mixer";
+      if (itemStr.includes("ac") || itemStr.includes("foam") || itemStr.includes("jet") || itemStr.includes("hvac")) return "AC Service & Cleaning";
     }
     return "Lock & Handle";
   });
 
   let effectiveKey = normalizedKey;
   // Check by normalizedKey / category FIRST so they aren't overridden by the default activeSubTab
-  if (normalizedKey === "tv_display" || (category && (category.id === "tv_display" || category.name === "TV & Display"))) {
+  if (normalizedKey === "hvac" || (category && (category.id === "hvac" || category.name === "AC & Heating" || category.name === "Air Conditioner" || category.slug === "hvac"))) {
+    effectiveKey = "hvac";
+  } else if (normalizedKey === "tv_display" || (category && (category.id === "tv_display" || category.name === "TV & Display"))) {
     effectiveKey = "tv_display";
   } else if (normalizedKey === "washing_machine" || (category && (category.id === "washing_machine" || category.name === "Washing Machine"))) {
     effectiveKey = "washing_machine";
-  } else if (normalizedKey === "refrigerator" || (category && (category.id === "refrigerator" || category.name === "Refrigerator & Fridge"))) {
+  } else if (normalizedKey === "refrigerator" || (category && (category.id === "refrigerator" || category.name === "Refrigerator & Fridge" || category.name === "Refrigerator"))) {
     effectiveKey = "refrigerator";
-  } else if (normalizedKey === "microwave" || (category && (category.id === "microwave" || category.name === "Microwave & Purifier"))) {
+  } else if (normalizedKey === "microwave" || (category && (category.id === "microwave" || category.name === "Microwave & Purifier" || category.name === "Microwave"))) {
     effectiveKey = "microwave";
-  } else if (normalizedKey === "electrical" || (category && (category.id === "electrical" || category.name === "Electrician"))) {
+  } else if (normalizedKey === "electrical" || (category && (category.id === "electrical" || category.name === "Electrician" || category.name === "Electrical"))) {
     effectiveKey = "electrical";
-  } else if (normalizedKey === "plumbing" || (category && (category.id === "plumbing" || category.name === "Plumber"))) {
+  } else if (normalizedKey === "plumbing" || (category && (category.id === "plumbing" || category.name === "Plumber" || category.name === "Plumbing"))) {
     effectiveKey = "plumbing";
-  } else if (normalizedKey === "carpentry" || (category && (category.id === "carpentry" || category.name === "Carpentry"))) {
+  } else if (normalizedKey === "carpentry" || (category && (category.id === "carpentry" || category.name === "Carpentry" || category.name === "Carpenter"))) {
     effectiveKey = "carpentry";
   } else if (tvSubtabs.includes(activeSubTab)) {
     effectiveKey = "tv_display";
@@ -13585,15 +13587,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (param) {
       if (param === "TV & Display") {
         setActiveSubTab("TV Service & Repair");
-      } else if (param === "Washing Machine") {
-        setActiveSubTab("Washing Machine Service & Repair");
-      } else if (param === "Refrigerator & Fridge") {
+      } else if (param === "Washing Machine" || param === "Washing Machine Service & Repair") {
+        setActiveSubTab("Washing Machine Jet Service");
+      } else if (param === "Refrigerator & Fridge" || param === "Refrigerator" || param === "Refrigerator Repair") {
         setActiveSubTab("Refrigerator Service & Repair");
-      } else if (param === "Electrician" || param === "electrical") {
+      } else if (param === "AC Service & Repair" || param === "AC Repair & Service" || param === "AC & Heating" || param === "hvac" || param === "Air Conditioner" || param === "Air Conditioner Services" || param === "AC Service") {
+        setActiveSubTab("AC Service & Cleaning");
+      } else if (param === "Electrician" || param === "electrical" || param === "Electrician Services") {
         setActiveSubTab("Switches & Sockets");
-      } else if (param === "Plumber" || param === "plumbing") {
-        setActiveSubTab("Taps & Mixers");
-      } else if (param === "Carpentry" || param === "carpentry") {
+      } else if (param === "Plumber" || param === "plumbing" || param === "Plumber Services" || param === "Taps & Mixers") {
+        setActiveSubTab("Tap & Mixer");
+      } else if (param === "Carpentry" || param === "carpentry" || param === "Carpenter Services") {
         setActiveSubTab("Lock & Handle");
       } else if (param === "Full House Cleaning" || param === "Full House Deep Cleaning" || param === "Full house cleaning" || param === "Home Cleaning" || param === "cleaning") {
         setActiveSubTab("Occupied Apartment");
@@ -13916,6 +13920,25 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         { id: "hvac-prt-fst", name: "Floor Stand", price: 399, duration: "30 mins", badge: "Floor Mount", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Heavy duty floor stand for rooftop or balcony outdoor unit positioning.", includes: ["Floor stand assembly", "Vibration dampening", "Rubber foot fit"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
         { id: "hvac-prt-bpl", name: "Universal Back Plate", price: 199, duration: "20 mins", badge: "Mounting Plate", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Galvanized steel indoor unit mounting backplate installation.", includes: ["Wall alignment", "Rawl plug drilling", "Spirit level check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
         { id: "hvac-prt-fast", name: "Fastener Set", price: 99, duration: "15 mins", badge: "Hardware", badgeColor: "bg-gray-50 text-gray-700 border-gray-100", description: "Heavy anchor dash fasteners and stainless steel mounting bolts set.", includes: ["4x anchor bolts", "Rawl plug anchors", "Tightening test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+      ],
+      "AC Repair & Service": [
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" }
+      ],
+      "AC Service & Repair": [
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" }
+      ],
+      "Air Conditioner": [
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
       ]
     },
     refrigerator: {
@@ -14357,7 +14380,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const currentOtherPlans = useMemo(() => {
     // Filter out Refrigerator Drain Cleaning from hardcoded plans
     const filteredRawPlans = rawOtherPlans.filter(plan => {
-      const isRefDrainCleaning = (normalizedKey === "refrigerator" || normalizedKey === "appliance_repair") && 
+      const isRefDrainCleaning = (normalizedKey === "refrigerator" || normalizedKey === "appliance_repair") &&
         (plan.id === "ref-cln-4" || plan.name === "Drain Cleaning");
       return !isRefDrainCleaning;
     });
@@ -14459,9 +14482,9 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     const filteredDbPackages = dbCatalogPackages.filter(p => {
       const pCatSlug = (p.category_slug || "").toLowerCase();
       if (pCatSlug && pCatSlug !== targetDbCategory) return false;
-      
+
       // Remove Drain Cleaning from Refrigerator category as it belongs in Home Services (Plumbing)
-      const isRefDrainCleaning = (targetDbCategory === "ac_appliance") && 
+      const isRefDrainCleaning = (targetDbCategory === "ac_appliance") &&
         (p.slug === "ref-cln-4" || p.name === "Drain Cleaning" || p.name === "Refrigerator Drain Cleaning");
       if (isRefDrainCleaning) return false;
 
@@ -14472,10 +14495,10 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     const seenIds = new Set();
     const mapped = filteredRawPlans.map(plan => {
       const normPlanName = (plan.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      
+
       // Pass 1: Prioritize exact slug/id matches to prevent cross-matching duplicates
       let dbMatch = filteredDbPackages.find(p => (p.slug && (p.slug === plan.slug || p.slug === plan.id)) || String(p.id) === String(plan.id));
-      
+
       // Pass 2: Fallback to name matches
       if (!dbMatch) {
         dbMatch = filteredDbPackages.find(p => {

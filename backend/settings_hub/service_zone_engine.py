@@ -120,6 +120,11 @@ def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_na
 
     # Exact alias mapping for catalog services
     ALIASES = {
+        "home-services-and-pest-control": {"full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "cockroach-control", "termite-control", "ants-bed-bugs-control", "full-home-deep-clean", "cleaning", "home-pest-control", "pest-control"},
+        "home-cleaning-and-pest-control": {"full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "cockroach-control", "termite-control", "ants-bed-bugs-control", "full-home-deep-clean", "cleaning", "home-pest-control", "pest-control"},
+        "home-pest-control": {"full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "cockroach-control", "termite-control", "ants-bed-bugs-control", "full-home-deep-clean", "cleaning", "pest-control"},
+        "cleaning": {"full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "full-home-deep-clean"},
+        "pest-control": {"cockroach-control", "termite-control", "ants-bed-bugs-control"},
         "kitchen-cleaning": {"kitchen-cleaning", "kitchen", "kitchen-clean"},
         "sofa-cleaning": {"sofa-cleaning", "sofa", "sofa-clean"},
         "bathroom-cleaning": {"bathroom-cleaning", "bathroom", "bathroom-clean"},
@@ -128,9 +133,15 @@ def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_na
         "cockroach-control": {"cockroach-control", "cockroach", "cockroach-and-termite-control"},
         "termite-control": {"termite-control", "termite", "cockroach-and-termite-control"},
         "ants-bed-bugs-control": {"ants-bed-bugs-control", "ants-control", "bedbugs-control", "ants-and-bed-bugs-control", "bed-bugs"},
+        "electrician-plumbing-and-carpentry": {"electrician", "plumbing", "carpentry", "electrician-plumbing-carpentry"},
+        "electrician-plumbing-carpentry": {"electrician", "plumbing", "carpentry"},
         "plumbing": {"plumbing", "plumber"},
         "electrician": {"electrician", "electrical"},
         "carpentry": {"carpentry", "carpenter"},
+        "ac-and-appliance": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave", "ac-appliance"},
+        "ac-and-appliance-repair": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave", "ac-appliance"},
+        "ac-appliance": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave"},
+        "hvac": {"ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation"},
         "ac-service-cleaning": {"ac-service-cleaning", "ac-service", "ac"},
         "ac-repair": {"ac-repair", "ac-diagnostics"},
         "ac-gas-refill": {"ac-gas-refill", "ac-gas"},
@@ -139,17 +150,22 @@ def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_na
         "washing-machine": {"washing-machine"},
         "tv-display": {"tv-display", "tv", "tv-and-display"},
         "microwave": {"microwave", "microwave-oven"},
+        "paintings": {"interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor", "painting"},
+        "painting": {"interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"},
         "interior-painting": {"interior-painting"},
         "exterior-painting": {"exterior-painting"},
         "waterproofing": {"waterproofing", "wall-waterproofing"},
         "wood-metal": {"wood-metal", "wood-and-metal-polish", "wood-and-metal"},
         "texture-decor": {"texture-decor"},
+        "mason": {"brick-block-work", "plastering-wall-repair", "wall-partition-construction", "wall-breaking-demolition", "home-construction", "full-house-construction"},
         "brick-block-work": {"brick-block-work"},
         "plastering-wall-repair": {"plastering-wall-repair"},
         "wall-partition-construction": {"wall-partition-construction"},
         "wall-breaking-demolition": {"wall-breaking-demolition"},
         "home-construction": {"home-construction"},
         "full-house-construction": {"full-house-construction"},
+        "goods-and-transports": {"truck", "two-wheeler", "packers-movers", "goods-transports", "transport"},
+        "goods-transports": {"truck", "two-wheeler", "packers-movers", "transport"},
         "truck": {"truck", "mini-truck"},
         "two-wheeler": {"two-wheeler", "bike"},
         "packers-movers": {"packers-movers", "house-shifting"},
@@ -163,6 +179,12 @@ def _matches_service_slug(requested_slug: str, candidate_slug: str, candidate_na
 
     req_set = ALIASES.get(r, {r})
     if c in req_set or (n and n in req_set):
+        return True
+
+    # Fallback fuzzy check
+    clean_r = r.replace("-", "").replace("_", "")
+    clean_c = c.replace("-", "").replace("_", "")
+    if clean_r and clean_c and (clean_r in clean_c or clean_c in clean_r):
         return True
 
     return False
