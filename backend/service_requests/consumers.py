@@ -188,14 +188,15 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
         params = urllib.parse.parse_qs(self.query_string)
         provided_token = (params.get("token") or [None])[0]
 
+        # 1. Authorized via valid tracking_token query parameter
         if provided_token and self.sr.tracking_token and str(self.sr.tracking_token).lower() == str(provided_token).strip().lower():
             return True
 
-        # Check if matched directly by tracking_token in path
+        # 2. Authorized via tracking_token UUID as path identifier
         if str(self.identifier).lower() == str(self.sr.tracking_token).lower():
             return True
 
-        # Check authenticated user
+        # 3. Authorized via authenticated customer ownership or admin role
         user = self.scope.get("user")
         if user and user.is_authenticated:
             if getattr(user, "role", "") in ["admin", "staff", "manager", "director"]:
@@ -203,30 +204,54 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
             if self.sr.customer_id and self.sr.customer_id == user.id:
                 return True
 
-        # Permissive for customer live-tracking link access
-        return True
+        return False
 
     @sync_to_async
     def _get_tracking_payload(self):
         from service_requests.views import _build_tracking_payload
         # Refresh from database
         self.sr.refresh_from_db()
-        return _build_tracking_payload(self.sr, has_full_access=True)
+        user = self.scope.get("user")
+        has_full_access = False
+        if user and user.is_authenticated and getattr(user, "role", "") in ["admin", "staff"]:
+            has_full_access = True
+        return _build_tracking_payload(self.sr, has_full_access=has_full_access)
 
     @sync_to_async
     def _verify_start_otp(self, entered_otp):
         self.sr.refresh_from_db()
+        from django.utils import timezone
+        from service_requests.state_machine import apply_transition
+
+        # 1. Require accepted technician
+        is_accepted = bool(self.sr.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed"] and self.sr.technician_name)
+        if not is_accepted:
+            return {"success": False, "error": "OTP verification requires an accepted technician on site."}
+
+        # 2. Check if already used
+        if self.sr.otp_verified:
+            return {"success": False, "error": "This Service Start OTP has already been used and verified."}
+
+        # 3. Rate limiting attempts
+        if self.sr.otp_attempt_count >= 5:
+            return {"success": False, "error": "Maximum OTP verification attempts exceeded."}
+
         if not self.sr.start_otp:
             return {"success": False, "error": "No OTP generated for this booking."}
 
-        if self.sr.start_otp != entered_otp:
-            return {"success": False, "error": "Invalid OTP. Please check the code."}
+        if str(self.sr.start_otp).strip() != str(entered_otp).strip():
+            self.sr.otp_attempt_count += 1
+            self.sr.save(update_fields=["otp_attempt_count", "updated_at"])
+            remaining = max(0, 5 - self.sr.otp_attempt_count)
+            return {"success": False, "error": f"Invalid OTP code. {remaining} attempt(s) remaining.", "attempts_remaining": remaining}
 
+        # Single-use success
         self.sr.otp_verified = True
+        self.sr.otp_verified_at = timezone.now()
         if self.sr.status in ["assigned", "accepted", "on_the_way", "arrived"]:
-            self.sr.status = "in_progress"
-        self.sr.save(update_fields=["otp_verified", "status", "updated_at"])
+            apply_transition(self.sr, "in_progress")
+        self.sr.save(update_fields=["otp_verified", "otp_verified_at", "status", "updated_at"])
 
         from service_requests.views import _build_tracking_payload
-        updated_payload = _build_tracking_payload(self.sr, has_full_access=True)
+        updated_payload = _build_tracking_payload(self.sr, has_full_access=False)
         return {"success": True, "data": updated_payload}

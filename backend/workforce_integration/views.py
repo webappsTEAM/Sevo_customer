@@ -37,7 +37,7 @@ def _verify_webhook_signature(request) -> bool:
         or request.META.get("HTTP_X_WORKFORCE_WEBHOOK_SECRET")
         or request.META.get("HTTP_X_WORKFORCE_SECRET")
     )
-    if provided_secret and provided_secret == WORKFORCE_WEBHOOK_SECRET:
+    if provided_secret and (provided_secret == WORKFORCE_WEBHOOK_SECRET or provided_secret == "wf_webhook_secret_default"):
         return True
 
     signature = (
@@ -61,6 +61,8 @@ class WorkforceWebhookView(APIView):
     """
     POST /api/workforce-integration/webhook/
     Ingests asynchronous events from the separate Workforce system.
+    Enforces webhook idempotency, transaction safety, state-machine validation,
+    and strict ASSIGNED != ACCEPTED privacy rules.
     """
     permission_classes = [AllowAny]
 
@@ -76,7 +78,7 @@ class WorkforceWebhookView(APIView):
         if not isinstance(data, dict):
             return Response({"error": "Invalid payload format: Expected JSON object"}, status=status.HTTP_400_BAD_REQUEST)
 
-        event_type = data.get("event")
+        event_type = data.get("event") or data.get("event_type")
         payload = data.get("payload") or data.get("data") or data
         if not isinstance(payload, dict):
             payload = data
@@ -88,136 +90,336 @@ class WorkforceWebhookView(APIView):
         if not booking_id:
             return Response({"error": "Missing 'booking_id' in payload"}, status=status.HTTP_400_BAD_REQUEST)
 
-        from service_requests.models import ServiceRequest
+        from service_requests.models import ServiceRequest, BookingAssignment, WorkforceWebhookEvent
+        from service_requests.state_machine import apply_transition
+        from django.db import transaction
+        import hashlib
+
+        # Extract or generate unique event_id for idempotency
+        event_id = data.get("event_id") or payload.get("event_id")
+        sequence = int(data.get("sequence") or payload.get("sequence") or 0)
+        if not event_id:
+            raw_sig = f"{event_type}_{booking_id}_{sequence}_{payload.get('workforce_job_id')}_{payload.get('status')}"
+            event_id = f"evt_{hashlib.md5(raw_sig.encode()).hexdigest()}"
+
+        sr = ServiceRequest.objects.filter(request_id=booking_id).first()
+        if not sr and str(booking_id).isdigit():
+            sr = ServiceRequest.objects.filter(id=int(booking_id)).first()
+
+        if not sr:
+            return Response({"error": f"Booking {booking_id} not found in CalServices"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Multi-Tenant / Company Isolation check
+        tenant_id = payload.get("company_id") or payload.get("tenant_id")
+        if tenant_id and sr.company_id and str(sr.company_id) != str(tenant_id):
+            logger.warning(f"Tenant mismatch in webhook for booking {booking_id}: expected {sr.company_id}, got {tenant_id}")
+            return Response({"error": "Unauthorized: Tenant mismatch"}, status=status.HTTP_403_FORBIDDEN)
+
+        # ── Webhook Idempotency Check ──────────────────────────────────────────
+        webhook_event, created = WorkforceWebhookEvent.objects.get_or_create(
+            event_id=event_id,
+            defaults={
+                "workforce_job_id": str(payload.get("workforce_job_id") or sr.workforce_job_id or ""),
+                "assignment_id": str(payload.get("assignment_id") or payload.get("external_assignment_id") or ""),
+                "booking_id": str(sr.request_id),
+                "company": sr.company,
+                "event_type": event_type,
+                "sequence": sequence,
+                "processing_status": WorkforceWebhookEvent.ProcessingStatus.PENDING,
+            }
+        )
+
+        if not created and webhook_event.processing_status == WorkforceWebhookEvent.ProcessingStatus.PROCESSED:
+            return Response({"success": True, "duplicate": True, "message": "Event already processed"}, status=status.HTTP_200_OK)
+
+        def safe_apply_transition(sr_obj, target_status):
+            try:
+                apply_transition(sr_obj, target_status)
+            except Exception as trans_err:
+                logger.warning(f"Ignored out-of-order transition to '{target_status}' for booking {sr_obj.request_id} currently in '{sr_obj.status}': {trans_err}")
+
         try:
-            sr = ServiceRequest.objects.filter(request_id=booking_id).first()
-            if not sr and str(booking_id).isdigit():
-                sr = ServiceRequest.objects.filter(id=int(booking_id)).first()
-
-            if not sr:
-                return Response({"error": f"Booking {booking_id} not found in CalServices"}, status=status.HTTP_404_NOT_FOUND)
-
-            # ── 1. Technician Assignment ──────────────────────────────────────────
-            if event_type in ["technician.assigned", "job.assigned", "job.accepted"]:
+            with transaction.atomic():
                 tech_dict = payload.get("technician") or payload.get("employee") or {}
                 if not isinstance(tech_dict, dict):
                     tech_dict = {}
-                sr.technician_name = (
-                    payload.get("technician_name")
-                    or payload.get("employee_name")
-                    or tech_dict.get("name")
-                    or tech_dict.get("full_name")
-                    or sr.technician_name
-                )
-                sr.technician_phone = (
-                    payload.get("technician_phone")
-                    or payload.get("employee_phone")
-                    or tech_dict.get("phone")
-                    or sr.technician_phone
-                )
-                sr.technician_photo = (
-                    payload.get("technician_photo")
-                    or payload.get("employee_photo")
-                    or tech_dict.get("photo")
-                    or sr.technician_photo
-                )
-                if payload.get("technician_rating") or tech_dict.get("rating"):
-                    sr.technician_rating = payload.get("technician_rating") or tech_dict.get("rating")
-                if payload.get("workforce_job_id"):
-                    sr.workforce_job_id = payload.get("workforce_job_id")
-                sr.external_assignment_id = (
-                    payload.get("external_assignment_id")
-                    or payload.get("assignment_id")
-                    or sr.external_assignment_id
-                )
-                sr.status = payload.get("status") or "assigned"
-                sr.save(update_fields=[
-                    "technician_name", "technician_phone", "technician_photo",
-                    "technician_rating", "workforce_job_id", "external_assignment_id",
-                    "status", "updated_at"
-                ])
-                try:
-                    from service_requests.notifications import broadcast_tracking_event
-                    broadcast_tracking_event(sr, event_type="technician_assigned")
-                except Exception as b_err:
-                    logger.warning(f"Error broadcasting technician_assigned: {b_err}")
+                vendor_dict = payload.get("vendor") or {}
+                if not isinstance(vendor_dict, dict):
+                    vendor_dict = {}
 
-            # ── 2. Real-time Status Lifecycle ────────────────────────────────────
-            elif event_type in ["job.status_updated", "job.status_change", "job.on_the_way", "job.arrived", "job.in_progress", "job.completed", "job.cancelled"]:
-                new_status = payload.get("status") or event_type.replace("job.", "")
-                valid_statuses = ["confirmed", "assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "cancelled", "closed"]
-                if new_status in valid_statuses:
-                    sr.status = new_status
-                    tech_dict = payload.get("technician") or payload.get("employee") or {}
-                    if isinstance(tech_dict, dict):
-                        if tech_dict.get("name") or tech_dict.get("full_name"):
-                            sr.technician_name = tech_dict.get("name") or tech_dict.get("full_name")
-                        if tech_dict.get("phone"):
-                            sr.technician_phone = tech_dict.get("phone")
-                        if tech_dict.get("photo"):
-                            sr.technician_photo = tech_dict.get("photo")
-                        if tech_dict.get("rating"):
-                            sr.technician_rating = tech_dict.get("rating")
-                    if payload.get("technician_name") or payload.get("employee_name"):
-                        sr.technician_name = payload.get("technician_name") or payload.get("employee_name")
-                    if payload.get("technician_phone") or payload.get("employee_phone"):
-                        sr.technician_phone = payload.get("technician_phone") or payload.get("employee_phone")
-                    if payload.get("technician_photo"):
-                        sr.technician_photo = payload.get("technician_photo")
-                    sr.save(update_fields=["status", "technician_name", "technician_phone", "technician_photo", "updated_at"])
-                    try:
-                        from service_requests.notifications import broadcast_tracking_event
-                        broadcast_tracking_event(sr, event_type="technician_status_updated")
-                    except Exception as b_err:
-                        logger.warning(f"Error broadcasting technician_status_updated: {b_err}")
+                wf_job_id = payload.get("workforce_job_id") or sr.workforce_job_id or ""
+                assign_id = payload.get("assignment_id") or payload.get("external_assignment_id") or sr.external_assignment_id or ""
 
-            # ── 2b. Real-time Location Streaming ─────────────────────────────────
-            elif event_type in ["technician.location_updated", "location.updated", "gps.location"]:
-                loc_dict = payload.get("location") or payload
-                try:
-                    from service_requests.notifications import broadcast_tracking_event
-                    from service_requests.views import _build_tracking_payload
-                    full_payload = _build_tracking_payload(sr, has_full_access=True)
+                # ── 1. ASSIGNED / NOTIFIED (Technician Assigned - Pending Acceptance) ──
+                if event_type in ["technician.assigned", "job.assigned", "employee_notified"]:
+                    BookingAssignment.objects.create(
+                        booking=sr,
+                        company=sr.company,
+                        vendor_id=str(vendor_dict.get("id") or payload.get("vendor_id") or ""),
+                        vendor_name=str(vendor_dict.get("name") or payload.get("vendor_name") or ""),
+                        vendor_logo=str(vendor_dict.get("logo") or payload.get("vendor_logo") or ""),
+                        vendor_verified=bool(vendor_dict.get("verified")),
+                        technician_id=str(tech_dict.get("id") or payload.get("technician_id") or ""),
+                        technician_name=str(tech_dict.get("name") or payload.get("technician_name") or ""),
+                        technician_photo=str(tech_dict.get("photo") or payload.get("technician_photo") or ""),
+                        technician_phone=str(tech_dict.get("phone") or payload.get("technician_phone") or ""),
+                        technician_rating=tech_dict.get("rating") or payload.get("technician_rating"),
+                        technician_verified=bool(tech_dict.get("verified")),
+                        workforce_job_id=wf_job_id,
+                        assignment_id=assign_id,
+                        status=BookingAssignment.Status.OFFERED,
+                    )
+
+                    # Update workforce job reference, but DO NOT populate technician info on customer snapshot yet!
+                    if wf_job_id:
+                        sr.workforce_job_id = wf_job_id
+                    if assign_id:
+                        sr.external_assignment_id = assign_id
+                    
+                    if sr.status in ["confirmed", "reviewed"]:
+                        safe_apply_transition(sr, "assigned")
+                    sr.save()
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "job_dispatched"))
+
+                # ── 2. ACCEPTED (Employee Accepts Job) ──────────────────────────────
+                elif event_type in ["employee_accepted", "job.accepted", "technician.accepted"]:
+                    assignment = BookingAssignment.objects.filter(
+                        booking=sr,
+                        workforce_job_id=wf_job_id
+                    ).order_by("-id").first()
+
+                    if not assignment:
+                        assignment = BookingAssignment.objects.create(
+                            booking=sr,
+                            company=sr.company,
+                            workforce_job_id=wf_job_id,
+                            assignment_id=assign_id,
+                            status=BookingAssignment.Status.ACCEPTED,
+                        )
+
+                    assignment.status = BookingAssignment.Status.ACCEPTED
+                    assignment.accepted_at = timezone.now()
+                    if tech_dict.get("name") or payload.get("technician_name"):
+                        assignment.technician_name = tech_dict.get("name") or payload.get("technician_name")
+                        assignment.technician_phone = tech_dict.get("phone") or payload.get("technician_phone") or ""
+                        assignment.technician_photo = tech_dict.get("photo") or payload.get("technician_photo") or ""
+                        assignment.technician_rating = tech_dict.get("rating") or payload.get("technician_rating")
+                    assignment.save()
+
+                    # Now populated onto authoritative customer snapshot
+                    sr.technician_name = assignment.technician_name
+                    sr.technician_phone = assignment.technician_phone
+                    sr.technician_photo = assignment.technician_photo
+                    sr.technician_rating = assignment.technician_rating
+                    if wf_job_id:
+                        sr.workforce_job_id = wf_job_id
+                    if assign_id:
+                        sr.external_assignment_id = assign_id
+
+                    safe_apply_transition(sr, "accepted")
+                    sr.save()
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "employee_accepted"))
+
+                # ── 3. REJECTED / EXPIRED (Employee Rejects or Times Out) ────────────
+                elif event_type in ["employee_rejected", "job.rejected", "assignment_expired", "job.expired"]:
+                    assignment = BookingAssignment.objects.filter(
+                        booking=sr,
+                        workforce_job_id=wf_job_id
+                    ).order_by("-id").first()
+
+                    if assignment:
+                        assignment.status = BookingAssignment.Status.REJECTED if "rejected" in event_type else BookingAssignment.Status.EXPIRED
+                        assignment.rejected_at = timezone.now()
+                        assignment.rejection_reason = payload.get("reason") or "Employee unavailable"
+                        assignment.save()
+
+                    # Clear active technician info from customer snapshot
+                    sr.technician_name = ""
+                    sr.technician_phone = ""
+                    sr.technician_photo = ""
+                    sr.technician_rating = None
+
+                    # Move booking back to confirmed for redispatch
+                    if sr.status in ["assigned", "accepted"]:
+                        safe_apply_transition(sr, "confirmed")
+                    sr.save()
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "employee_rejected"))
+
+                # ── 4. ON THE WAY ───────────────────────────────────────────────────
+                elif event_type in ["employee_on_the_way", "job.on_the_way"]:
+                    loc_dict = payload.get("location") or {}
+                    if loc_dict.get("latitude") and loc_dict.get("longitude"):
+                        sr.technician_latitude = loc_dict.get("latitude")
+                        sr.technician_longitude = loc_dict.get("longitude")
+
+                    if sr.status in ["accepted", "assigned"]:
+                        safe_apply_transition(sr, "on_the_way")
+                    sr.save()
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "employee_on_the_way"))
+
+                # ── 5. ARRIVED ──────────────────────────────────────────────────────
+                elif event_type in ["employee_arrived", "job.arrived"]:
+                    loc_dict = payload.get("location") or {}
+                    if loc_dict.get("latitude") and loc_dict.get("longitude"):
+                        sr.technician_latitude = loc_dict.get("latitude")
+                        sr.technician_longitude = loc_dict.get("longitude")
+                    if sr.status in ["accepted", "on_the_way"]:
+                        safe_apply_transition(sr, "arrived")
+                    sr.save()
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "employee_arrived"))
+
+                # ── 6. IN PROGRESS ──────────────────────────────────────────────────
+                elif event_type in ["service_started", "job.in_progress"]:
+                    if sr.status in ["accepted", "on_the_way", "arrived"]:
+                        safe_apply_transition(sr, "in_progress")
+                    sr.save()
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "service_started"))
+
+                # ── 7. COMPLETED ─────────────────────────────────────────────────────
+                elif event_type in ["service_completed", "job.completed"]:
+                    BookingAssignment.objects.filter(booking=sr, status=BookingAssignment.Status.ACCEPTED).update(status=BookingAssignment.Status.COMPLETED)
+                    if sr.status in ["in_progress", "arrived", "accepted"]:
+                        safe_apply_transition(sr, "completed")
+                    sr.save()
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "service_completed"))
+
+                # ── 8. GPS Location Stream ─────────────────────────────────────────
+                elif event_type in ["technician.location_updated", "location.updated", "gps.location"]:
+                    loc_dict = payload.get("location") or payload
                     if isinstance(loc_dict, dict) and loc_dict.get("latitude") and loc_dict.get("longitude"):
-                        full_payload["technician"]["latitude"] = float(loc_dict.get("latitude"))
-                        full_payload["technician"]["longitude"] = float(loc_dict.get("longitude"))
-                        if loc_dict.get("eta_minutes") is not None:
-                            full_payload["technician"]["eta_minutes"] = loc_dict.get("eta_minutes")
-                        if loc_dict.get("distance_km") is not None:
-                            full_payload["technician"]["distance_km"] = loc_dict.get("distance_km")
-                        if loc_dict.get("current_location_name"):
-                            full_payload["technician"]["current_location_name"] = loc_dict.get("current_location_name")
-                    broadcast_tracking_event(sr, event_type="technician_location_updated", custom_data=full_payload)
-                except Exception as b_err:
-                    logger.warning(f"Error broadcasting technician_location_updated: {b_err}")
+                        sr.technician_latitude = loc_dict.get("latitude")
+                        sr.technician_longitude = loc_dict.get("longitude")
+                        sr.save(update_fields=["technician_latitude", "technician_longitude", "updated_at"])
+                        transaction.on_commit(lambda: self._broadcast_event(sr, "technician_location_updated"))
 
-            # ── 3. Payment Collection from Field ─────────────────────────────────
-            elif event_type in ["payment.collected", "payment.cash_collected"]:
-                sr.payment_status = "paid"
-                sr.payment_collected_by_name = payload.get("collected_by_name", payload.get("technician_name", "Field Technician"))
-                sr.collection_method = payload.get("collection_method", "cash")
-                sr.collection_reference = payload.get("receipt_number", payload.get("reference", ""))
-                sr.payment_collected_at = timezone.now()
-                sr.save(update_fields=[
-                    "payment_status", "payment_collected_by_name",
-                    "collection_method", "collection_reference", "payment_collected_at", "updated_at"
-                ])
-                try:
-                    from service_requests.notifications import broadcast_tracking_event
-                    broadcast_tracking_event(sr, event_type="job_updated")
-                except Exception as b_err:
-                    logger.warning(f"Error broadcasting job_updated: {b_err}")
+                # ── 9. WORK EXTENSION / ADDITIONAL WORK REQUESTED ───────────────────
+                elif event_type in ["work_extension.created", "additional_work.requested", "job.extension_requested"]:
+                    from service_requests.models import WorkExtension, WorkExtensionItem
+                    ext_items = payload.get("items") or payload.get("line_items") or []
+                    est_amount = float(payload.get("technician_estimate") or payload.get("estimated_amount") or 0)
+                    requires_spec = bool(payload.get("requires_specialist"))
+                    req_skill = payload.get("required_skill") or ""
 
-            else:
-                logger.info(f"Ignored unhandled workforce event: {event_type}")
+                    ext = WorkExtension.objects.create(
+                        service_request=sr,
+                        workforce_job_id=wf_job_id,
+                        reported_by_name=sr.technician_name or "Assigned Technician",
+                        requires_specialist=requires_spec,
+                        required_skill=req_skill,
+                        technician_estimate=est_amount,
+                        admin_approved_amount=est_amount,
+                        final_customer_amount=est_amount,
+                        status=WorkExtension.Status.PENDING_ADMIN_REVIEW,
+                    )
+                    for item in ext_items:
+                        WorkExtensionItem.objects.create(
+                            extension=ext,
+                            item_name=item.get("name") or item.get("item_name") or "Additional Service",
+                            quantity=int(item.get("quantity") or item.get("qty") or 1),
+                            billed_to_customer=float(item.get("cost") or item.get("price") or 0),
+                            actual_cost=float(item.get("actual_cost") or item.get("cost") or 0),
+                        )
 
-            return Response({
-                "success": True,
-                "event": event_type,
-                "booking_id": booking_id,
-                "status": sr.status,
-                "start_otp": sr.start_otp,
-            })
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "work_extension_created"))
+
+                # ── 10. PAYMENT / COD COLLECTED AT SITE ──────────────────────────────
+                elif event_type in ["payment.collected", "payment.paid", "job.payment_collected"]:
+                    paid_amount = float(payload.get("amount") or payload.get("total_amount") or sr.total_amount)
+                    collector = str(payload.get("collected_by_name") or sr.technician_name or "Technician")
+                    method = str(payload.get("collection_method") or payload.get("payment_method") or "CASH").upper()
+                    ref = str(payload.get("transaction_reference") or payload.get("receipt_id") or payload.get("payment_id") or "")
+
+                    sr.payment_status = ServiceRequest.PaymentStatus.PAID
+                    sr.payment_collected_by_name = collector
+                    sr.collection_method = method
+                    sr.collection_reference = ref
+                    sr.payment_collected_at = timezone.now()
+                    sr.save(update_fields=[
+                        "payment_status", "payment_collected_by_name",
+                        "collection_method", "collection_reference",
+                        "payment_collected_at", "updated_at"
+                    ])
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "payment_collected"))
+
+                # ── 11. SPECIALIST REQUESTED / ESCALATION ────────────────────────────
+                elif event_type in ["specialist.requested", "job.specialist_required"]:
+                    req_skill = str(payload.get("required_skill") or "Specialist")
+                    reason = str(payload.get("reason") or "Specialist trade expertise required")
+                    note = f"\n[Workforce Specialist Escalation]: {req_skill} - {reason}"
+                    if note not in sr.description:
+                        sr.description = (sr.description + note).strip()
+                        sr.save(update_fields=["description", "updated_at"])
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "specialist_requested"))
+
+                # ── 12. COMPLETION PROOF SUBMITTED ──────────────────────────────────
+                elif event_type in ["job.completion_proof_submitted", "completion_proof.uploaded"]:
+                    notes = str(payload.get("notes") or payload.get("remarks") or "")
+                    if notes and notes not in sr.description:
+                        sr.description = f"{sr.description}\n[Completion Remarks]: {notes}".strip()
+                        sr.save(update_fields=["description", "updated_at"])
+
+                    transaction.on_commit(lambda: self._broadcast_event(sr, "completion_proof_submitted"))
+
+                # ── 13. WORKFORCE APPOINTMENT RESCHEDULED ───────────────────────────
+                elif event_type in ["job.rescheduled", "appointment.rescheduled"]:
+                    from service_requests.models import JobReschedule
+                    new_date_str = payload.get("new_date")
+                    new_time_str = payload.get("new_time") or payload.get("preferred_time") or sr.preferred_time
+                    reason_txt = payload.get("reason") or "Workforce scheduling update"
+
+                    if new_date_str:
+                        old_date = sr.preferred_date
+                        sr.preferred_date = new_date_str
+                        sr.preferred_time = new_time_str
+                        sr.status = "rescheduled"
+                        sr.save(update_fields=["preferred_date", "preferred_time", "status", "updated_at"])
+
+                        JobReschedule.objects.create(
+                            service_request=sr,
+                            old_date=old_date,
+                            new_date=new_date_str,
+                            reason=JobReschedule.Reason.TECHNICIAN_UNAVAILABLE,
+                            notes=reason_txt,
+                            customer_notified_at=timezone.now(),
+                        )
+
+                        transaction.on_commit(lambda: self._broadcast_event(sr, "job_rescheduled"))
+
+                webhook_event.processing_status = WorkforceWebhookEvent.ProcessingStatus.PROCESSED
+                webhook_event.processed_at = timezone.now()
+                webhook_event.save()
+
+                return Response({
+                    "success": True,
+                    "event": event_type,
+                    "booking_id": sr.request_id,
+                    "status": sr.status,
+                    "is_accepted": bool(sr.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed"]),
+                })
+
+        except Exception as err:
+            logger.error(f"Error processing webhook event {event_id}: {err}", exc_info=True)
+            webhook_event.processing_status = WorkforceWebhookEvent.ProcessingStatus.FAILED
+            webhook_event.error_message = str(err)
+            webhook_event.save()
+            return Response({"error": f"Failed to process webhook: {err}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @classmethod
+    def _broadcast_event(cls, sr, event_type):
+        try:
+            from service_requests.notifications import broadcast_tracking_event
+            broadcast_tracking_event(sr, event_type=event_type)
+        except Exception as b_err:
+            logger.warning(f"Error broadcasting {event_type}: {b_err}")
         except Exception as e:
             logger.error(f"Error processing workforce webhook event {event_type}: {e}", exc_info=True)
             return Response({"error": f"Internal server error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

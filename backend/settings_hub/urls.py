@@ -24,9 +24,18 @@ from .views_homepage import (
     HomePageImageUploadAPIView,
     HomePageImageDeleteAPIView,
 )
+from .views_service_zones import (
+    ServiceZoneListCreateView,
+    ServiceZoneDetailView,
+    ServiceZoneCheckView,
+)
+from .views_legal import PublicLegalConfigAPIView
 from service_requests.payment_views import InvoiceDownloadView
 
 urlpatterns = [
+    # Legal & Public Policy Config
+    path("legal/", PublicLegalConfigAPIView.as_view(), name="settings-public-legal"),
+
     # Homepage Config & Storage APIs
     path("homepage/", HomePageConfigAPIView.as_view(), name="settings-homepage-config"),
     path("homepage/upload-image/", HomePageImageUploadAPIView.as_view(), name="settings-homepage-upload-image"),
@@ -80,4 +89,9 @@ urlpatterns = [
     path("data/delete-account/", AccountDeletionView.as_view(), name="account-deletion"),
     path("data/delete-workspace/", WorkspaceDeletionView.as_view(), name="workspace-deletion"),
     path("data/transfer-ownership/", OwnerTransferView.as_view(), name="owner-transfer"),
+
+    # Service Area Geofencing
+    path("service-zones/", ServiceZoneListCreateView.as_view(), name="service-zone-list"),
+    path("service-zones/check/", ServiceZoneCheckView.as_view(), name="service-zone-check"),
+    path("service-zones/<int:pk>/", ServiceZoneDetailView.as_view(), name="service-zone-detail"),
 ]

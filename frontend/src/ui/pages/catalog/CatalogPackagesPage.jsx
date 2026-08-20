@@ -2973,6 +2973,7 @@ export function CatalogPackagesPage() {
         reviews_list: Array.isArray(cust.reviews_list) && cust.reviews_list.length > 0
                   ? cust.reviews_list
                   : (Array.isArray(defaults.reviews_list) ? defaults.reviews_list : []),
+        subtab_banners: cust.subtab_banners || defaults.subtab_banners || {},
       }
     })
     setCustomizerTab("general")
@@ -3314,7 +3315,7 @@ export function CatalogPackagesPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {visibleServices.map((svcItem) => {
+          {visibleServices.map((svcItem, idx) => {
             const SubIcon = svcItem.icon
             const pkgList = svcItem.packages
 
@@ -3334,16 +3335,27 @@ export function CatalogPackagesPage() {
                         <span className="text-xs font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-full">
                           {pkgList.length} {pkgList.length === 1 ? "option" : "options"}
                         </span>
-                        {activeCategoryKey === "paintings" || activeCategoryKey === "mason" ? (
-                          <button
-                            type="button"
-                            onClick={() => openServiceCustomizer(svcItem.service)}
-                            title="Customise Booking Card & Detail Page Content"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
-                          >
-                            <SlidersHorizontal className="w-3.5 h-3.5" />
-                            <span>Customise Page</span>
-                          </button>
+                        {(activeCategoryKey === "paintings" || activeCategoryKey === "mason") ||
+                         ((activeCategoryKey === "home_pest_control" || activeCategoryKey === "pest_control" || svcItem.service.slug.includes("clean") || svcItem.service.slug.includes("pest") || svcItem.service.slug.includes("sofa")) && idx === 0) ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openServiceCustomizer(svcItem.service)}
+                              title="Customise Booking Card & Detail Page Content"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                              <span>Customise Page</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setServiceEditing({ ...svcItem.service })}
+                              title="Edit Sub-Service Heading & Description"
+                              className="p-1 rounded-lg text-slate-400 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         ) : (
                           <button
                             type="button"
@@ -3702,118 +3714,239 @@ export function CatalogPackagesPage() {
               </div>
 
               {/* Pill Tabs Selector */}
-              <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100/70 dark:bg-slate-900/60 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 no-print">
-                {[
-                  { id: "general", label: "Card & General Settings", icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
-                  { id: "content", label: "Includes & Excludes", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
-                  { id: "details", label: "Badges, Steps & FAQs", icon: <Layers className="w-3.5 h-3.5" /> },
-                  { id: "pricing", label: "Price List & Materials", icon: <DollarSign className="w-3.5 h-3.5" /> },
-                ].map((t) => {
-                  const isSelected = customizerTab === t.id
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setCustomizerTab(t.id)}
-                      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
-                        isSelected
-                          ? "bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 shadow-xs border border-slate-200/50 dark:border-slate-700/50"
-                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                      }`}
-                    >
-                      {t.icon}
-                      <span>{t.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
+              {!["kitchen-cleaning", "bathroom-cleaning", "sofa-cleaning", "cleaning"].includes(serviceCustomizing.slug) && (
+                <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100/70 dark:bg-slate-900/60 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 no-print">
+                  {[
+                    { id: "general", label: "Card & General Settings", icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
+                    { id: "content", label: "Includes & Excludes", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+                    { id: "details", label: "Badges, Steps & FAQs", icon: <Layers className="w-3.5 h-3.5" /> },
+                    { id: "pricing", label: "Price List & Materials", icon: <DollarSign className="w-3.5 h-3.5" /> },
+                  ].map((t) => {
+                    const isSelected = customizerTab === t.id
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setCustomizerTab(t.id)}
+                        className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 shadow-xs border border-slate-200/50 dark:border-slate-700/50"
+                            : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                        }`}
+                      >
+                        {t.icon}
+                        <span>{t.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Tab 1: General & Card settings */}
             {customizerTab === "general" && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Sub-Service Name"
-                    required
-                    value={serviceCustomizing.name || ""}
-                    onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, name: e.target.value })}
-                  />
-                  <Input
-                    label="Display Order (sort_order)"
-                    type="number"
-                    value={serviceCustomizing.sort_order || 0}
-                    onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, sort_order: parseInt(e.target.value) || 0 })}
-                  />
-                </div>
-
-                <TextArea
-                  label="Description"
-                  value={serviceCustomizing.description || ""}
-                  onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, description: e.target.value })}
-                />
-
-                {/* Service Image Customizer Section */}
-                <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
-                  <div>
-                    <span className="text-xs font-bold text-slate-800">Service Banner Image</span>
-                    <p className="text-[11px] text-slate-500 mt-0.5">Upload a custom service banner image or paste an image URL.</p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-center gap-4">
-                    {serviceCustomizing.image ? (
-                      <div className="relative w-24 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
-                        <img src={serviceCustomizing.image} alt="Preview" className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setServiceCustomizing((prev) => ({ ...prev, image: "" }))}
-                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="w-24 h-16 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
-                        No Image
-                      </div>
-                    )}
-                    <div className="flex-1 w-full space-y-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            const formData = new FormData()
-                            formData.append("image", file)
-                            try {
-                              const res = await apiRequest("/settings/catalog/upload-image/", {
-                                method: "POST",
-                                body: formData,
-                              })
-                              if (res.success && res.url) {
-                                setServiceCustomizing((prev) => ({ ...prev, image: res.url }))
-                                showToast("Image uploaded successfully!")
-                              } else {
-                                showToast(res.message || "Upload failed", "error")
-                              }
-                            } catch (err) {
-                              showToast("Upload failed", "error")
-                            }
-                          }
-                        }}
-                        className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                {!["kitchen-cleaning", "bathroom-cleaning", "sofa-cleaning", "cleaning"].includes(serviceCustomizing.slug) && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Input
+                        label="Sub-Service Name"
+                        required
+                        value={serviceCustomizing.name || ""}
+                        onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, name: e.target.value })}
                       />
                       <Input
-                        label="Or Image URL"
-                        placeholder="https://images.unsplash.com/..."
-                        value={serviceCustomizing.image || ""}
-                        onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, image: e.target.value })}
+                        label="Display Order (sort_order)"
+                        type="number"
+                        value={serviceCustomizing.sort_order || 0}
+                        onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, sort_order: parseInt(e.target.value) || 0 })}
                       />
                     </div>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <TextArea
+                      label="Description"
+                      value={serviceCustomizing.description || ""}
+                      onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, description: e.target.value })}
+                    />
+
+                    {/* Service Image Customizer Section */}
+                    <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+                      <div>
+                        <span className="text-xs font-bold text-slate-800">Service Banner Image</span>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Upload a custom service banner image or paste an image URL.</p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-center gap-4">
+                        {serviceCustomizing.image ? (
+                          <div className="relative w-24 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                            <img src={serviceCustomizing.image} alt="Preview" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setServiceCustomizing((prev) => ({ ...prev, image: "" }))}
+                              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="w-24 h-16 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                            No Image
+                          </div>
+                        )}
+                        <div className="flex-1 w-full space-y-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                const formData = new FormData()
+                                formData.append("image", file)
+                                try {
+                                  const res = await apiRequest("/settings/catalog/upload-image/", {
+                                    method: "POST",
+                                    body: formData,
+                                  })
+                                  if (res.success && res.url) {
+                                    setServiceCustomizing((prev) => ({ ...prev, image: res.url }))
+                                    showToast("Image uploaded successfully!")
+                                  } else {
+                                    showToast(res.message || "Upload failed", "error")
+                                  }
+                                } catch (err) {
+                                  showToast("Upload failed", "error")
+                                }
+                              }
+                            }}
+                            className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                          />
+                          <Input
+                            label="Or Image URL"
+                            placeholder="https://images.unsplash.com/..."
+                            value={serviceCustomizing.image || ""}
+                            onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, image: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Sub-tab Banner Images Customizer Section */}
+                {["kitchen-cleaning", "bathroom-cleaning", "sofa-cleaning", "cleaning"].includes(serviceCustomizing.slug) && (
+                  <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-4">
+                    <div>
+                      <span className="text-xs font-bold text-slate-800">Sub-tab Banner Images</span>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Customize the top banner image for each sub-tab in this service category.</p>
+                    </div>
+                    <div className="space-y-4">
+                      {((serviceCustomizing.slug === "kitchen-cleaning" && [
+                        { id: "packages", label: "Full Kitchen Packages" },
+                        { id: "appliance", label: "Single Appliance Cleaning" },
+                        { id: "cabinet_tile", label: "Cabinet & Tile Care" },
+                        { id: "addons", label: "Quick Extra Services" },
+                      ]) || (serviceCustomizing.slug === "bathroom-cleaning" && [
+                        { id: "packages", label: "Full Clean" },
+                        { id: "minis", label: "Quick Extra Services" },
+                        { id: "subscription", label: "Weekly Bathroom Cleaning Subscription" },
+                      ]) || (serviceCustomizing.slug === "sofa-cleaning" && [
+                        { id: "sofa", label: "Sofa Cleaning" },
+                        { id: "mattress", label: "Mattress Cleaning" },
+                        { id: "carpet", label: "Carpet Cleaning" },
+                      ]) || (serviceCustomizing.slug === "cleaning" && [
+                        { id: "full_apartment", label: "Occupied Apartment" },
+                        { id: "unoccupied_apartment", label: "Unoccupied Apartment" },
+                        { id: "full_bungalow", label: "Occupied Bungalow/duplex" },
+                        { id: "unoccupied_bungalow", label: "Unoccupied Bungalow/duplex" },
+                        { id: "partial_home", label: "Quick Extra Services / Partial Home" },
+                      ]) || []).map((subtab) => {
+                        const currentVal = serviceCustomizing.customization.subtab_banners?.[subtab.id] || "";
+                        return (
+                          <div key={subtab.id} className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-white rounded-xl border border-slate-100 shadow-2xs">
+                            <div className="w-24 text-xs font-bold text-slate-700 sm:text-right shrink-0">{subtab.label}</div>
+                            {currentVal ? (
+                              <div className="relative w-24 h-14 rounded-lg border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                                <img src={currentVal} alt="Preview" className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updatedBanners = { ...serviceCustomizing.customization.subtab_banners };
+                                    delete updatedBanners[subtab.id];
+                                    setServiceCustomizing({
+                                      ...serviceCustomizing,
+                                      customization: { ...serviceCustomizing.customization, subtab_banners: updatedBanners }
+                                    });
+                                  }}
+                                  className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold transition-opacity"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="w-24 h-14 rounded-lg border border-dashed border-slate-200 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[9px] font-bold">
+                                Default Banner
+                              </div>
+                            )}
+                            <div className="flex-1 w-full space-y-2">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) {
+                                    const formData = new FormData()
+                                    formData.append("image", file)
+                                    try {
+                                      const res = await apiRequest("/settings/catalog/upload-image/", {
+                                        method: "POST",
+                                        body: formData,
+                                      })
+                                      if (res.success && res.url) {
+                                        const updatedBanners = {
+                                          ...serviceCustomizing.customization.subtab_banners,
+                                          [subtab.id]: res.url
+                                        };
+                                        setServiceCustomizing({
+                                          ...serviceCustomizing,
+                                          customization: { ...serviceCustomizing.customization, subtab_banners: updatedBanners }
+                                        });
+                                        showToast("Image uploaded successfully!")
+                                      } else {
+                                        showToast(res.message || "Upload failed", "error")
+                                      }
+                                    } catch (err) {
+                                      showToast("Upload failed", "error")
+                                    }
+                                  }
+                                }}
+                                className="block w-full text-[10px] text-slate-500 file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[9px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Or Paste Banner Image URL"
+                                value={currentVal}
+                                onChange={(e) => {
+                                  const updatedBanners = {
+                                    ...serviceCustomizing.customization.subtab_banners,
+                                    [subtab.id]: e.target.value
+                                  };
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, subtab_banners: updatedBanners }
+                                  });
+                                }}
+                                className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:border-indigo-500 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {!["kitchen-cleaning", "bathroom-cleaning", "sofa-cleaning", "cleaning"].includes(serviceCustomizing.slug) && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Input
                     label="Marketing Rating"
                     value={serviceCustomizing.customization.rating ?? ""}
@@ -3984,6 +4117,8 @@ export function CatalogPackagesPage() {
                     + Add Card Point
                   </button>
                 </div>
+                  </>
+                )}
               </div>
             )}
 

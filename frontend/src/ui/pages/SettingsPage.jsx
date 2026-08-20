@@ -22,8 +22,7 @@ const InvoicesSection = lazy(() => import("./settings/InvoicesSection.jsx"))
 const WorkspaceSection = lazy(() => import("./settings/WorkspaceSection.jsx"))
 const PrivacyDataSection = lazy(() => import("./settings/PrivacyDataSection.jsx"))
 const DangerZoneSection = lazy(() => import("./settings/DangerZoneSection.jsx"))
-const AccessControlSection = lazy(() => import("./settings/AccessControlSection.jsx"))
-const LocationsSettingsSection = lazy(() => import("./LocationsSettingsPage.jsx").then(m => ({ default: m.LocationsSettingsPage })))
+const LocationsSettingsSection = lazy(() => import("./LocationsPage.jsx").then(m => ({ default: m.LocationsPage })))
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 function Toast({ message, type = "success", onDismiss }) {
@@ -102,36 +101,12 @@ const TABS = [
     to: routes.settings_notifications,
   },
   {
-    id: "billing",
-    label: "Billing & Plans",
-    subtitle: "Manage your subscription, invoices, payment method, and usage.",
-    icon: <CreditCard size={15} />,
-    adminOnly: true,
-    to: routes.settings_billing,
-  },
-  {
     id: "team",
     label: "Team & Members",
     subtitle: "Invite members, assign roles, and manage workspace access.",
     icon: <Users2 size={15} />,
     adminOnly: true,
     to: routes.settings_team,
-  },
-  {
-    id: "invoices",
-    label: "Invoices",
-    subtitle: "View, generate, and download your past billing invoices.",
-    icon: <FileText size={15} />,
-    adminOnly: true,
-    to: routes.settings_invoices,
-  },
-  {
-    id: "organization",
-    label: "Workspace",
-    subtitle: "Organization name, logo, timezone, and data region.",
-    icon: <Building2 size={15} />,
-    adminOnly: true,
-    to: routes.settings_organization,
   },
   {
     id: "data",

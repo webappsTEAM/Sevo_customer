@@ -282,9 +282,9 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     companyLinks: ["About Us", "Careers", "Blog", "Become a Partner"],
     helpColTitle: "Need Help?",
     phone: "+91 98765 43210",
-    email: "support@calservices.com",
+    email: "support@caldimengg.com",
     workingHours: "Mon – Sun (8 AM – 8 PM)",
-    copyrightText: "© 2026 CalServices Inc. All rights reserved."
+    copyrightText: "© 2026 CALDIM ENGINEERING PRIVATE LIMITED. All rights reserved."
   }
 }
 

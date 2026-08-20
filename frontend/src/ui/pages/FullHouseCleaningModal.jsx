@@ -805,14 +805,58 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
   const [selectedExtraOpts, setSelectedExtraOpts] = useState([]); // Multiple for unfurnished extras
   const [selectedPartialOpts, setSelectedPartialOpts] = useState([]); // Multiple for partial cleaning choices
 
+  const addItemToCart = (id, name, price, duration) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id);
+      if (existing) {
+        return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { id, name, price, duration, quantity: 1 }];
+    });
+  };
+
   const addCustomizedItemToCart = (baseId, name, price, duration, detailsString) => {
-    const uniqueId = `${baseId}-${Date.now()}`;
-    const cartName = `${name} (${detailsString})`;
-    setCart(prev => [...prev, { id: uniqueId, name: cartName, price, duration, quantity: 1 }]);
+    const cartName = detailsString ? `${name} (${detailsString})` : name;
+    setCart(prev => {
+      const existingIdx = prev.findIndex(item => item.name === cartName && (item.id === baseId || item.id.startsWith(baseId + "-")));
+      if (existingIdx !== -1) {
+        return prev.map((item, idx) => idx === existingIdx ? { ...item, quantity: item.quantity + 1 } : item);
+      } else {
+        const uniqueId = `${baseId}-${Date.now()}`;
+        return [...prev, { id: uniqueId, name: cartName, price, duration, quantity: 1 }];
+      }
+    });
   };
 
   const removeItemFromCart = (id) => {
-    setCart(prev => prev.filter(c => c.id !== id));
+    setCart(prev => {
+      const existing = prev.find(i => i.id === id);
+      if (!existing) return prev;
+      if (existing.quantity <= 1) return prev.filter(i => i.id !== id);
+      return prev.map(i => i.id === id ? { ...i, quantity: i.quantity - 1 } : i);
+    });
+  };
+
+  const handleRemoveOneOfService = (serviceId) => {
+    setCart(prev => {
+      const idx = prev.map(i => i.id === serviceId || i.id.startsWith(serviceId + "-")).lastIndexOf(true);
+      if (idx === -1) return prev;
+      const target = prev[idx];
+      if (target.quantity > 1) {
+        return prev.map((item, i) => i === idx ? { ...item, quantity: item.quantity - 1 } : item);
+      }
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const handleQuickAdd = (service) => {
+    addItemToCart(service.id, service.name, service.price, service.duration);
+  };
+
+  const getServiceCount = (serviceId) => {
+    return cart
+      .filter(i => i.id === serviceId || i.id.startsWith(serviceId + "-"))
+      .reduce((sum, item) => sum + item.quantity, 0);
   };
 
   const getActiveServices = () => {
@@ -1020,12 +1064,13 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
 
           {/* Tab Banner Image */}
           {(() => {
+            const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
             const banners = {
-              full_apartment: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1200&q=80&fit=crop",
-              unoccupied_apartment: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=1200&q=80&fit=crop",
-              full_bungalow: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1200&q=80&fit=crop",
-              unoccupied_bungalow: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&q=80&fit=crop",
-              partial_home: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80&fit=crop"
+              full_apartment: customB.full_apartment || "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1200&q=80&fit=crop",
+              unoccupied_apartment: customB.unoccupied_apartment || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=1200&q=80&fit=crop",
+              full_bungalow: customB.full_bungalow || "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1200&q=80&fit=crop",
+              unoccupied_bungalow: customB.unoccupied_bungalow || "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&q=80&fit=crop",
+              partial_home: customB.partial_home || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80&fit=crop"
             };
             const bannerUrl = banners[activeTab];
             if (!bannerUrl) return null;
@@ -1042,6 +1087,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
 
           <div className="space-y-4">
             {activeServices.map((service) => {
+              const count = getServiceCount(service.id);
               return (
                 <div key={service.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 relative transition-all hover:shadow-md">
                   <div className="flex flex-col sm:flex-row gap-5">
@@ -1085,12 +1131,37 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                         <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
                       </div>
                       <div className="w-24 z-10">
-                        <button
-                          onClick={() => handleOpenDetails(service)}
-                          className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
-                        >
-                          <ShoppingCart size={14} /> Add
-                        </button>
+                        {count > 0 ? (
+                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs font-bold text-emerald-700 shadow-md">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleRemoveOneOfService(service.id); }}
+                              className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-black text-sm"
+                            >
+                              -
+                            </button>
+                            <span>{count}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleQuickAdd(service); }}
+                              className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-black text-sm"
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activeTab === "partial_home") {
+                                handleQuickAdd(service);
+                              } else {
+                                handleOpenDetails(service);
+                              }
+                            }}
+                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                          >
+                            <ShoppingCart size={14} /> Add
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1111,7 +1182,7 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
           <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
             <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
               <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
-              <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
+              <span className="text-[10px] font-bold text-slate-400">{cart.reduce((a, b) => a + b.quantity, 0)} items</span>
             </div>
 
             {cart.length > 0 ? (
@@ -1124,7 +1195,31 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                     </div>
                     <div className="text-right flex items-center gap-2">
                       <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
-                      <button onClick={() => removeItemFromCart(item.id)} className="text-red-500 hover:text-red-700 font-bold ml-1 border-none bg-transparent cursor-pointer">×</button>
+                      <div className="inline-flex items-center gap-1.5 border border-slate-200 rounded-md px-1.5 py-0.5 bg-slate-50">
+                        <button
+                          onClick={() => removeItemFromCart(item.id)}
+                          className="text-slate-400 hover:text-slate-600 font-bold bg-transparent border-none cursor-pointer text-[10px]"
+                        >
+                          -
+                        </button>
+                        <span className="text-[10px] font-black text-slate-700 min-w-3 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => {
+                            const baseId = item.id.split("-")[0];
+                            const parts = item.name.split(" (");
+                            const nameOnly = parts[0];
+                            const detailsString = parts.length > 1 ? parts.slice(1).join(" (").slice(0, -1) : "";
+                            if (detailsString) {
+                              addCustomizedItemToCart(baseId, nameOnly, item.price, item.duration, detailsString);
+                            } else {
+                              addItemToCart(item.id, item.name, item.price, item.duration);
+                            }
+                          }}
+                          className="text-slate-400 hover:text-slate-600 font-bold bg-transparent border-none cursor-pointer text-[10px]"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1136,7 +1231,13 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
             )}
 
             <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
-              <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
+              {cart.length > 0 && (
+                <div className="flex justify-between text-slate-500 font-bold">
+                  <span>Items Subtotal</span>
+                  <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1 border-t border-dashed border-slate-100 mt-1">
                 <span>Total Amount</span>
                 <span>₹{subtotal.toLocaleString("en-IN")}</span>
               </div>

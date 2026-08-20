@@ -43,6 +43,7 @@ class ServiceRequest(models.Model):
     class Status(models.TextChoices):
         DRAFT                 = "draft",                 "Draft"
         NEW_REQUEST           = "new_request",           "New Request"
+        UNASSIGNED            = "unassigned",            "Unassigned"
         PENDING_PAYMENT       = "pending_payment",       "Pending Payment"
         WAITING_FOR_PAYMENT   = "waiting_for_payment",   "Waiting for Payment"
         CONFIRMED             = "confirmed",             "Confirmed"
@@ -53,6 +54,7 @@ class ServiceRequest(models.Model):
         ON_THE_WAY            = "on_the_way",            "On The Way"
         ARRIVED               = "arrived",               "Arrived"
         IN_PROGRESS           = "in_progress",           "In Progress"
+        PROOF_SUBMITTED       = "proof_submitted",       "Proof Submitted"
         COMPLETED             = "completed",             "Completed"
         AWAITING_VERIFICATION = "awaiting_verification", "Awaiting Verification"
         VERIFIED              = "verified",              "Verified"
@@ -63,6 +65,7 @@ class ServiceRequest(models.Model):
         CANCELLED             = "cancelled",             "Cancelled"
         RESCHEDULED           = "rescheduled",           "Rescheduled"
         REWORK_REQUESTED      = "rework_requested",      "Rework Requested"
+        UNABLE_TO_COMPLETE    = "unable_to_complete",    "Unable to Complete"
         FOLLOW_UP_REQUIRED    = "follow_up_required",    "Follow-up Required"
 
     class Priority(models.TextChoices):
@@ -187,8 +190,11 @@ class ServiceRequest(models.Model):
     technician_latitude     = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     technician_longitude    = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     technician_location_name= models.CharField(max_length=255, blank=True, default="")
-    technician_last_seen_at = models.DateTimeField(null=True, blank=True)
     start_otp               = models.CharField(max_length=10, blank=True, default="")
+    otp_hash                = models.CharField(max_length=128, blank=True, default="")
+    otp_expires_at          = models.DateTimeField(null=True, blank=True)
+    otp_verified_at         = models.DateTimeField(null=True, blank=True)
+    otp_attempt_count       = models.PositiveIntegerField(default=0)
     otp_verified            = models.BooleanField(default=False)
     # Secure tracking token — unpredictable UUID used to authorize the public
     # customer tracking page (/track/:bookingId?token=<tracking_token>).
@@ -209,6 +215,14 @@ class ServiceRequest(models.Model):
     cancellation_reason  = models.CharField(max_length=50, blank=True, choices=CancellationReason.choices)
     cancellation_note    = models.TextField(blank=True)
     cancelled_at_status  = models.CharField(max_length=30, blank=True)
+
+    # Service Area snapshot — recorded at booking creation time.
+    # Preserves the zone that approved the booking so that later admin
+    # edits/deletions of zones do NOT retroactively invalidate old bookings.
+    # Null means the booking was created before geofencing was configured
+    # (open-access era) or no zones were active at the time.
+    service_zone_id_snapshot   = models.IntegerField(null=True, blank=True, db_index=False)
+    service_zone_name_snapshot = models.CharField(max_length=150, blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1219,5 +1233,121 @@ class CouponUsage(models.Model):
 
     def __str__(self):
         return f"CouponUsage({self.coupon.code} by User {self.customer_id} on SR {self.booking_id})"
+
+
+class BookingAssignment(models.Model):
+    """
+    Authoritative lifecycle history of technician/vendor job assignments.
+    Only ONE active assignment with status='accepted' can exist per ServiceRequest.
+    """
+    class Status(models.TextChoices):
+        OFFERED   = "offered",   "Offered"
+        RECEIVED  = "received",  "Received"
+        ACCEPTED  = "accepted",  "Accepted"
+        REJECTED  = "rejected",  "Rejected"
+        EXPIRED   = "expired",   "Expired"
+        CANCELLED = "cancelled", "Cancelled"
+        COMPLETED = "completed", "Completed"
+
+    booking = models.ForeignKey(
+        ServiceRequest,
+        on_delete=models.CASCADE,
+        related_name="assignments",
+        db_index=True,
+    )
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        related_name="booking_assignments",
+        null=True, blank=True,
+        db_index=True,
+    )
+    vendor_id = models.CharField(max_length=100, blank=True, default="")
+    vendor_name = models.CharField(max_length=200, blank=True, default="")
+    vendor_logo = models.CharField(max_length=500, blank=True, default="")
+    vendor_verified = models.BooleanField(default=False)
+
+    technician_id = models.CharField(max_length=100, blank=True, default="")
+    technician_name = models.CharField(max_length=200, blank=True, default="")
+    technician_photo = models.CharField(max_length=500, blank=True, default="")
+    technician_phone = models.CharField(max_length=30, blank=True, default="")
+    technician_rating = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    technician_verified = models.BooleanField(default=False)
+
+    workforce_job_id = models.CharField(max_length=100, blank=True, default="", db_index=True)
+    assignment_id = models.CharField(max_length=100, blank=True, default="", db_index=True)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OFFERED, db_index=True)
+
+    offered_at = models.DateTimeField(auto_now_add=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    expired_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["booking", "status"]),
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["workforce_job_id"]),
+            models.Index(fields=["assignment_id"]),
+        ]
+
+    def __str__(self):
+        return f"Assignment #{self.id} for SR {self.booking.request_id} — {self.technician_name} ({self.status})"
+
+
+class WorkforceWebhookEvent(models.Model):
+    """
+    Persistent, idempotent log of incoming Workforce webhook events.
+    Ensures duplicate events are ignored and out-of-order sequence events are validated.
+    """
+    class ProcessingStatus(models.TextChoices):
+        PENDING   = "PENDING",   "Pending"
+        PROCESSED = "PROCESSED", "Processed"
+        FAILED    = "FAILED",    "Failed"
+        IGNORED   = "IGNORED",   "Ignored"
+
+    event_id = models.CharField(max_length=128, unique=True, db_index=True)
+    workforce_job_id = models.CharField(max_length=100, blank=True, default="", db_index=True)
+    assignment_id = models.CharField(max_length=100, blank=True, default="")
+    booking_id = models.CharField(max_length=100, blank=True, default="", db_index=True)
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="workforce_webhook_events",
+    )
+    event_type = models.CharField(max_length=100, db_index=True)
+    sequence = models.BigIntegerField(default=0, db_index=True)
+    payload_hash = models.CharField(max_length=64, blank=True, default="")
+
+    processing_status = models.CharField(
+        max_length=20,
+        choices=ProcessingStatus.choices,
+        default=ProcessingStatus.PENDING,
+        db_index=True,
+    )
+    error_message = models.TextField(blank=True, default="")
+
+    received_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-received_at"]
+        indexes = [
+            models.Index(fields=["event_id"]),
+            models.Index(fields=["booking_id", "sequence"]),
+            models.Index(fields=["workforce_job_id", "sequence"]),
+        ]
+
+    def __str__(self):
+        return f"WebhookEvent {self.event_id} ({self.event_type} - {self.processing_status})"
+
 
 

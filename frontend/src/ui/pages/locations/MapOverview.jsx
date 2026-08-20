@@ -1,716 +1,638 @@
 /**
  * MapOverview.jsx
  *
- * Admin-only live operational map overview.
+ * CalServices Admin Live Service Coverage & Operations Map Overview.
  *
- * Phase 4: Marker clustering (imperative L.markerClusterGroup) so the
- * dashboard scales to thousands of sites. Status colours read directly
- * from the Phase 3 backend `status` field instead of being re-derived
- * client-side, so the source of truth is the engine in policies.py.
+ * Real Data Integration:
+ *  - Queries `/api/settings/service-zones/` for real customer coverage geofences (circles & polygons).
+ *  - Queries `/api/service-requests/` for live active customer bookings.
+ *  - Queries `/time/locations/` for company office hubs & branch sites.
  *
- * Status colours (matches LocationOverviewView taxonomy):
- *   active      → green   (running clean)
- *   alert       → red     (any open geofence violation)
- *   overcrowded → amber   (on_site > capacity)
- *   inactive    → gray
- *
- * Refreshes every 60 seconds for live employee-on-site counts.
+ * Interactive Features:
+ *  - Real-time geofence visualizer with zoom-to-bounds.
+ *  - Operational KPI stat cards (Active Service Areas, Covered Radius, Live Dispatches, Hubs).
+ *  - Filter by Zone Type (All, Circle Geofences, Polygon Boundaries, Live Jobs).
+ *  - Side detail panel with zone details, covered services, and active requests.
  */
-import React, { useState, useEffect, useCallback, useMemo } from "react"
-import { MapContainer, TileLayer, useMap, Circle, Polygon, Popup } from "react-leaflet"
+
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { MapContainer, TileLayer, Circle, Polygon, Marker, Popup, useMap } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
-// Phase 4: cluster plugin. Loaded only on this page.
-import "leaflet.markercluster/dist/MarkerCluster.css"
-import "leaflet.markercluster/dist/MarkerCluster.Default.css"
-import "leaflet.markercluster"
-import { RefreshCw, Users, MapPin, AlertTriangle, Activity, X, Clock, ShieldAlert } from "lucide-react"
+import {
+  Shield, MapPin, Activity, Layers, RefreshCw,
+  Navigation, Eye, CheckCircle2, AlertCircle, Wrench,
+  Clock, Truck, Phone, ChevronRight, X, Sparkles, Building2
+} from "lucide-react"
 import { apiRequest, unwrapResults } from "../../../api/client.js"
 
-// ── Status → colour mapping (single source of truth, Phase 3 contract) ───────
-const STATUS_COLOURS = {
-  active: "#22C55E", // green
-  alert: "#EF4444", // red
-  overcrowded: "#F59E0B", // amber
-  inactive: "#94A3B8", // gray
+/* ── Custom Pins ───────────────────────────────────────────────────────────── */
+
+const createZonePin = (color, name) =>
+  L.divIcon({
+    className: "custom-zone-pin",
+    html: `<div style="
+      position: relative;
+      width: 32px; height: 32px;
+      background: ${color || '#4F46E5'};
+      border: 2.5px solid white;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+      display: flex; align-items: center; justify-content: center;
+    ">
+      <div style="
+        width: 10px; height: 10px;
+        background: white;
+        border-radius: 50%;
+        transform: rotate(45deg);
+      "></div>
+    </div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -32],
+  })
+
+const createBookingPin = (status) => {
+  const bg = status === "arrived" ? "#10B981" : status === "on_the_way" ? "#F97316" : status === "in_progress" ? "#0284C7" : "#6366F1"
+  return L.divIcon({
+    className: "custom-booking-pin",
+    html: `<div style="
+      position: relative;
+      width: 28px; height: 28px;
+      background: ${bg};
+      border: 2px solid white;
+      border-radius: 8px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 800; font-size: 11px;
+    ">
+      🛵
+    </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -16],
+  })
 }
 
-function markerColor(loc) {
-  // Prefer Phase 3 `status` field; fall back to legacy heuristic so old
-  // backend versions still render (defensive — no breaking change).
-  if (loc.status && STATUS_COLOURS[loc.status]) return STATUS_COLOURS[loc.status]
-  if (!loc.is_active) return STATUS_COLOURS.inactive
-  if (loc.violation_count > 0) return STATUS_COLOURS.alert
-  if (loc.on_site_count > 0) return "#F97316" // legacy orange
-  if (loc.employee_count === 0) return STATUS_COLOURS.alert
-  return STATUS_COLOURS.active
-}
+const createHubPin = () =>
+  L.divIcon({
+    className: "custom-hub-pin",
+    html: `<div style="
+      width: 28px; height: 28px;
+      background: #1E293B;
+      border: 2px solid #38BDF8;
+      border-radius: 8px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 13px;
+    ">
+      🏢
+    </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -16],
+  })
 
-function markerLabel(loc) {
-  switch (loc.status) {
-    case "alert": return "Alert"
-    case "overcrowded": return "Overcrowded"
-    case "inactive": return "Inactive"
-    case "active": return loc.on_site_count > 0 ? `${loc.on_site_count} on site` : "Active"
-    default:
-      if (!loc.is_active) return "Inactive"
-      if (loc.on_site_count > 0) return `${loc.on_site_count} on site`
-      if (loc.employee_count === 0) return "No assignments"
-      return "Active"
-  }
-}
-
-// ── Imperative marker layer w/ clustering (Phase 4) ──────────────────────────
-function OverviewMarkers({ locations, onSelect }) {
+/* ── Smart Bounds Updater ─────────────────────────────────────────────────── */
+function MapBoundsUpdater({ bounds, center }) {
   const map = useMap()
-
   useEffect(() => {
-    // Cluster group for markers — geofence shapes are NOT clustered (would
-    // visually disappear at low zoom). Shapes go straight onto the map.
-    const cluster = L.markerClusterGroup({
-      // Keep clustering aggressive at low zoom; un-cluster as you zoom in.
-      showCoverageOnHover: false,
-      spiderfyOnMaxZoom: true,
-      disableClusteringAtZoom: 15,
-      maxClusterRadius: 60,
-      iconCreateFunction: (c) => {
-        const count = c.getChildCount()
-        // Aggregate child statuses to colour the cluster bubble.
-        let color = STATUS_COLOURS.active
-        for (const m of c.getAllChildMarkers()) {
-          const s = m.options._status
-          if (s === "alert") { color = STATUS_COLOURS.alert; break }
-          if (s === "overcrowded") color = STATUS_COLOURS.overcrowded
-          else if (s === "inactive" && color === STATUS_COLOURS.active) color = STATUS_COLOURS.inactive
-        }
-        const size = count < 10 ? 36 : count < 50 ? 44 : 52
-        return L.divIcon({
-          className: "",
-          html: `<div style="
-            width:${size}px;height:${size}px;border-radius:50%;
-            background:${color};color:white;border:3px solid rgba(255,255,255,0.9);
-            box-shadow:0 4px 12px rgba(0,0,0,0.25);
-            display:flex;align-items:center;justify-content:center;
-            font-weight:800;font-size:13px;">${count}</div>`,
-          iconSize: [size, size],
-          iconAnchor: [size / 2, size / 2],
-        })
-      },
-    })
-
-    const shapeLayers = [] // geofence polygons/circles, drawn outside cluster
-
-    locations.forEach((loc) => {
-      const color = markerColor(loc)
-      const icon = L.divIcon({
-        className: "",
-        html: `<div style="
-          position:relative;
-          width:36px;height:36px;
-          background:${color};
-          border:3px solid white;
-          border-radius:50% 50% 50% 0;
-          transform:rotate(-45deg);
-          box-shadow:0 4px 12px rgba(0,0,0,0.25);
-          display:flex;align-items:center;justify-content:center;
-        ">
-          <div style="width:10px;height:10px;background:white;border-radius:50%;transform:rotate(45deg)"></div>
-          ${loc.on_site_count > 0 ? `<div style="
-            position:absolute;top:-6px;right:-6px;transform:rotate(45deg);
-            background:#1e1b4b;color:white;font-size:9px;font-weight:800;
-            min-width:16px;height:16px;border-radius:99px;
-            display:flex;align-items:center;justify-content:center;padding:0 3px;
-          ">${loc.on_site_count}</div>` : ""}
-        </div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 36],
-        popupAnchor: [0, -38],
-      })
-
-      const onSiteHtml = loc.on_site_employees?.length
-        ? `<div style="margin-top:8px">
-            <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:4px">ON SITE NOW</div>
-            ${loc.on_site_employees.slice(0, 5).map(n => `
-              <div style="font-size:12px;color:#1e293b;padding:2px 0">${n}</div>
-            `).join("")}
-            ${loc.on_site_employees.length > 5 ? `<div style="font-size:11px;color:#94a3b8">+${loc.on_site_employees.length - 5} more</div>` : ""}
-           </div>`
-        : ""
-
-      // Phase 3 enrichment: surface violations & late arrivals in popup.
-      const violations = loc.violation_count || 0
-      const late = loc.late_arrival_count || 0
-      const alertHtml = (violations > 0 || late > 0)
-        ? `<div style="margin-top:8px;padding:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
-            <div style="font-size:11px;font-weight:700;color:#b91c1c;margin-bottom:4px">ALERTS</div>
-            ${violations > 0 ? `<div style="font-size:12px;color:#991b1b">${violations} geofence violation${violations === 1 ? "" : "s"}</div>` : ""}
-            ${late > 0 ? `<div style="font-size:12px;color:#991b1b">${late} late arrival${late === 1 ? "" : "s"}</div>` : ""}
-           </div>`
-        : ""
-
-      const marker = L.marker([loc.lat, loc.lng], { icon, _status: loc.status })
-        .bindPopup(`
-          <div style="min-width:220px;font-family:system-ui,sans-serif;padding:2px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-              <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
-              <div style="font-weight:800;font-size:14px;color:#0f172a">${loc.name}</div>
-            </div>
-            <div style="font-size:12px;color:#64748b;margin-bottom:8px">${loc.address || "No address"}</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-              <div style="background:#f8fafc;padding:6px 8px;border-radius:6px">
-                <div style="font-size:10px;color:#94a3b8;font-weight:600">ASSIGNED</div>
-                <div style="font-size:16px;font-weight:800;color:#0f172a">${loc.employee_count}</div>
-              </div>
-              <div style="background:#f8fafc;padding:6px 8px;border-radius:6px">
-                <div style="font-size:10px;color:#94a3b8;font-weight:600">ON SITE</div>
-                <div style="font-size:16px;font-weight:800;color:${color}">${loc.on_site_count}</div>
-              </div>
-            </div>
-            ${alertHtml}
-            ${onSiteHtml}
-            <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f1f5f9;font-size:11px;color:#94a3b8;text-transform:capitalize">
-              ${loc.location_type?.replace("_", " ") || "Location"} · ${markerLabel(loc)}
-            </div>
-          </div>
-        `, { maxWidth: 260 })
-        .on("click", () => onSelect?.(loc))
-
-      cluster.addLayer(marker)
-
-      // Draw geofence (shapes go straight onto the map, NOT into cluster).
-      if (loc.geofence_polygon) {
-        try {
-          const geom = typeof loc.geofence_polygon === "string"
-            ? JSON.parse(loc.geofence_polygon)
-            : loc.geofence_polygon
-          const ring = geom.coordinates?.[0]
-          if (ring) {
-            const positions = ring.map(([lng, lat]) => [lat, lng])
-            const poly = L.polygon(positions, {
-              color, fillColor: color, fillOpacity: 0.08, weight: 1.5
-            }).addTo(map)
-            shapeLayers.push(poly)
-          }
-        } catch { /* skip */ }
-      } else {
-        const circle = L.circle([loc.lat, loc.lng], {
-          radius: loc.geofence_radius || 5,
-          color, fillColor: color, fillOpacity: 0.06, weight: 1
-        }).addTo(map)
-        shapeLayers.push(circle)
-      }
-    })
-
-    map.addLayer(cluster)
-
-    return () => {
-      map.removeLayer(cluster)
-      shapeLayers.forEach((s) => s.remove())
+    if (bounds && bounds.isValid && bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14, animate: true })
+    } else if (center) {
+      map.setView(center, 12, { animate: true })
     }
-  }, [map, locations, onSelect])
-
+  }, [bounds, center, map])
   return null
 }
 
-// ── Stats bar ─────────────────────────────────────────────────────────────────
-function StatsBar({ locations }) {
-  const total = locations.length
-  const active = locations.filter(l => l.is_active).length
-  const onSite = locations.reduce((s, l) => s + (l.on_site_count || 0), 0)
-  // Phase 4: alerts come from the Phase 3 status field, not a heuristic.
-  const alerts = locations.filter(l => (l.status === "alert") || (l.violation_count || 0) > 0).length
-
-  const stat = (icon, label, val, color) => (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 10,
-      padding: "12px 18px", background: "#ffffff",
-      borderRadius: 14, border: "1.5px solid #f1f5f9", flex: 1,
-      boxShadow: "0 2px 10px rgba(0,0,0,0.04)"
-    }}>
-      <div style={{
-        width: 36, height: 36, borderRadius: 10, background: `${color}15`,
-        display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0
-      }}>
-        {icon}
-      </div>
-      <div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{val}</div>
-        <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.02em" }}>{label}</div>
-      </div>
-    </div>
-  )
-
-  return (
-    <div style={{
-      display: "flex",
-      gap: 12,
-      padding: "16px 20px",
-      background: "#f8fafc",
-      borderBottom: "1px solid #f1f5f9"
-    }}>
-      {stat(<MapPin size={18} />, "Total Sites", total, "#4F46E5")}
-      {stat(<Activity size={18} />, "Active", active, "#22C55E")}
-      {stat(<Users size={18} />, "On Site Now", onSite, "#F97316")}
-      {stat(<AlertTriangle size={18} />, "Alerts", alerts, "#EF4444")}
-    </div>
-  )
-}
-
-// ── Legend ────────────────────────────────────────────────────────────────────
-function Legend() {
-  const items = [
-    { color: STATUS_COLOURS.active, label: "Active — running clean" },
-    { color: STATUS_COLOURS.alert, label: "Alert — geofence violation" },
-    { color: STATUS_COLOURS.overcrowded, label: "Overcrowded — over capacity" },
-    { color: STATUS_COLOURS.inactive, label: "Inactive" },
-  ]
-  return (
-    <div style={{
-      position: "absolute", bottom: 16, left: 16, zIndex: 1000,
-      background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)",
-      borderRadius: 10, padding: "10px 14px", border: "1px solid var(--stroke)",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-    }}>
-      {items.map(({ color, label }) => (
-        <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
-          <div style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />
-          <span style={{ fontSize: 11, fontWeight: 600, color: "#475569" }}>{label}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── Phase 6: Sticky alerts banner ────────────────────────────────────────────
-function AlertsBanner({ locations, onShowAlerts, onShowOvercrowded }) {
-  const totals = useMemo(() => {
-    let violations = 0, lates = 0, alertSites = 0, overcrowdedSites = 0
-    for (const l of locations) {
-      violations += l.violation_count || 0
-      lates += l.late_arrival_count || 0
-      if (l.status === "alert") alertSites++
-      if (l.status === "overcrowded") overcrowdedSites++
-    }
-    return { violations, lates, alertSites, overcrowdedSites }
-  }, [locations])
-
-  const hasAnything = totals.violations > 0 || totals.lates > 0 || totals.overcrowdedSites > 0
-  if (!hasAnything) return null
-
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 16,
-      padding: "12px 16px",
-      background: totals.violations > 0 ? "#fef2f2" : "#fffbeb",
-      borderBottom: `1px solid ${totals.violations > 0 ? "#fecaca" : "#fde68a"}`,
-      flexWrap: "wrap",
-    }}>
-      <div style={{
-        width: 36, height: 36, borderRadius: 10,
-        background: totals.violations > 0 ? "#fee2e2" : "#fef3c7",
-        color: totals.violations > 0 ? "#b91c1c" : "#a16207",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        flexShrink: 0,
-      }}>
-        <AlertTriangle size={18} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 13, fontWeight: 800,
-          color: totals.violations > 0 ? "#991b1b" : "#92400e",
-        }}>
-          {totals.violations > 0 && (
-            <span>{totals.violations} open geofence violation{totals.violations === 1 ? "" : "s"} </span>
-          )}
-          {totals.violations > 0 && totals.lates > 0 && <span>· </span>}
-          {totals.lates > 0 && (
-            <span>{totals.lates} late arrival{totals.lates === 1 ? "" : "s"} </span>
-          )}
-          {(totals.violations > 0 || totals.lates > 0) && totals.overcrowdedSites > 0 && <span>· </span>}
-          {totals.overcrowdedSites > 0 && (
-            <span>{totals.overcrowdedSites} overcrowded site{totals.overcrowdedSites === 1 ? "" : "s"}</span>
-          )}
-        </div>
-        <div style={{
-          fontSize: 11, fontWeight: 600,
-          color: totals.violations > 0 ? "#991b1b" : "#92400e",
-          opacity: 0.75, marginTop: 2,
-        }}>
-          across {totals.alertSites + totals.overcrowdedSites} affected site{totals.alertSites + totals.overcrowdedSites === 1 ? "" : "s"}
-        </div>
-      </div>
-      {totals.alertSites > 0 && (
-        <button
-          onClick={onShowAlerts}
-          style={{
-            padding: "8px 14px", borderRadius: 10, border: "none",
-            background: "#dc2626", color: "white",
-            fontSize: 12, fontWeight: 800, cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 6,
-          }}
-        >
-          <ShieldAlert size={13} /> Show alerts
-        </button>
-      )}
-      {totals.overcrowdedSites > 0 && (
-        <button
-          onClick={onShowOvercrowded}
-          style={{
-            padding: "8px 14px", borderRadius: 10, border: "none",
-            background: "#d97706", color: "white",
-            fontSize: 12, fontWeight: 800, cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 6,
-          }}
-        >
-          <Users size={13} /> Show overcrowded
-        </button>
-      )}
-    </div>
-  )
-}
-
-
-// ── Phase 6: Location detail side panel ──────────────────────────────────────
-// Slides in from the right when a marker is clicked. Fetches today's open
-// time logs at that location and highlights violations / late arrivals.
-function LocationDetailPanel({ location, onClose }) {
-  const [logs, setLogs] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-
-  const today = useMemo(() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-  }, [])
-
-  useEffect(() => {
-    if (!location) return
-    let cancelled = false
-    setLoading(true); setError("")
-      ; (async () => {
-        try {
-          // Admin-scoped: returns all logs for the company. Filter client-side
-          // to this location + open shifts to keep payloads small enough.
-          const res = await apiRequest(`/time/logs/?date_from=${today}`)
-          const all = unwrapResults(res) || []
-          if (cancelled) return
-          const filtered = all.filter((l) =>
-            String(l.location) === String(location.id) && !l.clock_out
-          )
-          setLogs(filtered)
-        } catch (e) {
-          if (!cancelled) setError("Failed to load shifts at this site.")
-        } finally {
-          if (!cancelled) setLoading(false)
-        }
-      })()
-    return () => { cancelled = true }
-  }, [location, today])
-
-  if (!location) return null
-
-  const formatTime = (iso) => {
-    if (!iso) return "—"
-    try {
-      return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    } catch { return "—" }
-  }
-
-  return (
-    <div style={{
-      position: "absolute", top: 0, right: 0, bottom: 0,
-      width: "min(420px, 100%)", zIndex: 1500,
-      background: "white", boxShadow: "-8px 0 30px rgba(0,0,0,0.15)",
-      display: "flex", flexDirection: "column",
-      animation: "slide-in-right 220ms ease-out",
-    }}>
-      <style>{`
-        @keyframes slide-in-right {
-          from { transform: translateX(100%); }
-          to { transform: translateX(0); }
-        }
-      `}</style>
-
-      {/* Header */}
-      <div style={{
-        padding: "16px 20px", borderBottom: "1px solid #f1f5f9",
-        display: "flex", alignItems: "center", gap: 12,
-      }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: STATUS_COLOURS[location.status] || STATUS_COLOURS.active,
-          color: "white",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0,
-        }}>
-          <MapPin size={18} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>
-            {location.name}
-          </div>
-          <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
-            {location.location_type?.replace("_", " ") || "Site"} · {markerLabel(location)}
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          style={{
-            width: 32, height: 32, borderRadius: 8, border: "1px solid #e2e8f0",
-            background: "white", cursor: "pointer", color: "#64748b",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      {/* Counters */}
-      <div style={{
-        padding: "12px 20px", display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)", gap: 8,
-      }}>
-        {[
-          { label: "On site", val: location.on_site_count || 0, color: STATUS_COLOURS.active },
-          { label: "Violations", val: location.violation_count || 0, color: STATUS_COLOURS.alert },
-          { label: "Late", val: location.late_arrival_count || 0, color: STATUS_COLOURS.overcrowded },
-        ].map(({ label, val, color }) => (
-          <div key={label} style={{
-            background: "#f8fafc", borderRadius: 10, padding: "8px 10px",
-          }}>
-            <div style={{ fontSize: 9, color: "#94a3b8", fontWeight: 800, letterSpacing: "0.05em" }}>
-              {label.toUpperCase()}
-            </div>
-            <div style={{ fontSize: 18, fontWeight: 800, color, marginTop: 2 }}>
-              {val}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Open shifts list */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px 20px 20px" }}>
-        <div style={{
-          fontSize: 10, color: "#94a3b8", fontWeight: 800,
-          letterSpacing: "0.1em", marginTop: 8, marginBottom: 8,
-        }}>
-          OPEN SHIFTS · TODAY
-        </div>
-        {loading && (
-          <div style={{ fontSize: 12, color: "#64748b", padding: "20px 0", textAlign: "center" }}>
-            Loading shifts…
-          </div>
-        )}
-        {error && (
-          <div style={{
-            fontSize: 12, color: "#991b1b",
-            background: "#fef2f2", border: "1px solid #fecaca",
-            borderRadius: 8, padding: "10px 12px",
-          }}>
-            {error}
-          </div>
-        )}
-        {!loading && !error && logs.length === 0 && (
-          <div style={{ fontSize: 12, color: "#94a3b8", padding: "20px 0", textAlign: "center" }}>
-            No employees clocked in here right now.
-          </div>
-        )}
-        {!loading && !error && logs.map((log) => {
-          const isViolation = !log.geofence_passed && !log.admin_override_used
-          const tone = isViolation ? "alert" : "ok"
-          const bg = isViolation ? "#fef2f2" : "#f8fafc"
-          const border = isViolation ? "#fecaca" : "#e2e8f0"
-          return (
-            <div key={log.id} style={{
-              border: `1px solid ${border}`, background: bg,
-              borderRadius: 10, padding: "10px 12px", marginBottom: 8,
-              display: "flex", alignItems: "center", gap: 10,
-            }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 8,
-                background: tone === "alert" ? "#fee2e2" : "#e0e7ff",
-                color: tone === "alert" ? "#991b1b" : "#3730a3",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontWeight: 800, fontSize: 11, flexShrink: 0,
-              }}>
-                {(log.employee_name || "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 13, fontWeight: 700, color: "#0f172a",
-                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                }}>
-                  {log.employee_name || log.employee_username || "Unknown"}
-                </div>
-                <div style={{
-                  fontSize: 11, color: "#64748b", marginTop: 2,
-                  display: "flex", alignItems: "center", gap: 6,
-                }}>
-                  <Clock size={10} /> Since {formatTime(log.clock_in)}
-                  {log.distance_from_site_meters != null && (
-                    <span> · {log.distance_from_site_meters < 1000
-                      ? `${log.distance_from_site_meters}m off`
-                      : `${(log.distance_from_site_meters / 1000).toFixed(1)}km off`
-                    }</span>
-                  )}
-                </div>
-              </div>
-              {isViolation && (
-                <div style={{
-                  fontSize: 10, fontWeight: 800,
-                  color: "#991b1b", background: "white",
-                  border: "1px solid #fecaca",
-                  padding: "3px 8px", borderRadius: 99,
-                  letterSpacing: "0.05em",
-                }}>
-                  VIOLATION
-                </div>
-              )}
-              {log.admin_override_used && (
-                <div style={{
-                  fontSize: 10, fontWeight: 800,
-                  color: "#1e40af", background: "white",
-                  border: "1px solid #bfdbfe",
-                  padding: "3px 8px", borderRadius: 99,
-                  letterSpacing: "0.05em",
-                }}>
-                  OVERRIDE
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-
-// ── Main component ────────────────────────────────────────────────────────────
+/* ═════════════════════════════════════════════════════════════════════════════
+   MAIN COMPONENT: MapOverview
+   ═════════════════════════════════════════════════════════════════════════════ */
 export function MapOverview() {
+  const [serviceZones, setServiceZones] = useState([])
   const [locations, setLocations] = useState([])
+  const [activeBookings, setActiveBookings] = useState([])
   const [loading, setLoading] = useState(true)
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const [selected, setSelected] = useState(null)
-  const [filterZone, setFilterZone] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
+  const [refreshing, setRefreshing] = useState(false)
+  const [filterType, setFilterType] = useState("all") // 'all' | 'circle' | 'polygon' | 'active_jobs'
+  const [selectedZone, setSelectedZone] = useState(null)
+  const [selectedBooking, setSelectedBooking] = useState(null)
 
-  const load = useCallback(async () => {
+  // Fetch real data from all 3 operational sources
+  const fetchData = useCallback(async () => {
     try {
-      const data = await apiRequest("/time/locations/overview/")
-      setLocations(Array.isArray(data) ? data : [])
-      setLastUpdated(new Date())
-    } catch {
-      setLocations([])
+      const [zonesRes, locsRes, srRes] = await Promise.allSettled([
+        apiRequest("/settings/service-zones/"),
+        apiRequest("/time/locations/"),
+        apiRequest("/service-requests/?status__in=accepted,on_the_way,arrived,in_progress"),
+      ])
+
+      if (zonesRes.status === "fulfilled") {
+        const rawZones = unwrapResults(zonesRes.value) || []
+        setServiceZones(Array.isArray(rawZones) ? rawZones : (rawZones?.results || []))
+      }
+
+      if (locsRes.status === "fulfilled") {
+        const rawLocs = unwrapResults(locsRes.value) || []
+        setLocations(Array.isArray(rawLocs) ? rawLocs : (rawLocs?.results || []))
+      }
+
+      if (srRes.status === "fulfilled") {
+        const rawSR = unwrapResults(srRes.value) || []
+        setActiveBookings(Array.isArray(rawSR) ? rawSR : (rawSR?.results || []))
+      }
+    } catch (err) {
+      console.warn("Error fetching overview map data:", err)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [])
 
   useEffect(() => {
-    load()
-    const interval = setInterval(load, 30_000) // refresh every 30s (matches backend cache window)
-    return () => clearInterval(interval)
-  }, [load])
+    fetchData()
+  }, [fetchData])
 
-  // Phase 4: filters now read the Phase 3 `status` field (with legacy fallback).
-  const filtered = locations.filter((loc) => {
-    const status = loc.status || (loc.is_active ? "active" : "inactive")
-    if (filterStatus === "active" && status !== "active") return false
-    if (filterStatus === "inactive" && status !== "inactive") return false
-    if (filterStatus === "onsite" && (loc.on_site_count || 0) === 0) return false
-    if (filterStatus === "alerts" && status !== "alert") return false
-    if (filterStatus === "overcrowded" && status !== "overcrowded") return false
-    return true
-  })
+  const handleRefresh = () => {
+    setRefreshing(true)
+    fetchData()
+  }
 
-  const mapCenter = filtered.length > 0
-    ? [filtered[0].lat, filtered[0].lng]
-    : [20.5937, 78.9629]
+  // Calculate Aggregated Metrics
+  const totalZones = serviceZones.length
+  const activeZones = serviceZones.filter((z) => z.is_active).length
+  const circleZonesCount = serviceZones.filter((z) => z.zone_type === "circle").length
+  const polygonZonesCount = serviceZones.filter((z) => z.zone_type === "polygon").length
+  const activeJobsCount = activeBookings.length
+  const totalHubsCount = locations.length
+
+  // Filtered Zones
+  const visibleZones = useMemo(() => {
+    if (filterType === "all") return serviceZones
+    if (filterType === "circle") return serviceZones.filter((z) => z.zone_type === "circle")
+    if (filterType === "polygon") return serviceZones.filter((z) => z.zone_type === "polygon")
+    if (filterType === "active_jobs") return []
+    return serviceZones
+  }, [serviceZones, filterType])
+
+  // Compute bounding box
+  const mapBounds = useMemo(() => {
+    const latLngs = []
+    serviceZones.forEach((z) => {
+      if (z.center_lat && z.center_lng) {
+        latLngs.push([parseFloat(z.center_lat), parseFloat(z.center_lng)])
+      }
+      if (z.zone_type === "polygon" && z.polygon) {
+        try {
+          const poly = typeof z.polygon === "string" ? JSON.parse(z.polygon) : z.polygon
+          const coords = poly.coordinates?.[0] || []
+          coords.forEach(([lng, lat]) => latLngs.push([lat, lng]))
+        } catch { /* skip */ }
+      }
+    })
+
+    locations.forEach((l) => {
+      if (l.lat && l.lng) latLngs.push([parseFloat(l.lat), parseFloat(l.lng)])
+    })
+
+    activeBookings.forEach((b) => {
+      if (b.latitude && b.longitude) latLngs.push([parseFloat(b.latitude), parseFloat(b.longitude)])
+    })
+
+    if (latLngs.length > 0) {
+      return L.latLngBounds(latLngs)
+    }
+    return null
+  }, [serviceZones, locations, activeBookings])
+
+  const defaultCenter = [12.754598, 77.834477] // Hosur / Bangalore Hub
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      {/* Stats */}
-      <StatsBar locations={locations} />
-
-      {/* Phase 6 — Sticky alerts banner. Hidden when there's nothing wrong. */}
-      <AlertsBanner
-        locations={locations}
-        onShowAlerts={() => setFilterStatus("alerts")}
-        onShowOvercrowded={() => setFilterStatus("overcrowded")}
-      />
-
-      {/* Filter bar */}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#f8fafc", position: "relative" }}>
+      {/* ── Top Operational KPI Header ────────────────────────────────────────── */}
       <div style={{
-        display: "flex", gap: 10, padding: "12px 20px", alignItems: "center",
-        background: "white", borderBottom: "1px solid #f1f5f9", flexWrap: "wrap",
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+        gap: 12,
+        padding: "16px 20px",
+        background: "#ffffff",
+        borderBottom: "1px solid #e2e8f0",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
+        zIndex: 10,
       }}>
-        {[
-          { val: "all", label: "All Sites" },
-          { val: "active", label: "Active" },
-          { val: "onsite", label: "On Site" },
-          { val: "alerts", label: "Alerts" },
-          { val: "overcrowded", label: "Overcrowded" },
-          { val: "inactive", label: "Inactive" },
-        ].map(({ val, label }) => (
-          <button key={val} onClick={() => setFilterStatus(val)}
-            style={{
-              padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700,
-              border: "1px solid #e2e8f0", cursor: "pointer",
-              background: filterStatus === val ? "#4F46E5" : "transparent",
-              color: filterStatus === val ? "#fff" : "#64748b",
-              transition: "all 0.2s"
-            }}>
-            {label}
-          </button>
-        ))}
+        {/* KPI 1: Active Service Areas */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#eef2ff", display: "flex", alignItems: "center", justifyContent: "center", color: "#4F46E5" }}>
+            <Shield size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: "#0f172a", lineHeight: 1 }}>{activeZones} <span style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>/ {totalZones}</span></div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginTop: 3 }}>Service Areas Active</div>
+          </div>
+        </div>
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-          {lastUpdated && (
-            <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>
-              Updated {lastUpdated.toLocaleTimeString()}
-            </span>
-          )}
-          <button onClick={load} style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 10,
-            border: "1px solid #e2e8f0", background: "white",
-            fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#475569",
-          }}>
-            <RefreshCw size={13} /> Refresh
-          </button>
+        {/* KPI 2: Live Dispatches */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#ecfdf5", display: "flex", alignItems: "center", justifyContent: "center", color: "#10B981" }}>
+            <Activity size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: "#0f172a", lineHeight: 1 }}>{activeJobsCount}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginTop: 3 }}>Live Dispatched Jobs</div>
+          </div>
+        </div>
+
+        {/* KPI 3: Geofence Boundaries */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#fff7ed", display: "flex", alignItems: "center", justifyContent: "center", color: "#f97316" }}>
+            <Layers size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: "#0f172a", lineHeight: 1 }}>{polygonZonesCount} <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8" }}>Poly · {circleZonesCount} Circle</span></div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginTop: 3 }}>Geofence Boundaries</div>
+          </div>
+        </div>
+
+        {/* KPI 4: Company Hubs & Sites */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0" }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", color: "#0f172a" }}>
+            <Building2 size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: "#0f172a", lineHeight: 1 }}>{totalHubsCount}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginTop: 3 }}>Office Hubs & Sites</div>
+          </div>
         </div>
       </div>
 
-      {/* Map */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-        {loading ? (
-          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ textAlign: "center", color: "var(--muted)" }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Loading overview…</div>
+      {/* ── Sub-header: Quick Filter Pills & Refresh Button ──────────────────── */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 20px",
+        background: "#ffffff",
+        borderBottom: "1px solid #f1f5f9",
+        zIndex: 10,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          {[
+            { id: "all", label: `All Coverage (${totalZones})` },
+            { id: "circle", label: `Circle Geofences (${circleZonesCount})` },
+            { id: "polygon", label: `Polygon Boundaries (${polygonZonesCount})` },
+            { id: "active_jobs", label: `Live Dispatches (${activeJobsCount})` },
+          ].map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFilterType(f.id)}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 800,
+                cursor: "pointer",
+                border: filterType === f.id ? "1.5px solid #4F46E5" : "1px solid #e2e8f0",
+                background: filterType === f.id ? "#eef2ff" : "#ffffff",
+                color: filterType === f.id ? "#4F46E5" : "#64748b",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 14px",
+            borderRadius: 12,
+            border: "1px solid #e2e8f0",
+            background: "#ffffff",
+            color: "#0f172a",
+            fontSize: 12,
+            fontWeight: 800,
+            cursor: "pointer",
+          }}
+        >
+          <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      {/* ── Main Map Canvas ─────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+        <MapContainer
+          center={defaultCenter}
+          zoom={12}
+          scrollWheelZoom={true}
+          style={{ width: "100%", height: "100%", zIndex: 1 }}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            maxZoom={19}
+          />
+
+          <MapBoundsUpdater bounds={mapBounds} center={defaultCenter} />
+
+          {/* 1. Render Service Zones (Circles & Polygons) */}
+          {visibleZones.map((zone) => {
+            const color = zone.color || "#4F46E5"
+            const isActive = zone.is_active
+
+            if (zone.zone_type === "circle" && zone.center_lat && zone.center_lng) {
+              const radiusM = parseFloat(zone.radius_meters) || (parseFloat(zone.radius_km) ? parseFloat(zone.radius_km) * 1000 : 15000)
+              const center = [parseFloat(zone.center_lat), parseFloat(zone.center_lng)]
+
+              return (
+                <React.Fragment key={`zone-circle-${zone.id}`}>
+                  {/* Coverage Circle */}
+                  <Circle
+                    center={center}
+                    radius={radiusM}
+                    pathOptions={{
+                      color: isActive ? color : "#94a3b8",
+                      fillColor: isActive ? color : "#94a3b8",
+                      fillOpacity: isActive ? 0.12 : 0.05,
+                      weight: 2,
+                      dashArray: isActive ? undefined : "6, 6",
+                    }}
+                    eventHandlers={{
+                      click: () => {
+                        setSelectedZone(zone)
+                        setSelectedBooking(null)
+                      },
+                    }}
+                  />
+
+                  {/* Center Zone Pin */}
+                  <Marker
+                    position={center}
+                    icon={createZonePin(isActive ? color : "#94a3b8", zone.name)}
+                    eventHandlers={{
+                      click: () => {
+                        setSelectedZone(zone)
+                        setSelectedBooking(null)
+                      },
+                    }}
+                  >
+                    <Popup>
+                      <div style={{ minWidth: 200, padding: 4 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
+                          <strong style={{ fontSize: 13, color: "#0f172a" }}>{zone.name}</strong>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#64748b" }}>Radius: {(radiusM / 1000).toFixed(1)} km</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: isActive ? "#059669" : "#dc2626", marginTop: 4 }}>
+                          {isActive ? "● Active Service Zone" : "○ Inactive Zone"}
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                </React.Fragment>
+              )
+            }
+
+            if (zone.zone_type === "polygon" && zone.polygon) {
+              try {
+                const poly = typeof zone.polygon === "string" ? JSON.parse(zone.polygon) : zone.polygon
+                const coords = poly.coordinates?.[0] || []
+                const positions = coords.map(([lng, lat]) => [lat, lng])
+                const center = zone.center_lat && zone.center_lng ? [parseFloat(zone.center_lat), parseFloat(zone.center_lng)] : (positions[0] || defaultCenter)
+
+                return (
+                  <React.Fragment key={`zone-poly-${zone.id}`}>
+                    <Polygon
+                      positions={positions}
+                      pathOptions={{
+                        color: isActive ? color : "#94a3b8",
+                        fillColor: isActive ? color : "#94a3b8",
+                        fillOpacity: isActive ? 0.15 : 0.05,
+                        weight: 2.5,
+                      }}
+                      eventHandlers={{
+                        click: () => {
+                          setSelectedZone(zone)
+                          setSelectedBooking(null)
+                        },
+                      }}
+                    />
+                    <Marker
+                      position={center}
+                      icon={createZonePin(isActive ? color : "#94a3b8", zone.name)}
+                      eventHandlers={{
+                        click: () => {
+                          setSelectedZone(zone)
+                          setSelectedBooking(null)
+                        },
+                      }}
+                    />
+                  </React.Fragment>
+                )
+              } catch {
+                return null
+              }
+            }
+
+            return null
+          })}
+
+          {/* 2. Render Live Dispatched Bookings */}
+          {activeBookings.map((b) => {
+            if (!b.latitude || !b.longitude) return null
+            const pos = [parseFloat(b.latitude), parseFloat(b.longitude)]
+
+            return (
+              <Marker
+                key={`booking-${b.id || b.request_id}`}
+                position={pos}
+                icon={createBookingPin(b.status)}
+                eventHandlers={{
+                  click: () => {
+                    setSelectedBooking(b)
+                    setSelectedZone(null)
+                  },
+                }}
+              >
+                <Popup>
+                  <div style={{ minWidth: 200, padding: 4 }}>
+                    <strong style={{ fontSize: 13, color: "#0f172a" }}>#{b.request_id}</strong>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{b.issue_title || b.service_category}</div>
+                    <div style={{ fontSize: 11, color: "#0f172a", marginTop: 4 }}>Status: <strong>{b.status}</strong></div>
+                    {b.technician_name && (
+                      <div style={{ fontSize: 11, color: "#059669", marginTop: 2 }}>Pro: {b.technician_name}</div>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            )
+          })}
+
+          {/* 3. Render Company Sites & Hubs */}
+          {locations.map((loc) => {
+            if (!loc.lat || !loc.lng) return null
+            const pos = [parseFloat(loc.lat), parseFloat(loc.lng)]
+
+            return (
+              <Marker
+                key={`hub-${loc.id}`}
+                position={pos}
+                icon={createHubPin()}
+              >
+                <Popup>
+                  <div style={{ minWidth: 180, padding: 4 }}>
+                    <strong style={{ fontSize: 13, color: "#0f172a" }}>🏢 {loc.name}</strong>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{loc.address || "Company Site"}</div>
+                  </div>
+                </Popup>
+              </Marker>
+            )
+          })}
+        </MapContainer>
+
+        {/* ── Legend Overlay ──────────────────────────────────────────────────── */}
+        <div style={{
+          position: "absolute",
+          bottom: 20,
+          left: 20,
+          zIndex: 1000,
+          background: "rgba(255, 255, 255, 0.94)",
+          backdropFilter: "blur(6px)",
+          padding: "10px 14px",
+          borderRadius: 14,
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+          fontSize: 11,
+          fontWeight: 700,
+          color: "#334155",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#4F46E5" }} />
+            <span>Active Service Geofence</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#10B981" }} />
+            <span>Dispatched Live Job (🛵)</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: "#1E293B" }} />
+            <span>Company Site / Hub (🏢)</span>
+          </div>
+        </div>
+
+        {/* ── Side Detail Drawer (When clicking a Zone or Booking) ─────────────── */}
+        {selectedZone && (
+          <div style={{
+            position: "absolute",
+            top: 20,
+            right: 20,
+            width: 320,
+            maxHeight: "calc(100% - 40px)",
+            background: "#ffffff",
+            borderRadius: 16,
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
+            zIndex: 1000,
+            overflowY: "auto",
+            padding: 18,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 12, height: 12, borderRadius: "50%", background: selectedZone.color || "#4F46E5" }} />
+                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "#0f172a" }}>{selectedZone.name}</h4>
+              </div>
+              <button onClick={() => setSelectedZone(null)} style={{ border: "none", background: "none", cursor: "pointer", color: "#94a3b8" }}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+              <span style={{
+                padding: "2px 8px",
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 800,
+                background: selectedZone.is_active ? "#ecfdf5" : "#fef2f2",
+                color: selectedZone.is_active ? "#059669" : "#dc2626",
+                border: `1px solid ${selectedZone.is_active ? "#a7f3d0" : "#fecaca"}`,
+              }}>
+                {selectedZone.is_active ? "Active Zone" : "Disabled"}
+              </span>
+              <span style={{
+                padding: "2px 8px",
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 800,
+                background: "#f1f5f9",
+                color: "#475569",
+                textTransform: "uppercase",
+              }}>
+                {selectedZone.zone_type}
+              </span>
+            </div>
+
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
+              {selectedZone.description || "Designated geographic coverage area for customer service bookings."}
+            </div>
+
+            <div style={{ background: "#f8fafc", borderRadius: 10, padding: 12, border: "1px solid #f1f5f9", marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Coverage Parameters</div>
+              <div style={{ fontSize: 12, color: "#0f172a", marginBottom: 4 }}>
+                <strong>Type:</strong> {selectedZone.zone_type === "circle" ? "Radius Geofence" : "Custom Polygon Boundary"}
+              </div>
+              {selectedZone.zone_type === "circle" && (
+                <div style={{ fontSize: 12, color: "#0f172a", marginBottom: 4 }}>
+                  <strong>Radius:</strong> {((parseFloat(selectedZone.radius_meters) || 15000) / 1000).toFixed(1)} km
+                </div>
+              )}
+              {selectedZone.center_lat && selectedZone.center_lng && (
+                <div style={{ fontSize: 11, color: "#64748b" }}>
+                  Center: {parseFloat(selectedZone.center_lat).toFixed(4)}, {parseFloat(selectedZone.center_lng).toFixed(4)}
+                </div>
+              )}
             </div>
           </div>
-        ) : (
-          <MapContainer
-            center={mapCenter}
-            zoom={filtered.length === 1 ? 14 : 5}
-            style={{ width: "100%", height: "100%" }}
-          >
-            <TileLayer
-              url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
-              attribution="&copy; Google Maps"
-            />
-            <OverviewMarkers locations={filtered} onSelect={setSelected} />
-            <Legend />
-          </MapContainer>
         )}
 
-        {/* Phase 6 — Detail panel slides in over the map when a marker is clicked */}
-        {selected && (
-          <LocationDetailPanel
-            location={locations.find((l) => l.id === selected.id) || selected}
-            onClose={() => setSelected(null)}
-          />
+        {selectedBooking && (
+          <div style={{
+            position: "absolute",
+            top: 20,
+            right: 20,
+            width: 320,
+            background: "#ffffff",
+            borderRadius: 16,
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
+            zIndex: 1000,
+            padding: 18,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <h4 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: "#0f172a" }}>Booking #{selectedBooking.request_id}</h4>
+              <button onClick={() => setSelectedBooking(null)} style={{ border: "none", background: "none", cursor: "pointer", color: "#94a3b8" }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#4F46E5", marginBottom: 6 }}>{selectedBooking.issue_title || selectedBooking.service_category}</div>
+            <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10 }}>📍 {selectedBooking.address}</div>
+            <div style={{ background: "#f8fafc", borderRadius: 10, padding: 10, fontSize: 12 }}>
+              <div><strong>Status:</strong> {selectedBooking.status}</div>
+              <div><strong>Customer:</strong> {selectedBooking.customer_name} ({selectedBooking.phone})</div>
+              {selectedBooking.technician_name && (
+                <div><strong>Assigned Pro:</strong> {selectedBooking.technician_name}</div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

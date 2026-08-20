@@ -13,7 +13,7 @@ import {
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
   Calculator, PaintRoller, Smartphone, MoreVertical, Truck, Copy, Radio,
-  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2
+  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2, Wrench
 } from "lucide-react"
 import {
   apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError,
@@ -24,9 +24,7 @@ import { routes } from "../routes.js"
 import { CATEGORIES } from "./categoriesData.js"
 import { apiRequest } from "../../api/client.js"
 import { CalTrackLogo } from "../components/CalTrackLogo.jsx"
-import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
-import { LocationPermissionHandler } from "../components/AddressPicker/index.js"
-import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { LocationPermissionHandler, MapPickerScreen } from "../components/AddressPicker/index.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
@@ -271,535 +269,54 @@ function SummaryBar({ category, cart, date, time, step }) {
    •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”• */
 /* •”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”••”•
    /* ─────────────────────────────────────────────────────────────
-   SAVED ADDRESSES MODAL (Urban-style Address Selector)
+   UNIFIED LOCATION PICKER WRAPPERS (Delegates to MapPickerScreen)
    ───────────────────────────────────────────────────────────── */
 
-function SavedAddressesModal({
+export function SavedAddressesModal({
   onClose,
   onSelectAddress,
   currentAddress,
-  onAddNewAddress
+  serviceSlug = "",
+  initialCoords
 }) {
-  const [addresses, setAddresses] = useState([])
-  const [selectedId, setSelectedId] = useState(null)
-
-  useEffect(() => {
-    async function loadSavedAddresses() {
-      try {
-        const res = await apiRequest("/auth/customer/addresses/")
-        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-          const list = res.data.map(a => ({
-            id: String(a.id),
-            title: a.label || a.address_type || "Saved Address",
-            text: a.formatted_address || [a.locality, a.city, a.state].filter(Boolean).join(", ")
-          }))
-          setAddresses(list)
-          const found = list.find(a => a.text === currentAddress)
-          setSelectedId(found ? found.id : list[0].id)
-        } else {
-          setAddresses([])
-        }
-      } catch (err) {
-        console.warn("Failed to fetch saved addresses:", err)
-        setAddresses([])
-      }
-    }
-    loadSavedAddresses()
-  }, [currentAddress])
-
-  const [menuOpenId, setMenuOpenId] = useState(null)
-
-  const handleProceed = () => {
-    const sel = addresses.find(a => a.id === selectedId)
-    if (sel) {
-      onSelectAddress(sel.text)
-    }
-    onClose()
-  }
-
   return (
-    <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose}>
-      <motion.div
-        className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-100 relative max-h-[90vh] flex flex-col font-sans text-slate-800"
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Floating Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-white hover:bg-slate-100 text-slate-800 flex items-center justify-center shadow-lg border border-slate-200 transition-transform active:scale-95 cursor-pointer z-10"
-        >
-          <X size={20} />
-        </button>
-
-        {/* Title */}
-        <h3 className="text-xl font-black text-slate-900 mb-4">
-          Saved addresses
-        </h3>
-
-        {/* Add another address button */}
-        <button
-          onClick={() => {
-            onAddNewAddress()
-          }}
-          className="flex items-center gap-2 text-indigo-600 font-extrabold text-sm hover:underline mb-4 py-1 text-left cursor-pointer"
-        >
-          <Plus size={18} className="stroke-[3]" /> Add another address
-        </button>
-
-        <div className="h-px bg-slate-100 -mx-6 mb-4" />
-
-        {/* Address List */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1 divide-y divide-slate-100">
-          {addresses.map((item) => {
-            const isSelected = selectedId === item.id
-            return (
-              <div
-                key={item.id}
-                onClick={() => setSelectedId(item.id)}
-                className={`pt-3 first:pt-0 flex items-start gap-3 cursor-pointer group`}
-              >
-                {/* Custom Radio Circle */}
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${isSelected ? "border-slate-900 bg-white" : "border-slate-300 group-hover:border-slate-400"
-                  }`}>
-                  {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />}
-                </div>
-
-                {/* Address Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-black text-slate-900 block">
-                      {item.title}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setMenuOpenId(menuOpenId === item.id ? null : item.id)
-                      }}
-                      className="text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-100"
-                    >
-                      <MoreVertical size={16} />
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500 font-medium leading-relaxed mt-0.5 pr-2">
-                    {item.text}
-                  </p>
-
-                  {/* 3-dots popup options */}
-                  {menuOpenId === item.id && (
-                    <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-2 flex gap-3 text-xs font-bold">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onAddNewAddress()
-                        }}
-                        className="text-indigo-600 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setAddresses(prev => prev.filter(a => a.id !== item.id))
-                          setMenuOpenId(null)
-                        }}
-                        className="text-rose-600 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Sticky Proceed Button */}
-        <div className="pt-5 border-t border-slate-100 mt-4">
-          <button
-            onClick={handleProceed}
-            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.99] cursor-pointer"
-          >
-            Proceed
-          </button>
-        </div>
-      </motion.div>
-    </div>
+    <MapPickerScreen
+      initialCoords={initialCoords}
+      serviceSlug={serviceSlug}
+      onClose={onClose}
+      onConfirm={(resolvedAddr) => {
+        if (typeof onSelectAddress === "function") {
+          onSelectAddress(resolvedAddr)
+        }
+        if (typeof onClose === "function") {
+          onClose()
+        }
+      }}
+    />
   )
 }
-
-/* ─────────────────────────────────────────────────────────────
-   ADD ADDRESS SEARCH MODAL (Urban-style "Add another address" flow)
-   ───────────────────────────────────────────────────────────── */
 
 export function AddAddressSearchModal({
   onClose,
   onSelectLocation,
   onUseCurrentLocation,
-  savedAddresses: initialSaved = []
+  serviceSlug = "",
+  initialCoords
 }) {
-  const [query, setQuery] = useState("")
-  const [showMapPicker, setShowMapPicker] = useState(false)
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState([])
-  const [isGeoLoading, setIsGeoLoading] = useState(false)
-  const [geoError, setGeoError] = useState("")
-  const [savedAddrs, setSavedAddrs] = useState(initialSaved)
-
-  // Auto fetch saved addresses on mount if logged in
-  useEffect(() => {
-    async function loadSaved() {
-      try {
-        const res = await apiRequest('/auth/customer/addresses/')
-        if (res && res.success && Array.isArray(res.data)) {
-          setSavedAddrs(res.data)
-        }
-      } catch (e) {
-        // guest or non-auth
-      }
-    }
-    loadSaved()
-  }, [])
-
-  // Helper: save a location selection to recents in localStorage
-  const saveToRecents = (title, details) => {
-    try {
-      const existing = JSON.parse(localStorage.getItem("calservices_recent_locations") || "[]")
-      const newEntry = { title, details }
-      // Remove duplicates, add to front, keep max 10
-      const filtered = existing.filter(e => e.details !== details)
-      const updated = [newEntry, ...filtered].slice(0, 10)
-      localStorage.setItem("calservices_recent_locations", JSON.stringify(updated))
-      setRecents(updated)
-    } catch (e) { }
-  }
-
-  // Debounced geocoding search via Google Places Autocomplete
-  const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-  useEffect(() => {
-    if (!query || query.length < 3) {
-      setSearchResults([])
-      setIsSearching(false)
-      return
-    }
-    setIsSearching(true)
-    const delayDebounce = setTimeout(async () => {
-      try {
-        if (googleApiKey) {
-          // Use Google Places Autocomplete API
-          const gRes = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${googleApiKey}`
-          )
-          const gData = await gRes.json()
-          if (gData.status === "OK" && gData.results) {
-            const formatted = gData.results.slice(0, 5).map(result => {
-              const comps = result.address_components || []
-              let name = ""
-              for (const c of comps) {
-                if (c.types.includes("sublocality_level_1") || c.types.includes("sublocality") || c.types.includes("locality")) {
-                  name = c.long_name
-                  break
-                }
-              }
-              return {
-                title: name || result.formatted_address.split(",")[0],
-                details: result.formatted_address,
-                lat: result.geometry?.location?.lat,
-                lon: result.geometry?.location?.lng
-              }
-            })
-            setSearchResults(formatted)
-          } else {
-            setSearchResults([])
-          }
-        } else {
-          setSearchResults([])
-        }
-      } catch (err) {
-        console.error(err)
-      }
-      setIsSearching(false)
-    }, 400)
-    return () => clearTimeout(delayDebounce)
-  }, [query])
-
-  const handleUseCurrentLocationClick = () => {
-    if (!navigator.geolocation) {
-      setGeoError("Geolocation is not supported by your browser.")
-      return
-    }
-    setIsGeoLoading(true)
-    setGeoError("")
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = parseFloat(pos.coords.latitude.toFixed(6))
-        const lng = parseFloat(pos.coords.longitude.toFixed(6))
-        const acc = pos.coords.accuracy
-
-        try {
-          let readableLocation = ""
-          try {
-            const backendDetect = await apiDetectCustomerLocation(lat, lng, acc)
-            if (backendDetect && backendDetect.success && backendDetect.data) {
-              const d = backendDetect.data
-              readableLocation = [d.area, d.city, d.state].filter(Boolean).join(", ")
-            }
-          } catch (e) { }
-
-          if (!readableLocation) {
-            try {
-              readableLocation = await getAddress(lat, lng)
-            } catch (e) { }
-          }
-
-          if (!readableLocation) readableLocation = `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
-
-          onSelectLocation(readableLocation)
-          onClose()
-        } catch (e) {
-          setGeoError("Unable to detect location. Please try again.")
-        } finally {
-          setIsGeoLoading(false)
-        }
-      },
-      (err) => {
-        setIsGeoLoading(false)
-        if (err.code === 1) {
-          setGeoError("Location permission denied. Please allow location access.")
-        } else if (err.code === 2) {
-          setGeoError("Unable to detect high-accuracy GPS position.")
-        } else if (err.code === 3) {
-          setGeoError("Location request timed out.")
-        } else {
-          setGeoError("Failed to detect location.")
-        }
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    )
-  }
-
-  // Load recent searches from localStorage (no hardcoded locations)
-  const [recents, setRecents] = useState(() => {
-    try {
-      const stored = localStorage.getItem("calservices_recent_locations")
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
-      }
-    } catch (e) { }
-    return []
-  })
-
   return (
-    <div className="fixed inset-0 z-[10002] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose}>
-      <motion.div
-        className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-100 relative max-h-[90vh] flex flex-col font-sans text-slate-800"
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Top Header: Arrow + Search Input */}
-        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 mb-4">
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 transition-colors shrink-0 cursor-pointer"
-            title="Back"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="Search for your location/society/apartment"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-indigo-600 focus:bg-white focus:ring-2 focus:ring-indigo-600/10 transition-all placeholder:text-slate-400"
-              autoFocus
-            />
-            {query ? (
-              <button
-                onClick={() => setQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
-              >
-                <X size={14} />
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        {/* Use current location option */}
-        <button
-          onClick={() => {
-            setShowMapPicker(true)
-          }}
-          disabled={isGeoLoading}
-          className="flex items-center gap-3 text-purple-700 hover:text-purple-800 font-extrabold text-xs py-2.5 px-1 rounded-xl transition-colors cursor-pointer group mb-3 hover:bg-purple-50/50"
-        >
-          <div className="w-7 h-7 rounded-full bg-purple-100/70 flex items-center justify-center text-purple-700 shrink-0 group-hover:bg-purple-200/70 transition-colors">
-            {isGeoLoading ? (
-              <RefreshCw size={15} className="animate-spin text-purple-700" />
-            ) : (
-              <Compass size={15} className="stroke-[2.5]" />
-            )}
-          </div>
-          <div>
-            <span className="block text-purple-700 font-extrabold text-xs">
-              {isGeoLoading ? "Detecting location..." : "Use current location"}
-            </span>
-            <span className="block text-[10px] text-purple-600/70 font-medium">Using GPS for exact address</span>
-          </div>
-        </button>
-
-        {geoError && (
-          <div className="mb-3 px-3 py-2 bg-red-50 border border-red-100 rounded-xl text-[11px] font-bold text-red-600 flex items-center gap-2">
-            <AlertCircle size={14} className="shrink-0" />
-            <span>{geoError}</span>
-          </div>
-        )}
-
-        <div className="h-px bg-slate-100 -mx-6 mb-4" />
-
-        {/* Content Body: Search Results OR (Saved + Recents) */}
-        <div className="flex-1 overflow-y-auto space-y-5 pr-1 text-slate-800">
-          {query.length >= 3 ? (
-            <div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">
-                Search Results
-              </span>
-              {isSearching ? (
-                <div className="py-6 text-center text-xs font-bold text-indigo-600 flex items-center justify-center gap-2">
-                  <RefreshCw size={14} className="animate-spin" />
-                  <span>Searching locations...</span>
-                </div>
-              ) : searchResults.length > 0 ? (
-                <div className="divide-y divide-slate-100">
-                  {searchResults.map((item, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => { saveToRecents(item.title, item.details); onSelectLocation(item.details) }}
-                      className="py-3 flex items-start gap-3 cursor-pointer hover:bg-slate-50 rounded-xl px-2 transition-colors"
-                    >
-                      <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                      <div>
-                        <span className="text-xs font-black text-slate-900 block">{item.title}</span>
-                        <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">{item.details}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-6 text-center text-xs text-slate-400">
-                  No matching locations found.
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              {/* Saved Section */}
-              {savedAddrs && savedAddrs.length > 0 ? (
-                <div>
-                  <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Saved</h4>
-                  <div className="space-y-3">
-                    {savedAddrs.map((addr, idx) => {
-                      const displayAddr = [addr.address_line1, addr.address_line2, addr.city, addr.state, addr.pincode].filter(Boolean).join(", ")
-                      return (
-                        <div
-                          key={addr.id || idx}
-                          onClick={() => onSelectLocation(displayAddr, { lat: addr.latitude, lng: addr.longitude })}
-                          className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
-                        >
-                          <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
-                            <Home size={15} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-black text-slate-900 capitalize group-hover:text-purple-700 transition-colors">
-                                {addr.label_display || addr.label || "Home"}
-                              </span>
-                              {addr.is_default && (
-                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-md">
-                                  Default
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5 truncate">
-                              {displayAddr}
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <button onClick={() => { onClose(); onSelectLocation("") }} className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
-                    View more
-                  </button>
-                </div>
-              ) : null}
-
-              {/* Recents Section — only shown when user has actual recent searches */}
-              {recents.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-black text-slate-900 mb-3 tracking-tight">Recents</h4>
-                  <div className="space-y-3">
-                    {recents.map((item, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => { saveToRecents(item.title, item.details); onSelectLocation(item.details) }}
-                        className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
-                      >
-                        <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
-                          <Clock size={15} />
-                        </div>
-                        <div>
-                          <span className="text-xs font-black text-slate-900 block group-hover:text-purple-700 transition-colors">
-                            {item.title}
-                          </span>
-                          <p className="text-[11px] text-slate-500 font-medium leading-snug mt-0.5">
-                            {item.details}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="text-xs font-black text-purple-700 hover:underline pt-2.5 block cursor-pointer">
-                    View more
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Footer info */}
-        <div className="pt-3 border-t border-slate-100 mt-3 flex items-center justify-center gap-1.5 text-[10px] text-slate-400 font-semibold">
-          <span>powered by</span>
-          <span className="font-bold text-slate-600">Google</span>
-        </div>
-
-        {/* Swiggy/Zomato style Map Picker overlay */}
-        {showMapPicker && (
-          <LocationPermissionHandler
-            onClose={() => setShowMapPicker(false)}
-            onManualSearch={() => setShowMapPicker(false)}
-            onLocationConfirmed={(addressData) => {
-              setShowMapPicker(false)
-              const locStr = typeof addressData === "string"
-                ? addressData
-                : addressData?.formatted_address || [addressData?.flat_house_no, addressData?.locality, addressData?.city].filter(Boolean).join(", ")
-              if (typeof onSelectLocation === "function") {
-                onSelectLocation(locStr || addressData, { lat: addressData?.latitude, lng: addressData?.longitude })
-              }
-              onClose()
-            }}
-          />
-        )}
-      </motion.div>
-    </div>
+    <MapPickerScreen
+      initialCoords={initialCoords}
+      serviceSlug={serviceSlug}
+      onClose={onClose}
+      onConfirm={(resolvedAddr) => {
+        if (typeof onSelectLocation === "function") {
+          onSelectLocation(resolvedAddr, { lat: resolvedAddr.latitude, lng: resolvedAddr.longitude })
+        }
+        if (typeof onClose === "function") {
+          onClose()
+        }
+      }}
+    />
   )
 }
 
@@ -2283,7 +1800,9 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
         {/* Agreement */}
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 18 }}>
           <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ accentColor: '#7C3AED', marginTop: 2, flexShrink: 0 }} />
-          <span style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.5 }}>I agree to the <a href="#" className="uc-link">Terms of Service</a> and <a href="#" className="uc-link">Privacy Policy</a>. The technician will arrive at the scheduled time.</span>
+          <span style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.5 }}>
+            I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="uc-link" onClick={(e) => e.stopPropagation()}>Terms of Service</a>, <a href="/privacy" target="_blank" rel="noopener noreferrer" className="uc-link" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>, and <a href="/cancellation-refund" target="_blank" rel="noopener noreferrer" className="uc-link" onClick={(e) => e.stopPropagation()}>Cancellation &amp; Refund Policy</a>.
+          </span>
         </label>
 
         {error && <div className="uc-error"><AlertCircle size={13} /> {error}</div>}
@@ -2449,7 +1968,6 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
                 </motion.div>
                 <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Payment Successful! 🎉</div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Your booking is now confirmed</div>
-                <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.78rem', color: '#166534', fontWeight: 600 }}>✅ Amount {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()} debited successfully</div>
               </div>
             )}
             {payPhase === 'failed' && (
@@ -2478,12 +1996,10 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
                   style={{ width: '100%', padding: '1rem', background: upiId ? 'linear-gradient(135deg,#7C3AED,#4F46E5)' : '#e2e8f0', color: upiId ? 'white' : '#94a3b8', fontWeight: 800, fontSize: '0.95rem', border: 'none', borderRadius: 14, cursor: upiId ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <Lock size={15} /> Pay {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}
                 </button>
+                <div style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  <Shield size={11} /> 256-bit SSL · UPI Encryption
+                </div>
               </>
-            )}
-            {payPhase === null && (
-              <div style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                <Shield size={11} /> 256-bit SSL · UPI Encryption
-              </div>
             )}
           </div>
         </motion.div>
@@ -2602,29 +2118,144 @@ function PostBookingFlow({ bookingData, onDone }) {
   )
 }
 
+export function RunningServiceManRadar() {
+  return (
+    <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      
+      {/* Simple Soft Outer Pulse Ring */}
+      <motion.div
+        animate={{ scale: [1, 1.35, 1], opacity: [0.4, 0.15, 0.4] }}
+        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+        style={{
+          position: 'absolute',
+          width: 125,
+          height: 125,
+          borderRadius: '50%',
+          background: 'rgba(124, 58, 237, 0.12)',
+          border: '1.5px solid rgba(124, 58, 237, 0.25)',
+        }}
+      />
+
+      {/* Main Clean Upright Central Circle */}
+      <div
+        style={{
+          position: 'relative',
+          width: 88,
+          height: 88,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 8px 24px rgba(99, 102, 241, 0.35)',
+          border: '3px solid white',
+          zIndex: 2,
+        }}
+      >
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <User size={42} strokeWidth={2.2} color="white" />
+          <div style={{ position: 'absolute', bottom: -2, right: -4, background: '#F59E0B', borderRadius: '50%', padding: 4, border: '2px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Wrench size={14} color="white" strokeWidth={2.5} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    RAPIDO-STYLE LIVE TRACKING PAGE (Real-Time WebSockets & Database Dispatch)
    ───────────────────────────────────────────────────────────────────────────── */
 
 function LiveTrackingPage({ successData, category, cart, formData, selDate, selTime, onBookAgain }) {
-  const rid = successData?.request_id || successData?.id || "SR-0001"
+  const rid = successData?.request_id || (successData?.id ? `SR-${successData.id}` : "")
   const [liveData, setLiveData] = useState(null)
-  const [searchSeconds, setSearchSeconds] = useState(0)
   const [showMapModal, setShowMapModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
 
-  const totalPrice = cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const rawDate = selDate || liveData?.preferred_date || ""
-  const displayDate = rawDate ? new Date(rawDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : ""
-  const rawTime = selTime || liveData?.preferred_time || ""
-  const displayTime = rawTime ? (TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === rawTime)?.l || rawTime) : ""
-
-  // Timer counter for searching state
+  // Real-Time status polling
   useEffect(() => {
-    const t = setInterval(() => setSearchSeconds(s => s + 1), 1000)
+    if (!rid) return
+    let pollTimer = null
+    let isMounted = true
+
+    const fetchStatus = async () => {
+      try {
+        const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
+        const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
+        if (res?.data && isMounted) {
+          setLiveData(res.data)
+        }
+      } catch (e) { }
+    }
+
+    fetchStatus()
+    pollTimer = setInterval(fetchStatus, 4000)
+
+    return () => {
+      isMounted = false
+      if (pollTimer) clearInterval(pollTimer)
+    }
+  }, [rid, successData?.tracking_token])
+
+  // Persistent creation timestamp for timer across refreshes
+  const createdAtMs = useMemo(() => {
+    const fromBackend = liveData?.created_at || successData?.created_at || successData?.submitted_at
+    if (fromBackend) {
+      const parsed = new Date(fromBackend).getTime()
+      if (!isNaN(parsed) && parsed > 0) return parsed
+    }
+    const key = `calservice_created_time_${rid}`
+    try {
+      const stored = sessionStorage.getItem(key)
+      if (stored) return Number(stored)
+      const now = Date.now()
+      sessionStorage.setItem(key, String(now))
+      return now
+    } catch (_) {
+      return Date.now()
+    }
+  }, [liveData?.created_at, successData?.created_at, successData?.submitted_at, rid])
+
+  const [searchSeconds, setSearchSeconds] = useState(() => Math.max(0, Math.floor((Date.now() - createdAtMs) / 1000)))
+
+  // Synchronize elapsed search timer every second
+  useEffect(() => {
+    const updateTimer = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - createdAtMs) / 1000))
+      setSearchSeconds(elapsed)
+    }
+    updateTimer()
+    const t = setInterval(updateTimer, 1000)
     return () => clearInterval(t)
-  }, [])
+  }, [createdAtMs])
+
+  const formatTimer = (sec) => {
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+  }
+
+  // Combined data for complete service & booking view
+  const displayCart = useMemo(() => {
+    if (Array.isArray(liveData?.cart_data) && liveData.cart_data.length > 0) return liveData.cart_data
+    if (Array.isArray(successData?.cart_data) && successData.cart_data.length > 0) return successData.cart_data
+    if (Array.isArray(cart) && cart.length > 0) return cart
+    return []
+  }, [liveData?.cart_data, successData?.cart_data, cart])
+
+  const displayTotal = liveData?.total_amount || successData?.total_amount || (displayCart.length > 0 ? displayCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0) : (cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0))
+  const displayAddress = liveData?.destination?.address || liveData?.service_location?.address || successData?.address || formData?.address || "Service Location Address"
+  const customerName = liveData?.customer_name || successData?.customer_name || formData?.customer_name || "Valued Customer"
+  const customerPhone = liveData?.phone || successData?.phone || formData?.phone || ""
+  const paymentMethod = (liveData?.payment_method || successData?.payment_method || "COD").toUpperCase()
+  const paymentStatusText = liveData?.payment_status || successData?.payment_status || (paymentMethod === "ONLINE" ? "Paid" : "Cash on Service")
+
+  const rawDate = selDate || liveData?.preferred_date || successData?.preferred_date || ""
+  const displayDate = rawDate ? new Date(rawDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : ""
+  const rawTime = selTime || liveData?.preferred_time || successData?.preferred_time || ""
+  const displayTime = rawTime || ""
 
   // Real-Time WebSocket Connection + Resilient 3s Polling Backup
   useEffect(() => {
@@ -2653,21 +2284,27 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     }
   }, [rid, successData?.tracking_token])
 
-  const empInfo = liveData?.technician || successData?.technician || liveData?.assigned_employee
-  const techName = empInfo?.name || liveData?.technician_name || successData?.technician_name || (liveData?.is_accepted ? "Assigned Partner" : "")
-  const techPhone = empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || ""
-  const techPhoto = empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null
-  const techRating = empInfo?.rating || liveData?.technician_rating || successData?.technician_rating || null
-  const techJobs = empInfo?.jobs_completed || empInfo?.total_jobs || null
+  const isCompleted = Boolean(
+    liveData?.status && ["completed", "closed", "reviewed", "feedback_received"].includes(liveData.status.toLowerCase())
+  )
 
   const isAccepted = Boolean(
-    liveData?.is_accepted ||
-    (techName && ["assigned", "accepted", "in_progress", "on_the_way", "arrived", "completed"].includes(liveData?.status))
+    !isCompleted && (
+      liveData?.is_accepted ||
+      (["accepted", "in_progress", "on_the_way", "arrived"].includes(liveData?.status) && (liveData?.technician?.name || liveData?.technician_name))
+    )
   )
+  const empInfo = isAccepted || isCompleted ? (liveData?.technician || successData?.technician || liveData?.assigned_employee) : null
+  const techName = isAccepted || isCompleted ? (empInfo?.name || liveData?.technician_name || successData?.technician_name || "") : ""
+  const techPhone = isAccepted || isCompleted ? (empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || "") : ""
+  const techPhoto = isAccepted || isCompleted ? (empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null) : null
+  const techRating = isAccepted || isCompleted ? (empInfo?.rating || liveData?.technician_rating || successData?.technician_rating || null) : null
+  const techJobs = isAccepted || isCompleted ? (empInfo?.jobs_completed || empInfo?.total_jobs || null) : null
+
   const isCancelled = liveData?.status === "cancelled"
   const cancellationReason = liveData?.cancellation_reason || (liveData?.description && liveData.description.includes("[Cancellation Reason]:") ? liveData.description.split("[Cancellation Reason]:")[1].trim() : "")
   const graceSecs = liveData?.cancellation_grace_remaining_seconds ?? (isAccepted ? 300 : 9999)
-  const canCancel = !isCancelled && (liveData?.can_cancel !== false && (!isAccepted || graceSecs > 0))
+  const canCancel = !isCancelled && !isCompleted && (liveData?.can_cancel !== false && (!isAccepted || graceSecs > 0))
 
   const etaMinutes = liveData?.technician?.eta_minutes || liveData?.eta_minutes || null
   const distKm = liveData?.technician?.distance_km || liveData?.distance_km || null
@@ -2690,7 +2327,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     longitude: liveData?.destination?.longitude || formData?.longitude,
     address: liveData?.destination?.address || formData?.address,
     start_otp: startOtp,
-    status: liveData?.status || (isAccepted ? "assigned" : "confirmed"),
+    status: liveData?.status || (isCompleted ? "completed" : isAccepted ? "assigned" : "confirmed"),
     can_cancel: canCancel,
     cancellation_grace_remaining_seconds: graceSecs,
   }
@@ -2707,6 +2344,147 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     const m = Math.floor(sec / 60)
     const s = sec % 60
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+  }
+
+  /* ─────────────────── CASE 0A: BOOKING COMPLETED STATE ─────────────────── */
+  if (isCompleted) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{ maxWidth: 620, margin: "0 auto", padding: "1.5rem 1rem", textAlign: "center" }}
+      >
+        <div style={{
+          width: 76,
+          height: 76,
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #10B981, #059669)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "0 auto 1.2rem",
+          boxShadow: "0 8px 24px rgba(16, 185, 129, 0.35)",
+        }}>
+          <CheckCircle2 size={44} color="white" />
+        </div>
+
+        <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", margin: "0 0 0.35rem" }}>
+          Service Completed! 🎉
+        </h2>
+        <p style={{ color: "#64748b", fontSize: "0.9rem", margin: "0 0 1.25rem" }}>
+          Your service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been finished successfully.
+        </p>
+
+        {/* Serviced By Partner Card */}
+        {techName && (
+          <div style={{
+            background: "white",
+            borderRadius: 18,
+            padding: "1rem 1.25rem",
+            marginBottom: "1rem",
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            textAlign: "left",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+          }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #dcfce7, #bbf7d0)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "1.2rem",
+              fontWeight: 800,
+              color: "#15803d",
+              border: "2px solid #22c55e",
+              flexShrink: 0,
+            }}>
+              {techPhoto ? (
+                <img src={techPhoto} alt={techName} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+              ) : (
+                (techName || "P").charAt(0).toUpperCase()
+              )}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#16a34a", textTransform: "uppercase" }}>Serviced By</div>
+              <div style={{ fontSize: "0.98rem", fontWeight: 900, color: "#0f172a" }}>{techName}</div>
+              <div style={{ fontSize: "0.76rem", color: "#64748b" }}>Verified Professional • CalServices</div>
+            </div>
+            <span style={{
+              fontSize: "0.72rem",
+              fontWeight: 800,
+              background: "#ecfdf5",
+              color: "#059669",
+              padding: "4px 8px",
+              borderRadius: 8,
+              border: "1px solid #a7f3d0",
+            }}>
+              ✓ Finished
+            </span>
+          </div>
+        )}
+
+        {/* Real Bill / Order Details */}
+        <div style={{
+          background: "white",
+          borderRadius: 20,
+          padding: "1.25rem",
+          marginBottom: "1.5rem",
+          border: "1px solid #e2e8f0",
+          textAlign: "left",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, borderBottom: "1px solid #f1f5f9", paddingBottom: 8 }}>
+            <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Bill Summary</span>
+            <span style={{ fontSize: "0.76rem", fontWeight: 800, color: "#15803d", background: "#f0fdf4", padding: "2px 8px", borderRadius: 6 }}>Paid</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: "0.88rem" }}>
+            <span style={{ color: "#475569" }}>Total Amount:</span>
+            <span style={{ fontWeight: 900, color: "#0f172a" }}>₹{Number(displayTotal || 0).toLocaleString("en-IN")}</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: "0.82rem" }}>
+            <span style={{ color: "#64748b" }}>Payment Mode:</span>
+            <span style={{ fontWeight: 700, color: "#334155" }}>{paymentMethod === "ONLINE" ? "Online Payment" : "Cash on Delivery"}</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
+            <span style={{ color: "#64748b" }}>Delivered To:</span>
+            <span style={{ fontWeight: 600, color: "#334155", maxWidth: "60%", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {displayAddress}
+            </span>
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <button
+          onClick={onBookAgain}
+          style={{
+            width: "100%",
+            padding: "0.95rem",
+            background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
+            color: "white",
+            fontWeight: 800,
+            fontSize: "0.95rem",
+            border: "none",
+            borderRadius: 14,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            boxShadow: "0 4px 14px rgba(124, 58, 237, 0.35)",
+          }}
+        >
+          <Home size={16} /> Book Another Service
+        </button>
+      </motion.div>
+    )
   }
 
   /* ─────────────────── CASE 0: BOOKING CANCELLED STATE ─────────────────── */
@@ -2768,36 +2546,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       {!isAccepted ? (
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
 
-          {/* Rapido Pulse Radar Animation */}
-          <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <motion.div
-              animate={{ scale: [1, 1.8, 2.4], opacity: [0.6, 0.25, 0] }}
-              transition={{ repeat: Infinity, duration: 2.4, ease: "easeOut" }}
-              style={{ position: 'absolute', width: 120, height: 120, borderRadius: '50%', background: 'rgba(124, 58, 237, 0.25)' }}
-            />
-            <motion.div
-              animate={{ scale: [1, 1.6, 2.1], opacity: [0.7, 0.35, 0] }}
-              transition={{ repeat: Infinity, duration: 2.4, delay: 0.8, ease: "easeOut" }}
-              style={{ position: 'absolute', width: 100, height: 100, borderRadius: '50%', background: 'rgba(245, 158, 11, 0.3)' }}
-            />
-            <motion.div
-              animate={{ scale: [1, 1.06, 1] }}
-              transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-              style={{
-                width: 76,
-                height: 76,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #7C3AED, #F59E0B)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 8px 25px rgba(124, 58, 237, 0.45)',
-                zIndex: 2,
-              }}
-            >
-              <Radio size={36} color="white" className="animate-pulse" />
-            </motion.div>
-          </div>
+          {/* Animated Running Service Professional Radar */}
+          <RunningServiceManRadar />
 
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f5f3ff', border: '1px solid rgba(124, 58, 237, 0.25)', borderRadius: 99, padding: '4px 14px', marginBottom: 10 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7C3AED' }} className="animate-ping" />
@@ -2816,7 +2566,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           {/* Live search elapsed counter */}
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: '#475569', fontWeight: 700 }}>
             <Clock size={14} color="#7C3AED" />
-            <span>Searching for: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '0.88rem' }}>00:{searchSeconds.toString().padStart(2, '0')}</strong></span>
+            <span>Searching for: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '0.88rem' }}>{formatTimer(searchSeconds)}</strong></span>
             <span style={{ color: '#94a3b8' }}>•</span>
             <span style={{ color: '#10b981' }}>⚡ Verified partner pool notified</span>
           </div>
@@ -2930,18 +2680,24 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName || "Assigned Partner"}</span>
+                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1.05rem' }}>{techName || "Service Partner"}</span>
                 <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
                   ✓ Verified
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
-                  <Star size={13} fill="#d97706" /> {techRating ? Number(techRating).toFixed(1) : "4.9"}
-                </span>
-                <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
-                  • {techJobs ? `${techJobs}+ jobs completed` : "Verified Partner"}
-                </span>
+                {techRating != null ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>
+                    <Star size={13} fill="#d97706" /> {Number(techRating).toFixed(1)}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '0.76rem', color: '#64748b' }}>New partner</span>
+                )}
+                {techJobs != null && (
+                  <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                    • {techJobs}+ jobs completed
+                  </span>
+                )}
               </div>
             </div>
 
@@ -2955,10 +2711,15 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 <div style={{ fontSize: '1.1rem', fontWeight: 900 }}>{distKm}</div>
                 <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>KM AWAY</div>
               </div>
-            ) : (
+            ) : liveData?.technician_location?.latitude != null ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
                 <div style={{ fontSize: '0.88rem', fontWeight: 900 }}>Live GPS</div>
-                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>EN ROUTE</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ACTIVE</div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #64748b, #475569)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 900 }}>Assigned</div>
+                <div style={{ fontSize: '0.58rem', fontWeight: 800 }}>WAITING GPS</div>
               </div>
             )}
           </div>
@@ -2992,49 +2753,74 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             >
               <MapPin size={15} /> Track on Live Map
             </button>
-            <a
-              href={`tel:${techPhone}`}
-              style={{
-                flex: 1,
-                padding: '0.75rem',
-                background: '#f1f5f9',
-                color: '#0f172a',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: 'none',
-                borderRadius: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 5,
-                textDecoration: 'none',
-              }}
-            >
-              <Phone size={14} color="#0f172a" /> Call Pro
-            </a>
-            <button
-              onClick={() => {
-                const msg = encodeURIComponent(`Hi ${techName}, following up on my CalServices booking #${rid}.`)
-                window.open(`https://wa.me/91${techPhone.replace(/\D/g, '')}?text=${msg}`, '_blank')
-              }}
-              style={{
-                padding: '0.75rem 0.9rem',
-                background: '#ecfdf5',
-                color: '#059669',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: '1px solid #a7f3d0',
-                borderRadius: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-              }}
-            >
-              <MessageSquare size={14} color="#059669" />
-            </button>
+
+            {techPhone ? (
+              <>
+                <a
+                  href={`tel:${techPhone}`}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem',
+                    background: '#f1f5f9',
+                    color: '#0f172a',
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    border: 'none',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 5,
+                    textDecoration: 'none',
+                  }}
+                >
+                  <Phone size={14} color="#0f172a" /> Call Pro
+                </a>
+                <button
+                  onClick={() => {
+                    const msg = encodeURIComponent(`Hi ${techName || 'Partner'}, following up on my CalServices booking #${rid}.`)
+                    window.open(`https://wa.me/91${techPhone.replace(/\D/g, '')}?text=${msg}`, '_blank')
+                  }}
+                  style={{
+                    padding: '0.75rem 0.9rem',
+                    background: '#ecfdf5',
+                    color: '#059669',
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    border: '1px solid #a7f3d0',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                  }}
+                  title="WhatsApp Partner"
+                >
+                  <MessageSquare size={14} color="#059669" />
+                </button>
+              </>
+            ) : (
+              <span
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  background: '#f8fafc',
+                  color: '#94a3b8',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  border: '1px dashed #e2e8f0',
+                  borderRadius: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 5,
+                }}
+              >
+                <Phone size={14} color="#94a3b8" /> Call Unavailable
+              </span>
+            )}
           </div>
 
           {/* 5-Minute Grace Period Live Status Pill (Post-Acceptance) */}
@@ -3123,36 +2909,105 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         </div>
       )}
 
-      {/* ─────────────────── REAL BOOKING DETAILS (100% ACCURATE IN ₹) ─────────────────── */}
+      {/* ─────────────────── REAL BOOKING & SERVICE DETAILS (100% ACCURATE IN ₹) ─────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         style={{
           background: 'white',
           borderRadius: 20,
-          padding: '1.2rem',
+          padding: '1.25rem',
           marginBottom: '1rem',
           boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
           border: '1px solid #e2e8f0',
         }}
       >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-          📋 Booking Details
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.9rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.6rem' }}>
+          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>📋</span> Booking &amp; Service Details
+          </div>
+          <span style={{ fontSize: '0.72rem', fontWeight: 800, background: '#f1f5f9', color: '#475569', padding: '3px 9px', borderRadius: 8, fontFamily: 'monospace' }}>
+            #{rid}
+          </span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', fontSize: '0.8rem' }}>
-          {[
-            { label: 'Booking Ref', value: `#${rid}` },
-            { label: 'Service', value: category?.name || 'Home Service' },
-            { label: 'Date', value: displayDate },
-            { label: 'Time', value: displayTime },
-            { label: 'Address', value: liveData?.destination?.address || formData?.address, span: true },
-            { label: 'Total Amount', value: `₹${totalPrice || liveData?.total_amount || 0}`, highlight: true },
-          ].map((r, i) => (
-            <div key={i} style={{ ...(r.span ? { gridColumn: '1/-1' } : {}), background: '#f8fafc', borderRadius: 10, padding: '0.5rem 0.75rem' }}>
-              <div style={{ color: '#94a3b8', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase' }}>{r.label}</div>
-              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2, wordBreak: 'break-word' }}>{r.value || '—'}</div>
+
+        {/* Customer & Address Details */}
+        <div style={{ background: '#f8fafc', borderRadius: 12, padding: '0.75rem 0.9rem', marginBottom: '0.9rem', border: '1px solid #f1f5f9' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.6rem' }}>
+            <div>
+              <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Customer</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', marginTop: 1 }}>{customerName}</div>
             </div>
-          ))}
+            <div>
+              <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Phone</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', marginTop: 1 }}>{customerPhone || '—'}</div>
+            </div>
+          </div>
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.5rem' }}>
+            <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <MapPin size={11} color="#6366f1" /> Service Address
+            </div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e293b', marginTop: 2, lineHeight: 1.35, wordBreak: 'break-word' }}>
+              {displayAddress}
+            </div>
+          </div>
+        </div>
+
+        {/* Schedule Info Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginBottom: '0.9rem' }}>
+          <div style={{ background: '#f8fafc', borderRadius: 10, padding: '0.6rem 0.75rem', border: '1px solid #f1f5f9' }}>
+            <div style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Calendar size={11} color="#7C3AED" /> Scheduled Date
+            </div>
+            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.82rem', marginTop: 2 }}>{displayDate || 'As scheduled'}</div>
+          </div>
+          <div style={{ background: '#f8fafc', borderRadius: 10, padding: '0.6rem 0.75rem', border: '1px solid #f1f5f9' }}>
+            <div style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Clock size={11} color="#7C3AED" /> Time Slot
+            </div>
+            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.82rem', marginTop: 2 }}>{displayTime || 'Standard Slot'}</div>
+          </div>
+        </div>
+
+        {/* Itemized Service Breakdown */}
+        {displayCart.length > 0 && (
+          <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.75rem 0.9rem', background: '#fafafa', marginBottom: '0.9rem' }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>
+              Services Included ({displayCart.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {displayCart.map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                  <div style={{ color: '#334155', fontWeight: 700, flex: 1, minWidth: 0, paddingRight: 8 }}>
+                    {item.name || item.displayName || 'Service item'}
+                    {(item.quantity || 1) > 1 && <span style={{ color: '#64748b', fontSize: '0.75rem', marginLeft: 4 }}>× {item.quantity}</span>}
+                  </div>
+                  <div style={{ fontWeight: 800, color: '#0f172a', flexShrink: 0 }}>
+                    ₹{((Number(item.price) || 0) * (Number(item.quantity) || 1)).toLocaleString("en-IN")}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Total Amount & Payment Method Footer */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f3ff', border: '1px solid #7C3AED25', borderRadius: 12, padding: '0.75rem 0.95rem' }}>
+          <div>
+            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Payment Mode</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#4c1d95', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {paymentMethod === "ONLINE" ? "💳 Online Payment" : "💵 Cash on Service (COD)"}
+              <span style={{ fontSize: '0.68rem', fontWeight: 800, background: paymentMethod === "ONLINE" ? "#dcfce7" : "#fef3c7", color: paymentMethod === "ONLINE" ? "#15803d" : "#b45309", padding: "1px 6px", borderRadius: 6, marginLeft: 4 }}>
+                {paymentStatusText}
+              </span>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Amount</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#6D28D9' }}>
+              ₹{Number(displayTotal).toLocaleString("en-IN")}
+            </div>
+          </div>
         </div>
       </motion.div>
 
@@ -4209,10 +4064,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     { id: "Help & Support", icon: LifeBuoy },
   ]
 
-  const mockBookings = [
-    { id: "BK482910", service: "AC Servicing", date: "Aug 15, 2026", status: "Completed", amount: BOOKING_CURRENCY_SYMBOL + "899" },
-    { id: "BK483122", service: "Deep Cleaning", date: "Sep 02, 2026", status: "Upcoming", amount: BOOKING_CURRENCY_SYMBOL + "2,499" },
-  ]
   const renderBookedSubmodulesSummary = (b) => {
     if (!b) return null;
     let parsedCart = [];
@@ -4404,15 +4255,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending')}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                          {['confirmed', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status) && (
+                          {Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                if (b.tracking_token) {
-                                  window.open(`/track/${encodeURIComponent(b.request_id || b.id)}?token=${encodeURIComponent(b.tracking_token)}`, '_blank')
-                                } else {
-                                  window.open(`/track/${encodeURIComponent(b.request_id || b.id)}`, '_blank')
-                                }
+                                setTrackingBooking(b)
                               }}
                               style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(252,128,25,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
                               onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
@@ -4485,8 +4332,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Assigned Technician</div>
                             <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              👤 {(b.technician?.name || b.technician_name || b.assigned_employee?.full_name || (['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) ? 'Service Partner' : 'Not assigned yet'))}
-                              {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (
+                              👤 {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name)
+                                ? (b.technician?.name || b.technician_name)
+                                : (b.status === 'assigned' ? 'Finding service professional...' : 'Not assigned yet')}
+                              {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name) && (
                                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>✓ Verified Partner</span>
                               )}
                             </div>
@@ -4591,7 +4440,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               ? Object.keys(b.available_actions).filter(k => b.available_actions[k]).map(k => k.replace(/^can_/, ''))
                               : [
                                   b.payment_status === 'FAILED' ? 'retry_payment' : null,
-                                  ['confirmed', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status) ? 'track' : null,
+                                  Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) ? 'track' : null,
                                   ['pending', 'confirmed'].includes(b.status) ? 'reschedule' : null,
                                   'view_invoice',
                                   b.refund_status ? 'refund_status' : null,
@@ -4618,17 +4467,15 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                   <RefreshCw size={14} /> Retry Payment
                                 </button>
                               )
-                              if (cleanAct === "track") return (
-                                <button key={act} onClick={() => {
-                                  if (b.tracking_token) {
-                                    window.open(`/track/${encodeURIComponent(b.request_id || b.id)}?token=${encodeURIComponent(b.tracking_token)}`, '_blank')
-                                  } else {
-                                    window.open(`/track/${encodeURIComponent(b.request_id || b.id)}`, '_blank')
-                                  }
-                                }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}>
-                                  <MapPin size={14} /> Track Live
-                                </button>
-                              )
+                              if (cleanAct === "track") {
+                                const isAcceptedJob = Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status))
+                                if (!isAcceptedJob) return null
+                                return (
+                                  <button key={act} onClick={() => setTrackingBooking(b)} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}>
+                                    <MapPin size={14} /> Track Live
+                                  </button>
+                                )
+                              }
                               if (cleanAct === "reschedule") return (
                                 <button key={act} onClick={() => { setActiveTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <Calendar size={14} /> Reschedule
@@ -7589,7 +7436,7 @@ function StepWorkflowCheckout({
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold text-slate-500">Address</span>
                   <button
-                    onClick={() => setShowSavedAddrModal(true)}
+                    onClick={() => setShowMapModal(true)}
                     className="border border-slate-200 rounded-lg px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
                   >
                     Edit
@@ -7998,66 +7845,24 @@ function StepWorkflowCheckout({
 
       </div>
 
-      {showSavedAddrModal && (
-        <SavedAddressesModal
-          onClose={() => setShowSavedAddrModal(false)}
-          currentAddress={formData.address}
-          onSelectAddress={(addrObj) => {
-            if (typeof addrObj === "object" && addrObj !== null) {
-              const fullAddr = addrObj.formatted_address || [addrObj.address_line1, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(", ");
+      {showMapModal && (
+        <MapPickerScreen
+          initialCoords={{
+            lat: Number(formData.latitude) || 12.754598,
+            lng: Number(formData.longitude) || 77.834477,
+          }}
+          serviceSlug={category?.id || categoryKey || "general"}
+          onClose={() => setShowMapModal(false)}
+          onConfirm={(addrObj) => {
+            if (addrObj) {
+              const fullAddr = addrObj.formatted_address || [addrObj.address_line1, addrObj.locality, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(", ");
               onChange({ target: { name: "address", value: fullAddr } });
               if (addrObj.latitude) onChange({ target: { name: "latitude", value: String(addrObj.latitude) } });
               if (addrObj.longitude) onChange({ target: { name: "longitude", value: String(addrObj.longitude) } });
-            } else if (typeof addrObj === "string") {
-              onChange({ target: { name: "address", value: addrObj } });
+              if (typeof setLocation === "function") setLocation(fullAddr);
+              try { localStorage.setItem("calservice_user_location", fullAddr); } catch (e) {}
             }
-          }}
-          onAddNewAddress={() => {
-            setShowSavedAddrModal(false)
-            setShowAddSearchModal(true)
-          }}
-        />
-      )}
-
-      {showAddSearchModal && (
-        <AddAddressSearchModal
-          onClose={() => setShowAddSearchModal(false)}
-          onSelectLocation={(loc, coords) => {
-            setShowAddSearchModal(false)
-            if (loc) {
-              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
-              const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
-              const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
-              onChange({ target: { name: "address", value: addrStr } });
-              if (latVal) onChange({ target: { name: "latitude", value: String(latVal) } });
-              if (lngVal) onChange({ target: { name: "longitude", value: String(lngVal) } });
-              if (typeof setLocation === "function") setLocation(addrStr)
-              localStorage.setItem("calservice_user_location", addrStr)
-            }
-          }}
-          onUseCurrentLocation={() => {
-            setShowAddSearchModal(false)
-            if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(async (pos) => {
-                try {
-                  const lat = pos.coords.latitude;
-                  const lng = pos.coords.longitude;
-                  const res = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
-                  const data = await res.json();
-                  if (data?.features?.[0]?.properties) {
-                    const p = data.features[0].properties;
-                    const display = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
-                    if (display) {
-                      onChange({ target: { name: "address", value: display } });
-                      onChange({ target: { name: "latitude", value: String(lat) } });
-                      onChange({ target: { name: "longitude", value: String(lng) } });
-                      if (typeof setLocation === "function") setLocation(display);
-                      localStorage.setItem("calservice_user_location", display);
-                    }
-                  }
-                } catch (e) { }
-              });
-            }
+            setShowMapModal(false);
           }}
         />
       )}
@@ -20874,6 +20679,20 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
   const activeServices = getActiveServices();
 
+  const zoneResult = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("calservice_zone_result") || "null");
+    } catch { return null; }
+  })();
+
+  const isZoneServiceAllowed = (() => {
+    if (!zoneResult || zoneResult.open_access) return true;
+    if (zoneResult.in_zone === false) return false;
+    const allowed = zoneResult.available_services;
+    if (!allowed || !Array.isArray(allowed) || allowed.length === 0) return true;
+    return allowed.some(a => a.toLowerCase().includes("kitchen"));
+  })();
+
   return (
     <div className="w-full text-slate-700 bg-white">
       {/* Sticky Header + Tabs */}
@@ -20887,8 +20706,19 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
               <ChevronLeft size={14} /> Back to Services
             </button>
             <h2 className="text-xl font-black text-slate-900">Kitchen Cleaning</h2>
+            {!isZoneServiceAllowed && (
+              <span className="text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                Unavailable in Area
+              </span>
+            )}
           </div>
         </div>
+        {!isZoneServiceAllowed && (
+          <div className="my-2 p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-bold flex items-center gap-2">
+            <AlertCircle size={15} className="text-rose-600 shrink-0" />
+            <span>Kitchen Cleaning is currently unavailable in {zoneResult?.zone?.name || 'your area'}. Bookings are temporarily paused for this zone.</span>
+          </div>
+        )}
         <div className="flex gap-5 pb-3 pt-2 border-b border-slate-100 justify-start">
           {KITCHEN_SUB_TABS.map(tab => {
             const isSelected = activeTab === tab.id;
@@ -20915,7 +20745,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col lg:flex-row flex-1 pt-4">
+      <div className="flex flex-col lg:flex-row items-start gap-6 flex-1 pt-4">
 
         {/* Left Column */}
         <div className="flex-1 space-y-5">
@@ -20938,7 +20768,13 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                   {isFirst && (
                     <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-4 border border-slate-100/60">
                       <img
-                        src={activeTab === "packages" ? "/mockups/kitchen_top_new.png" : activeTab === "appliance" ? "/mockups/appliance_cleaning_hero.png" : activeTab === "cabinet_tile" ? "/mockups/kitchen_cleaning_hero.png" : "/mockups/quick_extra_services_hero.png"}
+                        src={(() => {
+                          const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
+                          if (activeTab === "packages") return customB.packages || "/mockups/kitchen_top_new.png";
+                          if (activeTab === "appliance") return customB.appliance || "/mockups/appliance_cleaning_hero.png";
+                          if (activeTab === "cabinet_tile") return customB.cabinet_tile || "/mockups/kitchen_cleaning_hero.png";
+                          return customB.addons || "/mockups/quick_extra_services_hero.png";
+                        })()}
                         alt={service.name}
                         className="w-full h-full object-cover object-center"
                       />
@@ -21085,8 +20921,8 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           </div>
         </div>
 
-        {/* Right Column: Order Summary */}
-        <div className="w-full lg:w-[350px] bg-slate-50 border-t lg:border-t-0 lg:border-l border-slate-100 p-5 flex flex-col justify-between lg:sticky lg:top-32 h-fit space-y-4 mt-6 lg:mt-0 rounded-2xl">
+        {/* Right Column: Order Summary (Sticky/Frozen on scroll below header tabs) */}
+        <div className="w-full lg:w-[350px] shrink-0 sticky top-[210px] self-start bg-slate-50 border border-slate-100 p-5 flex flex-col justify-between space-y-4 mt-6 lg:mt-0 rounded-2xl shadow-sm z-10">
           <div className="space-y-4">
             <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm space-y-3">
               <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
@@ -21136,11 +20972,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
 
           <div className="pt-4 mt-4 border-t border-slate-200/60">
             <button
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || !isZoneServiceAllowed}
               onClick={onCheckout}
               className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl text-center text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all"
             >
-              Proceed to Schedule
+              {!isZoneServiceAllowed ? "Service Unavailable in Area" : "Proceed to Schedule"}
             </button>
           </div>
         </div>

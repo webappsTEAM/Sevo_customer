@@ -9,7 +9,7 @@ import { motion } from "framer-motion"
 import {
   Phone, MessageSquare, CheckCircle2, Clock, MapPin,
   Star, RefreshCw, KeyRound, Bike, Copy, Check,
-  Wrench, WifiOff, Shield
+  Wrench, WifiOff, Shield, Home
 } from "lucide-react"
 import { useCustomerTracking } from "./useCustomerTracking.js"
 import { CustomerTrackingMap } from "./CustomerTrackingMap.jsx"
@@ -173,7 +173,14 @@ export function CustomerTrackingPage() {
               <div style={{ fontSize: "0.92rem", color: "#065f46", fontWeight: 800 }}>👤 {techName} {vendorName ? `(${vendorName})` : ""}</div>
             </div>
           )}
-          <p className="ltp-error-hint" style={{ color: "#047857" }}>Thank you for choosing CalServices!</p>
+          <p className="ltp-error-hint" style={{ color: "#047857", marginBottom: 14 }}>Thank you for choosing CalServices!</p>
+          <button
+            className="ltp-retry-btn"
+            style={{ background: "#059669", borderColor: "#059669", width: "100%", justifyContent: "center" }}
+            onClick={() => window.location.href = "/"}
+          >
+            <Home size={14} /> Book Another Service
+          </button>
         </motion.div>
       </div>
     )
@@ -187,7 +194,14 @@ export function CustomerTrackingPage() {
           <h2 className="ltp-error-title">Booking Cancelled</h2>
           <p className="ltp-error-body">Your booking <strong>#{data.request_id || activeIdentifier}</strong> has been cancelled.</p>
           {data.issue_title && <p className="ltp-error-body" style={{ color: "#64748b", fontSize: "0.85rem" }}>{data.issue_title}</p>}
-          <p className="ltp-error-hint" style={{ color: "#64748b" }}>If any advance payment was made, your full refund will be processed within 2–4 business days.</p>
+          <p className="ltp-error-hint" style={{ color: "#64748b", marginBottom: 14 }}>If any advance payment was made, your full refund will be processed within 2–4 business days.</p>
+          <button
+            className="ltp-retry-btn"
+            style={{ width: "100%", justifyContent: "center" }}
+            onClick={() => window.location.href = "/"}
+          >
+            <Home size={14} /> Return to Home
+          </button>
         </motion.div>
       </div>
     )
@@ -222,6 +236,9 @@ export function CustomerTrackingPage() {
             freshness={freshness}
             etaMinutes={etaMins}
             distanceKm={distKm}
+            startOtp={startOtp}
+            vendorName={vendorName}
+            requestId={data?.request_id || activeIdentifier}
           />
 
           {/* Unified Floating Overlay Card */}
@@ -276,14 +293,14 @@ export function CustomerTrackingPage() {
                 </div>
                 <div className="ltp-partner-info">
                   <div className="ltp-partner-name-row">
-                    <span className="ltp-partner-name">{techName}</span>
+                    <span className="ltp-partner-name">{techName || "Service Partner"}</span>
                     <span className="ltp-verified">✓ Professional</span>
                   </div>
                   <div className="ltp-partner-meta">
                     {techRating != null ? (
                       <span className="ltp-rating"><Star size={12} fill="#d97706" color="#d97706" /> {Number(techRating).toFixed(1)}</span>
                     ) : (
-                      <span className="ltp-rating">★ Verified Expert</span>
+                      <span className="ltp-rating" style={{ color: "#64748b" }}>New partner</span>
                     )}
                     {techJobs != null && (
                       <span className="ltp-meta-dim">
@@ -308,7 +325,7 @@ export function CustomerTrackingPage() {
                     <Phone size={14} /> Call Partner
                   </a>
                 ) : (
-                  <span className="ltp-btn disabled" aria-disabled="true"><Phone size={14} /> Call Partner</span>
+                  <span className="ltp-btn disabled" aria-disabled="true"><Phone size={14} /> Call Unavailable</span>
                 )}
                 {techPhone && (
                   <button className="ltp-btn outline" onClick={openWA} aria-label="WhatsApp technician">
