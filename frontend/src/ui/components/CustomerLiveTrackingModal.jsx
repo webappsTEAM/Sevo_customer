@@ -35,10 +35,12 @@ import {
   Check,
   Ban,
   AlertTriangle,
-  Wrench
+  Wrench,
+  Radio
 } from "lucide-react"
 import { API_BASE_URL } from "../../api/client.js"
 import { BookingCancellationModal } from "./BookingCancellationModal.jsx"
+import { fetchRoadRoute } from "../../api/routing.js"
 
 // Swiggy/Uber-style Custom HTML DivIcons
 const createCustomerHomeIcon = () => {
@@ -119,7 +121,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
   const [lastRefreshed, setLastRefreshed] = useState(new Date())
   const [recenterTrigger, setRecenterTrigger] = useState(0)
   const [copiedOtp, setCopiedOtp] = useState(false)
-  const [tileLayerType, setTileLayerType] = useState("streets") // 'streets' | 'osm'
+  const [tileLayerType, setTileLayerType] = useState("osm") // 'osm' (CartoDB Voyager) | 'dark' (CartoDB Dark)
   const [showCancelModal, setShowCancelModal] = useState(false)
 
   const bookingId = booking?.id
@@ -192,56 +194,65 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
   const isInProgress = currentStatus === "in_progress"
   const isCompleted = currentStatus === "completed" || currentStatus === "closed"
   const isCancelled = currentStatus === "cancelled"
-  const isOnTheWay = currentStatus === "on_the_way" || currentStatus === "accepted" || currentStatus === "assigned"
 
   const empLocation = liveData?.employee_live_location
-  const isAccepted = Boolean(liveData?.is_accepted || empLocation || booking?.assigned_employee || ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed"].includes(currentStatus))
+  const rawTechName = liveData?.technician?.name || empLocation?.technician_name || empLocation?.name || empLocation?.employee_name || booking?.technician_name || booking?.assigned_employee?.full_name || null
+  const rawTechPhone = liveData?.technician?.phone || empLocation?.technician_phone || empLocation?.phone || booking?.technician_phone || booking?.assigned_employee?.phone || ""
 
-  const empLat = empLocation?.latitude != null && !isNaN(parseFloat(empLocation.latitude))
+  // Strict Real Workflow Rule:
+  // Employee Assigned (status === "assigned"): Employee assigned BUT has NOT accepted yet.
+  // Employee Accepts (status in ["accepted", "on_the_way", "arrived", "in_progress", "completed"]): isAccepted becomes TRUE!
+  const isAccepted = Boolean(
+    (rawTechName || liveData?.is_accepted) &&
+    ["accepted", "on_the_way", "arrived", "in_progress", "completed"].includes(currentStatus)
+  )
+
+  const isAssignedOnly = (currentStatus === "assigned" || currentStatus === "reviewed") && !isAccepted
+  const isOnTheWay = isAccepted && (currentStatus === "on_the_way" || currentStatus === "accepted")
+
+  const empLat = isAccepted && empLocation?.latitude != null && !isNaN(parseFloat(empLocation.latitude))
     ? parseFloat(empLocation.latitude)
-    : null
+    : (isAccepted && booking?.technician_latitude != null ? parseFloat(booking.technician_latitude) : null)
 
-  const empLng = empLocation?.longitude != null && !isNaN(parseFloat(empLocation.longitude))
+  const empLng = isAccepted && empLocation?.longitude != null && !isNaN(parseFloat(empLocation.longitude))
     ? parseFloat(empLocation.longitude)
-    : null
+    : (isAccepted && booking?.technician_longitude != null ? parseFloat(booking.technician_longitude) : null)
 
   const hasCustomerCoords = destLat != null && !isNaN(destLat) && destLng != null && !isNaN(destLng)
-  const hasEmpCoords = empLat != null && !isNaN(empLat) && empLng != null && !isNaN(empLng)
+  const hasEmpCoords = isAccepted && empLat != null && !isNaN(empLat) && empLng != null && !isNaN(empLng)
 
-  const techName = booking?.technician_name || empLocation?.technician_name || empLocation?.name || empLocation?.employee_name || booking?.assigned_employee?.full_name || "Assigned Field Technician"
-  const techPhone = booking?.technician_phone || empLocation?.technician_phone || empLocation?.phone || booking?.assigned_employee?.phone || ""
-  const techPhoto = booking?.technician_photo || empLocation?.technician_photo || empLocation?.photo || null
-  const techRating = booking?.technician_rating || empLocation?.technician_rating || empLocation?.rating || null
-  const techJobs = empLocation?.jobs_completed || null
-  const startOtp = liveData?.start_otp || booking?.start_otp || booking?.otp || ""
+  const techName = isAccepted ? rawTechName : null
+  const techPhone = isAccepted ? rawTechPhone : ""
+  const techPhoto = isAccepted ? (liveData?.technician?.photo || booking?.technician_photo || empLocation?.technician_photo || null) : null
+  const techRating = isAccepted ? (liveData?.technician?.rating || booking?.technician_rating || empLocation?.technician_rating || null) : null
+  const techJobs = isAccepted ? (empLocation?.jobs_completed || liveData?.technician?.jobs_completed || null) : null
+  const startOtp = isAccepted ? (liveData?.start_otp || booking?.start_otp || booking?.otp || "") : ""
 
-  // Fetch real road navigation geometry via public OSRM routing engine
+  // Fetch real road navigation geometry via resilient multi-endpoint routing engine
   useEffect(() => {
     if (!hasCustomerCoords || !hasEmpCoords) return
 
+    let cancelled = false
     const fetchRoadGeometry = async () => {
       try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${empLng},${empLat};${destLng},${destLat}?overview=full&geometries=geojson`
-        const res = await fetch(url)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.routes && data.routes.length > 0) {
-            const geom = data.routes[0].geometry.coordinates.map(([lon, lat]) => [lat, lon])
-            setRoadRoute(geom)
-            const distKm = (data.routes[0].distance / 1000).toFixed(2)
-            const timeMins = Math.max(2, Math.round((data.routes[0].duration / 60) * 1.15))
-            setRoadDistanceKm(distKm)
-            setRoadEtaMins(timeMins)
-            return
-          }
+        const res = await fetchRoadRoute(empLng, empLat, destLng, destLat)
+        if (cancelled) return
+        if (res?.coordinates && res.coordinates.length > 0) {
+          setRoadRoute(res.coordinates)
+          setRoadDistanceKm(res.distanceKm)
+          setRoadEtaMins(res.etaMinutes)
+          return
         }
       } catch (e) {
-        console.warn("OSRM road routing fallback:", e)
+        console.warn("Road routing fallback:", e)
       }
-      setRoadRoute([[empLat, empLng], [destLat, destLng]])
+      if (!cancelled) {
+        setRoadRoute([[empLat, empLng], [destLat, destLng]])
+      }
     }
 
     fetchRoadGeometry()
+    return () => { cancelled = true }
   }, [empLat, empLng, destLat, destLng, hasCustomerCoords, hasEmpCoords])
 
   const finalDistance = roadDistanceKm || liveData?.distance_km || null
@@ -366,7 +377,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                   color: "#fdba74",
                   border: "1px solid rgba(253, 186, 116, 0.3)",
                 }}>
-                  {booking?.request_id || "SR-0462"}
+                  {booking?.request_id || (booking?.id ? `SR-${booking.id}` : "SR-JOB")}
                 </span>
               </div>
               <div style={{ fontSize: "0.78rem", color: "#9ca3af", display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
@@ -442,15 +453,19 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
               style={{ width: "100%", height: "100%", zIndex: 1 }}
               zoomControl={false}
             >
-              {tileLayerType === "streets" ? (
+              {tileLayerType === "osm" ? (
                 <TileLayer
-                  url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
-                  attribution="&copy; Google Maps"
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  subdomains={["a", "b", "c"]}
+                  maxZoom={19}
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 />
               ) : (
                 <TileLayer
-                  url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                  attribution="&copy; CartoDB Voyager"
+                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                  subdomains={["a", "b", "c", "d"]}
+                  maxZoom={19}
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
                 />
               )}
 
@@ -489,7 +504,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                         🏠 Your Home Location
                       </strong>
                       <div style={{ color: "#475569", fontSize: "0.78rem", marginTop: 4, lineHeight: 1.4 }}>
-                        {liveData?.destination?.address || booking?.address || "Service Address, Hosur"}
+                        {liveData?.destination?.address || booking?.address || "Service Location Address"}
                       </div>
                     </div>
                   </Popup>
@@ -626,14 +641,40 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                       Waiting for live GPS signal
                     </div>
                   </>
-                ) : (
+                ) : isAssignedOnly ? (
+                  <>
+                    <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#d97706", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} />
+                      Employee Assigned
+                    </div>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#0f172a" }}>
+                      Partner Assigned (Pending Acceptance)
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "#d97706", fontWeight: 600, marginTop: 2 }}>
+                      Waiting for partner to accept job & start travel
+                    </div>
+                  </>
+                ) : isAccepted ? (
                   <>
                     <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                       Estimated Arrival Time
                     </div>
                     <div style={{ fontSize: "1.35rem", fontWeight: 900, color: "#0f172a", display: "flex", alignItems: "baseline", gap: 6 }}>
-                      <span>{finalEta || 2} mins</span>
-                      <span style={{ fontSize: "0.88rem", color: "#64748b", fontWeight: 700 }}>({finalDistance || 0.5} km away)</span>
+                      <span>{finalEta ? `${finalEta} mins` : 'Live Tracking'}</span>
+                      {finalDistance && <span style={{ fontSize: "0.88rem", color: "#64748b", fontWeight: 700 }}>({finalDistance} km away)</span>}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#7C3AED", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7C3AED", display: "inline-block" }} className="animate-ping" />
+                      Broadcast Active • {liveData?.destination?.city || booking?.city || 'Local'}
+                    </div>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#0f172a" }}>
+                      Finding Service Professional...
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600, marginTop: 2 }}>
+                      Broadcasting request to nearby verified experts
                     </div>
                   </>
                 )}
@@ -667,7 +708,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                   color: "#334155",
                 }}
               >
-                <Layers size={15} color="#64748b" /> {tileLayerType === "streets" ? "Google Roads" : "Carto Voyager"}
+                <Layers size={15} color="#64748b" /> {tileLayerType === "osm" ? "Dark Map" : "Street Map"}
               </button>
 
               <button
@@ -703,168 +744,259 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
             overflowY: "auto",
           }}>
             {/* 1. Partner Profile Card */}
-            <div style={{
-              background: "white",
-              borderRadius: 18,
-              padding: "1.1rem",
-              border: "1px solid #e2e8f0",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ position: "relative" }}>
-                  {techPhoto ? (
-                    <img
-                      src={techPhoto}
-                      alt={techName}
-                      style={{
+            {isAccepted && techName ? (
+              <div style={{
+                background: "white",
+                borderRadius: 18,
+                padding: "1.1rem",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ position: "relative" }}>
+                    {techPhoto ? (
+                      <img
+                        src={techPhoto}
+                        alt={techName}
+                        style={{
+                          width: 52,
+                          height: 52,
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                          border: "2px solid #FC8019",
+                        }}
+                      />
+                    ) : (
+                      <div style={{
                         width: 52,
                         height: 52,
                         borderRadius: "50%",
-                        objectFit: "cover",
+                        background: "linear-gradient(135deg, #fef3c7, #fde68a)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "1.25rem",
+                        fontWeight: 900,
+                        color: "#b45309",
                         border: "2px solid #FC8019",
-                      }}
-                    />
-                  ) : (
-                    <div style={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg, #fef3c7, #fde68a)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "1.25rem",
-                      fontWeight: 900,
-                      color: "#b45309",
-                      border: "2px solid #FC8019",
-                    }}>
-                      {(techName || "P").charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div style={{
-                    position: "absolute",
-                    bottom: 0,
-                    right: 0,
-                    width: 14,
-                    height: 14,
-                    borderRadius: "50%",
-                    background: "#10b981",
-                    border: "2px solid white",
-                  }} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontWeight: 900, color: "#0f172a", fontSize: "1.05rem" }}>
-                      {techName}
-                    </span>
-                    <span style={{ fontSize: "0.68rem", fontWeight: 800, background: "#ecfdf5", color: "#059669", padding: "1px 6px", borderRadius: 6, border: "1px solid #a7f3d0" }}>
-                      ✓ Verified
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                    {techRating != null && (
-                      <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: "0.78rem", fontWeight: 800, color: "#d97706" }}>
-                        <Star size={13} fill="#d97706" /> {Number(techRating).toFixed(1)}
-                      </span>
+                      }}>
+                        {techName.charAt(0).toUpperCase()}
+                      </div>
                     )}
-                    <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
-                      {techRating != null ? "• " : ""}{techJobs ? `${techJobs}+ jobs completed` : "Assigned Service Professional"}
-                    </span>
+                    <div style={{
+                      position: "absolute",
+                      bottom: 0,
+                      right: 0,
+                      width: 14,
+                      height: 14,
+                      borderRadius: "50%",
+                      background: "#10b981",
+                      border: "2px solid white",
+                    }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontWeight: 900, color: "#0f172a", fontSize: "1.05rem" }}>
+                        {techName}
+                      </span>
+                      <span style={{ fontSize: "0.68rem", fontWeight: 800, background: "#ecfdf5", color: "#059669", padding: "1px 6px", borderRadius: 6, border: "1px solid #a7f3d0" }}>
+                        ✓ Verified
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                      {techRating != null && (
+                        <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: "0.78rem", fontWeight: 800, color: "#d97706" }}>
+                          <Star size={13} fill="#d97706" /> {Number(techRating).toFixed(1)}
+                        </span>
+                      )}
+                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                        {techRating != null ? "• " : ""}{techJobs ? `${techJobs}+ jobs completed` : "Assigned Service Professional"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Call & WhatsApp Action Buttons */}
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <a
-                  href={`tel:${techPhone}`}
-                  style={{
-                    flex: 1,
-                    padding: "9px 12px",
-                    background: "#10B981",
-                    color: "white",
-                    borderRadius: 10,
-                    fontWeight: 800,
-                    fontSize: "0.82rem",
-                    textDecoration: "none",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                    boxShadow: "0 2px 8px rgba(16, 185, 129, 0.25)",
-                  }}
-                >
-                  <Phone size={15} /> Call Partner
-                </a>
+                {/* Call & WhatsApp Action Buttons */}
+                {techPhone && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <a
+                      href={`tel:${techPhone}`}
+                      style={{
+                        flex: 1,
+                        padding: "9px 12px",
+                        background: "#10B981",
+                        color: "white",
+                        borderRadius: 10,
+                        fontWeight: 800,
+                        fontSize: "0.82rem",
+                        textDecoration: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        boxShadow: "0 2px 8px rgba(16, 185, 129, 0.25)",
+                      }}
+                    >
+                      <Phone size={15} /> Call Partner
+                    </a>
 
-                <button
-                  onClick={() => {
-                    const message = encodeURIComponent(`Hi ${techName}, I am following up on my CalServices booking #${booking?.request_id}.`)
-                    window.open(`https://wa.me/91${techPhone.replace(/\D/g, "")}?text=${message}`, "_blank")
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "9px 12px",
-                    background: "white",
-                    border: "1px solid #cbd5e1",
-                    color: "#1e293b",
-                    borderRadius: 10,
-                    fontWeight: 800,
-                    fontSize: "0.82rem",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                  }}
-                >
-                  <MessageSquare size={15} color="#FC8019" /> WhatsApp
-                </button>
-              </div>
-            </div>
-
-            {/* 2. Service Start OTP Strip with Copy button */}
-            <div style={{
-              background: "#fff7ed",
-              borderRadius: 14,
-              padding: "10px 14px",
-              border: "1px solid rgba(251, 146, 60, 0.4)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <KeyRound size={18} color="#ea580c" />
-                <div>
-                  <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#c2410c", textTransform: "uppercase" }}>
-                    Service Start OTP
+                    <button
+                      onClick={() => {
+                        const message = encodeURIComponent(`Hi ${techName}, I am following up on my CalServices booking #${booking?.request_id}.`)
+                        window.open(`https://wa.me/91${techPhone.replace(/\D/g, "")}?text=${message}`, "_blank")
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "9px 12px",
+                        background: "white",
+                        border: "1px solid #cbd5e1",
+                        color: "#1e293b",
+                        borderRadius: 10,
+                        fontWeight: 800,
+                        fontSize: "0.82rem",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <MessageSquare size={15} color="#25D366" /> WhatsApp
+                    </button>
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "#9a3412" }}>Share when partner arrives</div>
-                </div>
+                )}
               </div>
-              <div
-                onClick={handleCopyOtp}
-                title="Click to copy OTP"
-                style={{
-                  cursor: "pointer",
-                  fontFamily: "monospace",
-                  fontSize: "1.15rem",
-                  fontWeight: 900,
-                  color: "#c2410c",
-                  background: "white",
-                  padding: "3px 10px",
-                  borderRadius: 8,
-                  border: "1px dashed #f97316",
-                  letterSpacing: "1.5px",
+            ) : isAssignedOnly ? (
+              <div style={{
+                background: "white",
+                borderRadius: 18,
+                padding: "1.25rem",
+                border: "1px solid #fed7aa",
+                textAlign: "center",
+              }}>
+                <div style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: "50%",
+                  background: "#fff7ed",
+                  color: "#ea580c",
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span>{startOtp}</span>
-                {copiedOtp ? <Check size={13} color="#10B981" /> : <Copy size={13} color="#ea580c" />}
+                  justifyContent: "center",
+                  margin: "0 auto 12px",
+                  border: "1.5px solid #fdba74",
+                }}>
+                  <User size={28} />
+                </div>
+                <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "1rem", marginBottom: 4 }}>
+                  Employee Assigned
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "#c2410c", fontWeight: 700, marginBottom: 4 }}>
+                  Awaiting Acceptance
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#64748b", lineHeight: 1.4 }}>
+                  Partner has been assigned to your booking. Live tracking, contact details & OTP will unlock as soon as the partner accepts the request.
+                </div>
               </div>
-            </div>
+            ) : (
+              <div style={{
+                background: "white",
+                borderRadius: 18,
+                padding: "1.25rem",
+                border: "1px solid #e2e8f0",
+                textAlign: "center",
+              }}>
+                <div style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: "50%",
+                  background: "#f5f3ff",
+                  color: "#7C3AED",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 12px",
+                  border: "1.5px solid rgba(124, 58, 237, 0.25)",
+                }}>
+                  <Radio size={28} className="animate-pulse" />
+                </div>
+                <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "1rem", marginBottom: 4 }}>
+                  Finding Service Partner
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "#64748b", lineHeight: 1.4 }}>
+                  Broadcasting your request to verified experts in {liveData?.destination?.city || booking?.city || 'your service area'}. Partner details will appear here as soon as an expert accepts.
+                </div>
+              </div>
+            )}
+
+            {/* 2. Service Start OTP Strip with Copy button */}
+            {isAccepted && Boolean(startOtp) && (
+              <div style={{
+                background: "linear-gradient(135deg, #fff7ed, #ffedd5)",
+                borderRadius: 18,
+                padding: "1rem 1.25rem",
+                border: "1px solid #fed7aa",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                boxShadow: "0 2px 8px rgba(249, 115, 22, 0.08)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 12,
+                    background: "white",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#ea580c",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+                  }}>
+                    <KeyRound size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#c2410c", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      Service Start OTP
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "#9a3412", marginTop: 1 }}>
+                      Share when partner arrives
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleCopyOtp}
+                  style={{
+                    background: "white",
+                    border: "1px solid #fed7aa",
+                    borderRadius: 12,
+                    padding: "6px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <span style={{
+                    fontFamily: "monospace",
+                    fontSize: "1.2rem",
+                    fontWeight: 900,
+                    color: "#c2410c",
+                    letterSpacing: 2,
+                  }}>
+                    {startOtp}
+                  </span>
+                  {copiedOtp ? (
+                    <Check size={16} color="#10b981" />
+                  ) : (
+                    <Copy size={15} color="#ea580c" />
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* 3. Simple Clean 3-Stage Progress Timeline */}
             <div style={{
@@ -897,7 +1029,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                   </span>
                 </div>
 
-                {/* Step 2: Partner On The Way / Arrived */}
+                {/* Step 2: Partner Acceptance / Travel / Arrival */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     {isArrived ? (
@@ -917,7 +1049,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                       }}>
                         <CheckCircle2 size={16} />
                       </div>
-                    ) : (
+                    ) : isAccepted ? (
                       <div style={{
                         width: 26, height: 26, borderRadius: "50%",
                         background: "#FC8019", color: "white",
@@ -926,17 +1058,39 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                       }}>
                         <Bike size={15} />
                       </div>
+                    ) : isAssignedOnly ? (
+                      <div style={{
+                        width: 26, height: 26, borderRadius: "50%",
+                        background: "#f59e0b", color: "white",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        boxShadow: "0 0 0 4px rgba(245, 158, 11, 0.2)"
+                      }}>
+                        <Clock size={15} />
+                      </div>
+                    ) : (
+                      <div style={{
+                        width: 26, height: 26, borderRadius: "50%",
+                        background: "#7C3AED", color: "white",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        boxShadow: "0 0 0 4px rgba(124, 58, 237, 0.2)"
+                      }}>
+                        <Radio size={15} className="animate-pulse" />
+                      </div>
                     )}
                     <div style={{
                       fontSize: "0.84rem",
-                      fontWeight: isArrived || (!isInProgress && !isCompleted) ? 800 : 600,
-                      color: isArrived ? "#047857" : (!isInProgress && !isCompleted) ? "#ea580c" : "#0f172a"
+                      fontWeight: isArrived || isAccepted ? 800 : 600,
+                      color: isArrived ? "#047857" : isAccepted ? "#ea580c" : isAssignedOnly ? "#d97706" : "#7C3AED"
                     }}>
                       {isArrived
                         ? "Partner Arrived at Location"
                         : (isInProgress || isCompleted)
                         ? "Partner Arrived"
-                        : "Partner On The Way"}
+                        : isAccepted
+                        ? "Partner On The Way"
+                        : isAssignedOnly
+                        ? "Partner Assigned (Pending Acceptance)"
+                        : "Finding Service Partner"}
                     </div>
                   </div>
 
@@ -949,19 +1103,31 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                       ? "#ecfdf5"
                       : (isInProgress || isCompleted)
                       ? "#ecfdf5"
-                      : "#fff7ed",
+                      : isAccepted
+                      ? "#fff7ed"
+                      : isAssignedOnly
+                      ? "#fffbeb"
+                      : "#f5f3ff",
                     color: isArrived
                       ? "#047857"
                       : (isInProgress || isCompleted)
                       ? "#059669"
-                      : "#ea580c",
+                      : isAccepted
+                      ? "#ea580c"
+                      : isAssignedOnly
+                      ? "#d97706"
+                      : "#7C3AED",
                     border: isArrived ? "1px solid #a7f3d0" : "none"
                   }}>
                     {isArrived
                       ? "At Site"
                       : (isInProgress || isCompleted)
                       ? "Done"
-                      : `~${finalEta || 2} mins`}
+                      : isAccepted
+                      ? (finalEta ? `~${finalEta} mins` : "En Route")
+                      : isAssignedOnly
+                      ? "Assigned"
+                      : "Searching"}
                   </span>
                 </div>
 

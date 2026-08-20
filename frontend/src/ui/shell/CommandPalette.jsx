@@ -13,7 +13,6 @@ const ACTIONS = [
   { id: "inventory", label: "Warehouse Inventory", shortcut: ["G", "I"], icon: <Package size={18} />, to: routes.inventory, color: "text-teal-500" },
   { id: "reports", label: "Business Analytics & Reports", shortcut: ["G", "R"], icon: <BarChart3 size={18} />, to: routes.reports, color: "text-yellow-500" },
   { id: "support", label: "Customer Care", shortcut: ["G", "S"], icon: <Headset size={18} />, to: "/support/tickets", color: "text-sky-500" },
-  { id: "billing", label: "Billing & Invoices", shortcut: ["G", "B"], icon: <CreditCard size={18} />, to: routes.settings_billing, color: "text-rose-500" },
   { id: "settings", label: "Settings", shortcut: ["G", ","], icon: <Settings size={18} />, to: routes.settings, color: "text-slate-500" },
 ]
 

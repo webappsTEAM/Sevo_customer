@@ -14,10 +14,11 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { MapContainer, TileLayer, useMapEvents, useMap } from "react-leaflet"
-import { ArrowLeft, MapPin, Loader2, Navigation, Target } from "lucide-react"
+import { MapContainer, TileLayer, useMapEvents, Circle, Polygon } from "react-leaflet"
+import { ArrowLeft, MapPin, Loader2, Navigation, Target, Plus, Minus, AlertTriangle, CheckCircle2 } from "lucide-react"
 import { AddressBottomSheet } from "./AddressBottomSheet"
 import { useReverseGeocode } from "./useReverseGeocode"
+import { apiRequest } from "../../../api/client.js"
 import "leaflet/dist/leaflet.css"
 
 // ─── Internal: map event bridge ───────────────────────────────────────────────
@@ -26,29 +27,19 @@ import "leaflet/dist/leaflet.css"
  * Listens to Leaflet map events and notifies parent.
  * Must live inside <MapContainer>.
  */
-function MapEventBridge({ onDragStart, onMoveEnd }) {
+function MapEventBridge({ onDragStart, onMoveEnd, onMapClick }) {
   useMapEvents({
     dragstart() { onDragStart() },
     moveend(e) {
       const c = e.target.getCenter()
       onMoveEnd(c.lat, c.lng)
     },
-  })
-  return null
-}
-
-/**
- * Re-centers the Leaflet map when initialCoords changes.
- * Must live inside <MapContainer>.
- */
-function MapCenterSetter({ coords }) {
-  const map = useMap()
-  useEffect(() => {
-    if (map) {
-      setTimeout(() => map.invalidateSize(), 100)
+    click(e) {
+      if (onMapClick) {
+        onMapClick(e.latlng.lat, e.latlng.lng)
+      }
     }
-    if (coords && map) map.setView([coords.lat, coords.lng], 17, { animate: true })
-  }, [coords, map])
+  })
   return null
 }
 
@@ -62,26 +53,50 @@ function MapCenterSetter({ coords }) {
  *  lifted  → pin floats up 10px, shadow grows (drag in progress)
  *  dropped → spring bounce back to rest position (after moveend)
  */
-function FixedCenterPin({ lifted }) {
+function FixedCenterPin({ lifted, isOutOfZone }) {
+  const pinColor = isOutOfZone ? "#DC2626" : "#FF5200"
+
   return (
     <div style={pinStyles.wrapper} aria-hidden>
-      {/* Blue radar pulse circle */}
+      {/* Floating Status Warning Popup right above the Pin */}
+      {isOutOfZone && (
+        <motion.div
+          initial={{ opacity: 0, y: 6, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          style={pinStyles.warningBubble}
+        >
+          <span style={{ fontSize: 13 }}>⚠️</span>
+          <span>Outside Service Area</span>
+        </motion.div>
+      )}
+
+      {/* Radar pulse circle */}
       <motion.div
-        style={pinStyles.radarPulse}
+        style={{
+          ...pinStyles.radarPulse,
+          background: isOutOfZone ? "rgba(220, 38, 38, 0.15)" : "rgba(59, 130, 246, 0.2)",
+          border: isOutOfZone ? "1.5px solid rgba(220, 38, 38, 0.4)" : "1.5px solid rgba(59, 130, 246, 0.4)",
+        }}
         animate={{ scale: lifted ? 0.8 : [0.9, 1.1, 0.9], opacity: lifted ? 0.2 : [0.3, 0.6, 0.3] }}
         transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
       />
 
-      {/* Blue live GPS dot */}
-      <div style={pinStyles.blueDot} />
+      {/* Live GPS dot */}
+      <div style={{
+        ...pinStyles.blueDot,
+        background: isOutOfZone ? "#dc2626" : "#2563eb",
+      }} />
 
-      {/* The orange pin itself */}
+      {/* The pin itself */}
       <motion.div
-        style={pinStyles.pin}
+        style={{
+          ...pinStyles.pin,
+          filter: isOutOfZone ? "drop-shadow(0 6px 12px rgba(220,38,38,0.55))" : "drop-shadow(0 6px 12px rgba(255,82,0,0.45))",
+        }}
         animate={{ y: lifted ? -14 : 0 }}
         transition={{ type: "spring", damping: 18, stiffness: 280 }}
       >
-        <MapPin size={46} fill="#FF5200" color="#ffffff" strokeWidth={1.5} />
+        <MapPin size={46} fill={pinColor} color="#ffffff" strokeWidth={1.5} />
       </motion.div>
     </div>
   )
@@ -97,6 +112,22 @@ const pinStyles = {
     justifyContent: "center",
     pointerEvents: "none",
     zIndex: 800,
+  },
+  warningBubble: {
+    position: "absolute",
+    bottom: "calc(50% + 32px)",
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "5px 12px",
+    background: "#dc2626",
+    color: "#ffffff",
+    borderRadius: 20,
+    fontSize: "0.74rem",
+    fontWeight: 800,
+    boxShadow: "0 4px 14px rgba(220,38,38,0.4)",
+    whiteSpace: "nowrap",
+    zIndex: 850,
   },
   radarPulse: {
     position: "absolute",
@@ -190,48 +221,109 @@ const pillStyle = {
  * @param {object}   props
  * @param {{ lat: number, lng: number }} props.initialCoords  — GPS fix
  * @param {Function} props.onClose         — navigate back
- * @param {Function} [props.onManualSearch] — stub, wired in prompt 2
- * @param {Function} [props.onCenterChange] — stub (lat, lng) — wired in prompt 2
+ * @param {Function} [props.onManualSearch] — search modal opener
+ * @param {Function} [props.onCenterChange] — callback (lat, lng, address)
  */
 export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCenterChange }) {
   const [mapReady, setMapReady]           = useState(false)
   const [pinLifted, setPinLifted]         = useState(false)
   const [isDragging, setIsDragging]       = useState(false)
-  const [currentCenter, setCurrentCenter] = useState(initialCoords || { lat: 12.9716, lng: 77.5946 })
+  const [isLocating, setIsLocating]       = useState(false)
+  const [serviceZones, setServiceZones]   = useState([])
+  const [zoneStatus, setZoneStatus]       = useState({ inZone: true, zoneName: null, message: "" })
+  const [currentCenter, setCurrentCenter] = useState(initialCoords || { lat: 12.7409, lng: 77.8253 })
   const mapRef                            = useRef(null)
 
-  // ── Slice 2: reverse geocoding ──────────────────────────────────────────
-  // currentCenter drives geocoding; initial GPS coords fire on first render
+  // ── Load active service zones ──────────────────────────────────
+  useEffect(() => {
+    async function loadZones() {
+      try {
+        const res = await apiRequest("/settings/service-zones/")
+        if (Array.isArray(res)) {
+          setServiceZones(res)
+        }
+      } catch {}
+    }
+    loadZones()
+  }, [])
+
+  // ── Reverse geocoding ──────────────────────────────────────────
   const { address, loading: geoLoading, error: geoError } = useReverseGeocode(currentCenter)
 
-  // ── "Re-center on me" / Live GPS fetch (for the re-center button) ──────
+  // ── Real-time service zone check on pin movement ───────────────
+  useEffect(() => {
+    let active = true
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiRequest("/settings/service-zones/check/", {
+          method: "POST",
+          json: { lat: currentCenter.lat, lng: currentCenter.lng }
+        })
+        if (active && res) {
+          setZoneStatus({
+            inZone: res.in_zone !== false,
+            zoneName: res.zone?.name || null,
+            message: res.message || "",
+            errorCode: res.error_code || "",
+          })
+        }
+      } catch {
+        if (active) setZoneStatus({ inZone: true, zoneName: null, message: "" })
+      }
+    }, 300)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [currentCenter.lat, currentCenter.lng])
+
+  // ── "Re-center on me" / Live GPS fetch ──────
   const handleRecenter = useCallback(() => {
     if (navigator.geolocation) {
+      setIsLocating(true)
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = parseFloat(pos.coords.latitude.toFixed(6))
           const lng = parseFloat(pos.coords.longitude.toFixed(6))
           setCurrentCenter({ lat, lng })
+          setIsLocating(false)
           if (mapRef.current) {
-            mapRef.current.setView([lat, lng], 17, { animate: true })
+            mapRef.current.flyTo([lat, lng], 17, { animate: true, duration: 1 })
           }
         },
         (err) => {
           console.warn("Geolocation positioning error:", err)
+          setIsLocating(false)
           if (initialCoords && mapRef.current) {
-            mapRef.current.setView([initialCoords.lat, initialCoords.lng], 17, { animate: true })
+            mapRef.current.flyTo([initialCoords.lat, initialCoords.lng], 17, { animate: true })
             setCurrentCenter(initialCoords)
           }
         },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       )
     }
   }, [initialCoords])
 
-  // Automatically request live GPS location on mount to ensure pin points to current position
+  // Automatically request live GPS location on mount if not already present
   useEffect(() => {
-    handleRecenter()
-  }, [handleRecenter])
+    if (!initialCoords) {
+      handleRecenter()
+    }
+  }, [initialCoords, handleRecenter])
+
+  // ── Map Zoom Handlers ────────────────────────────────────────────────
+  const handleZoomIn = () => {
+    if (mapRef.current) {
+      mapRef.current.zoomIn()
+    }
+  }
+
+  const handleZoomOut = () => {
+    if (mapRef.current) {
+      mapRef.current.zoomOut()
+    }
+  }
 
   // ── Map event handlers ──────────────────────────────────────────────
   const handleDragStart = useCallback(() => {
@@ -243,9 +335,16 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
     setPinLifted(false)
     setIsDragging(false)
     setCurrentCenter({ lat, lng })
-    // Notify parent (stub — parent can use for analytics etc.)
     if (typeof onCenterChange === "function") onCenterChange(lat, lng)
   }, [onCenterChange])
+
+  const handleMapClick = useCallback((lat, lng) => {
+    if (mapRef.current) {
+      mapRef.current.panTo([lat, lng], { animate: true })
+    }
+  }, [])
+
+  const isOutOfZone = zoneStatus.inZone === false
 
   return (
     <div style={screenStyles.overlay} onClick={onClose}>
@@ -262,8 +361,12 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
           </div>
 
           <div style={screenStyles.searchBarRow}>
-            <div style={screenStyles.searchPill}>
-              <MapPin size={16} style={{ color: "#ff5200" }} />
+            <div style={{
+              ...screenStyles.searchPill,
+              borderColor: isOutOfZone ? "#fca5a5" : "#fed7aa",
+              background: isOutOfZone ? "#fef2f2" : "#fff",
+            }}>
+              <MapPin size={16} style={{ color: isOutOfZone ? "#dc2626" : "#ff5200" }} />
               <span style={screenStyles.searchPillText}>
                 {address?.city ? [address.city, address.state].filter(Boolean).join(", ") : (address?.formatted_address ? address.formatted_address.split(",").slice(0, 2).join(", ") : "Detecting Location...")}
               </span>
@@ -275,40 +378,79 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
               </button>
             </div>
           </div>
+
+          {/* Out of zone banner beneath search */}
+          {isOutOfZone && (
+            <div style={screenStyles.topWarningBanner}>
+              <AlertTriangle size={14} style={{ color: "#dc2626", flexShrink: 0 }} />
+              <span>Location is outside admin-defined service area ({zoneStatus.zoneName || "service boundaries"})</span>
+            </div>
+          )}
         </div>
 
         {/* ── Map area ────────────────────────────────────────────────────────── */}
         <div style={screenStyles.mapWrapper}>
 
-          {/* Loading skeleton (shown until map tiles fire whenReady) */}
+          {/* Loading skeleton */}
           {!mapReady && <MapLoadingSkeleton />}
 
-          {/* Fixed-center CSS pin */}
-          <FixedCenterPin lifted={pinLifted} />
+          {/* Fixed-center CSS pin with out-of-zone indicator */}
+          <FixedCenterPin lifted={pinLifted} isOutOfZone={isOutOfZone} />
 
           {/* "Updating…" pill while dragging */}
           <LocatingPill visible={isDragging} />
 
-          {/* Re-center button */}
-          <button
-            style={screenStyles.recenterBtn}
-            onClick={handleRecenter}
-            title="Re-center on my location"
-            id="map-recenter-btn"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="7" />
-              <circle cx="12" cy="12" r="2.5" fill="#0f172a" />
-              <line x1="12" y1="2" x2="12" y2="5" />
-              <line x1="12" y1="19" x2="12" y2="22" />
-              <line x1="2" y1="12" x2="5" y2="12" />
-              <line x1="19" y1="12" x2="22" y2="12" />
-            </svg>
-          </button>
+          {/* Floating Map Controls: Zoom In, Zoom Out, Re-Center */}
+          <div style={screenStyles.controlsContainer}>
+            {/* Zoom Controls */}
+            <div style={screenStyles.zoomGroup}>
+              <button
+                type="button"
+                style={screenStyles.zoomBtn}
+                onClick={handleZoomIn}
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                <Plus size={16} strokeWidth={2.5} color="#0f172a" />
+              </button>
+              <div style={screenStyles.zoomDivider} />
+              <button
+                type="button"
+                style={screenStyles.zoomBtn}
+                onClick={handleZoomOut}
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                <Minus size={16} strokeWidth={2.5} color="#0f172a" />
+              </button>
+            </div>
+
+            {/* Re-center button */}
+            <button
+              type="button"
+              style={screenStyles.recenterBtn}
+              onClick={handleRecenter}
+              title="Re-center on my location"
+              id="map-recenter-btn"
+            >
+              {isLocating ? (
+                <Loader2 size={18} style={{ color: "#ff5200", animation: "spin 1s linear infinite" }} />
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="7" />
+                  <circle cx="12" cy="12" r="2.5" fill="#0f172a" />
+                  <line x1="12" y1="2" x2="12" y2="5" />
+                  <line x1="12" y1="19" x2="12" y2="22" />
+                  <line x1="2" y1="12" x2="5" y2="12" />
+                  <line x1="19" y1="12" x2="22" y2="12" />
+                </svg>
+              )}
+            </button>
+          </div>
 
           {/* Leaflet map */}
           <MapContainer
-            center={[currentCenter?.lat || 12.9716, currentCenter?.lng || 77.5946]}
+            center={[currentCenter?.lat || 12.7409, currentCenter?.lng || 77.8253]}
             zoom={17}
             style={{ width: "100%", height: "100%" }}
             zoomControl={false}
@@ -322,19 +464,57 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
               attribution="&copy; Google Maps"
               maxZoom={19}
             />
-            <MapCenterSetter coords={currentCenter} />
+
+            {/* Admin-defined Service Zone Overlays */}
+            {serviceZones.map((zone) => {
+              if (zone.zone_type === "circle" && zone.center_lat && zone.center_lng) {
+                return (
+                  <Circle
+                    key={zone.id}
+                    center={[zone.center_lat, zone.center_lng]}
+                    radius={Number(zone.radius_meters || 5000)}
+                    pathOptions={{
+                      color: zone.color || "#4F46E5",
+                      fillColor: zone.color || "#4F46E5",
+                      fillOpacity: 0.12,
+                      weight: 2,
+                      dashArray: "6, 6",
+                    }}
+                  />
+                )
+              }
+              if (zone.zone_type === "polygon" && zone.polygon?.coordinates?.[0]) {
+                return (
+                  <Polygon
+                    key={zone.id}
+                    positions={zone.polygon.coordinates[0].map(([lng, lat]) => [lat, lng])}
+                    pathOptions={{
+                      color: zone.color || "#4F46E5",
+                      fillColor: zone.color || "#4F46E5",
+                      fillOpacity: 0.12,
+                      weight: 2,
+                      dashArray: "6, 6",
+                    }}
+                  />
+                )
+              }
+              return null
+            })}
+
             <MapEventBridge
               onDragStart={handleDragStart}
               onMoveEnd={handleMoveEnd}
+              onMapClick={handleMapClick}
             />
           </MapContainer>
         </div>
 
-        {/* ── Address bottom sheet ── */}
+        {/* ── Address bottom sheet with zone validation ── */}
         <AddressBottomSheet
           address={address}
           loading={geoLoading}
           error={geoError}
+          zoneStatus={zoneStatus}
           onConfirm={(resolvedAddress) => {
             if (typeof onCenterChange === "function") {
               onCenterChange(currentCenter.lat, currentCenter.lng, resolvedAddress)
@@ -357,6 +537,18 @@ export function MapPickerScreen({ initialCoords, onClose, onManualSearch, onCent
 // ─── Screen styles ────────────────────────────────────────────────────────────
 
 const screenStyles = {
+  topWarningBanner: {
+    padding: "6px 14px",
+    background: "#fef2f2",
+    borderTop: "1px solid #fecaca",
+    borderBottom: "1px solid #fecaca",
+    color: "#991b1b",
+    fontSize: "0.74rem",
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
   overlay: {
     position: "fixed", inset: 0, zIndex: 10010,
     display: "flex", alignItems: "center", justifyContent: "center",
@@ -412,12 +604,31 @@ const screenStyles = {
     background: "none", border: "none", cursor: "pointer", flexShrink: 0,
   },
   mapWrapper: {
-    height: "200px", flexShrink: 0, position: "relative", overflow: "hidden",
+    height: "230px", flexShrink: 0, position: "relative", overflow: "hidden",
     background: "#f1f5f9",
   },
-  recenterBtn: {
+  controlsContainer: {
     position: "absolute", right: 14, bottom: 14, zIndex: 820,
-    width: 44, height: 44, borderRadius: "50%",
+    display: "flex", flexDirection: "column", gap: 10, alignItems: "center",
+  },
+  zoomGroup: {
+    display: "flex", flexDirection: "column",
+    background: "#ffffff", borderRadius: "12px",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+    overflow: "hidden", border: "1px solid rgba(0,0,0,0.06)",
+  },
+  zoomBtn: {
+    width: 38, height: 38,
+    background: "#ffffff", border: "none",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    cursor: "pointer", transition: "background 0.15s",
+    padding: 0,
+  },
+  zoomDivider: {
+    height: 1, background: "#f1f5f9", width: "100%",
+  },
+  recenterBtn: {
+    width: 42, height: 42, borderRadius: "50%",
     background: "#ffffff", border: "none",
     display: "flex", alignItems: "center", justifyContent: "center",
     cursor: "pointer",

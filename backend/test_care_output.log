@@ -1,5 +1,0 @@
---- [BROWSER_GET_QUERYSET] ---
-Resolved company: Calservices
-Query params: status=None, category=None, search=None
-Total tickets in DB: 1
-Filtered count to return: 1

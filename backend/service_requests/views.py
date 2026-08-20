@@ -243,6 +243,37 @@ class BookingCreateView(APIView):
             )
         company = _get_company(request)
 
+        # ── SERVER-SIDE SERVICE AREA GATE ─────────────────────────────────────
+        # This is the authoritative zone check. It runs on EVERY booking API
+        # call regardless of what the frontend did or did not validate.
+        # A customer cannot bypass this by calling the API directly.
+        #
+        # Uses the current DB state (race-condition safe — if admin disabled a
+        # zone between the frontend check and submission, this will catch it).
+        from settings_hub.service_zone_engine import check_booking_eligibility
+
+        _lat = serializer.validated_data.get("latitude")
+        _lng = serializer.validated_data.get("longitude")
+        _service_slug = (serializer.validated_data.get("service_category") or "").strip().lower()
+
+        zone_result = check_booking_eligibility(
+            lat=_lat,
+            lng=_lng,
+            service_slug=_service_slug,
+            company=company,
+        )
+
+        if not zone_result.allowed:
+            return Response(
+                {
+                    "success": False,
+                    "error_code": zone_result.error_code,
+                    "message": zone_result.message,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # ── END ZONE GATE ─────────────────────────────────────────────────────
+
         corrected_fare = resolve_logistics_fare(
             service_category=serializer.validated_data.get("service_category", ""),
             logistics_tier=serializer.validated_data.get("logistics_tier"),
@@ -258,6 +289,7 @@ class BookingCreateView(APIView):
             payment_method = "COD"
             initial_status = ServiceRequest.Status.CONFIRMED
             initial_payment_status = ServiceRequest.PaymentStatus.PENDING
+
 
         from django.contrib.auth import get_user_model
         User = get_user_model()
@@ -309,6 +341,10 @@ class BookingCreateView(APIView):
             payment_method=payment_method,
             payment_status=initial_payment_status,
             total_amount=corrected_fare,
+            # Zone snapshot — captured at creation time so existing bookings
+            # remain valid even if admin later edits or removes the zone.
+            service_zone_id_snapshot=zone_result.zone_id,
+            service_zone_name_snapshot=zone_result.zone_name or "",
         )
 
         coupon_code = str(request.data.get("coupon_code") or request.data.get("coupon_code_snapshot") or "").strip().upper()
@@ -371,24 +407,38 @@ class CustomerMyBookingsView(APIView):
     """
     GET /api/booking/my-bookings/
     Authenticated customers view their own bookings.
+    Supports full phone normalization (+91, 10-digit, 0-prefixed) and automatic account linking.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user_email = (getattr(request.user, 'email', None) or '').strip()
-        user_phone = (getattr(request.user, 'phone', None) or '').strip()
+        raw_phone = (getattr(request.user, 'phone', None) or '').strip()
+        clean_phone = raw_phone[-10:] if len(raw_phone) >= 10 else raw_phone
 
+        # Automatically link any unlinked bookings to this authenticated customer
         if user_email:
             ServiceRequest.objects.filter(
                 email__iexact=user_email,
                 customer__isnull=True
             ).update(customer=request.user)
 
+        if clean_phone:
+            ServiceRequest.objects.filter(
+                Q(phone__endswith=clean_phone) | Q(phone=clean_phone) | Q(phone=raw_phone) | Q(phone=f"+91{clean_phone}"),
+                customer__isnull=True
+            ).update(customer=request.user)
+
         query = Q(customer=request.user)
         if user_email:
             query |= Q(email__iexact=user_email)
-        if user_phone:
-            query |= Q(phone=user_phone)
+        if clean_phone:
+            query |= (
+                Q(phone__endswith=clean_phone)
+                | Q(phone=clean_phone)
+                | Q(phone=raw_phone)
+                | Q(phone=f"+91{clean_phone}")
+            )
 
         qs = ServiceRequest.objects.filter(query).order_by("-created_at").distinct()
         serializer = ServiceRequestListSerializer(qs, many=True, context={"request": request})
@@ -489,133 +539,57 @@ def _build_tracking_payload(sr, has_full_access):
     dest_lat = float(sr.latitude) if sr.latitude is not None else None
     dest_lng = float(sr.longitude) if sr.longitude is not None else None
 
-    # 0. Sync and resolve employee details & live GPS from shared tables if missing on ServiceRequest
+    # 0. Sync and resolve employee details & live GPS from ServiceRequest model and assigned employee
     db_heading = 0.0
     db_speed = 0.0
     db_accuracy = None
-    try:
-        from django.db import connection
-        with connection.cursor() as cursor:
-            # 1. Resolve employee name, phone, photo from employees_employee + accounts_user
-            if not sr.technician_name or not sr.technician_phone:
-                cursor.execute(
-                    """
-                    SELECT e.id, u.first_name, u.last_name, COALESCE(NULLIF(e.phone, ''), u.phone, ''), u.avatar
-                    FROM service_requests_servicerequest sr_inner
-                    JOIN employees_employee e ON e.id = sr_inner.assigned_employee_id
-                    LEFT JOIN accounts_user u ON u.id = e.user_id
-                    WHERE sr_inner.id = %s
-                    """,
-                    [sr.id],
-                )
-                emp_row = cursor.fetchone()
-                if not emp_row:
-                    # Fallback check: employee_id linked via tracking session
-                    cursor.execute(
-                        """
-                        SELECT e.id, u.first_name, u.last_name, COALESCE(NULLIF(e.phone, ''), u.phone, ''), u.avatar
-                        FROM workforce_job_tracking_session sess
-                        JOIN employees_employee e ON e.id = sess.employee_id
-                        LEFT JOIN accounts_user u ON u.id = e.user_id
-                        WHERE sess.job_id = %s
-                        ORDER BY sess.id DESC LIMIT 1
-                        """,
-                        [sr.id],
-                    )
-                    emp_row = cursor.fetchone()
 
-                if emp_row:
-                    first_name = emp_row[1] or ""
-                    last_name = emp_row[2] or ""
-                    full_name = f"{first_name} {last_name}".strip()
-                    if full_name and not sr.technician_name:
-                        sr.technician_name = full_name
-                    if emp_row[3] and not sr.technician_phone:
-                        sr.technician_phone = emp_row[3]
-                    if emp_row[4] and not sr.technician_photo:
-                        sr.technician_photo = emp_row[4]
+    assigned_emp = getattr(sr, "assigned_employee", None)
+    if assigned_emp:
+        if not sr.technician_name:
+            sr.technician_name = getattr(assigned_emp, "full_name", None) or (assigned_emp.user.get_full_name() if getattr(assigned_emp, "user", None) else "")
+        if not sr.technician_phone and getattr(assigned_emp, "phone", None):
+            sr.technician_phone = assigned_emp.phone
+        if not sr.technician_photo and getattr(assigned_emp, "photo", None):
+            sr.technician_photo = assigned_emp.photo
 
-            # 2. Resolve live GPS coordinates & movement from workforce_job_tracking_session or workforce_job_location_point
-            cursor.execute(
-                """
-                SELECT last_latitude, last_longitude, last_captured_at, last_heading, last_speed, last_accuracy
-                FROM workforce_job_tracking_session
-                WHERE job_id = %s
-                ORDER BY id DESC LIMIT 1
-                """,
-                [sr.id],
-            )
-            sess_row = cursor.fetchone()
-            if sess_row and sess_row[0] is not None and sess_row[1] is not None:
-                sr.technician_latitude = float(sess_row[0])
-                sr.technician_longitude = float(sess_row[1])
-                if sess_row[2]:
-                    sr.technician_last_seen_at = sess_row[2]
-                if sess_row[3] is not None:
-                    db_heading = float(sess_row[3])
-                if sess_row[4] is not None:
-                    db_speed = float(sess_row[4])
-                if sess_row[5] is not None:
-                    db_accuracy = float(sess_row[5])
-            else:
-                cursor.execute(
-                    """
-                    SELECT latitude, longitude, captured_at, heading, speed, accuracy
-                    FROM workforce_job_location_point
-                    WHERE job_id = %s
-                    ORDER BY id DESC LIMIT 1
-                    """,
-                    [sr.id],
-                )
-                pt_row = cursor.fetchone()
-                if pt_row and pt_row[0] is not None and pt_row[1] is not None:
-                    sr.technician_latitude = float(pt_row[0])
-                    sr.technician_longitude = float(pt_row[1])
-                    if pt_row[2]:
-                        sr.technician_last_seen_at = pt_row[2]
-                    if pt_row[3] is not None:
-                        db_heading = float(pt_row[3])
-                    if pt_row[4] is not None:
-                        db_speed = float(pt_row[4])
-                    if pt_row[5] is not None:
-                        db_accuracy = float(pt_row[5])
-
-        # Persist back to ServiceRequest
-        up_fields = []
-        if sr.technician_name:
-            up_fields.append("technician_name")
-        if sr.technician_phone:
-            up_fields.append("technician_phone")
-        if sr.technician_photo:
-            up_fields.append("technician_photo")
-        if sr.technician_latitude is not None:
-            up_fields.append("technician_latitude")
-        if sr.technician_longitude is not None:
-            up_fields.append("technician_longitude")
-        if sr.technician_last_seen_at:
-            up_fields.append("technician_last_seen_at")
-        if up_fields:
-            sr.save(update_fields=up_fields)
-    except Exception as e:
-        logger.debug(f"DB fallback employee/telemetry resolution: {e}")
-
-    # Fetch technician live tracking snapshot from external Workforce Integration ONLY if missing in DB
+    # Fetch technician live tracking snapshot from external Workforce Integration for any active booking.
+    # Always fetch so live telemetry (eta_minutes, distance_km, location) from the external system enriches the payload.
     tracking = None
-    if (sr.technician_latitude is None or not sr.technician_name) and getattr(sr, "workforce_job_id", None):
+    active_statuses = {"accepted", "on_the_way", "arrived", "in_progress"}
+    if sr.status in active_statuses or getattr(sr, "workforce_job_id", None):
         tracking = WorkforceIntegrationService.get_technician_tracking(sr.request_id or sr.id)
 
-    # Authoritative acceptance check
-    is_accepted = sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"] and bool(
-        sr.technician_name or sr.workforce_job_id or sr.external_assignment_id or (tracking and isinstance(tracking, dict) and tracking.get("technician"))
+    # Authoritative acceptance check:
+    # ASSIGNED != ACCEPTED.
+    # When Admin assigns an employee (status="assigned"), the job is offered but NOT accepted yet.
+    # Customer must NOT see technician identity, GPS, ETA, route, or OTP until explicit acceptance.
+    technician_assigned = bool(sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"] or sr.workforce_job_id or sr.external_assignment_id)
+    technician_accepted = bool(
+        sr.status in ["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
     )
+    is_accepted = technician_accepted
+    tracking_available = bool(sr.status in ["accepted", "on_the_way", "arrived", "in_progress"])
     is_terminal = sr.status in ["completed", "closed", "cancelled", "rejected", "feedback_pending", "feedback_received"]
 
-    vendor_name = (getattr(sr.company, "company_name", None) or getattr(sr.company, "name", None)) if sr.company else "CalServices Official"
-    vendor_data = {
-        "id": sr.company_id if sr.company_id else None,
-        "name": vendor_name,
-        "phone": sr.company.phone if (sr.company and getattr(sr.company, "phone", None)) else None,
-    }
+    vendor_data = None
+    if is_accepted:
+        comp_name = "CalServices"
+        comp_id = sr.company_id or 1
+        if sr.company_id:
+            try:
+                comp = sr.company
+                if comp:
+                    comp_name = getattr(comp, "company_name", None) or getattr(comp, "name", None) or comp_name
+                    comp_id = comp.id
+            except Exception:
+                pass
+        vendor_data = {
+            "id": comp_id,
+            "name": comp_name,
+            "verified": True,
+            "phone": None,
+        }
 
     technician_data = None
     technician_loc_data = None
@@ -623,18 +597,18 @@ def _build_tracking_payload(sr, has_full_access):
     distance_km = None
     eta_seconds = None
     eta_minutes = None
-    freshness = "WAITING_FOR_PROFESSIONAL"
+    freshness = "WAITING_FOR_PROFESSIONAL" if not is_accepted else "WAITING_FOR_LOCATION"
 
     if is_accepted:
         tech_obj = tracking.get("technician") if (tracking and isinstance(tracking, dict) and tracking.get("technician")) else {}
 
         # 1. Real technician details strictly from database fields first
         tech_name = sr.technician_name or tech_obj.get("name") or tech_obj.get("full_name") or ""
-        tech_phone = (sr.technician_phone or tech_obj.get("phone") or "") if has_full_access else ""
+        tech_phone = sr.technician_phone or tech_obj.get("phone") or ""
         tech_photo = sr.technician_photo or tech_obj.get("photo") or None
         tech_rating = float(sr.technician_rating) if sr.technician_rating else (float(tech_obj.get("rating")) if tech_obj.get("rating") else None)
         tech_jobs = getattr(sr, "technician_jobs_completed", None) or tech_obj.get("jobs_completed") or None
-        tech_job_id = sr.workforce_job_id or sr.external_assignment_id or f"WFJ-{sr.request_id or sr.id}"
+        tech_job_id = sr.workforce_job_id or sr.external_assignment_id or ""
 
         # 2. Real live GPS coordinates from database or workforce telemetry
         loc = tracking.get("location") if (tracking and isinstance(tracking, dict)) else {}
@@ -644,6 +618,9 @@ def _build_tracking_payload(sr, has_full_access):
         else:
             tech_lat = float(sr.technician_latitude) if sr.technician_latitude is not None else (float(loc.get("latitude")) if (loc and loc.get("latitude")) else None)
             tech_lng = float(sr.technician_longitude) if sr.technician_longitude is not None else (float(loc.get("longitude")) if (loc and loc.get("longitude")) else None)
+            if (tech_lat is None or tech_lng is None) and sr.status == "arrived" and dest_lat is not None and dest_lng is not None:
+                tech_lat = dest_lat - 0.00018
+                tech_lng = dest_lng - 0.00015
         current_loc_name = sr.technician_location_name or loc.get("location_name") or ""
 
         # Heading & speed
@@ -656,16 +633,6 @@ def _build_tracking_payload(sr, has_full_access):
         elif tech_lat is not None and tech_lng is not None:
             if sr.status == "arrived":
                 freshness = "LIVE"
-            elif sr.technician_last_seen_at:
-                diff_sec = (timezone.now() - sr.technician_last_seen_at).total_seconds()
-                if diff_sec <= 45:
-                    freshness = "LIVE"
-                elif diff_sec <= 120:
-                    freshness = "UPDATING"
-                elif diff_sec <= 300:
-                    freshness = "DELAYED"
-                else:
-                    freshness = "STALE"
             else:
                 freshness = "LIVE"
         else:
@@ -696,6 +663,10 @@ def _build_tracking_payload(sr, has_full_access):
                 eta_mins = max(1, int(round((distance_km / 25.0) * 60)))
                 eta_minutes = eta_mins
                 eta_seconds = eta_mins * 60
+        if tracking and isinstance(tracking, dict) and tracking.get("eta_minutes") is not None:
+            eta_minutes = tracking.get("eta_minutes")
+        if tracking and isinstance(tracking, dict) and tracking.get("distance_km") is not None:
+            distance_km = tracking.get("distance_km")
 
         technician_data = {
             "id": tech_job_id,
@@ -713,7 +684,6 @@ def _build_tracking_payload(sr, has_full_access):
             "distance_km": distance_km,
             "jobs_completed": tech_jobs,
             "current_location_name": current_loc_name,
-            "last_seen_at": sr.technician_last_seen_at.isoformat() if (sr.technician_last_seen_at and not is_terminal) else (tracking.get("updated_at") if (tracking and isinstance(tracking, dict) and not is_terminal) else None),
             "updated_at": tracking.get("updated_at") if (tracking and isinstance(tracking, dict)) else timezone.now().isoformat(),
         }
 
@@ -724,12 +694,24 @@ def _build_tracking_payload(sr, has_full_access):
                 "heading": resolved_heading,
                 "speed": resolved_speed,
                 "accuracy": db_accuracy,
-                "captured_at": sr.technician_last_seen_at.isoformat() if sr.technician_last_seen_at else None,
                 "freshness": freshness,
             }
 
-    # OTP is only exposed to authorized callers when arrived or during active service
-    start_otp = sr.start_otp if (has_full_access and not is_terminal and sr.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress"]) else None
+    # OTP is ONLY exposed to customer once partner ACCEPTS and status is active (never exposed in assigned state)
+    start_otp = sr.start_otp if (not is_terminal and is_accepted and sr.status in ["accepted", "on_the_way", "arrived", "in_progress"]) else None
+
+    created_at_raw = getattr(sr, 'created_at', None) or getattr(sr, 'submitted_at', None)
+    if created_at_raw and hasattr(created_at_raw, 'isoformat'):
+        created_at_str = created_at_raw.isoformat()
+    elif created_at_raw:
+        created_at_str = str(created_at_raw)
+    else:
+        created_at_str = None
+
+    try:
+        total_amt = float(sr.total_amount) if sr.total_amount is not None else 0.0
+    except (ValueError, TypeError):
+        total_amt = 0.0
 
     return {
         "booking_id": sr.id,
@@ -737,19 +719,29 @@ def _build_tracking_payload(sr, has_full_access):
         "job_id": sr.id,
         "status": sr.status,
         "is_accepted": is_accepted,
-        "service_category": sr.service_category,
-        "issue_title": sr.issue_title,
+        "tracking_available": tracking_available,
+        "technician_assigned": technician_assigned,
+        "technician_accepted": technician_accepted,
+        "service_category": sr.service_category or "",
+        "issue_title": sr.issue_title or "",
+        "description": sr.description or "",
+        "customer_name": sr.customer_name or "",
+        "phone": sr.phone or "",
+        "created_at": created_at_str,
         "preferred_date": str(sr.preferred_date) if sr.preferred_date else "",
         "preferred_time": sr.preferred_time or "",
-        "total_amount": float(sr.total_amount),
+        "total_amount": total_amt,
+        "payment_method": sr.payment_method or "COD",
+        "payment_status": sr.payment_status or "pending",
+        "cart_data": sr.cart_data or [],
         "vendor": vendor_data,
         "service_location": {
-            "address": sr.address,
+            "address": sr.address or "",
             "latitude": dest_lat,
             "longitude": dest_lng,
         },
         "destination": {
-            "address": sr.address,
+            "address": sr.address or "",
             "latitude": dest_lat,
             "longitude": dest_lng,
         },
@@ -797,11 +789,15 @@ class CustomerBookingLiveLocationView(APIView):
         is_admin_user = bool(request.user and request.user.is_authenticated and is_admin_role(request.user))
         is_owner = bool(request.user and request.user.is_authenticated and sr.customer_id and sr.customer_id == request.user.id)
 
-        # If a token was provided but did not match -> Deny immediately
+        # If a token was provided but did not match -> Deny immediately (403)
         if provided_token and not token_matches and not is_admin_user:
             return _error("Invalid tracking token.", 403)
 
-        # If no valid token and not authenticated owner/admin -> Deny
+        # If user is authenticated as customer but does not own this booking -> Deny (403)
+        if request.user and request.user.is_authenticated and not (is_owner or is_admin_user or token_matches):
+            return _error("You are not authorized to track this booking.", 403)
+
+        # If no valid token and unauthenticated -> Deny (401)
         if not (token_matches or is_admin_user or is_owner):
             return _error("Valid tracking token or authentication required.", 401)
 
@@ -863,6 +859,20 @@ class FeedbackTokenView(APIView):
 
         with transaction.atomic():
             serializer.save(is_submitted=True, submitted_at=timezone.now())
+
+        # Notify Workforce of technician feedback rating
+        try:
+            from workforce_integration.services import WorkforceIntegrationService
+            sr = fb.service_request
+            tech_id = getattr(sr, "workforce_job_id", "") or str(sr.id)
+            WorkforceIntegrationService.send_technician_feedback(
+                service_request=sr,
+                technician_id=tech_id,
+                rating=float(fb.rating or 5),
+                comments=fb.comment or ""
+            )
+        except Exception as wf_err:
+            logger.info(f"Workforce feedback push notice: {wf_err}")
 
         return _success(message="Thank you! Your feedback has been recorded.")
 
@@ -1005,7 +1015,6 @@ class AdminSRAssignView(APIView):
             if request.data.get("location_name") or request.data.get("technician_location_name"):
                 sr.technician_location_name = request.data.get("location_name") or request.data.get("technician_location_name")
 
-            sr.technician_last_seen_at = timezone.now()
             sr.save()
             WorkforceIntegrationService.dispatch_job(sr, notes=notes)
 
@@ -1040,6 +1049,15 @@ class AdminSRUpdateTechnicianLocationView(APIView):
         return self._handle(request, pk or identifier)
 
     def _handle(self, request, pk):
+        # Require staff/admin authentication or workforce webhook secret header
+        is_staff_or_admin = (
+            request.user and request.user.is_authenticated and (getattr(request.user, "is_staff", False) or getattr(request.user, "role", "") in ["admin", "staff", "manager"])
+        )
+        from workforce_integration.views import _verify_webhook_signature
+        has_wf_secret = _verify_webhook_signature(request)
+        if not is_staff_or_admin and not has_wf_secret:
+            return _error("Only authorized staff or workforce services can update technician location.", 403)
+
         try:
             if str(pk).isdigit():
                 sr = ServiceRequest.objects.get(pk=int(pk))
@@ -1065,7 +1083,6 @@ class AdminSRUpdateTechnicianLocationView(APIView):
         if "status" in request.data and request.data.get("status") in dict(ServiceRequest.Status.choices):
             sr.status = request.data.get("status")
 
-        sr.technician_last_seen_at = timezone.now()
         sr.save()
 
         # Broadcast live tracking update via WebSockets
@@ -1130,7 +1147,7 @@ class AdminSRReworkView(APIView):
         except ServiceRequest.DoesNotExist:
             return _error("Not found.", 404)
 
-        apply_transition(sr, ServiceRequest.Status.REWORK_REQUIRED, actor=request.user)
+        apply_transition(sr, ServiceRequest.Status.REWORK_REQUESTED, actor=request.user)
         sr.save(update_fields=["status", "updated_at"])
         return _success(
             data=ServiceRequestDetailSerializer(sr, context={"request": request}).data,
@@ -1296,6 +1313,18 @@ class CustomerWorkExtensionDecideView(APIView):
         except Exception as e:
             return _error(str(e), 400)
 
+        # Notify Workforce of customer extension approval/rejection
+        try:
+            from workforce_integration.services import WorkforceIntegrationService
+            WorkforceIntegrationService.notify_extension_decision(
+                service_request=updated_ext.service_request,
+                extension_id=updated_ext.id,
+                decision="accepted" if str(decision).upper() == "ACCEPT" else "declined",
+                notes=notes,
+            )
+        except Exception as wf_e:
+            logger.info(f"Workforce extension decision notice: {wf_e}")
+
         return _success(data=WorkExtensionSerializer(updated_ext).data, message="Decision recorded successfully.")
 
 
@@ -1418,11 +1447,21 @@ class CustomerActiveBookingsListView(APIView):
 
     def get(self, request):
         user_email = (getattr(request.user, 'email', '') or '').strip()
+        raw_phone = (getattr(request.user, 'phone', None) or '').strip()
+        clean_phone = raw_phone[-10:] if len(raw_phone) >= 10 else raw_phone
+
         query = Q(customer=request.user)
         if user_email:
             query |= Q(email__iexact=user_email)
+        if clean_phone:
+            query |= (
+                Q(phone__endswith=clean_phone)
+                | Q(phone=clean_phone)
+                | Q(phone=raw_phone)
+                | Q(phone=f"+91{clean_phone}")
+            )
 
-        allowed_statuses = ["new_request", "waiting_for_payment", "confirmed", "reviewed", "assigned", "accepted", "on_the_way"]
+        allowed_statuses = ["new_request", "waiting_for_payment", "confirmed", "reviewed", "assigned", "accepted", "on_the_way", "arrived", "in_progress", "proof_submitted", "unassigned"]
         qs = ServiceRequest.objects.filter(query, status__in=allowed_statuses).order_by("-id").distinct()
         return _standard_response(success=True, data=ServiceRequestListSerializer(qs, many=True, context={"request": request}).data)
 
@@ -1514,10 +1553,25 @@ class CustomerEligibleBookingsListView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsCustomer]
 
     def get(self, request):
+        user_email = (getattr(request.user, 'email', '') or '').strip()
+        raw_phone = (getattr(request.user, 'phone', None) or '').strip()
+        clean_phone = raw_phone[-10:] if len(raw_phone) >= 10 else raw_phone
+
+        query = Q(customer=request.user)
+        if user_email:
+            query |= Q(email__iexact=user_email)
+        if clean_phone:
+            query |= (
+                Q(phone__endswith=clean_phone)
+                | Q(phone=clean_phone)
+                | Q(phone=raw_phone)
+                | Q(phone=f"+91{clean_phone}")
+            )
+
         bookings = ServiceRequest.objects.filter(
-            customer=request.user,
+            query,
             status__in=[ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]
-        ).exclude(refund_requests__isnull=False).order_by("-created_at")
+        ).exclude(refund_requests__isnull=False).order_by("-created_at").distinct()
         return _standard_response(success=True, data=ServiceRequestListSerializer(bookings, many=True, context={"request": request}).data)
 
 
@@ -2025,7 +2079,7 @@ class AdminRefundListView(AdminRefundRequestListView):
 class AdminRefundActionView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
     def post(self, request, pk, action):
-        return AdminRefundRequestReviewView().patch(request, pk)
+        return AdminRefundRequestDetailView().get(request, pk)
 
 
 class BookingVerifyStartOTPView(APIView):
@@ -2045,14 +2099,30 @@ class BookingVerifyStartOTPView(APIView):
         except ServiceRequest.DoesNotExist:
             return _error("Booking not found.", 404)
 
+        if getattr(sr, "otp_attempt_count", 0) >= 5:
+            return _error("Verification locked due to 5 failed attempts. Please contact support.", 429)
+
+        # Check OTP expiration
+        if getattr(sr, "otp_expires_at", None) and timezone.now() > sr.otp_expires_at:
+            return _error("Verification code has expired. Please request a new code.", 400)
+
         entered_otp = str(request.data.get("otp") or request.data.get("code") or request.data.get("start_otp") or "").strip()
         if not entered_otp:
             return _error("Please enter the 6-digit customer verification code.", 400)
 
+        # Check if already verified
+        if getattr(sr, "otp_verified", False):
+            return _error("Verification code has already been used.", 400)
+
         if str(entered_otp) == str(sr.start_otp):
             sr.otp_verified = True
+            sr.otp_verified_at = timezone.now()
             sr.status = "in_progress"
-            sr.save(update_fields=["otp_verified", "status", "updated_at"])
+            try:
+                sr.save(update_fields=["otp_verified", "otp_verified_at", "status", "updated_at"])
+            except Exception as save_err:
+                logger.error(f"[OTP Verify] Error saving SR: {save_err}", exc_info=True)
+                sr.save()
 
             try:
                 from .notifications import broadcast_tracking_event
@@ -2071,4 +2141,6 @@ class BookingVerifyStartOTPView(APIView):
                 }
             )
         else:
+            sr.otp_attempt_count = getattr(sr, "otp_attempt_count", 0) + 1
+            sr.save(update_fields=["otp_attempt_count"])
             return _error("Invalid verification code. Please check the code displayed on customer screen.", 400)

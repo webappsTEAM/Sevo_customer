@@ -13,7 +13,7 @@ import {
   FileText, CheckCheck, Phone as PhoneIcon, ShoppingCart,
   CreditCard, Wallet, Tag as TagIcon, Bell, LifeBuoy, LogOut, Ticket,
   Calculator, PaintRoller, Smartphone, MoreVertical, Truck, Copy, Radio,
-  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2
+  ShieldAlert, Ban, AlertTriangle, ShoppingBag, Paperclip, Send, Trash2, Wrench
 } from "lucide-react"
 import {
   apiFetchCustomerBookings, apiLogout, apiCustomerGoogleLogin, extractAuthError,
@@ -446,6 +446,9 @@ export function AddAddressSearchModal({
   const [isGeoLoading, setIsGeoLoading] = useState(false)
   const [geoError, setGeoError] = useState("")
   const [savedAddrs, setSavedAddrs] = useState(initialSaved)
+  // Service zone availability gate
+  const [zoneCheckResult, setZoneCheckResult] = useState(null) // null | { in_zone, zone, message }
+  const [zoneChecking, setZoneChecking] = useState(false)
 
   // Auto fetch saved addresses on mount if logged in
   useEffect(() => {
@@ -524,6 +527,30 @@ export function AddAddressSearchModal({
     return () => clearTimeout(delayDebounce)
   }, [query])
 
+  // ── Shared zone check helper ─────────────────────────────────────────────
+  // Called for ALL location selection methods (GPS, saved address, map-picker,
+  // search result with known coords). Returns true if booking may proceed.
+  // Backend remains the authoritative gate — this is UX-layer feedback only.
+  const checkZoneForCoords = async (lat, lng) => {
+    if (lat == null || lng == null) return true  // No coords → let backend decide
+    try {
+      setZoneChecking(true)
+      const zoneRes = await apiRequest("/settings/service-zones/check/", {
+        method: "POST",
+        json: { lat, lng },
+      })
+      setZoneCheckResult(zoneRes)
+      return zoneRes?.in_zone !== false  // false means blocked; null/true → allow
+    } catch {
+      // Network error / endpoint down → allow (open access fallback)
+      setZoneCheckResult({ in_zone: true, zone: null, open_access: true, message: "Zone check unavailable." })
+      return true
+    } finally {
+      setZoneChecking(false)
+    }
+  }
+  // ── End zone check helper ────────────────────────────────────────────────
+
   const handleUseCurrentLocationClick = () => {
     if (!navigator.geolocation) {
       setGeoError("Geolocation is not supported by your browser.")
@@ -531,6 +558,7 @@ export function AddAddressSearchModal({
     }
     setIsGeoLoading(true)
     setGeoError("")
+    setZoneCheckResult(null)
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
@@ -539,6 +567,28 @@ export function AddAddressSearchModal({
         const acc = pos.coords.accuracy
 
         try {
+          // ── Step 1: Check service zone availability ─────────────────
+          try {
+            setZoneChecking(true)
+            const zoneRes = await apiRequest("/settings/service-zones/check/", {
+              method: "POST",
+              json: { lat, lng },
+            })
+            setZoneCheckResult(zoneRes)
+            if (zoneRes && zoneRes.in_zone === false) {
+              // Customer is outside all service zones — block booking
+              setIsGeoLoading(false)
+              setZoneChecking(false)
+              return
+            }
+          } catch (zoneErr) {
+            // Zone check failed (network / no zones) → allow booking (open access)
+            setZoneCheckResult({ in_zone: true, zone: null, message: "Zone check unavailable — open access." })
+          } finally {
+            setZoneChecking(false)
+          }
+
+          // ── Step 2: Reverse-geocode the coordinates ─────────────────
           let readableLocation = ""
           try {
             const backendDetect = await apiDetectCustomerLocation(lat, lng, acc)
@@ -660,7 +710,58 @@ export function AddAddressSearchModal({
           </div>
         )}
 
-        <div className="h-px bg-slate-100 -mx-6 mb-4" />
+        {/* ── Service Zone Gate Banner ─────────────────────────────────────────── */}
+        {zoneCheckResult && zoneCheckResult.in_zone === false && (
+          <div style={{
+            marginBottom: 12,
+            borderRadius: 14,
+            background: "linear-gradient(135deg, #fff1f2, #fff7ed)",
+            border: "1.5px solid #fca5a5",
+            padding: "14px 16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <span style={{ fontSize: 18 }}>🚫</span>
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 13, color: "#991b1b" }}>Service Not Available in Your Area</div>
+                <div style={{ fontSize: 11, color: "#b91c1c", marginTop: 1 }}>We currently don't serve your location.</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: "#7f1d1d", lineHeight: 1.5, padding: "8px 10px", borderRadius: 8, background: "rgba(239,68,68,0.07)" }}>
+              📍 Your GPS location is outside our current service zones. Please try a different address or check back later as we expand.
+            </div>
+            <button
+              onClick={() => { setZoneCheckResult(null); setGeoError("") }}
+              style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 700, color: "#4F46E5", background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 2 }}
+            >
+              ↩ Try a different location
+            </button>
+          </div>
+        )}
+
+        {/* ── Zone Available Confirmation Badge ────────────────────────── */}
+        {zoneCheckResult && zoneCheckResult.in_zone === true && zoneCheckResult.zone && (
+          <div style={{
+            marginBottom: 10,
+            padding: "8px 12px",
+            borderRadius: 10,
+            background: "#ecfdf5",
+            border: "1px solid #a7f3d0",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 11,
+            fontWeight: 700,
+            color: "#065f46",
+          }}>
+            <span style={{ fontSize: 14 }}>✅</span>
+            Service available in <strong style={{ color: "#047857" }}>{zoneCheckResult.zone.name}</strong>
+          </div>
+        )}
 
         {/* Content Body: Search Results OR (Saved + Recents) */}
         <div className="flex-1 overflow-y-auto space-y-5 pr-1 text-slate-800">
@@ -679,7 +780,14 @@ export function AddAddressSearchModal({
                   {searchResults.map((item, idx) => (
                     <div
                       key={idx}
-                      onClick={() => { saveToRecents(item.title, item.details); onSelectLocation(item.details) }}
+                      onClick={async () => {
+                        if (item.lat != null && item.lon != null) {
+                          const ok = await checkZoneForCoords(item.lat, item.lon)
+                          if (!ok) return
+                        }
+                        saveToRecents(item.title, item.details)
+                        onSelectLocation(item.details, (item.lat != null && item.lon != null) ? { lat: item.lat, lng: item.lon } : undefined)
+                      }}
                       className="py-3 flex items-start gap-3 cursor-pointer hover:bg-slate-50 rounded-xl px-2 transition-colors"
                     >
                       <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
@@ -708,7 +816,13 @@ export function AddAddressSearchModal({
                       return (
                         <div
                           key={addr.id || idx}
-                          onClick={() => onSelectLocation(displayAddr, { lat: addr.latitude, lng: addr.longitude })}
+                          onClick={async () => {
+                            if (addr.latitude != null && addr.longitude != null) {
+                              const ok = await checkZoneForCoords(addr.latitude, addr.longitude)
+                              if (!ok) return
+                            }
+                            onSelectLocation(displayAddr, { lat: addr.latitude, lng: addr.longitude })
+                          }}
                           className="flex items-start gap-3 cursor-pointer group p-2 hover:bg-slate-50 rounded-2xl transition-colors"
                         >
                           <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 mt-0.5 group-hover:border-purple-300 group-hover:bg-purple-50/50 transition-colors">
@@ -784,13 +898,19 @@ export function AddAddressSearchModal({
           <LocationPermissionHandler
             onClose={() => setShowMapPicker(false)}
             onManualSearch={() => setShowMapPicker(false)}
-            onLocationConfirmed={(addressData) => {
-              setShowMapPicker(false)
+            onLocationConfirmed={async (addressData) => {
               const locStr = typeof addressData === "string"
                 ? addressData
                 : addressData?.formatted_address || [addressData?.flat_house_no, addressData?.locality, addressData?.city].filter(Boolean).join(", ")
+              const lat = addressData?.latitude
+              const lng = addressData?.longitude
+              if (lat != null && lng != null) {
+                const ok = await checkZoneForCoords(lat, lng)
+                if (!ok) return
+              }
+              setShowMapPicker(false)
               if (typeof onSelectLocation === "function") {
-                onSelectLocation(locStr || addressData, { lat: addressData?.latitude, lng: addressData?.longitude })
+                onSelectLocation(locStr || addressData, { lat, lng })
               }
               onClose()
             }}
@@ -2447,7 +2567,6 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
                 </motion.div>
                 <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#0f172a', marginBottom: 6 }}>Payment Successful! 🎉</div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem' }}>Your booking is now confirmed</div>
-                <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '0.75rem 1rem', fontSize: '0.78rem', color: '#166534', fontWeight: 600 }}>✅ Amount {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()} debited successfully</div>
               </div>
             )}
             {payPhase === 'failed' && (
@@ -2476,12 +2595,10 @@ function PaymentModal({ total, allowedMethods = ['cash', 'online'], onClose, onC
                   style={{ width: '100%', padding: '1rem', background: upiId ? 'linear-gradient(135deg,#7C3AED,#4F46E5)' : '#e2e8f0', color: upiId ? 'white' : '#94a3b8', fontWeight: 800, fontSize: '0.95rem', border: 'none', borderRadius: 14, cursor: upiId ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <Lock size={15} /> Pay {BOOKING_CURRENCY_SYMBOL}{total.toLocaleString()}
                 </button>
+                <div style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  <Shield size={11} /> 256-bit SSL · UPI Encryption
+                </div>
               </>
-            )}
-            {payPhase === null && (
-              <div style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.68rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                <Shield size={11} /> 256-bit SSL · UPI Encryption
-              </div>
             )}
           </div>
         </motion.div>
@@ -2600,29 +2717,144 @@ function PostBookingFlow({ bookingData, onDone }) {
   )
 }
 
+export function RunningServiceManRadar() {
+  return (
+    <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      
+      {/* Simple Soft Outer Pulse Ring */}
+      <motion.div
+        animate={{ scale: [1, 1.35, 1], opacity: [0.4, 0.15, 0.4] }}
+        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+        style={{
+          position: 'absolute',
+          width: 125,
+          height: 125,
+          borderRadius: '50%',
+          background: 'rgba(124, 58, 237, 0.12)',
+          border: '1.5px solid rgba(124, 58, 237, 0.25)',
+        }}
+      />
+
+      {/* Main Clean Upright Central Circle */}
+      <div
+        style={{
+          position: 'relative',
+          width: 88,
+          height: 88,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 8px 24px rgba(99, 102, 241, 0.35)',
+          border: '3px solid white',
+          zIndex: 2,
+        }}
+      >
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <User size={42} strokeWidth={2.2} color="white" />
+          <div style={{ position: 'absolute', bottom: -2, right: -4, background: '#F59E0B', borderRadius: '50%', padding: 4, border: '2px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Wrench size={14} color="white" strokeWidth={2.5} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    RAPIDO-STYLE LIVE TRACKING PAGE (Real-Time WebSockets & Database Dispatch)
    ───────────────────────────────────────────────────────────────────────────── */
 
 function LiveTrackingPage({ successData, category, cart, formData, selDate, selTime, onBookAgain }) {
-  const rid = successData?.request_id || successData?.id || "SR-0001"
+  const rid = successData?.request_id || (successData?.id ? `SR-${successData.id}` : "")
   const [liveData, setLiveData] = useState(null)
-  const [searchSeconds, setSearchSeconds] = useState(0)
   const [showMapModal, setShowMapModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
 
-  const totalPrice = cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const rawDate = selDate || liveData?.preferred_date || ""
-  const displayDate = rawDate ? new Date(rawDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : ""
-  const rawTime = selTime || liveData?.preferred_time || ""
-  const displayTime = rawTime ? (TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === rawTime)?.l || rawTime) : ""
-
-  // Timer counter for searching state
+  // Real-Time status polling
   useEffect(() => {
-    const t = setInterval(() => setSearchSeconds(s => s + 1), 1000)
+    if (!rid) return
+    let pollTimer = null
+    let isMounted = true
+
+    const fetchStatus = async () => {
+      try {
+        const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
+        const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
+        if (res?.data && isMounted) {
+          setLiveData(res.data)
+        }
+      } catch (e) { }
+    }
+
+    fetchStatus()
+    pollTimer = setInterval(fetchStatus, 4000)
+
+    return () => {
+      isMounted = false
+      if (pollTimer) clearInterval(pollTimer)
+    }
+  }, [rid, successData?.tracking_token])
+
+  // Persistent creation timestamp for timer across refreshes
+  const createdAtMs = useMemo(() => {
+    const fromBackend = liveData?.created_at || successData?.created_at || successData?.submitted_at
+    if (fromBackend) {
+      const parsed = new Date(fromBackend).getTime()
+      if (!isNaN(parsed) && parsed > 0) return parsed
+    }
+    const key = `calservice_created_time_${rid}`
+    try {
+      const stored = sessionStorage.getItem(key)
+      if (stored) return Number(stored)
+      const now = Date.now()
+      sessionStorage.setItem(key, String(now))
+      return now
+    } catch (_) {
+      return Date.now()
+    }
+  }, [liveData?.created_at, successData?.created_at, successData?.submitted_at, rid])
+
+  const [searchSeconds, setSearchSeconds] = useState(() => Math.max(0, Math.floor((Date.now() - createdAtMs) / 1000)))
+
+  // Synchronize elapsed search timer every second
+  useEffect(() => {
+    const updateTimer = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - createdAtMs) / 1000))
+      setSearchSeconds(elapsed)
+    }
+    updateTimer()
+    const t = setInterval(updateTimer, 1000)
     return () => clearInterval(t)
-  }, [])
+  }, [createdAtMs])
+
+  const formatTimer = (sec) => {
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+  }
+
+  // Combined data for complete service & booking view
+  const displayCart = useMemo(() => {
+    if (Array.isArray(liveData?.cart_data) && liveData.cart_data.length > 0) return liveData.cart_data
+    if (Array.isArray(successData?.cart_data) && successData.cart_data.length > 0) return successData.cart_data
+    if (Array.isArray(cart) && cart.length > 0) return cart
+    return []
+  }, [liveData?.cart_data, successData?.cart_data, cart])
+
+  const displayTotal = liveData?.total_amount || successData?.total_amount || (displayCart.length > 0 ? displayCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0) : (cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0))
+  const displayAddress = liveData?.destination?.address || liveData?.service_location?.address || successData?.address || formData?.address || "Service Location Address"
+  const customerName = liveData?.customer_name || successData?.customer_name || formData?.customer_name || "Valued Customer"
+  const customerPhone = liveData?.phone || successData?.phone || formData?.phone || ""
+  const paymentMethod = (liveData?.payment_method || successData?.payment_method || "COD").toUpperCase()
+  const paymentStatusText = liveData?.payment_status || successData?.payment_status || (paymentMethod === "ONLINE" ? "Paid" : "Cash on Service")
+
+  const rawDate = selDate || liveData?.preferred_date || successData?.preferred_date || ""
+  const displayDate = rawDate ? new Date(rawDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : ""
+  const rawTime = selTime || liveData?.preferred_time || successData?.preferred_time || ""
+  const displayTime = rawTime ? (TIME_SLOTS.flatMap(g => g.slots).find(s => s.t === rawTime)?.l || rawTime) : ""
 
   // Real-Time WebSocket Connection + Resilient 3s Polling Backup
   useEffect(() => {
@@ -2651,17 +2883,17 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     }
   }, [rid, successData?.tracking_token])
 
-  const empInfo = liveData?.technician || successData?.technician || liveData?.assigned_employee
-  const techName = empInfo?.name || liveData?.technician_name || successData?.technician_name || (liveData?.is_accepted ? "Assigned Partner" : "")
-  const techPhone = empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || ""
-  const techPhoto = empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null
-  const techRating = empInfo?.rating || liveData?.technician_rating || successData?.technician_rating || null
-  const techJobs = empInfo?.jobs_completed || empInfo?.total_jobs || null
-
   const isAccepted = Boolean(
     liveData?.is_accepted ||
-    (techName && ["assigned", "accepted", "in_progress", "on_the_way", "arrived", "completed"].includes(liveData?.status))
+    (["accepted", "in_progress", "on_the_way", "arrived", "completed"].includes(liveData?.status) && (liveData?.technician?.name || liveData?.technician_name))
   )
+  const empInfo = isAccepted ? (liveData?.technician || successData?.technician || liveData?.assigned_employee) : null
+  const techName = isAccepted ? (empInfo?.name || liveData?.technician_name || successData?.technician_name || "") : ""
+  const techPhone = isAccepted ? (empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || "") : ""
+  const techPhoto = isAccepted ? (empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null) : null
+  const techRating = isAccepted ? (empInfo?.rating || liveData?.technician_rating || successData?.technician_rating || null) : null
+  const techJobs = isAccepted ? (empInfo?.jobs_completed || empInfo?.total_jobs || null) : null
+
   const isCancelled = liveData?.status === "cancelled"
   const cancellationReason = liveData?.cancellation_reason || (liveData?.description && liveData.description.includes("[Cancellation Reason]:") ? liveData.description.split("[Cancellation Reason]:")[1].trim() : "")
   const graceSecs = liveData?.cancellation_grace_remaining_seconds ?? (isAccepted ? 300 : 9999)
@@ -2766,36 +2998,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       {!isAccepted ? (
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
 
-          {/* Rapido Pulse Radar Animation */}
-          <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <motion.div
-              animate={{ scale: [1, 1.8, 2.4], opacity: [0.6, 0.25, 0] }}
-              transition={{ repeat: Infinity, duration: 2.4, ease: "easeOut" }}
-              style={{ position: 'absolute', width: 120, height: 120, borderRadius: '50%', background: 'rgba(124, 58, 237, 0.25)' }}
-            />
-            <motion.div
-              animate={{ scale: [1, 1.6, 2.1], opacity: [0.7, 0.35, 0] }}
-              transition={{ repeat: Infinity, duration: 2.4, delay: 0.8, ease: "easeOut" }}
-              style={{ position: 'absolute', width: 100, height: 100, borderRadius: '50%', background: 'rgba(245, 158, 11, 0.3)' }}
-            />
-            <motion.div
-              animate={{ scale: [1, 1.06, 1] }}
-              transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-              style={{
-                width: 76,
-                height: 76,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #7C3AED, #F59E0B)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 8px 25px rgba(124, 58, 237, 0.45)',
-                zIndex: 2,
-              }}
-            >
-              <Radio size={36} color="white" className="animate-pulse" />
-            </motion.div>
-          </div>
+          {/* Animated Running Service Professional Radar */}
+          <RunningServiceManRadar />
 
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f5f3ff', border: '1px solid rgba(124, 58, 237, 0.25)', borderRadius: 99, padding: '4px 14px', marginBottom: 10 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7C3AED' }} className="animate-ping" />
@@ -2814,7 +3018,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
           {/* Live search elapsed counter */}
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: '#475569', fontWeight: 700 }}>
             <Clock size={14} color="#7C3AED" />
-            <span>Searching for: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '0.88rem' }}>00:{searchSeconds.toString().padStart(2, '0')}</strong></span>
+            <span>Searching for: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '0.88rem' }}>{formatTimer(searchSeconds)}</strong></span>
             <span style={{ color: '#94a3b8' }}>•</span>
             <span style={{ color: '#10b981' }}>⚡ Verified partner pool notified</span>
           </div>
@@ -3121,36 +3325,105 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         </div>
       )}
 
-      {/* ─────────────────── REAL BOOKING DETAILS (100% ACCURATE IN ₹) ─────────────────── */}
+      {/* ─────────────────── REAL BOOKING & SERVICE DETAILS (100% ACCURATE IN ₹) ─────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         style={{
           background: 'white',
           borderRadius: 20,
-          padding: '1.2rem',
+          padding: '1.25rem',
           marginBottom: '1rem',
           boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
           border: '1px solid #e2e8f0',
         }}
       >
-        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-          📋 Booking Details
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.9rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.6rem' }}>
+          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>📋</span> Booking &amp; Service Details
+          </div>
+          <span style={{ fontSize: '0.72rem', fontWeight: 800, background: '#f1f5f9', color: '#475569', padding: '3px 9px', borderRadius: 8, fontFamily: 'monospace' }}>
+            #{rid}
+          </span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', fontSize: '0.8rem' }}>
-          {[
-            { label: 'Booking Ref', value: `#${rid}` },
-            { label: 'Service', value: category?.name || 'Home Service' },
-            { label: 'Date', value: displayDate },
-            { label: 'Time', value: displayTime },
-            { label: 'Address', value: liveData?.destination?.address || formData?.address, span: true },
-            { label: 'Total Amount', value: `₹${totalPrice || liveData?.total_amount || 0}`, highlight: true },
-          ].map((r, i) => (
-            <div key={i} style={{ ...(r.span ? { gridColumn: '1/-1' } : {}), background: '#f8fafc', borderRadius: 10, padding: '0.5rem 0.75rem' }}>
-              <div style={{ color: '#94a3b8', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase' }}>{r.label}</div>
-              <div style={{ fontWeight: 700, color: r.highlight ? '#7C3AED' : '#0f172a', marginTop: 2, wordBreak: 'break-word' }}>{r.value || '—'}</div>
+
+        {/* Customer & Address Details */}
+        <div style={{ background: '#f8fafc', borderRadius: 12, padding: '0.75rem 0.9rem', marginBottom: '0.9rem', border: '1px solid #f1f5f9' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.6rem' }}>
+            <div>
+              <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Customer</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', marginTop: 1 }}>{customerName}</div>
             </div>
-          ))}
+            <div>
+              <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Phone</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', marginTop: 1 }}>{customerPhone || '—'}</div>
+            </div>
+          </div>
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.5rem' }}>
+            <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <MapPin size={11} color="#6366f1" /> Service Address
+            </div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e293b', marginTop: 2, lineHeight: 1.35, wordBreak: 'break-word' }}>
+              {displayAddress}
+            </div>
+          </div>
+        </div>
+
+        {/* Schedule Info Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginBottom: '0.9rem' }}>
+          <div style={{ background: '#f8fafc', borderRadius: 10, padding: '0.6rem 0.75rem', border: '1px solid #f1f5f9' }}>
+            <div style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Calendar size={11} color="#7C3AED" /> Scheduled Date
+            </div>
+            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.82rem', marginTop: 2 }}>{displayDate || 'As scheduled'}</div>
+          </div>
+          <div style={{ background: '#f8fafc', borderRadius: 10, padding: '0.6rem 0.75rem', border: '1px solid #f1f5f9' }}>
+            <div style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Clock size={11} color="#7C3AED" /> Time Slot
+            </div>
+            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.82rem', marginTop: 2 }}>{displayTime || 'Standard Slot'}</div>
+          </div>
+        </div>
+
+        {/* Itemized Service Breakdown */}
+        {displayCart.length > 0 && (
+          <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.75rem 0.9rem', background: '#fafafa', marginBottom: '0.9rem' }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>
+              Services Included ({displayCart.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {displayCart.map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                  <div style={{ color: '#334155', fontWeight: 700, flex: 1, minWidth: 0, paddingRight: 8 }}>
+                    {item.name || item.displayName || 'Service item'}
+                    {(item.quantity || 1) > 1 && <span style={{ color: '#64748b', fontSize: '0.75rem', marginLeft: 4 }}>× {item.quantity}</span>}
+                  </div>
+                  <div style={{ fontWeight: 800, color: '#0f172a', flexShrink: 0 }}>
+                    ₹{((Number(item.price) || 0) * (Number(item.quantity) || 1)).toLocaleString("en-IN")}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Total Amount & Payment Method Footer */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f3ff', border: '1px solid #7C3AED25', borderRadius: 12, padding: '0.75rem 0.95rem' }}>
+          <div>
+            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Payment Mode</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#4c1d95', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {paymentMethod === "ONLINE" ? "💳 Online Payment" : "💵 Cash on Service (COD)"}
+              <span style={{ fontSize: '0.68rem', fontWeight: 800, background: paymentMethod === "ONLINE" ? "#dcfce7" : "#fef3c7", color: paymentMethod === "ONLINE" ? "#15803d" : "#b45309", padding: "1px 6px", borderRadius: 6, marginLeft: 4 }}>
+                {paymentStatusText}
+              </span>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Amount</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#6D28D9' }}>
+              ₹{Number(displayTotal).toLocaleString("en-IN")}
+            </div>
+          </div>
         </div>
       </motion.div>
 
@@ -4291,10 +4564,6 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
     { id: "Help & Support", icon: LifeBuoy },
   ]
 
-  const mockBookings = [
-    { id: "BK482910", service: "AC Servicing", date: "Aug 15, 2026", status: "Completed", amount: BOOKING_CURRENCY_SYMBOL + "899" },
-    { id: "BK483122", service: "Deep Cleaning", date: "Sep 02, 2026", status: "Upcoming", amount: BOOKING_CURRENCY_SYMBOL + "2,499" },
-  ]
   const renderBookedSubmodulesSummary = (b) => {
     if (!b) return null;
     let parsedCart = [];
@@ -4443,15 +4712,11 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : b.payment_status === 'collected' ? 'Collected' : 'Pending')}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                          {['confirmed', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status) && (
+                          {Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                if (b.tracking_token) {
-                                  window.open(`/track/${encodeURIComponent(b.request_id || b.id)}?token=${encodeURIComponent(b.tracking_token)}`, '_blank')
-                                } else {
-                                  window.open(`/track/${encodeURIComponent(b.request_id || b.id)}`, '_blank')
-                                }
+                                setTrackingBooking(b)
                               }}
                               style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #FC8019, #f97316)', fontWeight: 800, cursor: 'pointer', color: 'white', boxShadow: '0 2px 8px rgba(252,128,25,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'transform 0.15s' }}
                               onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
@@ -4524,8 +4789,10 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           <div>
                             <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Assigned Technician</div>
                             <div style={{ fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              👤 {(b.technician?.name || b.technician_name || b.assigned_employee?.full_name || (['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) ? 'Service Partner' : 'Not assigned yet'))}
-                              {['assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (
+                              👤 {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name)
+                                ? (b.technician?.name || b.technician_name)
+                                : (b.status === 'assigned' ? 'Finding service professional...' : 'Not assigned yet')}
+                              {['accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'].includes(b.status) && (b.technician?.name || b.technician_name) && (
                                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 6, border: '1px solid #a7f3d0' }}>✓ Verified Partner</span>
                               )}
                             </div>
@@ -4630,7 +4897,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               ? Object.keys(b.available_actions).filter(k => b.available_actions[k]).map(k => k.replace(/^can_/, ''))
                               : [
                                   b.payment_status === 'FAILED' ? 'retry_payment' : null,
-                                  ['confirmed', 'assigned', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status) ? 'track' : null,
+                                  Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status)) ? 'track' : null,
                                   ['pending', 'confirmed'].includes(b.status) ? 'reschedule' : null,
                                   'view_invoice',
                                   b.refund_status ? 'refund_status' : null,
@@ -4657,17 +4924,15 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                   <RefreshCw size={14} /> Retry Payment
                                 </button>
                               )
-                              if (cleanAct === "track") return (
-                                <button key={act} onClick={() => {
-                                  if (b.tracking_token) {
-                                    window.open(`/track/${encodeURIComponent(b.request_id || b.id)}?token=${encodeURIComponent(b.tracking_token)}`, '_blank')
-                                  } else {
-                                    window.open(`/track/${encodeURIComponent(b.request_id || b.id)}`, '_blank')
-                                  }
-                                }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}>
-                                  <MapPin size={14} /> Track Live
-                                </button>
-                              )
+                              if (cleanAct === "track") {
+                                const isAcceptedJob = Boolean(b.is_accepted || ['accepted', 'on_the_way', 'arrived', 'in_progress', 'started', 'dispatched'].includes(b.status))
+                                if (!isAcceptedJob) return null
+                                return (
+                                  <button key={act} onClick={() => setTrackingBooking(b)} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'linear-gradient(135deg, #FC8019, #f97316)', color: 'white', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 2px 8px rgba(252, 128, 25, 0.3)' }}>
+                                    <MapPin size={14} /> Track Live
+                                  </button>
+                                )
+                              }
                               if (cleanAct === "reschedule") return (
                                 <button key={act} onClick={() => { setActiveTab("My Reschedules"); setSelectedBooking(b); setShowRescheduleForm(true); }} style={{ flex: 1, minWidth: 140, padding: '9px 14px', background: 'white', border: '1px solid #cbd5e1', borderRadius: 10, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                   <Calendar size={14} /> Reschedule

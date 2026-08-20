@@ -1,4 +1,4 @@
-﻿"""
+"""
 service_requests/tests/test_live_tracking_security.py
 
 Comprehensive security and data authorization unit tests for customer live technician tracking:
@@ -56,7 +56,7 @@ class LiveTrackingSecurityTests(TestCase):
             latitude=Decimal("12.740900"),
             longitude=Decimal("77.825300"),
             preferred_date=timezone.localdate(),
-            status=ServiceRequest.Status.ASSIGNED,
+            status=ServiceRequest.Status.ACCEPTED,
             technician_name="Ramesh Kumar",
             technician_phone="9840123456",
             total_amount=Decimal("499.00"),
@@ -106,6 +106,22 @@ class LiveTrackingSecurityTests(TestCase):
         self.assertEqual(data.get("technician", {}).get("phone"), "9840123456")
         self.assertEqual(data.get("technician", {}).get("name"), "Ramesh Kumar")
         self.assertEqual(data.get("technician", {}).get("eta_minutes"), 8)
+
+    def test_assigned_status_strictly_hides_technician_and_otp(self):
+        self.booking_a.status = ServiceRequest.Status.ASSIGNED
+        self.booking_a.save()
+
+        url = f"/api/booking/{self.booking_a.request_id}/live-location/?token={self.booking_a.tracking_token}"
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json().get("data", {})
+        self.assertFalse(data.get("is_accepted"))
+        self.assertFalse(data.get("technician_accepted"))
+        self.assertTrue(data.get("technician_assigned"))
+        self.assertIsNone(data.get("technician"))
+        self.assertIsNone(data.get("technician_location"))
+        self.assertIsNone(data.get("start_otp"))
 
     def test_invalid_tracking_token_returns_403_forbidden(self):
         fake_token = uuid.uuid4()

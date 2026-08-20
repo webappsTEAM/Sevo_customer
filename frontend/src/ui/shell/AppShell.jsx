@@ -107,8 +107,6 @@ const ADMIN_NAV_ITEMS = [
       { label: "My Profile", to: "/settings?section=profile", icon: <User size={16} />, color: "#3B82F6" },
       { label: "Security", to: "/settings?section=security", icon: <Shield size={16} />, color: "#10B981" },
       { label: "Appearance", to: "/settings?section=appearance", icon: <Palette size={16} />, color: "#8B5CF6" },
-      { label: "Billing & Invoices", to: "/settings?section=billing", icon: <CreditCard size={16} />, color: "#EC4899" },
-      { label: "Workspace & Team", to: "/settings?section=organization", icon: <Building2 size={16} />, color: "#06B6D4" },
     ]
   },
 ]

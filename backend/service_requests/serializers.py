@@ -277,56 +277,65 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         )
 
     def get_technician_name(self, obj):
+        # Strictly hidden before partner accepts
+        if obj.status in ["confirmed", "new_request", "assigned"]:
+            return ""
         if obj.technician_name:
             return obj.technician_name
         assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp:
-            return getattr(assigned_emp, "full_name", None) or (assigned_emp.user.get_full_name() if getattr(assigned_emp, "user", None) else None)
-        if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
-            return "Service Partner"
+        if assigned_emp and obj.status not in ["assigned", "confirmed"]:
+            return getattr(assigned_emp, "full_name", None) or (assigned_emp.user.get_full_name() if getattr(assigned_emp, "user", None) else None) or ""
         return ""
 
     def get_technician_phone(self, obj):
+        # Strictly hidden before partner accepts
+        if obj.status in ["confirmed", "new_request", "assigned"]:
+            return ""
         if obj.technician_phone:
             return obj.technician_phone
         assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and getattr(assigned_emp, "phone", None):
+        if assigned_emp and obj.status not in ["assigned", "confirmed"] and getattr(assigned_emp, "phone", None):
             return assigned_emp.phone
         return ""
 
     def get_technician_photo(self, obj):
+        # Strictly hidden before partner accepts
+        if obj.status in ["confirmed", "new_request", "assigned"]:
+            return ""
         if obj.technician_photo:
             return obj.technician_photo
         assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and getattr(assigned_emp, "photo", None):
+        if assigned_emp and obj.status not in ["assigned", "confirmed"] and getattr(assigned_emp, "photo", None):
             return assigned_emp.photo
-        if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
-            return "/mockups/service_plumbing.png"
         return ""
 
     def get_technician_rating(self, obj):
+        # Strictly hidden before partner accepts
+        if obj.status in ["confirmed", "new_request", "assigned"]:
+            return None
         if obj.technician_rating:
             return float(obj.technician_rating)
         assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and getattr(assigned_emp, "rating", None):
+        if assigned_emp and obj.status not in ["assigned", "confirmed"] and getattr(assigned_emp, "rating", None):
             return float(assigned_emp.rating)
-        if obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
-            return 4.9
         return None
 
     def get_technician(self, obj):
+        # ASSIGNED != ACCEPTED: Customer must NOT see technician profile until explicit acceptance
+        if obj.status in ["confirmed", "new_request", "assigned", "cancelled", "rejected"]:
+            return None
         name = self.get_technician_name(obj)
-        if name or obj.status in ["assigned", "accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]:
+        if name:
             return {
-                "name": name or "Service Partner",
+                "name": name,
                 "phone": self.get_technician_phone(obj) or "",
-                "photo": self.get_technician_photo(obj) or "/mockups/service_plumbing.png",
-                "rating": self.get_technician_rating(obj) or 4.9,
+                "photo": self.get_technician_photo(obj) or None,
+                "rating": self.get_technician_rating(obj),
                 "latitude": float(obj.technician_latitude) if obj.technician_latitude is not None else None,
                 "longitude": float(obj.technician_longitude) if obj.technician_longitude is not None else None,
                 "location_name": obj.technician_location_name or "",
-                "last_seen_at": obj.technician_last_seen_at.isoformat() if obj.technician_last_seen_at else None,
-                "workforce_job_id": obj.workforce_job_id or obj.external_assignment_id or f"WFJ-{obj.request_id or obj.id}",
+                "last_seen_at": obj.updated_at.isoformat() if getattr(obj, "updated_at", None) else None,
+                "workforce_job_id": obj.workforce_job_id or obj.external_assignment_id or "",
             }
         return None
 

@@ -18,20 +18,24 @@ ALLOWED_TRANSITIONS = {
     S.PENDING_PAYMENT:        {S.CONFIRMED, S.CANCELLED, S.PENDING_PAYMENT},
     S.WAITING_FOR_PAYMENT:    {S.CONFIRMED, S.REJECTED, S.CANCELLED},
     S.NEW_REQUEST:            {S.CONFIRMED, S.REVIEWED, S.ASSIGNED, S.REJECTED, S.CANCELLED, S.FEEDBACK_RECEIVED},
-    S.CONFIRMED:              {S.REVIEWED, S.ASSIGNED, S.REJECTED, S.CANCELLED, S.RESCHEDULED, S.FEEDBACK_RECEIVED},
+    S.UNASSIGNED:             {S.CONFIRMED, S.REVIEWED, S.ASSIGNED, S.ACCEPTED, S.REJECTED, S.CANCELLED, S.FEEDBACK_RECEIVED},
+    S.CONFIRMED:              {S.REVIEWED, S.ASSIGNED, S.ACCEPTED, S.REJECTED, S.CANCELLED, S.RESCHEDULED, S.FEEDBACK_RECEIVED},
     S.REVIEWED:               {S.ASSIGNED, S.REJECTED, S.CANCELLED, S.FEEDBACK_RECEIVED},
-    S.ASSIGNED:               {S.RECEIVED, S.ACCEPTED, S.REJECTED, S.CANCELLED, S.RESCHEDULED, S.FEEDBACK_RECEIVED},
-    S.RECEIVED:               {S.ACCEPTED, S.REJECTED, S.CANCELLED},
-    S.ACCEPTED:               {S.ON_THE_WAY, S.ARRIVED, S.IN_PROGRESS, S.CANCELLED, S.FEEDBACK_RECEIVED},
-    S.ON_THE_WAY:             {S.ARRIVED, S.IN_PROGRESS, S.CANCELLED, S.FEEDBACK_RECEIVED},
+    S.ASSIGNED:               {S.RECEIVED, S.ACCEPTED, S.REJECTED, S.CONFIRMED, S.CANCELLED, S.RESCHEDULED, S.FEEDBACK_RECEIVED},
+    S.RECEIVED:               {S.ACCEPTED, S.REJECTED, S.CONFIRMED, S.CANCELLED},
+    S.ACCEPTED:               {S.ON_THE_WAY, S.ARRIVED, S.IN_PROGRESS, S.CONFIRMED, S.ASSIGNED, S.CANCELLED, S.FEEDBACK_RECEIVED},
+    S.ON_THE_WAY:             {S.ARRIVED, S.IN_PROGRESS, S.CONFIRMED, S.CANCELLED, S.FEEDBACK_RECEIVED},
     S.ARRIVED:                {S.IN_PROGRESS, S.CANCELLED, S.FEEDBACK_RECEIVED},
-    S.IN_PROGRESS:            {S.COMPLETED, S.FEEDBACK_RECEIVED},
+    S.IN_PROGRESS:            {S.COMPLETED, S.PROOF_SUBMITTED, S.UNABLE_TO_COMPLETE, S.FEEDBACK_RECEIVED, S.CANCELLED},
+    S.PROOF_SUBMITTED:        {S.COMPLETED, S.AWAITING_VERIFICATION, S.VERIFIED, S.FEEDBACK_RECEIVED, S.CANCELLED},
+    S.UNABLE_TO_COMPLETE:     {S.CANCELLED, S.REWORK_REQUESTED, S.IN_PROGRESS, S.FEEDBACK_RECEIVED, S.CLOSED},
     S.COMPLETED:              {S.AWAITING_VERIFICATION, S.FEEDBACK_RECEIVED},
     S.AWAITING_VERIFICATION:  {S.VERIFIED, S.REWORK_REQUESTED, S.FEEDBACK_RECEIVED},
     S.VERIFIED:               {S.FEEDBACK_PENDING, S.FEEDBACK_RECEIVED},
     S.FEEDBACK_PENDING:       {S.FEEDBACK_RECEIVED},
     S.FEEDBACK_RECEIVED:      {S.CLOSED},
     S.REWORK_REQUESTED:       {S.IN_PROGRESS, S.FEEDBACK_RECEIVED},
+    S.FOLLOW_UP_REQUIRED:     {S.IN_PROGRESS, S.COMPLETED, S.CANCELLED, S.FEEDBACK_RECEIVED, S.CLOSED},
     S.RESCHEDULED:            {S.CONFIRMED, S.ASSIGNED, S.CANCELLED},
     # Terminal states — no further transitions
     S.CLOSED:                 set(),
@@ -78,30 +82,34 @@ def record_transition(service_request, from_status: str, to_status: str, actor=N
     """
     Creates an append-only BookingStatusEvent record to track the transition.
     """
-    from customer_analytics.models import BookingStatusEvent
-    from django.utils import timezone
-    
-    if actor is None:
-        persona = BookingStatusEvent.ActorPersona.SYSTEM
-    elif getattr(actor, "role", "") == "customer":
-        persona = BookingStatusEvent.ActorPersona.CUSTOMER
-    elif getattr(actor, "role", "") == "admin":
-        persona = BookingStatusEvent.ActorPersona.ADMIN
-    else:
-        persona = BookingStatusEvent.ActorPersona.EMPLOYEE
+    try:
+        from customer_analytics.models import BookingStatusEvent
+        from django.utils import timezone
+        
+        if actor is None:
+            persona = BookingStatusEvent.ActorPersona.SYSTEM
+        elif getattr(actor, "role", "") == "customer":
+            persona = BookingStatusEvent.ActorPersona.CUSTOMER
+        elif getattr(actor, "role", "") == "admin":
+            persona = BookingStatusEvent.ActorPersona.ADMIN
+        else:
+            persona = BookingStatusEvent.ActorPersona.EMPLOYEE
 
-    BookingStatusEvent.objects.create(
-        service_request=service_request,
-        customer=service_request.customer,
-        company=service_request.company,
-        from_status=from_status,
-        to_status=to_status,
-        actor=actor,
-        actor_persona=persona,
-        reason_code=reason_code,
-        reason_note=reason_note,
-        occurred_at=timezone.now(),
-    )
+        BookingStatusEvent.objects.create(
+            service_request=service_request,
+            customer=getattr(service_request, "customer", None),
+            company=getattr(service_request, "company", None),
+            from_status=from_status or "",
+            to_status=to_status or "",
+            actor=actor,
+            actor_persona=persona,
+            reason_code=reason_code or "",
+            reason_note=reason_note or "",
+            occurred_at=timezone.now(),
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to record BookingStatusEvent: %s", e)
 
 
 def apply_transition(service_request, new_status: str, new_payment_status: str = None, actor=None) -> None:
@@ -123,11 +131,12 @@ def apply_transition(service_request, new_status: str, new_payment_status: str =
     allowed = ALLOWED_TRANSITIONS.get(current_status, set())
 
     if new_status != current_status and new_status not in allowed:
+        allowed_display = [s.value if hasattr(s, 'value') else str(s) for s in allowed]
         raise ValidationError(
             {
                 "detail": (
                     f"Cannot move from '{current_status}' to '{new_status}'. "
-                    f"Allowed transitions: {[s.value for s in allowed] or 'none (terminal state)'}."
+                    f"Allowed transitions: {allowed_display or 'none (terminal state)'}."
                 )
             }
         )

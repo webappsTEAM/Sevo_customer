@@ -123,10 +123,12 @@ def auto_create_ticket_from_low_rating(sender, instance, created, **kwargs):
         email = customer.email if customer else ""
         phone = getattr(customer, "phone", "") if customer else ""
 
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         try:
             ticket_service.create_ticket(
                 company=company,
-                created_by=customer or booking.created_by or User.objects.first(),
+                created_by=customer or getattr(booking, "created_by", None) or User.objects.first(),
                 category="service_quality",
                 priority="high",
                 channel="portal",

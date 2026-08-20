@@ -187,6 +187,9 @@ function renderVehicleSvg(category, bearing) {
  * @param {string} options.category - Vehicle category ('bike' | 'truck' | 'van')
  * @param {number} options.bearing - Heading in degrees [0, 360)
  * @param {string} options.status - Current job status ('on_the_way', 'arrived', etc.)
+ * @param {string|null} options.techName - Technician's verified name (e.g. "Mani S")
+ * @param {string|null} options.techPhoto - Optional URL to technician's photo
+ * @param {number|null} options.speed - Speed in km/h or m/s
  * @param {string|null} options.etaText - Formatted ETA string e.g. "8 min"
  * @param {string|null} options.distText - Formatted distance string e.g. "2.4 km"
  * @param {string} options.freshness - Telemetry freshness state ('LIVE', 'UPDATING', etc.)
@@ -196,6 +199,9 @@ export function createServiceVehicleMarker({
   category = "bike",
   bearing = 0,
   status = "on_the_way",
+  techName = null,
+  techPhoto = null,
+  speed = null,
   etaText = null,
   distText = null,
   freshness = "LIVE",
@@ -210,24 +216,31 @@ export function createServiceVehicleMarker({
     cleanEta = "< 1 min"
   }
 
+  // Display name formatted (First name + Last initial or full short name)
+  const displayName = techName ? techName.trim() : "Technician"
+
   const tagContent = isArrived
     ? `<div class="ltp-bike-tag-badge ltp-tag-arrived">
          <span class="ltp-tag-dot pulse-emerald"></span>
+         <span class="ltp-tag-name">${displayName}</span>
+         <span class="ltp-tag-sep">•</span>
          <span class="ltp-tag-txt">Arrived at Site</span>
        </div>`
     : isInProgress
     ? `<div class="ltp-bike-tag-badge ltp-tag-inprogress">
          <span class="ltp-tag-dot pulse-blue"></span>
+         <span class="ltp-tag-name">${displayName}</span>
+         <span class="ltp-tag-sep">•</span>
          <span class="ltp-tag-txt">Service in Progress</span>
        </div>`
-    : cleanEta || distText
-    ? `<div class="ltp-bike-tag-badge">
+    : `<div class="ltp-bike-tag-badge">
          ${isLive ? '<span class="ltp-tag-dot pulse-cyan"></span>' : '<span class="ltp-tag-dot dot-amber"></span>'}
+         <span class="ltp-tag-name">${displayName}</span>
+         ${distText || cleanEta ? `<span class="ltp-tag-sep">•</span>` : ""}
          ${distText ? `<span class="ltp-tag-dist">${distText}</span>` : ""}
-         ${distText && cleanEta ? `<span class="ltp-tag-sep">•</span>` : ""}
-         ${cleanEta ? `<span class="ltp-tag-eta">${cleanEta}</span>` : ""}
+         ${distText && cleanEta ? `<span class="ltp-tag-sep">(${cleanEta})</span>` : cleanEta ? `<span class="ltp-tag-eta">${cleanEta}</span>` : ""}
+         ${speed && speed > 2 ? `<span class="ltp-tag-speed">⚡ ${Math.round(speed * 3.6 > 100 ? speed : speed * 3.6)} km/h</span>` : ""}
        </div>`
-    : ""
 
   const vehicleSvg = renderVehicleSvg(category, bearing)
 
@@ -249,14 +262,17 @@ export function createServiceVehicleMarker({
   return L.divIcon({
     className: "ltp-technician-bike-icon",
     html: html,
-    iconSize: [56, 56],
-    iconAnchor: [28, 28],
-    popupAnchor: [0, -32],
+    iconSize: [64, 64],
+    iconAnchor: [32, 32],
+    popupAnchor: [0, -36],
   })
 }
 
 // Backward compatibility alias
 export function createTechnicianBikeIcon(options = {}) {
+  if (typeof options === "string") {
+    return createServiceVehicleMarker({ techName: options })
+  }
   return createServiceVehicleMarker(options)
 }
 

@@ -24,6 +24,11 @@ from .views_homepage import (
     HomePageImageUploadAPIView,
     HomePageImageDeleteAPIView,
 )
+from .views_service_zones import (
+    ServiceZoneListCreateView,
+    ServiceZoneDetailView,
+    ServiceZoneCheckView,
+)
 from service_requests.payment_views import InvoiceDownloadView
 
 urlpatterns = [
@@ -80,4 +85,9 @@ urlpatterns = [
     path("data/delete-account/", AccountDeletionView.as_view(), name="account-deletion"),
     path("data/delete-workspace/", WorkspaceDeletionView.as_view(), name="workspace-deletion"),
     path("data/transfer-ownership/", OwnerTransferView.as_view(), name="owner-transfer"),
+
+    # Service Area Geofencing
+    path("service-zones/", ServiceZoneListCreateView.as_view(), name="service-zone-list"),
+    path("service-zones/check/", ServiceZoneCheckView.as_view(), name="service-zone-check"),
+    path("service-zones/<int:pk>/", ServiceZoneDetailView.as_view(), name="service-zone-detail"),
 ]

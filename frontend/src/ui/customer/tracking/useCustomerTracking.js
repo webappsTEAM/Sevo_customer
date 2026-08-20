@@ -282,19 +282,107 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
           return
         }
 
-        if (eventType === "technician_assigned" && eventData) {
+        if (["technician_assigned", "job_dispatched"].includes(eventType)) {
           setData((prev) => {
             if (!prev) return prev
             return {
               ...prev,
-              status: eventData.status || "assigned",
+              status: "assigned",
+              is_accepted: false,
+              technician_assigned: true,
+              technician_accepted: false,
+              technician: null,
+              technician_location: null,
+              start_otp: null,
+              freshness: "WAITING_FOR_PROFESSIONAL",
+            }
+          })
+          return
+        }
+
+        if (["employee_accepted", "technician_accepted"].includes(eventType) && eventData) {
+          setData((prev) => {
+            if (!prev) return prev
+            const techPayload = eventData.technician || eventData
+            return {
+              ...prev,
+              status: "accepted",
               is_accepted: true,
-              vendor: eventData.vendor || prev.vendor,
-              technician: {
-                ...(prev.technician || {}),
-                ...eventData.technician,
-                ...eventData,
-              },
+              technician_assigned: true,
+              technician_accepted: true,
+              technician: techPayload?.name ? techPayload : prev.technician,
+              start_otp: eventData.start_otp || prev.start_otp,
+              freshness: "WAITING_FOR_LOCATION",
+            }
+          })
+          return
+        }
+
+        if (["employee_rejected", "assignment_expired"].includes(eventType)) {
+          setData((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              status: "confirmed",
+              is_accepted: false,
+              technician_assigned: false,
+              technician_accepted: false,
+              technician: null,
+              technician_location: null,
+              start_otp: null,
+              freshness: "WAITING_FOR_PROFESSIONAL",
+            }
+          })
+          return
+        }
+
+        if (["employee_on_the_way", "technician_on_the_way"].includes(eventType)) {
+          setData((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              status: "on_the_way",
+              is_accepted: true,
+              freshness: "LIVE",
+            }
+          })
+          return
+        }
+
+        if (["employee_arrived", "technician_arrived"].includes(eventType)) {
+          setData((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              status: "arrived",
+              is_accepted: true,
+              freshness: "LIVE",
+            }
+          })
+          return
+        }
+
+        if (["service_started", "job_started"].includes(eventType)) {
+          setData((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              status: "in_progress",
+              is_accepted: true,
+            }
+          })
+          return
+        }
+
+        if (["service_completed", "job_completed"].includes(eventType)) {
+          setData((prev) => {
+            if (!prev) return prev
+            return {
+              ...prev,
+              status: "completed",
+              technician_location: null,
+              start_otp: null,
+              freshness: "COMPLETED",
             }
           })
           return
@@ -303,10 +391,12 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
         if (eventType === "technician_status_updated" && eventData) {
           setData((prev) => {
             if (!prev) return prev
+            const isNowAccepted = ["accepted", "on_the_way", "arrived", "in_progress", "completed"].includes(eventData.status)
             return {
               ...prev,
               status: eventData.status || prev.status,
-              start_otp: eventData.start_otp || prev.start_otp,
+              is_accepted: isNowAccepted,
+              start_otp: isNowAccepted ? (eventData.start_otp || prev.start_otp) : null,
             }
           })
           return
@@ -321,6 +411,7 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
               otp_verified: true,
             }
           })
+          return
         }
       },
       // onStatusChange callback
