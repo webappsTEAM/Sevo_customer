@@ -1005,7 +1005,7 @@ export function LandingPage() {
   const [query, setQuery] = useState("")
   const [testimonialIdx, setTestimonialIdx] = useState(0)
   const location = useLocation()
-  const [modalCart, setModalCart] = useState(() => (location.state?.cart || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")))
+  const [modalCart, setModalCart] = useState(() => (location.state?.cart || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false))
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
@@ -1358,7 +1358,7 @@ export function LandingPage() {
   }, [location.state])
 
   const handleCloseCategory = () => {
-    setModalCart(prev => prev.filter(c => !c.id.includes("mason") && !c.id.includes("paint")));
+    setModalCart(prev => prev.filter(c => c.id && String(c.id).includes("mason") === false && String(c.id).includes("paint") === false));
     const rawCatKey = (activeCategory?.id || activeCategory?.slug || activeCategoryId || "").toLowerCase()
     if (["hvac", "ac", "appliance"].some(k => rawCatKey.includes(k))) {
       navigate("/home", { state: { openAcModal: true } })
@@ -1379,7 +1379,7 @@ export function LandingPage() {
 
   const cleanConsultationItems = (cartArray) => {
     const list = resolveCartArg(cartArray);
-    return list.filter(c => c && typeof c === "object" && c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && typeof c.id === "string" && !c.id.includes("paint") && !c.id.includes("mason"));
+    return list.filter(c => c && typeof c === "object" && c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && typeof c.id === "string" && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false);
   };
 
   const goToBooking = () => navigate(routes.booking)
@@ -1409,7 +1409,7 @@ export function LandingPage() {
   useEffect(() => {
     if (activeCategory) {
       const rawCatKey = (activeCategory.id || activeCategory.slug || "").toLowerCase();
-      if (rawCatKey.includes("painting") || rawCatKey.includes("mason")) {
+      if (rawCatKey.includes("painting") || rawCatKey.includes("mason") || rawCatKey === "11" || rawCatKey === "17") {
         console.log("DEBUG: [LandingPage] Hot-reloading catalog services for category:", rawCatKey);
         apiRequest("/catalog/services/")
           .then(svcRes => {
@@ -4590,7 +4590,24 @@ export function LandingPage() {
             navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
           }}
         />
-
+      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.id === "civil" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase()?.includes("mason") || activeCategory.name?.toLowerCase()?.includes("civil")) ? (
+        <MasonPackageModal
+          category={activeCategory}
+          cart={modalCart}
+          setCart={setModalCart}
+          packagesData={packagesData}
+          onClose={() => navigate("/home")}
+          onCheckout={(customCart) => {
+            const finalCart = resolveCartArg(customCart);
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
+          }}
+          onGetEstimate={(customCart) => {
+            const finalCart = resolveCartArg(customCart);
+            setModalCart(cleanConsultationItems(finalCart));
+            navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
+          }}
+        />
       ) : (
         <CustomCleaningPackageModal
           category={activeCategory}
