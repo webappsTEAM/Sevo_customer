@@ -234,6 +234,7 @@ export function ServiceRequestsPage() {
       const q = docSearch.toLowerCase()
       list = list.filter(r =>
         r.request_id?.toLowerCase().includes(q) ||
+        r.customer_id?.toLowerCase().includes(q) ||
         r.customer_name?.toLowerCase().includes(q) ||
         r.email?.toLowerCase().includes(q) ||
         r.issue_title?.toLowerCase().includes(q) ||
@@ -891,7 +892,7 @@ export function ServiceRequestsPage() {
             <Search size={14} className="sr-search-icon" />
             <input
               className="sr-search"
-              placeholder="Search ID, customer, issue..."
+              placeholder="Search ID (AC0826, CUS0025), customer, phone..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -945,7 +946,7 @@ export function ServiceRequestsPage() {
 
                   <div className="sr-item-title">{r.issue_title}</div>
                   <div className="sr-item-customer">
-                    <User size={11} /> {r.customer_name} · {r.phone}
+                    <User size={11} /> {r.customer_name} {r.customer_id ? `(${r.customer_id})` : ""} · {r.phone}
                   </div>
 
                   <div className="sr-item-bottom">
@@ -1051,6 +1052,12 @@ export function ServiceRequestsPage() {
                 {/* Customer */}
                 <div className="sr-info-card">
                   <div className="sr-info-card-title"><User size={13} /> Customer</div>
+                  {detail.customer_id && (
+                    <div className="sr-info-row">
+                      <span className="sr-info-key">Customer ID</span>
+                      <span className="sr-info-val font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900">{detail.customer_id}</span>
+                    </div>
+                  )}
                   <div className="sr-info-row"><span className="sr-info-key">Name</span><span className="sr-info-val">{detail.customer_name}</span></div>
                   <div className="sr-info-row">
                     <span className="sr-info-key">Phone</span>

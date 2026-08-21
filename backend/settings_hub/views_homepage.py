@@ -102,7 +102,8 @@ class HomePageConfigAPIView(APIView):
                     "categories": [
                         {"id": "cat-1", "title": "For You", "subtitle": "Curated services & recommendations", "badge": "For You", "image": "/mockups/category_for_you.png", "link": "/booking?category=for_you", "enabled": True, "display_order": 1},
                         {"id": "cat-2", "title": "Food and Health", "subtitle": "Groceries & farm-fresh vegetables", "badge": "Groceries & Veggies", "image": "/mockups/category_food_health.png", "link": "/booking?category=groceries", "enabled": True, "display_order": 2},
-                        {"id": "cat-3", "title": "Home, Repair & Transport Services", "subtitle": "Cleaning, repairs, painting & logistics", "badge": "8 Services", "image": "/mockups/category_home_transport.png", "link": "/booking?category=home_repairs", "enabled": True, "display_order": 3}
+                        {"id": "cat-3", "title": "Home & Repair Services", "subtitle": "Cleaning, repairs, painting & masonry", "badge": "5 Services", "image": "/mockups/category_home_transport.png", "link": "/booking?category=home_repairs", "enabled": True, "display_order": 3},
+                        {"id": "cat-4", "title": "Goods & Transport", "subtitle": "Mini trucks, 2-wheelers & logistics", "badge": "Transport", "image": "/mockups/service_transport.jpg", "link": "/logistics", "enabled": True, "display_order": 4}
                     ],
                     "vendorBanner": {
                         "enabled": True,

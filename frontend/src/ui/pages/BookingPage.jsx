@@ -3435,6 +3435,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
   const [profileEmail, setProfileEmail] = useState('')
+  const [profileCustomerId, setProfileCustomerId] = useState(user?.customer_id || user?.customerId || '')
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || user?.avatar || '')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState('')
@@ -3447,10 +3448,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       setProfileName(uFullName)
       setProfilePhone(user?.phone || '')
       setProfileEmail(user?.email || '')
+      setProfileCustomerId(user?.customer_id || user?.customerId || '')
       if (user?.avatar_url || user?.avatar) {
         setAvatarPreview(user.avatar_url || user.avatar)
       }
     }
+
+    // Always fetch fresh customer profile on modal open to ensure customer_id is loaded
+    apiRequest('/auth/customer/profile/')
+      .then(res => {
+        const data = res?.data || res
+        if (data?.customer_id) {
+          setProfileCustomerId(data.customer_id)
+        }
+      })
+      .catch(() => {
+        if (typeof refreshMe === 'function') refreshMe()
+      })
   }, [user])
 
   const handleAvatarUpload = async (e) => {
@@ -4114,7 +4128,14 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 )}
               </div>
               <div>
-                <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: 4 }}>{userFullName}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>{userFullName}</span>
+                  {(profileCustomerId || user?.customer_id || user?.customerId) && (
+                    <span style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 700, fontFamily: 'monospace' }}>
+                      {profileCustomerId || user?.customer_id || user?.customerId}
+                    </span>
+                  )}
+                </div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 12 }}>{userEmail || userPhone}</div>
                 <input
                   ref={avatarInputRef}
@@ -4137,6 +4158,20 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             {profileSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, marginBottom: 16 }}>{profileSuccess}</div>}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
+                  <span>Customer ID</span>
+                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
+                </label>
+                <input
+                  type="text"
+                  value={profileCustomerId || user?.customer_id || user?.customerId || "—"}
+                  disabled
+                  readOnly
+                  title="Customer ID (Non-editable)"
+                  style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
+                />
+              </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>Full Name</label>
                 <input
@@ -4161,7 +4196,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
                 />
               </div>
-              <div style={{ gridColumn: '1/-1' }}>
+              <div>
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
                   <span>Email Address</span>
                   <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
@@ -6127,16 +6162,21 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         {/* Sidebar */}
         <div style={{ width: 280, background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '2.25rem 0', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '0 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg,#ede9fe,#ddd6fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #c4b5fd', flexShrink: 0, overflow: 'hidden' }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0', flexShrink: 0, overflow: 'hidden' }}>
               {avatarPreview || user?.avatar_url || user?.avatar ? (
                 <img src={avatarPreview || user?.avatar_url || user?.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <User size={22} color="#6366f1" />
+                <User size={22} color="#94a3b8" />
               )}
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userFullName}</div>
               <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail || userPhone}</div>
+              {(profileCustomerId || user?.customer_id || user?.customerId) && (
+                <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace' }}>
+                  🆔 {profileCustomerId || user?.customer_id || user?.customerId}
+                </div>
+              )}
             </div>
           </div>
 
