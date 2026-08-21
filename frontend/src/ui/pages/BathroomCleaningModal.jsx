@@ -8,8 +8,8 @@ const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const BATHROOM_SUB_TABS = [
   { id: "packages", name: "Full Clean", image: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=150&q=80&fit=crop" },
-  { id: "minis", name: "Quick Extra Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" },
-  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=150&q=80&fit=crop" }
+  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=150&q=80&fit=crop" },
+  { id: "minis", name: "Quick Extra Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" }
 ];
 
 const BATHROOM_SERVICES = {
@@ -1055,8 +1055,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = getSelectedServiceDetailsObject();
                 const hasSavedTools = dbMatch && Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0;
-                const tools = hasSavedTools ? dbMatch.tools.map(t => typeof t === "string" ? t : (t.text || "")) : (selectedServiceDetails.tools || details.tools || []);
-                const activeTools = tools.filter(t => typeof t === "string" ? true : (t?.checked !== false && t?.enabled !== false));
+                const rawTools = hasSavedTools ? dbMatch.tools : (selectedServiceDetails.tools || details.tools || []);
+                const activeTools = rawTools
+                  .filter(t => typeof t === "string" ? true : (t?.checked !== false && t?.enabled !== false))
+                  .map(t => typeof t === "string" ? t : (t.text || ""));
 
                 if (activeTools.length === 0) return null;
                 return (
@@ -1064,12 +1066,11 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                     <div className="space-y-2">
                       {activeTools.map((item, i) => {
-                        const labelText = typeof item === "string" ? item : (item?.text || "");
-                        if (!labelText) return null;
+                        if (!item) return null;
                         return (
                           <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
                             <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
-                            <span className="leading-relaxed">{labelText}</span>
+                            <span className="leading-relaxed">{item}</span>
                           </div>
                         );
                       })}
@@ -1084,8 +1085,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = getSelectedServiceDetailsObject();
                 const hasSavedReady = dbMatch && Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0;
-                const ready = hasSavedReady ? dbMatch.ready.map(r => typeof r === "string" ? r : (r.text || "")) : (selectedServiceDetails.ready || details.ready || []);
-                const activeReady = ready.filter(r => typeof r === "string" ? true : (r?.checked !== false && r?.enabled !== false));
+                const rawReady = hasSavedReady ? dbMatch.ready : (selectedServiceDetails.ready || details.ready || []);
+                const activeReady = rawReady
+                  .filter(r => typeof r === "string" ? true : (r?.checked !== false && r?.enabled !== false))
+                  .map(r => typeof r === "string" ? r : (r.text || ""));
 
                 if (activeReady.length === 0) return null;
                 return (
