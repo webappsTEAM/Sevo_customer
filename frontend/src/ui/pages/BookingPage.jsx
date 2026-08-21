@@ -32,6 +32,8 @@ import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
+import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -1098,7 +1100,7 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
   const dateScrollRef = useRef()
   const canContinue = selectedDate && selectedTime
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const taxFee = totalPrice === 0 ? 49 : (totalPrice === 49 || (cart && cart.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
+  const taxFee = totalPrice === 0 ? 49 : (totalPrice === 49 || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))) ? 0 : 99
   const grandTotal = totalPrice + taxFee
 
   // Urban time slots: Morning / Afternoon / Evening
@@ -1690,7 +1692,7 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
   const UC_TIME_FORMATS = (t) => { if (!t) return ''; const [h] = t.split(':').map(Number); const ampm = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:00 ${ampm}` }
   const displayTime = UC_TIME_FORMATS(time)
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (pkg?.price || 0)
-  const taxFee = totalPrice === 0 ? 49 : (totalPrice === 49 || (cart && cart.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
+  const taxFee = totalPrice === 0 ? 49 : (totalPrice === 49 || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))) ? 0 : 99
   const discount = couponApplied ? Math.floor(totalPrice * 0.1) : 0
   const tipAmount = tip === 'custom' ? (parseInt(customTip) || 0) : (tip || 0)
   const grandTotal = totalPrice + taxFee - discount + tipAmount
@@ -7203,7 +7205,7 @@ function StepWorkflowCheckout({
         ? Math.min(itemTotal, appliedCoupon.discountValue)
         : Math.min(appliedCoupon.maxDiscount || itemTotal, Math.floor(itemTotal * (appliedCoupon.discountValue / 100)))))
     : (couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 0)
-  const taxFee = itemTotal === 0 ? 49 : (itemTotal === 49 || (items && items.some(c => c.id.includes("mason") || c.id.includes("paint")))) ? 0 : 99
+  const taxFee = itemTotal === 0 ? 49 : (itemTotal === 49 || (items && items.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))) ? 0 : 99
   const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
   const grandTotal = Math.max(0, itemTotal + taxFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
 
@@ -7993,9 +7995,9 @@ function StepWorkflowCheckout({
 export function resolveCategoryFromCart(currentCategory, cartItems) {
   if (cartItems && cartItems.length > 0) {
     const first = cartItems[0];
-    const catName = (first.categoryName || first.category || first.catId || "").toLowerCase();
-    const idName = (first.id || "").toLowerCase();
-    const itemName = (first.name || "").toLowerCase();
+    const catName = String(first.categoryName || first.category || first.catId || "").toLowerCase();
+    const idName = String(first.id || "").toLowerCase();
+    const itemName = String(first.name || "").toLowerCase();
     const combined = `${catName} ${idName} ${itemName}`;
 
     if (combined.includes("carp") || combined.includes("lock") || combined.includes("handle") || combined.includes("door") || combined.includes("furniture") || combined.includes("hinge") || combined.includes("wood") || combined.includes("drawer")) {
@@ -8761,7 +8763,7 @@ export function BookingPage() {
             className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
             onClick={() => {
               setShowSubCategoryChoiceModal(false);
-              navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+              navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
             }}
           >
             <motion.div
@@ -8774,7 +8776,7 @@ export function BookingPage() {
               <button
                 onClick={() => {
                   setShowSubCategoryChoiceModal(false);
-                  navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                  navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
                 }}
                 className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer"
               >
@@ -8872,7 +8874,7 @@ export function BookingPage() {
                   packagesData={packagesData}
                   onClose={() => {
                     setShowPackageModal(false);
-                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
                   }}
                   onCheckout={() => { setShowPackageModal(false); setStep(3); }}
                   onGetEstimate={() => {
@@ -8889,7 +8891,7 @@ export function BookingPage() {
                   packagesData={packagesData}
                   onClose={() => {
                     setShowPackageModal(false);
-                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
                   }}
                   onCheckout={() => { setShowPackageModal(false); setStep(3); }}
                   onGetEstimate={() => {
@@ -8906,7 +8908,7 @@ export function BookingPage() {
                   packagesData={packagesData}
                   onClose={() => {
                     setShowPackageModal(false);
-                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
                   }}
                   onCheckout={() => { setShowPackageModal(false); setStep(3); }}
                 />
@@ -11641,11 +11643,14 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     const foundKey = Object.keys(packagesData).find(key =>
       packagesData[key] && packagesData[key].some(p => p.category_slug === "mason" || p.category_slug === "masons" || String(p.category) === "mason" || String(p.category) === "11")
     );
+    console.log("DEBUG: [MasonPackageModal] foundKey:", foundKey);
     return foundKey || null;
   }, [packagesData]);
 
   const dbPackages = React.useMemo(() => {
-    return masonKey ? packagesData[masonKey] : [];
+    const pkgs = masonKey ? packagesData[masonKey] : [];
+    console.log("DEBUG: [MasonPackageModal] dbPackages size:", pkgs.length, pkgs);
+    return pkgs;
   }, [packagesData, masonKey]);
 
   const MASON_CATEGORIES = React.useMemo(() => {
@@ -11848,8 +11853,8 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     })
     : MASON_SERVICES.filter(s => s.catId === activeTab);
 
-  const totalQuantity = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const totalQuantity = cart.filter(c => c.id && String(c.id).includes("mason")).reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = cart.filter(c => c.id && String(c.id).includes("mason")).reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
 
 
@@ -12462,7 +12467,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
                 <div className="uc-paint-cart-card">
                   <h4 className="uc-paint-cart-card-title">Your Cart</h4>
-                  {cart.filter(c => c.id.includes("mason")).length === 0 ? (
+                  {cart.filter(c => c.id && String(c.id).includes("mason")).length === 0 ? (
                     <div>
                       <ShoppingCart className="uc-paint-empty-cart-img" style={{ color: "#94a3b8" }} />
                       <p className="uc-paint-empty-cart-text">No items in your cart</p>
@@ -12470,7 +12475,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   ) : (
                     <div>
                       <div className="uc-paint-cart-items">
-                        {cart.filter(c => c.id.includes("mason")).map(item => (
+                        {cart.filter(c => c.id && String(c.id).includes("mason")).map(item => (
                           <div key={item.id} className="uc-paint-cart-item">
                             <div className="uc-paint-cart-item-info">
                               <span className="uc-paint-cart-item-name">{item.name}</span>
@@ -13522,6 +13527,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     "Carpenter On-Demand",
     "Furniture Repair"
   ];
+  const masonSubtabs = [
+    "Brick & Block Work",
+    "Plastering & Wall Repair",
+    "Wall & Partition Construction",
+    "Wall Breaking & Demolition"
+  ];
   const applianceSubtabs = ["Microwave Repair", "Water Purifier & RO", "Refrigerator & Fridge", "Microwave & Purifier"];
   const hvacSubtabs = [
     "AC Service & Cleaning",
@@ -13552,6 +13563,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (subtabParam === "Electrician" || subtabParam === "electrical" || subtabParam === "Electrician Services") return "Switches & Sockets";
     if (subtabParam === "Plumber" || subtabParam === "plumbing" || subtabParam === "Plumber Services" || subtabParam === "Taps & Mixers") return "Tap & Mixer";
     if (subtabParam === "Carpentry" || subtabParam === "carpentry" || subtabParam === "Carpenter Services") return "Lock & Handle";
+    if (subtabParam === "Mason" || subtabParam === "mason") return "Brick & Block Work";
     if (subtabParam === "Full House Cleaning" || subtabParam === "Full House Deep Cleaning" || subtabParam === "Full house cleaning" || subtabParam === "Home Cleaning" || subtabParam === "cleaning") return "Occupied Apartment";
     if (subtabParam) return subtabParam;
     // No URL param — derive default from normalizedKey / category / cart
@@ -13560,6 +13572,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (nk === "electrical" || cn.includes("electric")) return "Switches & Sockets";
     if (nk === "plumbing" || cn.includes("plumb")) return "Tap & Mixer";
     if (nk === "carpentry" || cn.includes("carpenter") || cn.includes("carpentry")) return "Lock & Handle";
+    if (nk === "mason" || String(nk) === "11" || cn.includes("mason") || cn.includes("civil")) return "Brick & Block Work";
     if (nk === "refrigerator" || cn.includes("fridge") || cn.includes("refrigerator")) return "Refrigerator Service & Repair";
     if (nk === "washing_machine" || cn.includes("washing")) return "Washing Machine Jet Service";
     if (nk === "tv_display" || cn.includes("tv")) return "TV Service & Repair";
@@ -13594,6 +13607,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     effectiveKey = "plumbing";
   } else if (normalizedKey === "carpentry" || (category && (category.id === "carpentry" || category.name === "Carpentry" || category.name === "Carpenter"))) {
     effectiveKey = "carpentry";
+  } else if (normalizedKey === "mason" || String(normalizedKey) === "11" || (category && (category.id === "mason" || String(category.id) === "11" || category.name === "Mason"))) {
+    effectiveKey = "mason";
   } else if (tvSubtabs.includes(activeSubTab)) {
     effectiveKey = "tv_display";
   } else if (washingMachineSubtabs.includes(activeSubTab)) {
@@ -13610,6 +13625,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     effectiveKey = "plumbing";
   } else if (carpentrySubtabs.includes(activeSubTab)) {
     effectiveKey = "carpentry";
+  } else if (masonSubtabs.includes(activeSubTab)) {
+    effectiveKey = "mason";
   } else if (hvacSubtabs.includes(activeSubTab)) {
     effectiveKey = "hvac";
   }
@@ -13638,6 +13655,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         setActiveSubTab("Tap & Mixer");
       } else if (param === "Carpentry" || param === "carpentry" || param === "Carpenter Services") {
         setActiveSubTab("Lock & Handle");
+      } else if (param === "Mason" || param === "mason") {
+        setActiveSubTab("Brick & Block Work");
       } else if (param === "Full House Cleaning" || param === "Full House Deep Cleaning" || param === "Full house cleaning" || param === "Home Cleaning" || param === "cleaning") {
         setActiveSubTab("Occupied Apartment");
       } else {
@@ -14434,16 +14453,16 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       const tab = (activeSubTab || "").toLowerCase();
 
       if (normalizedKey === "mason") {
-        if (tab.includes("partition") || tab.includes("construction") || tab.includes("wall")) {
-          return sSlug.includes("part") || sSlug.includes("construction") || sName.includes("partition") || sName.includes("construction") || sName.includes("wall") || pName.includes("construction") || pName.includes("partition");
-        }
-        if (tab.includes("brick") || tab.includes("block")) {
+        if (tab === "brick & block work" || tab.includes("brick") || tab.includes("block")) {
           return sSlug.includes("brick") || sSlug.includes("block") || sName.includes("brick") || sName.includes("block");
         }
-        if (tab.includes("plastering") || tab.includes("repair")) {
+        if (tab === "plastering & wall repair" || tab.includes("plastering")) {
           return sSlug.includes("plaster") || sName.includes("plaster") || sName.includes("repair");
         }
-        if (tab.includes("breaking") || tab.includes("demolition") || tab.includes("removal")) {
+        if (tab === "wall & partition construction" || (tab.includes("partition") && !tab.includes("breaking") && !tab.includes("demolition"))) {
+          return sSlug.includes("part") || sSlug.includes("construction") || sName.includes("partition") || sName.includes("construction");
+        }
+        if (tab === "wall breaking & demolition" || tab.includes("breaking") || tab.includes("demolition") || tab.includes("removal")) {
           return sSlug.includes("demo") || sName.includes("demolition") || sName.includes("breaking") || sName.includes("removal");
         }
       }
