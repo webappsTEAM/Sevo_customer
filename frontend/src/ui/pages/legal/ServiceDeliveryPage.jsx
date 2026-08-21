@@ -10,7 +10,7 @@ export function ServiceDeliveryPage() {
     <LegalLayout
       activePage="service-delivery"
       pageTitle="Doorstep Service Delivery Policy"
-      subtitle="How CalServices executes on-site doorstep home and commercial services, verified dispatch, live tracking, and OTP verification."
+      subtitle="How Sevo executes on-site doorstep home and commercial services, verified dispatch, live tracking, and OTP verification."
       versionKey="service_delivery"
     >
       <div className="space-y-8 text-slate-700 text-sm sm:text-base leading-relaxed">
@@ -21,7 +21,7 @@ export function ServiceDeliveryPage() {
             <span>On-Site Doorstep Service Model</span>
           </div>
           <p>
-            <strong>CalServices</strong> provides professional on-site doorstep services (e.g. Home Cleaning, Pest Control, Painting, Carpentry, Masonry, and City Transport). We do not ship physical parcels; all services are fulfilled directly at your designated service location by verified service professionals.
+            <strong>Sevo</strong> provides professional on-site doorstep services (e.g. Home Cleaning, Pest Control, Painting, Carpentry, Masonry, and City Transport). We do not ship physical parcels; all services are fulfilled directly at your designated service location by verified service professionals.
           </p>
         </div>
 

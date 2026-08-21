@@ -10,7 +10,6 @@ import { Card, Button, Input, Select, Pill } from "../../components/kit.jsx"
 const ROLE_CONFIG = {
   admin: { label: "Admin", tone: "neutral" },
   manager: { label: "Manager", tone: "neutral" },
-  support: { label: "Support", tone: "neutral" },
 }
 
 function RoleMenu({ value, onChange, exclude = [] }) {
@@ -169,15 +168,19 @@ export default function TeamMembersSection({ showToast, SectionHeader }) {
   }
 
   const filtered = members.filter(m => {
+    const role = (m.role || "").toLowerCase()
+    if (role !== "admin" && role !== "manager") return false
     const q = search.toLowerCase()
-    const matchesSearch = !q || m.name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q)
+    const nameStr = typeof m.name === 'object' ? (m.name?.name || m.name?.username || "") : (m.name || m.username || "")
+    const emailStr = typeof m.email === 'object' ? (m.email?.email || "") : (m.email || "")
+    const matchesSearch = !q || nameStr.toLowerCase().includes(q) || emailStr.toLowerCase().includes(q)
     const matchesRole = !roleFilter || m.role === roleFilter
     return matchesSearch && matchesRole
   })
 
   return (
     <div className="stPanel animate-fadeUp">
-      <SectionHeader title="Team & Administrators" subtitle="Invite fellow administrators, managers, and support staff to manage services, bookings, and customer care." />
+      <SectionHeader title="Administrators & Managers" subtitle="Manage admin accounts and send invites for additional Admin and Manager access control." />
 
       <Card>
         <div className="flex flex-col md:flex-row md:items-end gap-6">
@@ -202,7 +205,7 @@ export default function TeamMembersSection({ showToast, SectionHeader }) {
           </div>
           {isAdmin && (
             <Button onClick={() => setShowInviteForm(v => !v)} className="h-[50px] px-6">
-              <UserPlus size={16} className="mr-2" /> Invite Member
+              <UserPlus size={16} className="mr-2" /> Invite Admin / Manager
             </Button>
           )}
         </div>
@@ -229,9 +232,8 @@ export default function TeamMembersSection({ showToast, SectionHeader }) {
                     onChange={e => setInviteForm(p => ({ ...p, role: e.target.value }))}
                     disabled={inviting}
                     options={[
-                      { label: "Admin (Full Workspace Access)", value: "admin" },
-                      { label: "Manager (Operations Access)", value: "manager" },
-                      { label: "Support (Customer Care Access)", value: "support" }
+                      { label: "Admin (Full Access & Settings)", value: "admin" },
+                      { label: "Manager (Operations & Service Access)", value: "manager" }
                     ]}
                   />
                 </div>

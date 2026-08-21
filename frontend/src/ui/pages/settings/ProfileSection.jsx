@@ -46,14 +46,14 @@ export default function ProfileSection({ markDirty, showToast, Field, SectionHea
   useEffect(() => {
     if (user) {
       setForm({
-        first_name: user.firstName || "",
-        last_name: user.lastName || "",
+        first_name: user.first_name || user.firstName || "",
+        last_name: user.last_name || user.lastName || "",
         email: user.email || "",
-        phone: user.phone || "",
+        phone: user.phone || user.mobile_number || "",
         timezone: user.timezone || "UTC",
         language: user.language || "en",
       })
-      if (user.avatar_url) setAvatarPreview(user.avatar_url)
+      if (user.avatar_url || user.avatar) setAvatarPreview(user.avatar_url || user.avatar)
     }
   }, [user])
 
@@ -187,10 +187,10 @@ export default function ProfileSection({ markDirty, showToast, Field, SectionHea
                 // Cancel: restore original values
                 setForm(prev => ({
                   ...prev,
-                  first_name: user.firstName || "",
-                  last_name: user.lastName || "",
-                  email: user.email || "",
-                  phone: user.phone || "",
+                  first_name: user?.first_name || user?.firstName || "",
+                  last_name: user?.last_name || user?.lastName || "",
+                  email: user?.email || "",
+                  phone: user?.phone || user?.mobile_number || "",
                 }))
               }
               setIsEditing(!isEditing)

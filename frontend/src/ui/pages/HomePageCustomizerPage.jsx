@@ -7,7 +7,7 @@ import {
   Users, Gift, Repeat2, BarChart3, FileText, Phone, Mail, ChevronRight,
   Layers, CheckCircle, ExternalLink, Sliders, ToggleLeft, ToggleRight
 } from "lucide-react"
-import { getHomePageConfig, saveHomePageConfig, resetHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, fetchDirectImageUrl, fetchPublishedHomePageConfig, publishHomePageConfig } from "../../config/homePageConfig.js"
+import { getHomePageConfig, saveHomePageConfig, resetHomePageConfig, DEFAULT_HOME_PAGE_CONFIG, fetchDirectImageUrl, fetchPublishedHomePageConfig, publishHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
 import ImageUploadField from "../components/ImageUploadField.jsx"
 
 export default function HomePageCustomizerPage() {
@@ -68,34 +68,50 @@ export default function HomePageCustomizerPage() {
 
   // Helper updates
   const updateHero = (field, value) => {
-    setConfig(prev => ({
-      ...prev,
-      hero: { ...prev.hero, [field]: value }
-    }))
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        hero: { ...prev.hero, [field]: value }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
   }
 
   const updateOffersMain = (field, value) => {
-    setConfig(prev => ({
-      ...prev,
-      offers: {
-        ...prev.offers,
-        mainCard: { ...prev.offers.mainCard, [field]: value }
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        offers: {
+          ...prev.offers,
+          mainCard: { ...prev.offers.mainCard, [field]: value }
+        }
       }
-    }))
+      saveHomePageConfig(next)
+      return next
+    })
   }
 
   const updateFooter = (field, value) => {
-    setConfig(prev => ({
-      ...prev,
-      footer: { ...prev.footer, [field]: value }
-    }))
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        footer: { ...prev.footer, [field]: value }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
   }
 
   const updateVendorBanner = (field, value) => {
-    setConfig(prev => ({
-      ...prev,
-      vendorBanner: { ...prev.vendorBanner, [field]: value }
-    }))
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        vendorBanner: { ...prev.vendorBanner, [field]: value }
+      }
+      saveHomePageConfig(next)
+      return next
+    })
   }
 
   const navWorkflowSteps = [
@@ -183,11 +199,10 @@ export default function HomePageCustomizerPage() {
                 <button
                   key={step.id}
                   onClick={() => handleTabChange(step.id)}
-                  className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition ${
-                    isActive
+                  className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition ${isActive
                       ? "bg-teal-50 text-teal-900 border border-teal-200 font-semibold"
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${step.color}`}>
@@ -374,55 +389,57 @@ export default function HomePageCustomizerPage() {
                     <span className="text-[11px] text-slate-400 font-mono">Real-time Layout</span>
                   </div>
 
-                  <div className="relative h-[260px] sm:h-[320px] w-full max-w-xl mx-auto overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-950/80 via-slate-900 to-teal-950/80 p-2 border border-slate-800/80">
-                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-teal-500/10 to-amber-500/10 rounded-2xl -z-10" />
-                    
+                  <div className="relative h-[270px] sm:h-[330px] w-full max-w-xl mx-auto overflow-hidden rounded-3xl bg-slate-900 p-2.5 border border-slate-800/80">
                     {/* Card 1: Top-Left */}
-                    <div className="absolute top-3 left-3 w-[60%] h-[62%] rounded-xl overflow-hidden border-2 border-white/80 shadow-lg group">
+                    <div className="absolute top-2.5 left-2.5 w-[59%] h-[59%] rounded-2xl overflow-hidden border-2 border-white/90 shadow-lg group z-10 bg-white">
                       <img
-                        src={(config.hero.collageImages[0]?.startsWith("http") || config.hero.collageImages[0]?.startsWith("/")) ? config.hero.collageImages[0] : `/mockups/service_hvac.png`}
+                        src={resolveDisplayImageUrl(config.hero.collageImages[0], "/mockups/service_hvac.png")}
                         onError={(e) => { e.currentTarget.src = "/mockups/service_hvac.png" }}
                         alt="Hero Card 1"
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover object-left-top"
+                        style={{ imageRendering: "-webkit-optimize-contrast" }}
                       />
                       <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
                         Card 1 (Top-Left)
                       </div>
                     </div>
 
-                    {/* Card 2: Bottom-Left */}
-                    <div className="absolute bottom-3 left-[10%] w-[46%] h-[44%] rounded-xl overflow-hidden border-2 border-white/80 shadow-lg group">
-                      <img
-                        src={(config.hero.collageImages[1]?.startsWith("http") || config.hero.collageImages[1]?.startsWith("/")) ? config.hero.collageImages[1] : `/mockups/service_electrical.png`}
-                        onError={(e) => { e.currentTarget.src = "/mockups/service_electrical.png" }}
-                        alt="Hero Card 2"
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
-                        Card 2 (Bottom-Left)
-                      </div>
-                    </div>
-
                     {/* Card 3: Top-Right */}
-                    <div className="absolute top-4 right-3 w-[45%] h-[50%] rounded-xl overflow-hidden border-2 border-white/80 shadow-lg group">
+                    <div className="absolute top-3.5 right-2.5 w-[46%] h-[48%] rounded-2xl overflow-hidden border-2 border-white/90 shadow-lg group z-10 bg-white">
                       <img
-                        src={(config.hero.collageImages[2]?.startsWith("http") || config.hero.collageImages[2]?.startsWith("/")) ? config.hero.collageImages[2] : `/mockups/service_cleaning.png`}
+                        src={resolveDisplayImageUrl(config.hero.collageImages[2], "/mockups/service_cleaning.png")}
                         onError={(e) => { e.currentTarget.src = "/mockups/service_cleaning.png" }}
                         alt="Hero Card 3"
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover object-center"
+                        style={{ imageRendering: "-webkit-optimize-contrast" }}
                       />
                       <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
                         Card 3 (Top-Right)
                       </div>
                     </div>
 
-                    {/* Card 4: Bottom-Right */}
-                    <div className="absolute bottom-4 right-4 w-[42%] h-[42%] rounded-xl overflow-hidden border-2 border-white/80 shadow-lg group">
+                    {/* Card 2: Bottom-Left */}
+                    <div className="absolute bottom-2.5 left-[8%] w-[50%] h-[45%] rounded-2xl overflow-hidden border-2 border-white/90 shadow-lg group z-20 bg-white">
                       <img
-                        src={(config.hero.collageImages[3]?.startsWith("http") || config.hero.collageImages[3]?.startsWith("/")) ? config.hero.collageImages[3] : `/mockups/service_plumbing.png`}
+                        src={resolveDisplayImageUrl(config.hero.collageImages[1], "/mockups/service_electrical.png")}
+                        onError={(e) => { e.currentTarget.src = "/mockups/service_electrical.png" }}
+                        alt="Hero Card 2"
+                        className="w-full h-full object-cover object-center"
+                        style={{ imageRendering: "-webkit-optimize-contrast" }}
+                      />
+                      <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
+                        Card 2 (Bottom-Left)
+                      </div>
+                    </div>
+
+                    {/* Card 4: Bottom-Right */}
+                    <div className="absolute bottom-2.5 right-3 w-[44%] h-[44%] rounded-2xl overflow-hidden border-2 border-white/90 shadow-lg group z-20 bg-white">
+                      <img
+                        src={resolveDisplayImageUrl(config.hero.collageImages[3], "/mockups/service_plumbing.png")}
                         onError={(e) => { e.currentTarget.src = "/mockups/service_plumbing.png" }}
                         alt="Hero Card 4"
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover object-center"
+                        style={{ imageRendering: "-webkit-optimize-contrast" }}
                       />
                       <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
                         Card 4 (Bottom-Right)
@@ -440,16 +457,6 @@ export default function HomePageCustomizerPage() {
                     { id: 3, title: "Collage Card 4 (Bottom-Right)", defaultPreset: "/mockups/service_plumbing.png" }
                   ].map((card) => {
                     const currentVal = config.hero.collageImages[card.id] || ""
-                    const presetsList = [
-                      { label: "AC & HVAC", path: "/mockups/service_hvac.png" },
-                      { label: "Electrical", path: "/mockups/service_electrical.png" },
-                      { label: "Home Cleaning", path: "/mockups/service_cleaning.png" },
-                      { label: "Plumbing", path: "/mockups/service_plumbing.png" },
-                      { label: "Movers & Transport", path: "/mockups/category_home_transport.png" },
-                      { label: "Pest Control", path: "/mockups/cockroach_control.png" },
-                      { label: "Kitchen Clean", path: "/mockups/kitchen_cleaning_hero.png" },
-                      { label: "Appliance Repair", path: "/mockups/appliance_cleaning_hero.png" }
-                    ]
 
                     return (
                       <div key={card.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
@@ -482,36 +489,6 @@ export default function HomePageCustomizerPage() {
                           fallbackSrc={card.defaultPreset}
                           aspectRatio="aspect-[16/9]"
                         />
-
-                        {/* Presets Selector Buttons */}
-                        <div className="space-y-1.5">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                            Select Service Preset Image:
-                          </span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {presetsList.map((preset) => {
-                              const isSelected = currentVal === preset.path
-                              return (
-                                <button
-                                  key={preset.path}
-                                  type="button"
-                                  onClick={() => {
-                                    const newImgs = [...config.hero.collageImages]
-                                    newImgs[card.id] = preset.path
-                                    updateHero("collageImages", newImgs)
-                                  }}
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
-                                    isSelected
-                                      ? "bg-teal-600 text-white border-teal-600 shadow-2xs font-semibold"
-                                      : "bg-white text-slate-700 border-slate-200 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300"
-                                  }`}
-                                >
-                                  {preset.label}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
                       </div>
                     )
                   })}
@@ -570,9 +547,8 @@ export default function HomePageCustomizerPage() {
                             newCats[idx].enabled = !newCats[idx].enabled
                             setConfig(prev => ({ ...prev, categories: newCats }))
                           }}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${
-                            cat.enabled ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"
-                          }`}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${cat.enabled ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"
+                            }`}
                         >
                           {cat.enabled ? "Enabled" : "Disabled"}
                         </button>
@@ -666,11 +642,10 @@ export default function HomePageCustomizerPage() {
                                   newCats[idx].image = preset.path
                                   setConfig(prev => ({ ...prev, categories: newCats }))
                                 }}
-                                className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition ${
-                                  cat.image === preset.path
+                                className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition ${cat.image === preset.path
                                     ? "bg-blue-600 text-white border-blue-600 font-bold"
                                     : "bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:text-blue-700"
-                                }`}
+                                  }`}
                               >
                                 {preset.label}
                               </button>

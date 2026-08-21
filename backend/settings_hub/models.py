@@ -16,17 +16,31 @@ class NotificationPreference(models.Model):
     email_security_alerts = models.BooleanField(default=True)
     email_login_alerts = models.BooleanField(default=True)
     email_booking_updates = models.BooleanField(default=True)
+    email_new_bookings = models.BooleanField(default=True)
+    email_cancellation_alerts = models.BooleanField(default=True)
+    email_completion_alerts = models.BooleanField(default=True)
+    email_complaint_alerts = models.BooleanField(default=True)
+    email_unassigned_alerts = models.BooleanField(default=True)
     email_weekly_digest = models.BooleanField(default=False)
     email_product_updates = models.BooleanField(default=False)
 
     # In-app channel
     inapp_security_alerts = models.BooleanField(default=True)
+    inapp_login_alerts = models.BooleanField(default=True)
     inapp_booking_updates = models.BooleanField(default=True)
+    inapp_new_bookings = models.BooleanField(default=True)
+    inapp_cancellation_alerts = models.BooleanField(default=True)
+    inapp_completion_alerts = models.BooleanField(default=True)
+    inapp_complaint_alerts = models.BooleanField(default=True)
+    inapp_unassigned_alerts = models.BooleanField(default=True)
     inapp_announcements = models.BooleanField(default=True)
 
     # SMS channel
     sms_security_alerts = models.BooleanField(default=False)
     sms_booking_updates = models.BooleanField(default=True)
+    sms_new_bookings = models.BooleanField(default=True)
+    sms_cancellation_alerts = models.BooleanField(default=False)
+    sms_complaint_alerts = models.BooleanField(default=True)
 
     updated_at = models.DateTimeField(auto_now=True)
 

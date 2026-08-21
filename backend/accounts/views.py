@@ -855,10 +855,10 @@ class PasswordResetRequestView(APIView):
             reset_url = f"{frontend_url}/reset-password?uid={uid}&token={token}"
             
             first_name = user.first_name or user.username or "Customer"
-            subject = "CalServices Password Reset Request"
+            subject = "Sevo Password Reset Request"
             
             body_text = (
-                "CALSERVICES SECURITY\n\n"
+                "SEVO SECURITY\n\n"
                 f"Hello {first_name},\n\n"
                 f"A password reset request has been received for: {user.email or user.username}\n\n"
                 f"Reset Link: {reset_url}\n\n"
@@ -868,7 +868,7 @@ class PasswordResetRequestView(APIView):
             
             html_message = f"""
             <div style="font-family: sans-serif; padding: 30px; max-width: 550px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px;">
-                <h2 style="color: #4f46e5; margin-bottom: 20px;">CalServices Password Reset</h2>
+                <h2 style="color: #4f46e5; margin-bottom: 20px;">Sevo Password Reset</h2>
                 <p style="color: #334155; font-size: 15px;">Hello {first_name},</p>
                 <p style="color: #64748b; font-size: 14px;">A password reset was requested for your account ({user.email or user.username}).</p>
                 <div style="margin: 30px 0;">

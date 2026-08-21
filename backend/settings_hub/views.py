@@ -267,15 +267,23 @@ class TeamMembersView(APIView):
 
     def get(self, request):
         from django.contrib.auth import get_user_model
+        from django.db.models import Q
         User = get_user_model()
-        members = User.objects.filter(company=request.user.company, is_active=True).order_by("first_name", "username")
+        # Team members are strictly Admin and Manager accounts with administrative access control.
+        # Customers, employees, and technicians are strictly excluded.
+        members = (
+            User.objects.filter(company=request.user.company, is_active=True)
+            .filter(Q(role__in=["admin", "manager"]) | Q(is_superuser=True))
+            .exclude(role__in=["customer", "employee", "technician"])
+            .order_by("first_name", "username")
+        )
         data = [
             {
                 "id": str(m.pk),
                 "username": m.username,
                 "email": m.email,
                 "name": m.get_full_name() or m.username,
-                "role": m.role,
+                "role": m.role if m.role in ["admin", "manager"] else "admin",
                 "date_joined": m.date_joined.isoformat(),
                 "is_current_user": m.pk == request.user.pk,
             }

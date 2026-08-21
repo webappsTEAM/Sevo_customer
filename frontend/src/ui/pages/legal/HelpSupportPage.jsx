@@ -23,12 +23,12 @@ const FAQS = [
     category: "Bookings & Service Areas",
     items: [
       {
-        q: "How do I book a doorstep service on CalServices?",
+        q: "How do I book a doorstep service on Sevo?",
         a: "Browse categories from the Home page (e.g. Cleaning, Pest Control, Painting, Masonry), select your specific package or add-ons, pick your preferred date and time slot, select your location address, and choose your payment method (Online or Cash on Delivery where applicable).",
       },
       {
-        q: "How does CalServices check if my area is serviceable?",
-        a: "CalServices utilizes geofenced operational zones. When you enter an address or enable device location, our service engine instantly verifies whether your coordinates fall within an active zone. If inside, all available services are displayed with instant booking.",
+        q: "How does Sevo check if my area is serviceable?",
+        a: "Sevo utilizes geofenced operational zones. When you enter an address or enable device location, our service engine instantly verifies whether your coordinates fall within an active zone. If inside, all available services are displayed with instant booking.",
       },
       {
         q: "Why are some services unavailable in my selected area?",
@@ -66,7 +66,7 @@ const FAQS = [
       },
       {
         q: "What happens if additional work or materials are needed on-site?",
-        a: "If additional scope is required, the professional will create a digital Work Extension Request. No extra work can be performed or charged without your prior approval via the CalServices app.",
+        a: "If additional scope is required, the professional will create a digital Work Extension Request. No extra work can be performed or charged without your prior approval via the Sevo app.",
       },
       {
         q: "How can I download my GST tax invoice?",

@@ -2571,6 +2571,8 @@ export function CatalogPackagesPage() {
     setQuickPriceEditing({
       ...pkg,
       base_price: Math.round(Number(pkg.base_price) || 0),
+      gst_rate: pkg.gst_rate !== undefined && pkg.gst_rate !== null ? parseFloat(pkg.gst_rate) : 18,
+      platform_fee: pkg.platform_fee !== undefined && pkg.platform_fee !== null ? parseFloat(pkg.platform_fee) : 29,
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
       checklist: items,
       image: pkg.image || "",
@@ -2633,6 +2635,8 @@ export function CatalogPackagesPage() {
         name: quickPriceEditing.name,
         description: quickPriceEditing.description || "",
         base_price: Math.round(Number(quickPriceEditing.base_price) || 0),
+        gst_rate: quickPriceEditing.gst_rate !== undefined && quickPriceEditing.gst_rate !== "" ? parseFloat(quickPriceEditing.gst_rate) : 18.0,
+        platform_fee: quickPriceEditing.platform_fee !== undefined && quickPriceEditing.platform_fee !== "" ? parseFloat(quickPriceEditing.platform_fee) : 29.0,
         tag: quickPriceEditing.tag || "",
         popular: isPop,
         duration: quickPriceEditing.duration || "",
@@ -3307,8 +3311,13 @@ export function CatalogPackagesPage() {
 
                               {/* Starting Fare / Price */}
                               <td className="py-3.5 px-4 sm:px-5">
-                                <div className="inline-flex items-center gap-1 text-sm font-extrabold text-indigo-700 bg-blue-50/80 border border-indigo-200/90 px-2.5 py-1 rounded-lg">
-                                  <span>₹{Math.round(Number(pkg.base_price) || 0).toLocaleString("en-IN")}</span>
+                                <div className="inline-flex flex-col items-start gap-1">
+                                  <div className="inline-flex items-center gap-1 text-sm font-extrabold text-indigo-700 bg-blue-50/80 border border-indigo-200/90 px-2.5 py-1 rounded-lg">
+                                    <span>₹{Math.round(Number(pkg.base_price) || 0).toLocaleString("en-IN")}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 font-semibold pl-0.5">
+                                    +{pkg.gst_rate !== undefined ? pkg.gst_rate : 18}% GST • ₹{pkg.platform_fee !== undefined ? pkg.platform_fee : 29} fee
+                                  </span>
                                 </div>
                               </td>
 
@@ -5140,6 +5149,50 @@ export function CatalogPackagesPage() {
                   setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
                 }
               />
+            </div>
+
+            {/* GST & Platform Fee Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="GST Percentage (%)"
+                type="number"
+                step="0.01"
+                placeholder="e.g. 18"
+                value={quickPriceEditing.gst_rate ?? 18}
+                onChange={(e) =>
+                  setQuickPriceEditing({ ...quickPriceEditing, gst_rate: e.target.value })
+                }
+              />
+              <Input
+                label="Platform / Convenience Fee (₹)"
+                type="number"
+                step="0.01"
+                placeholder="e.g. 29"
+                value={quickPriceEditing.platform_fee ?? 29}
+                onChange={(e) =>
+                  setQuickPriceEditing({ ...quickPriceEditing, platform_fee: e.target.value })
+                }
+              />
+            </div>
+
+            {/* Customer Price Calculation Live Preview Card */}
+            <div className="p-3.5 bg-gradient-to-r from-blue-50/80 via-indigo-50/70 to-blue-50/80 rounded-xl border border-indigo-100/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-0.5">
+                <span className="font-bold text-indigo-950">Customer Bill Preview:</span>
+                <div className="text-[11px] text-slate-600 font-medium flex items-center gap-2 flex-wrap">
+                  <span>Base: ₹{Math.round(Number(quickPriceEditing.base_price) || 0)}</span>
+                  <span>+</span>
+                  <span className="text-indigo-700 font-bold">GST ({Number(quickPriceEditing.gst_rate) || 18}%): ₹{Math.round((Number(quickPriceEditing.base_price) || 0) * ((Number(quickPriceEditing.gst_rate) || 18) / 100))}</span>
+                  <span>+</span>
+                  <span className="text-emerald-700 font-bold">Platform Fee: ₹{Math.round(Number(quickPriceEditing.platform_fee) || 29)}</span>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 block">Total Customer Price</span>
+                <span className="text-sm font-black text-indigo-900">
+                  ₹{Math.round(Number(quickPriceEditing.base_price) || 0) + Math.round((Number(quickPriceEditing.base_price) || 0) * ((Number(quickPriceEditing.gst_rate) || 18) / 100)) + Math.round(Number(quickPriceEditing.platform_fee) || 29)}
+                </span>
+              </div>
             </div>
 
             <div>

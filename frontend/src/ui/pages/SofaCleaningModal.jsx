@@ -272,11 +272,11 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
     };
   }, [selectedServiceDetails]);
 
-  const addItemToCart = (id, name, price, duration) => {
+  const addItemToCart = (id, name, price, duration, gst_rate, platform_fee) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === id);
       if (existing) return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { id, name, price, duration, quantity: 1 }];
+      return [...prev, { id, name, price, duration, gst_rate: Number(gst_rate || 18), platform_fee: Number(platform_fee || 29), quantity: 1 }];
     });
   };
 
@@ -302,6 +302,8 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
           if (parentDbMatch) {
             item.name = parentDbMatch.name;
             item.price = Math.round(Number(parentDbMatch.base_price) || item.price);
+            item.gst_rate = parentDbMatch.gst_rate !== undefined && parentDbMatch.gst_rate !== null ? parseFloat(parentDbMatch.gst_rate) : 18;
+            item.platform_fee = parentDbMatch.platform_fee !== undefined && parentDbMatch.platform_fee !== null ? parseFloat(parentDbMatch.platform_fee) : 29;
             item.duration = parentDbMatch.duration || item.duration;
             item.description = parentDbMatch.description || item.description;
             item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
@@ -318,6 +320,8 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 ...subOpt,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
+                gst_rate: dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18,
+                platform_fee: dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29,
                 duration: dbMatch.duration || subOpt.duration,
                 includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : subOpt.includes,
               };
@@ -327,16 +331,24 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
               if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) updatedSub.faqs = dbMatch.faqs;
               return updatedSub;
             }
-            return subOpt;
+            return {
+              ...subOpt,
+              gst_rate: subOpt.gst_rate || 18,
+              platform_fee: subOpt.platform_fee || 29,
+            };
           });
           if (item.subOptions.length > 0) {
             item.price = item.subOptions[0].price;
+            item.gst_rate = item.subOptions[0].gst_rate || 18;
+            item.platform_fee = item.subOptions[0].platform_fee || 29;
           }
         } else {
           const dbMatch = dbPackages.find(p => p.slug === item.id);
           if (dbMatch) {
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
+            item.platform_fee = dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29;
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
             item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
@@ -344,6 +356,9 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
             if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
             if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
             if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
+          } else {
+            item.gst_rate = item.gst_rate || 18;
+            item.platform_fee = item.platform_fee || 29;
           }
         }
         return item;
@@ -549,18 +564,39 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                 </div>
               )}
 
-              <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
-                {cart.length > 0 && (
-                  <div className="flex justify-between text-slate-500">
-                    <span>Items Subtotal</span>
-                    <span>₹{subtotal.toLocaleString("en-IN")}</span>
+              {cart.length > 0 ? (() => {
+                const itemTotal = cart.reduce((s, i) => s + (i.price * (i.quantity || 1)), 0);
+                const totalGst = cart.reduce((s, i) => s + Math.round((i.price * (i.quantity || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
+                const platformFee = cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
+                const grandTotal = itemTotal + totalGst + platformFee;
+                return (
+                  <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-slate-500 font-semibold">
+                      <span>Item Total</span>
+                      <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500 font-semibold">
+                      <span>Taxes & GST (18%)</span>
+                      <span className="text-indigo-600 font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500 font-semibold">
+                      <span>Platform Fee</span>
+                      <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-slate-200 pt-2">
+                      <span>Total Amount</span>
+                      <span className="text-emerald-700">₹{grandTotal.toLocaleString("en-IN")}</span>
+                    </div>
                   </div>
-                )}
-                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2">
-                  <span>Total Amount</span>
-                  <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                );
+              })() : (
+                <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
+                  <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
+                    <span>Total Amount</span>
+                    <span>₹0</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -812,26 +848,53 @@ export function SofaCleaningModal({ category, cart, setCart, onClose, onCheckout
                   const subTotalVal = selectedServiceDetails.subOptions.reduce((acc, sub) => {
                     return acc + (sub.price * getCount(sub.id));
                   }, 0);
+                  const gstPct = selectedServiceDetails.gst_rate !== undefined ? Number(selectedServiceDetails.gst_rate) : 18;
+                  const gstAmt = Math.round(subTotalVal * (gstPct / 100));
+                  const platFee = selectedServiceDetails.platform_fee !== undefined ? Number(selectedServiceDetails.platform_fee) : 29;
+                  const total = subTotalVal > 0 ? (subTotalVal + gstAmt + platFee) : 0;
                   return subTotalVal > 0 ? (
-                    <div className="text-sm font-extrabold text-slate-900">₹{subTotalVal}</div>
+                    <div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold flex-wrap">
+                        <span>Fare: ₹{subTotalVal}</span>
+                        <span>•</span>
+                        <span className="text-indigo-600 font-bold">GST ({gstPct}%): ₹{gstAmt}</span>
+                        <span>•</span>
+                        <span className="text-emerald-600 font-bold">Fee: ₹{platFee}</span>
+                      </div>
+                      <div className="text-sm font-black text-slate-900 mt-0.5">Total Amount: ₹{total}</div>
+                    </div>
                   ) : (
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
                   );
                 }
+                const baseFare = selectedServiceDetails.price || 0;
+                const gstPct = selectedServiceDetails.gst_rate !== undefined ? Number(selectedServiceDetails.gst_rate) : 18;
+                const gstAmt = Math.round(baseFare * (gstPct / 100));
+                const platFee = selectedServiceDetails.platform_fee !== undefined ? Number(selectedServiceDetails.platform_fee) : 29;
+                const total = baseFare + gstAmt + platFee;
                 return (
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
+                  <div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold flex-wrap">
+                      <span>Fare: ₹{baseFare}</span>
+                      <span>•</span>
+                      <span className="text-indigo-600 font-bold">GST ({gstPct}%): ₹{gstAmt}</span>
+                      <span>•</span>
+                      <span className="text-emerald-600 font-bold">Fee: ₹{platFee}</span>
+                    </div>
+                    <div className="text-sm font-black text-slate-900 mt-0.5">Total Amount: ₹{total}</div>
+                  </div>
                 );
               })()}
               <button
                 onClick={() => {
                   if (!selectedServiceDetails.subOptions) {
                     if (getCount(selectedServiceDetails.id) === 0) {
-                      addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration);
+                      addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration, selectedServiceDetails.gst_rate, selectedServiceDetails.platform_fee);
                     }
                   }
                   setSelectedServiceDetails(null);
                 }}
-                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer border-none"
+                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all uppercase tracking-wider cursor-pointer border-none active:scale-95"
               >
                 Proceed
               </button>

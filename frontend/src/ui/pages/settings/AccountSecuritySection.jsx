@@ -48,7 +48,7 @@ function SessionCard({ session, onRevoke, revoking }) {
 }
 
 export default function AccountSecuritySection({ markDirty, showToast, Field, SectionHeader }) {
-  const { user } = useAuth()
+  const { user, refreshMe } = useAuth()
 
   // Email change state
   const [emailForm, setEmailForm] = useState({ new_email: "", password: "" })
@@ -103,6 +103,7 @@ export default function AccountSecuritySection({ markDirty, showToast, Field, Se
       await apiRequest("/auth/email/change/", { method: "POST", json: emailForm })
       showToast("Email updated successfully.")
       setEmailForm({ new_email: "", password: "" })
+      if (refreshMe) await refreshMe()
     } catch (err) {
       showToast(err?.body?.message || "Failed to update email.", "error")
     } finally { setEmailSaving(false) }

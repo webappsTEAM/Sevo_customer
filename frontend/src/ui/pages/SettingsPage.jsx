@@ -20,8 +20,7 @@ const BillingSection = lazy(() => import("./settings/BillingSection.jsx"))
 const TeamMembersSection = lazy(() => import("./settings/TeamMembersSection.jsx"))
 const InvoicesSection = lazy(() => import("./settings/InvoicesSection.jsx"))
 const WorkspaceSection = lazy(() => import("./settings/WorkspaceSection.jsx"))
-const PrivacyDataSection = lazy(() => import("./settings/PrivacyDataSection.jsx"))
-const DangerZoneSection = lazy(() => import("./settings/DangerZoneSection.jsx"))
+const AccessControlSection = lazy(() => import("./settings/AccessControlSection.jsx"))
 const LocationsSettingsSection = lazy(() => import("./LocationsPage.jsx").then(m => ({ default: m.LocationsPage })))
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -102,18 +101,11 @@ const TABS = [
   },
   {
     id: "team",
-    label: "Team & Members",
+    label: "Administrators & Managers",
     subtitle: "Invite members, assign roles, and manage workspace access.",
     icon: <Users2 size={15} />,
     adminOnly: true,
     to: routes.settings_team,
-  },
-  {
-    id: "data",
-    label: "Privacy & Data",
-    subtitle: "GDPR export, cookie preferences, audit log, and account deletion.",
-    icon: <Database size={15} />,
-    to: routes.settings_data,
   },
   {
     id: "rbac",
@@ -129,14 +121,6 @@ const TABS = [
     subtitle: "Manage service sites, warehouse hubs, GPS boundaries, and operational coverage.",
     icon: <MapPin size={15} />,
     adminOnly: true,
-  },
-  {
-    id: "danger",
-    label: "Danger Zone",
-    subtitle: "Transfer ownership, delete workspace, and irreversible actions.",
-    icon: <AlertTriangle size={15} />,
-    adminOnly: true,
-    to: routes.settings_danger,
   },
 ]
 
@@ -229,10 +213,8 @@ export function SettingsPage({ section: sectionProp }) {
               {activeSection === "team" && <TeamMembersSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "invoices" && <InvoicesSection />}
               {activeSection === "organization" && <WorkspaceSection showToast={showToast} SectionHeader={SectionHeader} />}
-              {activeSection === "data" && <PrivacyDataSection showToast={showToast} SectionHeader={SectionHeader} />}
               {activeSection === "location" && <LocationsSettingsSection />}
               {activeSection === "rbac" && <AccessControlSection />}
-              {activeSection === "danger" && <DangerZoneSection showToast={showToast} SectionHeader={SectionHeader} />}
             </Suspense>
           </motion.div>
         </AnimatePresence>
