@@ -192,7 +192,7 @@ const SOFA_ADDONS_SERVICES = [
         price: 399,
         rating: "4.85",
         reviews: "65K reviews",
-        image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=200&q=80&fit=crop",
+        image: "/mockups/fridge_single_door.jpg",
         duration: "1 hr"
       },
       {
@@ -201,7 +201,7 @@ const SOFA_ADDONS_SERVICES = [
         price: 549,
         rating: "4.83",
         reviews: "93K reviews",
-        image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=200&q=80&fit=crop",
+        image: "/mockups/fridge_double_door.jpg",
         duration: "1.5 hrs"
       },
       {
@@ -210,7 +210,7 @@ const SOFA_ADDONS_SERVICES = [
         price: 799,
         rating: "4.80",
         reviews: "9K reviews",
-        image: "/mockups/appliance_cleaning_thumb.png",
+        image: "/mockups/fridge_triple_door.jpg",
         duration: "2 hrs"
       }
     ]

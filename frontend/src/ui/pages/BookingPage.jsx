@@ -19611,7 +19611,7 @@ const APPLIANCE_SERVICES = [
         price: 399,
         rating: "4.85",
         reviews: "65K reviews",
-        image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=200&q=80&fit=crop",
+        image: "/mockups/fridge_single_door.jpg",
         duration: "1 hr"
       },
       {
@@ -19620,7 +19620,7 @@ const APPLIANCE_SERVICES = [
         price: 549,
         rating: "4.83",
         reviews: "93K reviews",
-        image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=200&q=80&fit=crop",
+        image: "/mockups/fridge_double_door.jpg",
         duration: "1.5 hrs"
       },
       {
@@ -19629,7 +19629,7 @@ const APPLIANCE_SERVICES = [
         price: 799,
         rating: "4.80",
         reviews: "9K reviews",
-        image: "/mockups/appliance_cleaning_thumb.png",
+        image: "/mockups/fridge_triple_door.jpg",
         duration: "2 hrs"
       }
     ]
@@ -19700,7 +19700,7 @@ const APPLIANCE_SERVICES = [
         price: 99,
         rating: "4.81",
         reviews: "30K reviews",
-        image: "/mockups/gas_stove_clean.png",
+        image: "/mockups/stove_2b.jpg",
         duration: "30 mins"
       },
       {
@@ -19709,7 +19709,7 @@ const APPLIANCE_SERVICES = [
         price: 149,
         rating: "4.79",
         reviews: "15K reviews",
-        image: "/mockups/gas_stove_clean.png",
+        image: "/mockups/stove_3b.jpg",
         duration: "45 mins"
       },
       {
@@ -19718,7 +19718,7 @@ const APPLIANCE_SERVICES = [
         price: 199,
         rating: "4.78",
         reviews: "15K reviews",
-        image: "/mockups/gas_stove_clean.png",
+        image: "/mockups/stove_4b.jpg",
         duration: "1 hr"
       }
     ]
@@ -20707,29 +20707,35 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
             item.tag = parentDbMatch.tag || "";
             item.popular = parentDbMatch.popular || false;
+            if (parentDbMatch.image) {
+              item.image = parentDbMatch.image;
+            }
           }
 
           item.subOptions = item.subOptions.map(subOpt => {
             const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
             if (dbMatch) {
+              const baseIncludes = Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes);
               return {
                 ...subOpt,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
                 duration: dbMatch.duration || subOpt.duration,
                 description: dbMatch.description || subOpt.description,
-                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes),
+                image: dbMatch.image ? dbMatch.image : subOpt.image,
+                includes: baseIncludes.filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false)),
                 tag: dbMatch.tag || "",
                 popular: dbMatch.popular || false,
-                tools: Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0 ? dbMatch.tools : (subOpt.tools || []),
-                ready: Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0 ? dbMatch.ready : (subOpt.ready || []),
-                reviews: Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || []),
-                faqs: Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0 ? dbMatch.faqs : (subOpt.faqs || []),
+                tools: (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0 ? dbMatch.tools : (subOpt.tools || [])).filter(t => typeof t === "string" ? true : (t?.checked !== false && t?.enabled !== false)),
+                ready: (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0 ? dbMatch.ready : (subOpt.ready || [])).filter(r => typeof r === "string" ? true : (r?.checked !== false && r?.enabled !== false)),
+                reviews: (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || [])).filter(r => r?.enabled !== false),
+                reviews_list: (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || [])).filter(r => r?.enabled !== false),
+                faqs: (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0 ? dbMatch.faqs : (subOpt.faqs || [])).filter(f => f?.checked !== false && f?.enabled !== false),
               };
             }
             return {
               ...subOpt,
-              includes: subOpt.includes || item.includes
+              includes: (subOpt.includes || item.includes).filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false))
             };
           });
           if (item.subOptions.length > 0) {
@@ -20742,12 +20748,21 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            item.includes = Array.isArray(dbMatch.includes) 
+              ? dbMatch.includes.filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false))
+              : item.includes;
             item.tag = dbMatch.tag || "";
             item.popular = dbMatch.popular || false;
+            // Overwrite the image if the database has a customized image path set
+            if (dbMatch.image) {
+              item.image = dbMatch.image;
+            }
             if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
             if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
-            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) {
+              item.reviews = dbMatch.reviews.filter(r => r.enabled !== false);
+              item.reviews_list = dbMatch.reviews.filter(r => r.enabled !== false);
+            }
             if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
           }
         }
@@ -20901,19 +20916,22 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                       {service.includes && service.includes.length > 0 && (
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
                           {(() => {
+                            const activeIncludes = service.includes
+                              .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false))
+                              .map(inc => typeof inc === "string" ? inc : inc.text);
+
                             const isBasic = service.id === "occ-basic";
                             const isDeep = service.id === "occ-deep";
-                            const isExpanded = isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true);
+                            const hasMoreThanThree = activeIncludes.length > 3;
+                            const isExpanded = (isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true)) && hasMoreThanThree;
                             const displayIncludes = ((isBasic || isDeep) && !isExpanded
-                              ? service.includes.slice(0, 3)
-                              : service.includes)
-                              .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false))
-                              .map(inc => typeof inc === "string" ? inc : inc.text);
+                              ? activeIncludes.slice(0, 3)
+                              : activeIncludes);
 
                             return (
                               <>
                                 {displayIncludes.map((item, i) => {
-                                  const isLastOfThree = (isBasic || isDeep) && !isExpanded && i === 2;
+                                  const isLastOfThree = (isBasic || isDeep) && !isExpanded && i === 2 && hasMoreThanThree;
                                   return (
                                     <li key={i} className="flex items-start gap-2">
                                       <span className="text-emerald-600 font-bold mt-0.5">✓</span>
@@ -20938,7 +20956,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                                     </li>
                                   );
                                 })}
-                                {(isBasic || isDeep) && isExpanded && (
+                                {(isBasic || isDeep) && isExpanded && hasMoreThanThree && (
                                   <div className="text-left mt-1 pl-3">
                                     <span
                                       onClick={(e) => {
@@ -20966,36 +20984,64 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                     </div>
 
                     {/* Image + add button */}
-                    <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
-                      <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
-                        <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
-                        {count > 0 ? (
-                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
-                            <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
-                            <span>{count}</span>
-                            <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-emerald-900">+</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              if (service.subOptions) {
-                                setSelectedServiceDetails(service);
-                              } else {
-                                addItemToCart(service.id, service.name, service.price, service.duration);
-                              }
-                            }}
-                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
-                          >
-                            <ShoppingCart size={12} /> Add
-                          </button>
+                    {service.image && (
+                      <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
+                        <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
+                          <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
+                          {count > 0 ? (
+                            <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                              <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
+                              <span>{count}</span>
+                              <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-emerald-900">+</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (service.subOptions) {
+                                  setSelectedServiceDetails(service);
+                                } else {
+                                  addItemToCart(service.id, service.name, service.price, service.duration);
+                                }
+                              }}
+                              className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
+                            >
+                              <ShoppingCart size={12} /> Add
+                            </button>
+                          )}
+                        </div>
+                        {service.options && (
+                          <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
                         )}
                       </div>
-                      {service.options && (
-                        <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
-                      )}
-                    </div>
+                    )}
+                    {!service.image && (
+                      <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
+                        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
+                          {count > 0 ? (
+                            <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                              <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
+                              <span>{count}</span>
+                              <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-emerald-900">+</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (service.subOptions) {
+                                  setSelectedServiceDetails(service);
+                                } else {
+                                  addItemToCart(service.id, service.name, service.price, service.duration);
+                                }
+                              }}
+                              className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
+                            >
+                              <ShoppingCart size={12} /> Add
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
