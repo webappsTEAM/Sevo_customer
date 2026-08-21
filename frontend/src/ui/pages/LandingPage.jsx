@@ -2144,6 +2144,147 @@ export function LandingPage() {
           </div>
         </section>
 
+        {/* ── Vendor Hire Banner ─────────────────────────────── */}
+        {homeConfig.vendorBanner?.enabled !== false && (() => {
+          const vb = homeConfig.vendorBanner || {}
+          const features = vb.features && vb.features.length > 0
+            ? vb.features
+            : [
+                { id: "vf-1", icon: "📅", label: "Flexible Timings" },
+                { id: "vf-2", icon: "💼", label: "Stable Work" },
+                { id: "vf-3", icon: "🤝", label: "Team Support" },
+              ]
+          const benefits = vb.benefits && vb.benefits.length > 0
+            ? vb.benefits
+            : [
+                { id: "vb-1", icon: "✅", text: "Verified & trusted customers" },
+                { id: "vb-2", icon: "🕐", text: "On-time service & support" },
+                { id: "vb-3", icon: "📍", text: "Work close to your area" },
+                { id: "vb-4", icon: "🌟", text: "Recognition for quality work" },
+              ]
+          return (
+            <section className="max-w-7xl mx-auto px-6 py-8">
+              <div
+                style={{
+                  background: "linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #134e4a 100%)",
+                  borderRadius: "24px",
+                  overflow: "hidden",
+                  position: "relative",
+                  boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+                }}
+              >
+                {/* Decorative blobs */}
+                <div style={{ position: "absolute", top: "-60px", right: "-60px", width: "260px", height: "260px", borderRadius: "50%", background: "rgba(20,184,166,0.10)", pointerEvents: "none" }} />
+                <div style={{ position: "absolute", bottom: "-40px", left: "30%", width: "180px", height: "180px", borderRadius: "50%", background: "rgba(16,185,129,0.07)", pointerEvents: "none" }} />
+
+                <div style={{ display: "flex", flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", minHeight: "260px", position: "relative", zIndex: 1 }}>
+                  {/* Left Content */}
+                  <div style={{ flex: "1 1 320px", padding: "36px 32px 32px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                    {/* Badge */}
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "7px", background: "rgba(20,184,166,0.15)", border: "1px solid rgba(20,184,166,0.30)", borderRadius: "999px", padding: "5px 14px", marginBottom: "16px", width: "fit-content" }}>
+                      <span style={{ fontSize: "0.9rem" }}>{vb.badgeIcon || "🤝"}</span>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#5eead4", letterSpacing: "0.03em" }}>
+                        {vb.badgeText || "We're Looking for Professionals"}
+                      </span>
+                    </div>
+
+                    {/* Title */}
+                    <h2 style={{ fontSize: "clamp(1.45rem, 4vw, 2.1rem)", fontWeight: 900, color: "#f8fafc", lineHeight: 1.18, margin: "0 0 12px" }}>
+                      {vb.titlePrefix || "We Hire"}{" "}
+                      <span style={{ color: "#2dd4bf" }}>{vb.titleHighlight || "Technicians, Employees"}</span>
+                      {vb.titleSuffix ? ` ${vb.titleSuffix}` : " & Vendors"}
+                    </h2>
+
+                    {/* Subtitle */}
+                    <p style={{ fontSize: "0.88rem", color: "#94a3b8", lineHeight: 1.6, marginBottom: "24px", maxWidth: "400px" }}>
+                      {vb.subtitle || "Join our team of skilled professionals and be part of a growing service community that works with trust and quality."}
+                    </p>
+
+                    {/* Feature highlights */}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "28px" }}>
+                      {features.map((f, i) => (
+                        <div key={f.id || i} style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "10px", padding: "6px 13px" }}>
+                          <span style={{ fontSize: "0.95rem" }}>{f.icon}</span>
+                          <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#e2e8f0" }}>{f.label}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* CTA Buttons */}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
+                      <a
+                        href={vb.ctaUrl || "https://calservices-vendor.vercel.app"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: "8px",
+                          background: "linear-gradient(135deg, #14b8a6, #0d9488)",
+                          color: "#fff", fontWeight: 800, fontSize: "0.88rem",
+                          padding: "12px 24px", borderRadius: "14px",
+                          boxShadow: "0 4px 20px rgba(20,184,166,0.35)",
+                          textDecoration: "none", transition: "transform 0.15s, box-shadow 0.15s",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(20,184,166,0.45)" }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 4px 20px rgba(20,184,166,0.35)" }}
+                      >
+                        {vb.ctaText || "Join as a Professional"} →
+                      </a>
+                      {(vb.learnMoreText || vb.learnMoreUrl) && (
+                        <a
+                          href={vb.learnMoreUrl || "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: "0.83rem", fontWeight: 700, color: "#94a3b8", textDecoration: "underline", textUnderlineOffset: "3px" }}
+                        >
+                          {vb.learnMoreText || "Learn more"}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Content — Image + Benefits */}
+                  <div style={{ flex: "0 1 420px", display: "flex", flexDirection: "row", alignItems: "stretch", overflow: "hidden" }}>
+                    {/* Technician image — clearly visible, not cropped */}
+                    {vb.image && (
+                      <div style={{ flex: "0 0 220px", position: "relative", overflow: "hidden", alignSelf: "stretch" }}>
+                        <img
+                          src={vb.image}
+                          alt="Service Professional"
+                          style={{
+                            position: "absolute",
+                            bottom: 0,
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            height: "100%",
+                            width: "auto",
+                            maxWidth: "none",
+                            objectFit: "contain",
+                            objectPosition: "bottom center",
+                            opacity: 1,
+                            pointerEvents: "none",
+                            display: "block",
+                          }}
+                        />
+                        {/* Subtle left-edge fade to blend into banner */}
+                        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, #1e293b 0%, transparent 30%)", pointerEvents: "none" }} />
+                      </div>
+                    )}
+                    {/* Benefits list — always fully visible */}
+                    <div style={{ flex: 1, padding: "28px 24px 28px 16px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "12px", minWidth: "155px" }}>
+                      {benefits.map((b, i) => (
+                        <div key={b.id || i} style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                          <span style={{ fontSize: "1rem", lineHeight: 1.4, flexShrink: 0 }}>{b.icon}</span>
+                          <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#e2e8f0", lineHeight: 1.4 }}>{b.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )
+        })()}
+
         {/* ── 1. Home Services & Pest Control Modal Popup ── */}
         {isHomePestModalOpen &&
           typeof document !== "undefined" &&
