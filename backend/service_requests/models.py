@@ -11,14 +11,53 @@ from django.db import models
 from django.utils import timezone
 
 
-def _generate_request_id():
-    """Generate SR-XXXX style human-readable ID."""
-    last = ServiceRequest.objects.order_by("-id").first()
-    num = (last.id + 1) if last and last.id else 1
-    req_id = f"SR-{str(num).zfill(4)}"
+# ── Category prefix mapping for unique human-readable Service Request IDs ────
+CATEGORY_PREFIX_MAP = {
+    "home_services": "HM",
+    "home": "HM",
+    "plumbing": "PL",
+    "electrical": "EL",
+    "carpentry": "CP",
+    "hvac": "AC",
+    "ac_repair": "AC",
+    "appliance_repair": "AC",
+    "appliances": "AC",
+    "cleaning": "CL",
+    "pest_control": "PC",
+    "painting": "PA",
+    "security": "SC",
+    "general": "GM",
+    "logistics": "LG",
+    "goods_transport": "GT",
+    "packers_movers": "PM",
+}
+
+
+def _generate_request_id(category_or_slug=None):
+    """
+    Generate category-prefixed unique ID (e.g. HM0001, AC0001, PL0001, EL0001).
+    Guarantees global uniqueness across all ServiceRequests.
+    """
+    prefix = "SR"
+    if category_or_slug:
+        slug_clean = str(category_or_slug).strip().lower().replace("-", "_")
+        prefix = CATEGORY_PREFIX_MAP.get(slug_clean)
+        if not prefix:
+            # Fallback: derive 2-letter uppercase prefix from category string
+            words = [w for w in slug_clean.split("_") if w]
+            if len(words) >= 2:
+                prefix = f"{words[0][0]}{words[1][0]}".upper()
+            elif len(slug_clean) >= 2:
+                prefix = slug_clean[:2].upper()
+            else:
+                prefix = "SR"
+
+    last = ServiceRequest.objects.filter(request_id__startswith=prefix).order_by("-id").first()
+    num = (last.id + 1) if last and last.id else (ServiceRequest.objects.count() + 1)
+    req_id = f"{prefix}{str(num).zfill(4)}"
     while ServiceRequest.objects.filter(request_id=req_id).exists():
         num += 1
-        req_id = f"SR-{str(num).zfill(4)}"
+        req_id = f"{prefix}{str(num).zfill(4)}"
     return req_id
 
 
@@ -243,7 +282,7 @@ class ServiceRequest(models.Model):
             old_status = ServiceRequest.objects.filter(pk=self.pk).values_list("status", flat=True).first() or ""
 
         if not self.request_id:
-            self.request_id = _generate_request_id()
+            self.request_id = _generate_request_id(self.service_category)
         if not self.start_otp:
             import hashlib
             h = hashlib.sha256(f"calservices_booking_otp_{self.request_id}_{self.phone}_{self.customer_name}".encode()).hexdigest()

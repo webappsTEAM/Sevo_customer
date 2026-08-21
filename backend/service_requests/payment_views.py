@@ -106,7 +106,7 @@ class PaymentVerifyView(APIView):
         sr.transaction_id = payment_id or f"TXN_{uuid.uuid4().hex[:12].upper()}"
         sr.payment_gateway = "gateway"
         if not sr.invoice_id:
-            sr.invoice_id = f"INV-{sr.request_id.replace('SR-', '')}-{uuid.uuid4().hex[:6].upper()}"
+            sr.invoice_id = f"INV-{sr.request_id}-{uuid.uuid4().hex[:6].upper()}"
         sr.save(update_fields=["status", "payment_status", "transaction_id", "payment_gateway", "invoice_id", "updated_at"])
 
         return _success(
@@ -150,7 +150,7 @@ class AdminPaymentUpdateView(APIView):
             sr.payment_collected_by_name = request.data.get("collected_by_name") or request.user.get_full_name() or request.user.username
             sr.collection_method = request.data.get("collection_method") or "Cash"
             if not sr.invoice_id:
-                sr.invoice_id = f"INV-{sr.request_id.replace('SR-', '')}-{uuid.uuid4().hex[:6].upper()}"
+                sr.invoice_id = f"INV-{sr.request_id}-{uuid.uuid4().hex[:6].upper()}"
             sr.save(update_fields=["payment_status", "payment_collected_at", "payment_collected_by_name", "collection_method", "invoice_id", "updated_at"])
         else:
             sr.save(update_fields=["payment_status", "updated_at"])
