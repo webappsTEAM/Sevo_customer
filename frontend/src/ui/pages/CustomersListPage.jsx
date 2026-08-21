@@ -314,7 +314,7 @@ export function CustomersListPage() {
           <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
           <input
             type="text"
-            placeholder="Search by name, phone, email..."
+            placeholder="Search by name, phone, email, Customer ID (e.g. CUS0025)..."
             value={searchTerm}
             onChange={handleSearchChange}
             className="w-full pl-9 pr-4 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-950 border border-stroke dark:border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -386,7 +386,14 @@ export function CustomersListPage() {
                           {c.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <div className="font-extrabold text-slate-800 dark:text-slate-200 hover:text-indigo-600 transition-colors">{c.name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 hover:text-indigo-600 transition-colors">{c.name}</span>
+                            {c.customer_id && (
+                              <span className="font-mono text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900 px-1.5 py-0.5 rounded">
+                                {c.customer_id}
+                              </span>
+                            )}
+                          </div>
                           {c.total_bookings >= 2 && (
                             <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-450 text-[9px] font-black uppercase tracking-wider">
                               Repeat Customer

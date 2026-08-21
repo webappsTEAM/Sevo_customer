@@ -164,8 +164,13 @@ def detect_customer_location(latitude: float, longitude: float, accuracy: float 
 
 def get_customer_profile(user):
     """Return a plain dict of the customer's profile fields."""
+    if not getattr(user, "customer_id", None):
+        from .models import _generate_customer_id
+        user.customer_id = _generate_customer_id()
+        user.save(update_fields=["customer_id"])
     return {
         "id": user.id,
+        "customer_id": user.customer_id,
         "username": user.username,
         "full_name": user.get_full_name(),
         "first_name": user.first_name,

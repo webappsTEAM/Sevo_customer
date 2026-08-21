@@ -61,6 +61,7 @@ class CustomerListView(APIView):
             results.append({
                 "id": identity_id.id if identity_id else ident.display_customer_id,
                 "user_id": ident.user.id,
+                "customer_id": getattr(ident.user, "customer_id", None),
                 "name": ident.name or ident.user.get_full_name() or ident.user.username,
                 "email": ident.email or ident.user.email or "",
                 "phone": ident.phone or ident.user.phone or "",
@@ -104,6 +105,7 @@ class CustomerDetailView(APIView):
         profile = {
             "id": identity.id,
             "user_id": user.id,
+            "customer_id": getattr(user, "customer_id", None),
             "username": user.username,
             "name": user.get_full_name() or user.username,
             "email": identity.email_normalized or user.email or "",

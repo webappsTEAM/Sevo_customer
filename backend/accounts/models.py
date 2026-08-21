@@ -30,6 +30,27 @@ class UserManager(BaseUserManager):
         return self._create_user(username, email, password, **extra_fields)
 
 
+def _generate_customer_id():
+    """
+    Generate unique human-readable customer ID in CUS0001, CUS0002 format.
+    """
+    last_user = User.objects.filter(customer_id__startswith="CUS").order_by("-id").first()
+    num = 1
+    if last_user and last_user.customer_id:
+        try:
+            num = int(str(last_user.customer_id).replace("CUS", "")) + 1
+        except ValueError:
+            num = (last_user.id or 1) + 1
+    else:
+        num = (User.objects.count() + 1)
+
+    cid = f"CUS{str(num).zfill(4)}"
+    while User.objects.filter(customer_id=cid).exists():
+        num += 1
+        cid = f"CUS{str(num).zfill(4)}"
+    return cid
+
+
 class User(AbstractBaseUser):
     """
     Custom user model for QuickTIMS.
@@ -40,6 +61,17 @@ class User(AbstractBaseUser):
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, null=True, blank=True, related_name="users")
 
     username_validator = UnicodeUsernameValidator()
+
+    # Permanent human-readable Customer ID (e.g. CUS0001, CUS0002)
+    customer_id = models.CharField(
+        max_length=30,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        editable=False,
+        help_text="Permanent unique Customer ID (e.g. CUS0001)",
+    )
 
     username = models.CharField(
         max_length=150,
@@ -98,7 +130,13 @@ class User(AbstractBaseUser):
             models.Index(fields=["role"], name="idx_user_role"),
             models.Index(fields=["company", "role"], name="idx_user_company_role"),
             models.Index(fields=["role", "date_joined"], name="idx_user_role_date_joined"),
+            models.Index(fields=["customer_id"], name="idx_user_customer_id"),
         ]
+
+    def save(self, *args, **kwargs):
+        if not self.customer_id:
+            self.customer_id = _generate_customer_id()
+        super().save(*args, **kwargs)
 
     def get_full_name(self):
         full_name = f"{self.first_name} {self.last_name}".strip()

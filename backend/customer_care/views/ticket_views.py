@@ -91,7 +91,9 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
             qs = qs.filter(ticket_number__icontains=search) \
                | qs.filter(customer_name__icontains=search) \
                | qs.filter(email__icontains=search) \
-               | qs.filter(phone__icontains=search)
+               | qs.filter(phone__icontains=search) \
+               | qs.filter(customer__customer_id__icontains=search) \
+               | qs.filter(service_request__customer__customer_id__icontains=search)
         if sla_breached in ("true", "1", "yes"):
             from django.utils import timezone
             qs = qs.filter(

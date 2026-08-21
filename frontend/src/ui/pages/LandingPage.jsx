@@ -886,7 +886,6 @@ const CATEGORIES = [
   { label: "Mason", icon: Building2, photo: "/mockups/service_building.png", bg: "bg-sky-50", ring: "border-sky-100", fg: "text-sky-600", hoverBg: "group-hover:bg-sky-100", serviceCategoryId: "mason" },
   { label: "AC & Appliance", icon: AirVent, photo: "/mockups/service_hvac.png", bg: "bg-rose-50", ring: "border-rose-100", fg: "text-rose-600", hoverBg: "group-hover:bg-rose-100", serviceCategoryId: "hvac" },
   { label: "Electrician, Plumbing & Carpentry", icon: Hammer, photo: "/mockups/service_electrical.png", bg: "bg-violet-50", ring: "border-violet-100", fg: "text-violet-600", hoverBg: "group-hover:bg-violet-100", serviceCategoryId: "electrical" },
-  { label: "Goods & Transports", icon: Boxes, photo: "/mockups/service_transport.jpg", bg: "bg-teal-50", ring: "border-teal-100", fg: "text-teal-600", hoverBg: "group-hover:bg-teal-100", serviceCategoryId: null },
 ]
 
 const HOME_SERVICES_SUB = [
@@ -2097,12 +2096,13 @@ export function LandingPage() {
           </div>
 
           {/* Dynamic Category Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-6xl">
             {(homeConfig.categories || []).filter(c => c.enabled !== false && c.is_enabled !== false).map((cat, idx) => {
               const defaultCatImgs = [
                 "/mockups/category_for_you.png",
                 "/mockups/category_food_health.png",
-                "/mockups/category_home_transport.png"
+                "/mockups/category_home_transport.png",
+                "/mockups/service_transport.jpg"
               ]
               const fallbackCatImg = defaultCatImgs[idx % defaultCatImgs.length]
               const displayImg = (cat.image_url && cat.image_url.trim()) || (cat.image && cat.image.trim()) || fallbackCatImg
@@ -2111,9 +2111,17 @@ export function LandingPage() {
                   key={cat.id || idx}
                   type="button"
                   onClick={() => {
-                    if (idx === 0) setIsForYouModalOpen(true)
-                    else if (idx === 1) { setSelectedFoodSubModuleId(null); setIsFoodHealthModalOpen(true) }
-                    else setIsHomeServicesCombinedModalOpen(true)
+                    const titleLower = (cat.title || "").toLowerCase()
+                    if (cat.id === "cat-1" || titleLower.includes("for you") || idx === 0) {
+                      setIsForYouModalOpen(true)
+                    } else if (cat.id === "cat-2" || titleLower.includes("food") || titleLower.includes("health") || idx === 1) {
+                      setSelectedFoodSubModuleId(null)
+                      setIsFoodHealthModalOpen(true)
+                    } else if (cat.id === "cat-4" || titleLower.includes("goods") || titleLower.includes("transport") || idx === 3) {
+                      setIsGoodsModalOpen(true)
+                    } else {
+                      setIsHomeServicesCombinedModalOpen(true)
+                    }
                   }}
                   className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-emerald-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
                 >
@@ -3621,13 +3629,13 @@ export function LandingPage() {
 
                 <div className="text-center mb-8">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-extrabold uppercase tracking-wider mb-2">
-                    ⚡ 6 Core Specialized Pillars
+                    ⚡ 5 Core Specialized Pillars
                   </div>
                   <h3
                     id="home-combined-modal-title"
                     className="text-xl sm:text-2xl font-extrabold text-slate-900"
                   >
-                    Home, Repair &amp; Transport Services
+                    Home &amp; Repair Services
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg mx-auto">
                     Select any service below to explore specific options, verified technicians, and transparent pricing.
@@ -3651,8 +3659,8 @@ export function LandingPage() {
                   </div>
                 )}
 
-                {/* 6 Combined Services Grid matching the exact items from the 3rd image */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
+                {/* 5 Combined Services Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
                   {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => {
                     const isAvailable = isServiceAvailableInZone(label)
                     return (
@@ -5331,21 +5339,21 @@ export function LandingPage() {
 
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-extrabold uppercase tracking-wider mb-2">
-                  ⚡ 6 Core Specialized Pillars
+                  ⚡ 5 Core Specialized Pillars
                 </div>
                 <h3
                   id="home-combined-modal-title"
                   className="text-xl sm:text-2xl font-extrabold text-slate-900"
                 >
-                  Home, Repair &amp; Transport Services
+                  Home &amp; Repair Services
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg mx-auto">
                   Select any service below to explore specific options, verified technicians, and transparent pricing.
                 </p>
               </div>
 
-              {/* 6 Combined Services Grid matching the exact items from the 3rd image */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
+              {/* 5 Combined Services Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
                 {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => (
                   <button
                     key={label}
