@@ -8,10 +8,11 @@ import {
   Star, Search, MapPin, ChevronDown, ChevronLeft, ChevronRight,
   Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart,
-  Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2,
+  Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2, AlertCircle,
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
 import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
@@ -290,6 +291,8 @@ function AcGraphic({ className = "w-16 h-16" }) {
     </svg>
   )
 }
+
+const AirConditionerGraphic = AcGraphic
 
 function SofaCleaningGraphic({ className = "w-12 h-12" }) {
   return (
@@ -672,7 +675,7 @@ function getFoodItemPhoto(name = "", isGrocery = false) {
   if (n.includes("basket") || n.includes("essential")) return "/mockups/vegetables_realistic.png"
   if (n.includes("exotic") || n.includes("gourds pack")) return "/mockups/category_food_health.png"
   if (n.includes("leafy & salad") || n.includes("leafy box") || n.includes("leafy & salad box")) return "/mockups/veg_coriander.png"
-  
+
   if (n.includes("coriander") || n.includes("kothamalli") || n.includes("dhaniya")) return "/mockups/veg_coriander.png"
   if (n.includes("curry") || n.includes("karuveppilai") || n.includes("kadi patta")) return "/mockups/veg/curry_leaves.jpg"
   if (n.includes("lemon") || n.includes("elumichai") || n.includes("nimbu")) return "/mockups/veg_lemon.png"
@@ -686,23 +689,23 @@ function getFoodItemPhoto(name = "", isGrocery = false) {
   if (n.includes("bitter gourd") || n.includes("pavakkai") || n.includes("karela")) return "/mockups/veg/karela.jpg"
   if (n.includes("drumstick") || n.includes("murungakkai") || n.includes("sahjan")) return "/mockups/veg/drumstick.jpg"
   if (n.includes("peas") || n.includes("pattani") || n.includes("matar")) return "/mockups/veg/peas.jpg"
-  
+
   if (n.includes("peeled garlic") || n.includes("uricha poondu")) return "/mockups/veg/peeled_garlic.jpg"
   if (n.includes("garlic") || n.includes("poondu") || n.includes("lehsun")) return "/mockups/veg/garlic.jpg"
   if (n.includes("sweet potato") || n.includes("sakkaraivalli") || n.includes("shakarkand")) return "/mockups/veg/sweet_potato.jpg"
   if (n.includes("potato") || n.includes("urulaikilangu") || n.includes("aloo")) return "/mockups/veg/potato.jpg"
-  
+
   // Spring Onion MUST be checked before general onion
   if (n.includes("spring onion") || n.includes("vengaya thaal")) return "/mockups/veg/spring_onion.jpg"
   if (n.includes("onion") || n.includes("vengayam") || n.includes("pyaz")) return "/mockups/veg/onion.jpg"
   if (n.includes("cucumber") || n.includes("vellarikkai") || n.includes("kheera")) return "/mockups/veg/cucumber.jpg"
-  
+
   // Specific Bell Peppers & Capsicum MUST be checked before general chilli
   if (n.includes("red bell pepper") || n.includes("sigappu")) return "/mockups/veg/red_bell_pepper.jpg"
   if (n.includes("yellow bell pepper") || n.includes("manjal")) return "/mockups/veg/yellow_bell_pepper.jpg"
   if (n.includes("capsicum") || n.includes("kuda milagai") || n.includes("shimla")) return "/mockups/veg_capsicum_green.png"
   if (n.includes("chilli") || n.includes("milagai") || n.includes("mirch")) return "/mockups/veg/green_chilli.jpg"
-  
+
   if (n.includes("cauliflower") || n.includes("kooliflower") || n.includes("phool gobhi")) return "/mockups/veg/cauliflower.jpg"
   if (n.includes("cabbage") || n.includes("muttakose") || n.includes("patta gobhi")) return "/mockups/veg/cabbage.jpg"
   if (n.includes("corn") || n.includes("solam") || n.includes("bhutta")) return "/mockups/veg/corn.jpg"
@@ -1004,7 +1007,7 @@ export function LandingPage() {
   const [query, setQuery] = useState("")
   const [testimonialIdx, setTestimonialIdx] = useState(0)
   const location = useLocation()
-  const [modalCart, setModalCart] = useState(() => (location.state?.cart || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")))
+  const [modalCart, setModalCart] = useState(() => (location.state?.cart || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false))
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
@@ -1053,6 +1056,7 @@ export function LandingPage() {
     } catch { return null }
   })
   const [packagesData, setPackagesData] = useState(null)
+  const [serviceAlertMessage, setServiceAlertMessage] = useState("")
 
   // Verify service zone for customer coordinates
   const verifyServiceZone = async (lat, lng, label) => {
@@ -1069,6 +1073,169 @@ export function LandingPage() {
       const openRes = { in_zone: true, open_access: true, zone: null, available_services: [] }
       setZoneCheckResult(openRes)
     }
+  }
+
+  // Initial zone check on mount
+  useEffect(() => {
+    const storedCoords = localStorage.getItem("calservice_user_coords")
+    if (storedCoords) {
+      try {
+        const parsed = JSON.parse(storedCoords)
+        if (parsed?.lat && parsed?.lng) {
+          verifyServiceZone(parsed.lat, parsed.lng)
+          return
+        }
+      } catch (e) { }
+    }
+    // Fallback default coordinates (Hosur / Bangalore Hub)
+    verifyServiceZone(12.754598, 77.834477)
+  }, [])
+
+  // Check if a service is enabled in customer's current zone
+  // Check if a service is enabled in customer's current zone
+  const isServiceAvailableInZone = useCallback((serviceNameOrSlug) => {
+    if (!zoneCheckResult) return true
+    if (zoneCheckResult.open_access) return true
+    if (zoneCheckResult.in_zone === false) return false
+
+    const allowed = zoneCheckResult.available_services
+    if (!allowed || !Array.isArray(allowed) || allowed.length === 0) return true
+
+    const slug = (serviceNameOrSlug || "")
+      .toLowerCase()
+      .trim()
+      .replace(/_/g, "-")
+      .replace(/\s+/g, "-")
+      .replace(/&/g, "and")
+
+    const SLUG_MAPPINGS = {
+      // Home Cleaning & Pest Control
+      "home-services-and-pest-control": [
+        "full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning",
+        "cockroach-control", "termite-control", "ants-bed-bugs-control", "full-home-deep-clean", "cleaning"
+      ],
+      "home-services-&-pest-control": [
+        "full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning",
+        "cockroach-control", "termite-control", "ants-bed-bugs-control", "full-home-deep-clean", "cleaning"
+      ],
+      "home-cleaning-and-pest-control": [
+        "full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning",
+        "cockroach-control", "termite-control", "ants-bed-bugs-control", "full-home-deep-clean", "cleaning"
+      ],
+      "home-cleaning": ["full-house-cleaning", "bathroom-cleaning", "kitchen-cleaning", "sofa-cleaning", "full-home-deep-clean", "cleaning"],
+      "pest-control": ["cockroach-control", "termite-control", "ants-bed-bugs-control"],
+      "kitchen-cleaning": ["kitchen-cleaning", "kitchen"],
+      "sofa-cleaning": ["sofa-cleaning", "sofa"],
+      "bathroom-cleaning": ["bathroom-cleaning", "bathroom"],
+      "full-house-cleaning": ["full-house-cleaning", "full-home-deep-clean", "cleaning", "occupied-apartment"],
+      "full-house-deep-cleaning": ["full-house-cleaning", "full-home-deep-clean"],
+      "cockroach-and-termite-control": ["cockroach-control", "termite-control"],
+      "cockroach-control": ["cockroach-control"],
+      "termite-control": ["termite-control"],
+      "ants-and-bed-bugs-control": ["ants-bed-bugs-control"],
+      "ants-bed-bugs-control": ["ants-bed-bugs-control"],
+
+      // Electrician, Plumbing & Carpentry
+      "electrician-plumbing-and-carpentry": ["electrician", "plumbing", "carpentry"],
+      "electrician-plumbing-&-carpentry": ["electrician", "plumbing", "carpentry"],
+      "plumbing": ["plumbing"],
+      "plumber": ["plumbing"],
+      "plumber-services": ["plumbing"],
+      "electrician": ["electrician"],
+      "electrician-services": ["electrician"],
+      "electrical": ["electrician"],
+      "carpentry": ["carpentry"],
+      "carpenter": ["carpentry"],
+      "carpenter-services": ["carpentry"],
+      "express-electrician-and-plumber": ["electrician", "plumbing"],
+
+      // AC & Appliance
+      "ac-and-appliance": ["ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave"],
+      "ac-and-appliance-repair": ["ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave"],
+      "ac-&-appliance": ["ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation", "refrigerator", "washing-machine", "tv-display", "microwave"],
+      "air-conditioner": ["ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation"],
+      "ac": ["ac-service-cleaning", "ac-repair", "ac-gas-refill", "ac-installation"],
+      "ac-master-service": ["ac-service-cleaning", "ac-repair"],
+      "ac-service-and-cleaning": ["ac-service-cleaning", "ac-repair"],
+      "ac-repair-and-service": ["ac-service-cleaning", "ac-repair"],
+      "refrigerator": ["refrigerator"],
+      "refrigerator-repair": ["refrigerator"],
+      "refrigerator-service-and-repair": ["refrigerator"],
+      "washing-machine": ["washing-machine"],
+      "washing-machine-repair": ["washing-machine"],
+      "washing-machine-jet-service": ["washing-machine"],
+      "water-purifier": ["ac-service-cleaning", "refrigerator", "washing-machine", "microwave"],
+      "water-purifier-repair": ["ac-service-cleaning", "refrigerator", "washing-machine", "microwave"],
+      "water-purifier-(ro)": ["ac-service-cleaning", "refrigerator", "washing-machine", "microwave"],
+      "tv-and-display": ["tv-display"],
+      "tv-display": ["tv-display"],
+      "tv-and-home-theatre": ["tv-display"],
+      "tv-service-and-repair": ["tv-display"],
+      "microwave-oven": ["microwave"],
+      "microwave": ["microwave"],
+      "microwave-repair": ["microwave"],
+
+      // Paintings
+      "paintings": ["interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"],
+      "painting": ["interior-painting", "exterior-painting", "waterproofing", "wood-metal", "texture-decor"],
+      "interior-painting": ["interior-painting"],
+      "exterior-painting": ["exterior-painting"],
+      "waterproofing": ["waterproofing"],
+      "wood-and-metal": ["wood-metal"],
+      "texture-decor": ["texture-decor"],
+      "interior-wall-painting": ["interior-painting"],
+
+      // Mason
+      "mason": ["brick-block-work", "plastering-wall-repair", "wall-partition-construction", "wall-breaking-demolition", "home-construction", "full-house-construction"],
+      "masonry": ["brick-block-work", "plastering-wall-repair", "wall-partition-construction", "wall-breaking-demolition", "home-construction", "full-house-construction"],
+      "home-construction": ["home-construction"],
+      "full-house-construction": ["full-house-construction"],
+      "brick-and-block-work": ["brick-block-work"],
+      "plastering-and-wall-repair": ["plastering-wall-repair"],
+      "wall-and-partition-construction": ["wall-partition-construction"],
+      "wall-breaking-and-demolition": ["wall-breaking-demolition"],
+
+      // Goods & Transport
+      "goods-and-transports": ["truck", "two-wheeler", "packers-movers"],
+      "goods-and-transport": ["truck", "two-wheeler", "packers-movers"],
+      "goods-&-transports": ["truck", "two-wheeler", "packers-movers"],
+      "goods": ["truck", "two-wheeler", "packers-movers"],
+      "transport": ["truck", "two-wheeler", "packers-movers"],
+      "house-shifting": ["packers-movers", "truck"],
+      "single-item-transport": ["two-wheeler", "truck"],
+      "truck": ["truck"],
+      "mini-truck-transport": ["truck"],
+      "mini-truck-(hosur)": ["truck"],
+      "two-wheeler": ["two-wheeler"],
+      "instant-bike-courier": ["two-wheeler"],
+      "2-wheeler-(hosur)": ["two-wheeler"],
+      "packers-and-movers": ["packers-movers"],
+      "packers-and-movers-(hosur)": ["packers-movers"],
+      "vegetables": ["vegetables"],
+      "groceries": ["groceries"],
+    }
+
+    const targetList = SLUG_MAPPINGS[slug] || [slug]
+    const directMatch = targetList.some(target =>
+      allowed.some(allowedSlug => {
+        const aNorm = allowedSlug.toLowerCase().replace(/_/g, "-")
+        return aNorm === target || aNorm.includes(target) || target.includes(aNorm)
+      })
+    )
+    if (directMatch) return true
+
+    // Fallback: general alphanumeric substring check between normalized slug & allowed slugs
+    const cleanSlug = slug.replace(/[^a-z0-9]/g, "")
+    return allowed.some(allowedSlug => {
+      const cleanAllowed = allowedSlug.toLowerCase().replace(/[^a-z0-9]/g, "")
+      return cleanAllowed && cleanSlug && (cleanAllowed.includes(cleanSlug) || cleanSlug.includes(cleanAllowed))
+    })
+  }, [zoneCheckResult])
+
+  const showUnavailableServiceAlert = (serviceName) => {
+    const zoneName = zoneCheckResult?.zone?.name || "your area"
+    setServiceAlertMessage(`⚠️ ${serviceName} is currently not available in ${zoneName}. Please choose another service or update your location.`)
+    setTimeout(() => setServiceAlertMessage(""), 5000)
   }
 
   useEffect(() => {
@@ -1273,7 +1440,7 @@ export function LandingPage() {
   }, [location.state])
 
   const handleCloseCategory = () => {
-    setModalCart(prev => prev.filter(c => !c.id.includes("mason") && !c.id.includes("paint")));
+    setModalCart(prev => prev.filter(c => c.id && String(c.id).includes("mason") === false && String(c.id).includes("paint") === false));
     const rawCatKey = (activeCategory?.id || activeCategory?.slug || activeCategoryId || "").toLowerCase()
     if (["hvac", "ac", "appliance"].some(k => rawCatKey.includes(k))) {
       navigate("/home", { state: { openAcModal: true } })
@@ -1294,7 +1461,7 @@ export function LandingPage() {
 
   const cleanConsultationItems = (cartArray) => {
     const list = resolveCartArg(cartArray);
-    return list.filter(c => c && typeof c === "object" && c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && typeof c.id === "string" && !c.id.includes("paint") && !c.id.includes("mason"));
+    return list.filter(c => c && typeof c === "object" && c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && typeof c.id === "string" && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false);
   };
 
   const goToBooking = () => navigate(routes.booking)
@@ -1313,18 +1480,18 @@ export function LandingPage() {
   const activeCategoryId = searchParams.get("category")
   const activeSubTabParam = searchParams.get("subtab")
   const activeCategory = activeCategoryId
-    ? (BOOKING_CATEGORIES.find(c => 
-        c.id === activeCategoryId || 
-        c.slug === activeCategoryId || 
-        c.id === `${activeCategoryId}_cleaning`
-      ) || { id: activeCategoryId, name: activeCategoryId.replace(/_/g, " ") })
+    ? (BOOKING_CATEGORIES.find(c =>
+      c.id === activeCategoryId ||
+      c.slug === activeCategoryId ||
+      c.id === `${activeCategoryId}_cleaning`
+    ) || { id: activeCategoryId, name: activeCategoryId.replace(/_/g, " ") })
     : null
 
   // Hot reload services catalog when category choice becomes active
   useEffect(() => {
     if (activeCategory) {
       const rawCatKey = (activeCategory.id || activeCategory.slug || "").toLowerCase();
-      if (rawCatKey.includes("painting") || rawCatKey.includes("mason")) {
+      if (rawCatKey.includes("painting") || rawCatKey.includes("mason") || rawCatKey === "11" || rawCatKey === "17") {
         console.log("DEBUG: [LandingPage] Hot-reloading catalog services for category:", rawCatKey);
         apiRequest("/catalog/services/")
           .then(svcRes => {
@@ -1450,11 +1617,10 @@ export function LandingPage() {
                 <button
                   type="button"
                   onClick={() => setShowLocationPickerModal(true)}
-                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-extrabold transition-all cursor-pointer shadow-2xs max-w-[240px] sm:max-w-[340px] truncate ${
-                    zoneCheckResult && zoneCheckResult.in_zone === false
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-extrabold transition-all cursor-pointer shadow-2xs max-w-[240px] sm:max-w-[340px] truncate ${zoneCheckResult && zoneCheckResult.in_zone === false
                       ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
                       : "border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-slate-800"
-                  }`}
+                    }`}
                   title="Select Location"
                 >
                   <MapPin className={`w-4 h-4 shrink-0 ${zoneCheckResult && zoneCheckResult.in_zone === false ? "text-red-500" : "text-indigo-600"}`} />
@@ -1608,24 +1774,7 @@ export function LandingPage() {
                     navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
                   }}
                 />
-              ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.slug === "masons" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase() === "mason" || activeCategory.name?.toLowerCase() === "masonry") ? (
-                <MasonPackageModal
-                  category={activeCategory}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  packagesData={packagesData}
-                  onClose={handleCloseCategory}
-                  onCheckout={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(cleanConsultationItems(finalCart));
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-                  }}
-                  onGetEstimate={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(cleanConsultationItems(finalCart));
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
-                  }}
-                />
+
               ) : (activeCategory.id === "pest_control" || activeCategory.slug === "pest_control" || activeSubTabParam === "Cockroach & Termite Control" || activeSubTabParam === "Cockroach Control" || activeSubTabParam === "Termite Control") && (activeSubTabParam !== "Ants & Bed Bugs Control" && activeSubTabParam !== "Ants Control" && activeSubTabParam !== "Bedbugs Control" && activeSubTabParam !== "Ants and bed bugs control") ? (
                 <CockroachControlModal
                   category={{ id: "pest_control", name: "Pest Control" }}
@@ -1729,11 +1878,10 @@ export function LandingPage() {
               <button
                 type="button"
                 onClick={() => setShowLocationPickerModal(true)}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-extrabold transition-all cursor-pointer shadow-2xs max-w-[240px] sm:max-w-[340px] truncate ${
-                  zoneCheckResult && zoneCheckResult.in_zone === false
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-extrabold transition-all cursor-pointer shadow-2xs max-w-[240px] sm:max-w-[340px] truncate ${zoneCheckResult && zoneCheckResult.in_zone === false
                     ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
                     : "border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-slate-800"
-                }`}
+                  }`}
                 title="Select Location"
               >
                 <MapPin className={`w-4 h-4 shrink-0 ${zoneCheckResult && zoneCheckResult.in_zone === false ? "text-red-500" : "text-indigo-600"}`} />
@@ -1996,7 +2144,148 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* ── Home Services & Pest Control Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
+        {/* ── Vendor Hire Banner ─────────────────────────────── */}
+        {homeConfig.vendorBanner?.enabled !== false && (() => {
+          const vb = homeConfig.vendorBanner || {}
+          const features = vb.features && vb.features.length > 0
+            ? vb.features
+            : [
+                { id: "vf-1", icon: "📅", label: "Flexible Timings" },
+                { id: "vf-2", icon: "💼", label: "Stable Work" },
+                { id: "vf-3", icon: "🤝", label: "Team Support" },
+              ]
+          const benefits = vb.benefits && vb.benefits.length > 0
+            ? vb.benefits
+            : [
+                { id: "vb-1", icon: "✅", text: "Verified & trusted customers" },
+                { id: "vb-2", icon: "🕐", text: "On-time service & support" },
+                { id: "vb-3", icon: "📍", text: "Work close to your area" },
+                { id: "vb-4", icon: "🌟", text: "Recognition for quality work" },
+              ]
+          return (
+            <section className="max-w-7xl mx-auto px-6 py-8">
+              <div
+                style={{
+                  background: "linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #134e4a 100%)",
+                  borderRadius: "24px",
+                  overflow: "hidden",
+                  position: "relative",
+                  boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+                }}
+              >
+                {/* Decorative blobs */}
+                <div style={{ position: "absolute", top: "-60px", right: "-60px", width: "260px", height: "260px", borderRadius: "50%", background: "rgba(20,184,166,0.10)", pointerEvents: "none" }} />
+                <div style={{ position: "absolute", bottom: "-40px", left: "30%", width: "180px", height: "180px", borderRadius: "50%", background: "rgba(16,185,129,0.07)", pointerEvents: "none" }} />
+
+                <div style={{ display: "flex", flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", minHeight: "260px", position: "relative", zIndex: 1 }}>
+                  {/* Left Content */}
+                  <div style={{ flex: "1 1 320px", padding: "36px 32px 32px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                    {/* Badge */}
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "7px", background: "rgba(20,184,166,0.15)", border: "1px solid rgba(20,184,166,0.30)", borderRadius: "999px", padding: "5px 14px", marginBottom: "16px", width: "fit-content" }}>
+                      <span style={{ fontSize: "0.9rem" }}>{vb.badgeIcon || "🤝"}</span>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#5eead4", letterSpacing: "0.03em" }}>
+                        {vb.badgeText || "We're Looking for Professionals"}
+                      </span>
+                    </div>
+
+                    {/* Title */}
+                    <h2 style={{ fontSize: "clamp(1.45rem, 4vw, 2.1rem)", fontWeight: 900, color: "#f8fafc", lineHeight: 1.18, margin: "0 0 12px" }}>
+                      {vb.titlePrefix || "We Hire"}{" "}
+                      <span style={{ color: "#2dd4bf" }}>{vb.titleHighlight || "Technicians, Employees"}</span>
+                      {vb.titleSuffix ? ` ${vb.titleSuffix}` : " & Vendors"}
+                    </h2>
+
+                    {/* Subtitle */}
+                    <p style={{ fontSize: "0.88rem", color: "#94a3b8", lineHeight: 1.6, marginBottom: "24px", maxWidth: "400px" }}>
+                      {vb.subtitle || "Join our team of skilled professionals and be part of a growing service community that works with trust and quality."}
+                    </p>
+
+                    {/* Feature highlights */}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "28px" }}>
+                      {features.map((f, i) => (
+                        <div key={f.id || i} style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "10px", padding: "6px 13px" }}>
+                          <span style={{ fontSize: "0.95rem" }}>{f.icon}</span>
+                          <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#e2e8f0" }}>{f.label}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* CTA Buttons */}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
+                      <a
+                        href={vb.ctaUrl || "https://calservices-vendor.vercel.app"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: "8px",
+                          background: "linear-gradient(135deg, #14b8a6, #0d9488)",
+                          color: "#fff", fontWeight: 800, fontSize: "0.88rem",
+                          padding: "12px 24px", borderRadius: "14px",
+                          boxShadow: "0 4px 20px rgba(20,184,166,0.35)",
+                          textDecoration: "none", transition: "transform 0.15s, box-shadow 0.15s",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(20,184,166,0.45)" }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 4px 20px rgba(20,184,166,0.35)" }}
+                      >
+                        {vb.ctaText || "Join as a Professional"} →
+                      </a>
+                      {(vb.learnMoreText || vb.learnMoreUrl) && (
+                        <a
+                          href={vb.learnMoreUrl || "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: "0.83rem", fontWeight: 700, color: "#94a3b8", textDecoration: "underline", textUnderlineOffset: "3px" }}
+                        >
+                          {vb.learnMoreText || "Learn more"}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Content — Image + Benefits */}
+                  <div style={{ flex: "0 1 420px", display: "flex", flexDirection: "row", alignItems: "stretch", overflow: "hidden" }}>
+                    {/* Technician image — clearly visible, not cropped */}
+                    {vb.image && (
+                      <div style={{ flex: "0 0 220px", position: "relative", overflow: "hidden", alignSelf: "stretch" }}>
+                        <img
+                          src={vb.image}
+                          alt="Service Professional"
+                          style={{
+                            position: "absolute",
+                            bottom: 0,
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            height: "100%",
+                            width: "auto",
+                            maxWidth: "none",
+                            objectFit: "contain",
+                            objectPosition: "bottom center",
+                            opacity: 1,
+                            pointerEvents: "none",
+                            display: "block",
+                          }}
+                        />
+                        {/* Subtle left-edge fade to blend into banner */}
+                        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, #1e293b 0%, transparent 30%)", pointerEvents: "none" }} />
+                      </div>
+                    )}
+                    {/* Benefits list — always fully visible */}
+                    <div style={{ flex: 1, padding: "28px 24px 28px 16px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "12px", minWidth: "155px" }}>
+                      {benefits.map((b, i) => (
+                        <div key={b.id || i} style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                          <span style={{ fontSize: "1rem", lineHeight: 1.4, flexShrink: 0 }}>{b.icon}</span>
+                          <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#e2e8f0", lineHeight: 1.4 }}>{b.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )
+        })()}
+
+        {/* ── 1. Home Services & Pest Control Modal Popup ── */}
         {isHomePestModalOpen &&
           typeof document !== "undefined" &&
           createPortal(
@@ -2016,13 +2305,13 @@ export function LandingPage() {
                   type="button"
                   onClick={() => setIsHomePestModalOpen(false)}
                   aria-label="Close popup"
-                  className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-white text-slate-900 hover:bg-slate-100 flex items-center justify-center shadow-md border border-slate-200 transition-colors z-50"
+                  className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-white text-slate-900 hover:bg-slate-100 flex items-center justify-center shadow-md border border-slate-200 transition-colors z-50 cursor-pointer"
                 >
                   <X className="w-4 h-4" strokeWidth={2.5} />
                 </button>
 
                 {/* Modal Title */}
-                <div className="text-left mb-6">
+                <div className="text-left mb-4">
                   <h3
                     id="homepest-modal-title"
                     className="text-lg sm:text-xl font-extrabold text-slate-900"
@@ -2031,46 +2320,74 @@ export function LandingPage() {
                   </h3>
                 </div>
 
+                {/* Service Alert Message (When clicking unavailable service) */}
+                {serviceAlertMessage && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                      <span>{serviceAlertMessage}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setServiceAlertMessage("")}
+                      className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
                 {/* Cleaning Section */}
                 <div className="mb-6">
                   <h4 className="text-sm font-extrabold text-slate-900 mb-3 select-none">
                     Home Cleaning
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {HOME_SERVICES_SUB.map((item) => (
-                      <button
-                        key={item.name}
-                        type="button"
-                        onClick={() => {
-                          setIsHomePestModalOpen(false)
-                          document.body.style.overflow = "unset"
-                          if (item.name === "Kitchen Cleaning") {
-                            navigate(`?category=kitchen_cleaning`)
-                          } else if (item.name === "Sofa Cleaning") {
-                            navigate(`?category=sofa_cleaning`)
-                          } else if (item.name === "Bathroom Cleaning") {
-                            navigate(`?category=bathroom_cleaning`)
-                          } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
-                            navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
-                          } else {
-                            navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
-                          }
-                        }}
-                        className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                      >
-                        <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                          <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                          {item.badge && (
-                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                              {item.badge}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                          {item.name}
-                        </span>
-                      </button>
-                    ))}
+                    {HOME_SERVICES_SUB.map((item) => {
+                      const isAvailable = isServiceAvailableInZone(item.name)
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => {
+                            if (!isAvailable) {
+                              showUnavailableServiceAlert(item.name)
+                              return
+                            }
+                            setIsHomePestModalOpen(false)
+                            document.body.style.overflow = "unset"
+                            if (item.name === "Kitchen Cleaning") {
+                              navigate(`?category=kitchen_cleaning`)
+                            } else if (item.name === "Sofa Cleaning") {
+                              navigate(`?category=sofa_cleaning`)
+                            } else if (item.name === "Bathroom Cleaning") {
+                              navigate(`?category=bathroom_cleaning`)
+                            } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
+                              navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
+                            } else {
+                              navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                            }
+                          }}
+                          className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
+                        >
+                          <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
+                            <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                            {!isAvailable ? (
+                              <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                                Not Available
+                              </div>
+                            ) : item.badge && (
+                              <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
+                                {item.badge}
+                              </div>
+                            )}
+                          </div>
+                          <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
+                            {item.name}
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -2080,30 +2397,41 @@ export function LandingPage() {
                     Pest Control
                   </h4>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                    {PEST_CONTROL_SUB.map((item) => (
-                      <button
-                        key={item.name}
-                        type="button"
-                        onClick={() => {
-                          setIsHomePestModalOpen(false)
-                          document.body.style.overflow = "unset"
-                          navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
-                        }}
-                        className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                      >
-                        <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                          <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                          {item.badge && (
-                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                              {item.badge}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                          {item.name}
-                        </span>
-                      </button>
-                    ))}
+                    {PEST_CONTROL_SUB.map((item) => {
+                      const isAvailable = isServiceAvailableInZone(item.name)
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => {
+                            if (!isAvailable) {
+                              showUnavailableServiceAlert(item.name)
+                              return
+                            }
+                            setIsHomePestModalOpen(false)
+                            document.body.style.overflow = "unset"
+                            navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                          }}
+                          className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
+                        >
+                          <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
+                            <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                            {!isAvailable ? (
+                              <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                                Not Available
+                              </div>
+                            ) : item.badge && (
+                              <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
+                                {item.badge}
+                              </div>
+                            )}
+                          </div>
+                          <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
+                            {item.name}
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
@@ -2111,124 +2439,7 @@ export function LandingPage() {
             document.body
           )}
 
-        {/* ── Goods & Transports Modal Popup (Mounted to body for true window centering & Landing Page Emerald UI) ── */}
-        {isGoodsModalOpen &&
-          typeof document !== "undefined" &&
-          createPortal(
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="transport-modal-title"
-              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-              onClick={() => setIsGoodsModalOpen(false)}
-            >
-              <div
-                className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Close Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsGoodsModalOpen(false)}
-                  aria-label="Close popup"
-                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-
-                {/* Modal Title */}
-                <div className="text-center mb-6">
-                  <h3
-                    id="transport-modal-title"
-                    className="text-lg sm:text-xl font-extrabold text-slate-900"
-                  >
-                    Goods &amp; Transports
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Choose a transport type to get an instant estimate
-                  </p>
-                </div>
-
-                {/* Items Grid matching Image 2 with Landing Page Emerald styling */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-stretch">
-                  {/* Option 1: Truck */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsGoodsModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      navigate(routes.truck_booking_hosur)
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <TruckGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Mini Truck (Hosur)
-                    </span>
-                  </button>
-
-                  {/* Option 2: Two Wheeler */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsGoodsModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      navigate(routes.two_wheeler_booking_hosur)
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <TwoWheelerGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      2-Wheeler (Hosur)
-                    </span>
-                  </button>
-
-                  {/* Option 3: Packers & Movers */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsGoodsModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      navigate(routes.packers_movers_booking_hosur)
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <PackersMoversGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Packers &amp; Movers
-                    </span>
-                  </button>
-
-                  {/* Option 4: All Transports */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsGoodsModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      navigate(routes.truck_booking_hosur)
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-[#059669] border border-emerald-600 group-hover:bg-emerald-700 flex items-center justify-center p-2 group-hover:scale-105 transition-all text-white font-bold text-xs">
-                      View All
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      All Options
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )}
-
-        {/* ── Electrician, Plumbing & Carpentry Sub-Category Modal Popup ── */}
+        {/* ── 2. Electrician, Plumbing & Carpentry Sub-Category Modal Popup ── */}
         {isElecModalOpen &&
           typeof document !== "undefined" &&
           createPortal(
@@ -2248,7 +2459,7 @@ export function LandingPage() {
                   type="button"
                   onClick={() => setIsElecModalOpen(false)}
                   aria-label="Close popup"
-                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors"
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -2266,68 +2477,71 @@ export function LandingPage() {
                   </p>
                 </div>
 
+                {/* Service Alert Message (When clicking unavailable service) */}
+                {serviceAlertMessage && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                      <span>{serviceAlertMessage}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setServiceAlertMessage("")}
+                      className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
                 {/* Items Grid for Electrician, Plumbing & Carpentry (3 options) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 items-stretch">
-                  {/* Option 1: Electrician */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsElecModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("electrical")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <ElectricianGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Electrician
-                    </span>
-                  </button>
-
-                  {/* Option 2: Plumber */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsElecModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("plumbing")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <PlumberGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Plumber
-                    </span>
-                  </button>
-
-                  {/* Option 3: Carpentry */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsElecModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("carpentry")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <CarpentryGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Carpentry
-                    </span>
-                  </button>
+                  {[
+                    { key: "electrician", name: "Electrician", slug: "electrician", cat: "electrical", graphic: ElectricianGraphic },
+                    { key: "plumber", name: "Plumber", slug: "plumbing", cat: "plumbing", graphic: PlumberGraphic },
+                    { key: "carpenter", name: "Carpenter", slug: "carpentry", cat: "carpentry", graphic: CarpentryGraphic },
+                  ].map((item) => {
+                    const isAvailable = isServiceAvailableInZone(item.slug)
+                    const Graphic = item.graphic
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => {
+                          if (!isAvailable) {
+                            showUnavailableServiceAlert(item.name)
+                            return
+                          }
+                          setIsElecModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          goToCategoryServices(item.cat, `${item.name} Services`)
+                        }}
+                        className={`group relative flex flex-col items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
+                            ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                            : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
+                          }`}
+                      >
+                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative">
+                          <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                          {!isAvailable && (
+                            <span className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                              Not Available
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-sm font-bold mt-2.5 transition-colors ${isAvailable ? 'text-slate-800 group-hover:text-slate-900' : 'text-slate-400'}`}>
+                          {item.name}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>,
             document.body
           )}
 
-        {/* ── AC & Appliance Sub-Category Modal Popup ── */}
+        {/* ── 3. AC & Appliance Sub-Category Modal Popup ── */}
         {isAcModalOpen &&
           typeof document !== "undefined" &&
           createPortal(
@@ -2347,7 +2561,7 @@ export function LandingPage() {
                   type="button"
                   onClick={() => setIsAcModalOpen(false)}
                   aria-label="Close popup"
-                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -2365,97 +2579,1135 @@ export function LandingPage() {
                   </p>
                 </div>
 
+                {/* Service Alert Message (When clicking unavailable service) */}
+                {serviceAlertMessage && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                      <span>{serviceAlertMessage}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setServiceAlertMessage("")}
+                      className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
                 {/* Items Grid for AC & Appliance Repair (5 options) */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 items-stretch">
-                  {/* Option 1: AC Service */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAcModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("hvac", "AC Service & Cleaning")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <AcGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Air Conditioner
-                    </span>
-                  </button>
+                  {[
+                    { key: "ac", name: "Air Conditioner", slug: "air-conditioner", cat: "hvac", subTab: "AC Service & Cleaning", graphic: AcGraphic },
+                    { key: "refrigerator", name: "Refrigerator", slug: "refrigerator", cat: "refrigerator", subTab: "Refrigerator Service & Repair", graphic: FridgeGraphic },
+                    { key: "washing_machine", name: "Washing Machine", slug: "washing-machine", cat: "washing_machine", subTab: "Washing Machine Jet Service", graphic: WashingMachineGraphic },
+                    { key: "tv", name: "TV & Display", slug: "tv-display", cat: "tv_display", subTab: "TV Service & Repair", graphic: TvGraphic },
+                    { key: "microwave", name: "Microwave Oven", slug: "microwave-oven", cat: "microwave", subTab: "Microwave Repair", graphic: MicrowaveGraphic },
+                  ].map((item) => {
+                    const isAvailable = isServiceAvailableInZone(item.slug)
+                    const Graphic = item.graphic
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => {
+                          if (!isAvailable) {
+                            showUnavailableServiceAlert(item.name)
+                            return
+                          }
+                          setIsAcModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          goToCategoryServices(item.cat, item.subTab)
+                        }}
+                        className={`group relative flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
+                            ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                            : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
+                          }`}
+                      >
+                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative">
+                          <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                          {!isAvailable && (
+                            <span className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                              Not Available
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-sm font-bold mt-2.5 transition-colors ${isAvailable ? 'text-slate-800 group-hover:text-slate-900' : 'text-slate-400'}`}>
+                          {item.name}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
 
-                  {/* Option 2: Refrigerator */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAcModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("refrigerator", "Refrigerator Service & Repair")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <FridgeGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Refrigerator
-                    </span>
-                  </button>
+        {/* ── 4. Goods & Transports Modal Popup ── */}
+        {isGoodsModalOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="transport-modal-title"
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+              onClick={() => setIsGoodsModalOpen(false)}
+            >
+              <div
+                className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsGoodsModalOpen(false)}
+                  aria-label="Close popup"
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
 
-                  {/* Option 3: Washing Machine */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAcModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("washing_machine", "Washing Machine Jet Service")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                {/* Modal Title */}
+                <div className="text-center mb-6">
+                  <h3
+                    id="transport-modal-title"
+                    className="text-lg sm:text-xl font-extrabold text-slate-900"
                   >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <WashingMachineGraphic className="w-full h-full" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Washing Machine
-                    </span>
-                  </button>
+                    Goods &amp; Transports
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Choose a transport type to get an instant estimate
+                  </p>
+                </div>
 
-                  {/* Option 4: TV & Home Theatre */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAcModalOpen(false)
-                      document.body.style.overflow = "unset"
-                      goToCategoryServices("tv_display", "TV Service & Repair")
-                    }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                  >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <TvGraphic className="w-full h-full" />
+                {/* Service Alert Message (When clicking unavailable service) */}
+                {serviceAlertMessage && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                      <span>{serviceAlertMessage}</span>
                     </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      TV &amp; Display
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setServiceAlertMessage("")}
+                      className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
 
-                  {/* Option 5: Microwave Oven */}
+                {/* Items Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-stretch">
+                  {[
+                    { key: "truck", name: "Mini Truck (Hosur)", slug: "truck", route: routes.truck_booking_hosur, graphic: TruckGraphic },
+                    { key: "two_wheeler", name: "2-Wheeler (Hosur)", slug: "two-wheeler", route: routes.two_wheeler_booking_hosur, graphic: TwoWheelerGraphic },
+                    { key: "packers_movers", name: "Packers & Movers", slug: "packers-movers", route: routes.packers_movers_booking_hosur, graphic: PackersMoversGraphic },
+                  ].map((item) => {
+                    const isAvailable = isServiceAvailableInZone(item.slug)
+                    const Graphic = item.graphic
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => {
+                          if (!isAvailable) {
+                            showUnavailableServiceAlert(item.name)
+                            return
+                          }
+                          setIsGoodsModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          navigate(item.route)
+                        }}
+                        className={`group relative flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
+                            ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                            : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
+                          }`}
+                      >
+                        <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative">
+                          <Graphic className={`w-full h-full ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                          {!isAvailable && (
+                            <span className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                              Not Available
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-sm font-bold mt-2.5 transition-colors ${isAvailable ? 'text-slate-800 group-hover:text-slate-900' : 'text-slate-400'}`}>
+                          {item.name}
+                        </span>
+                      </button>
+                    )
+                  })}
+
+                  {/* Option 4: Get an Estimate card in Landing Page Emerald theme */}
                   <button
                     type="button"
                     onClick={() => {
-                      setIsAcModalOpen(false)
+                      setIsGoodsModalOpen(false)
                       document.body.style.overflow = "unset"
-                      goToCategoryServices("microwave", "Microwave Repair")
+                      navigate(routes.truck_booking_hosur)
                     }}
-                    className="group flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                    className="group flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-[0.98] text-white shadow-lg shadow-emerald-600/25 transition-all text-left cursor-pointer min-h-[140px]"
                   >
-                    <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
-                      <MicrowaveGraphic className="w-full h-full" />
+                    <div>
+                      <p className="text-lg sm:text-xl font-extrabold leading-tight tracking-tight">
+                        Get an<br />Estimate
+                      </p>
+                      <p className="text-xs text-emerald-100 font-medium mt-2 opacity-95">
+                        (takes ~2 mins)
+                      </p>
                     </div>
-                    <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-slate-900 transition-colors">
-                      Microwave Oven
-                    </span>
+                    <div className="pt-4 flex items-center">
+                      <ArrowRight className="w-6 h-6 text-white stroke-[2.5] group-hover:translate-x-1.5 transition-transform" />
+                    </div>
                   </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
+        {/* ── 1. Food and Health Sub-Modules Modal Popup ── */}
+        {isFoodHealthModalOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="food-health-modal-title"
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+              onClick={() => {
+                setIsFoodHealthModalOpen(false)
+                setSelectedFoodSubModuleId(null)
+                setFoodOrderPlaced(false)
+              }}
+            >
+              <div
+                className={`bg-white rounded-3xl w-full shadow-2xl border border-slate-100 relative flex flex-col max-h-[90vh] overflow-hidden transition-all ${selectedFoodSubModule ? "max-w-5xl" : "max-w-xl"
+                  }`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsFoodHealthModalOpen(false)
+                    setSelectedFoodSubModuleId(null)
+                    setFoodOrderPlaced(false)
+                    setVegSearchQuery("")
+                    setVegCategoryFilter("All")
+                  }}
+                  aria-label="Close popup"
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-800 flex items-center justify-center transition-colors cursor-pointer z-40"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                {/* Pinned Modal Header (When viewing a sub-module detail) */}
+                {selectedFoodSubModule && (
+                  <div className="px-5 sm:px-7 pt-5 sm:pt-6 pb-3 border-b border-slate-100 bg-white shrink-0">
+                    {/* Back Link & Header */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pr-10">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFoodSubModuleId(null)
+                          setFoodOrderPlaced(false)
+                          setVegSearchQuery("")
+                          setVegCategoryFilter("All")
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-emerald-700 cursor-pointer transition-colors"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        <span>Back to Categories</span>
+                      </button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
+                          <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Title and Search Row (only for live catalogs, not Coming Soon) */}
+                    {selectedFoodSubModule.id !== "groceries" && (
+                      <>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <h4 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                              {selectedFoodSubModule.name}
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                {selectedFoodSubModule.items.length} items
+                              </span>
+                            </h4>
+                            <p className="text-xs text-slate-500 font-medium">
+                              {selectedFoodSubModule.tagline}
+                            </p>
+                          </div>
+
+                          {/* Search Bar */}
+                          <div className="relative min-w-[240px]">
+                            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              value={vegSearchQuery}
+                              onChange={(e) => setVegSearchQuery(e.target.value)}
+                              placeholder={`Search ${selectedFoodSubModule.name.toLowerCase()} (e.g. Onion, Tomato)...`}
+                              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 focus:border-emerald-500 focus:outline-none bg-slate-50/50"
+                            />
+                            {vegSearchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setVegSearchQuery("")}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Category Filter Pills (if vegetables) */}
+                        {selectedFoodSubModule.id === "vegetables" && (
+                          <div className="flex items-center gap-2 overflow-x-auto pt-3 no-scrollbar">
+                            {["All", "Daily Essentials", "Herbs & Leafy", "Gourds & Roots", "Organic & Exotic", "Herbs & Seasoning"].map((cat) => (
+                              <button
+                                key={cat}
+                                type="button"
+                                onClick={() => setVegCategoryFilter(cat)}
+                                className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${vegCategoryFilter === cat
+                                    ? "bg-emerald-600 text-white shadow-xs"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                  }`}
+                              >
+                                {cat}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Scrollable Body Container (Optimized for smooth 60fps scrolling) */}
+                <div
+                  className="flex-1 overflow-y-auto p-5 sm:p-7 overscroll-contain"
+                  style={{
+                    overscrollBehavior: "contain",
+                    WebkitOverflowScrolling: "touch",
+                    willChange: "scroll-position",
+                    transform: "translateZ(0)",
+                  }}
+                >
+                  {!selectedFoodSubModule ? (
+                    /* Sub-Modules Main View: Groceries & Vegetables (Compact & Attractive Emerald UI) */
+                    <div>
+                      <div className="text-center mb-6">
+                        <h3
+                          id="food-health-modal-title"
+                          className="text-lg sm:text-xl font-extrabold text-slate-900"
+                        >
+                          Food and Health
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Choose a category to view items &amp; schedule fast delivery
+                        </p>
+                      </div>
+
+                      {/* 2 Compact & Attractive Sub-Module Cards */}
+                      <div className="grid grid-cols-2 gap-4 items-stretch max-w-lg mx-auto">
+                        {foodHealthSub.map((sub, index) => {
+                          const isGroceries = sub.id === "groceries"
+                          const borderHoverClass = isGroceries
+                            ? "hover:border-amber-400 hover:bg-amber-50/20"
+                            : "hover:border-emerald-500 hover:bg-emerald-50/30"
+                          const textHoverClass = isGroceries
+                            ? "group-hover:text-amber-800"
+                            : "group-hover:text-emerald-700"
+                          const badgeBgClass = isGroceries
+                            ? "bg-amber-100 text-amber-900 border-amber-300"
+                            : "bg-emerald-100/80 text-emerald-800 border-emerald-200"
+
+                          return (
+                            <button
+                              key={sub.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedFoodSubModuleId(sub.id)
+                                setFoodOrderPlaced(false)
+                                setVegSearchQuery("")
+                                setVegCategoryFilter("All")
+                              }}
+                              className={`group flex flex-col items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 border-slate-100 hover:shadow-md bg-white relative ${borderHoverClass}`}
+                            >
+                              <div className="w-full aspect-square max-w-[125px] rounded-2xl bg-slate-50 group-hover:bg-white border border-slate-100/80 overflow-hidden flex items-center justify-center p-1 group-hover:scale-105 transition-all shadow-2xs relative">
+                                <img
+                                  src={sub.image || (isGroceries ? "/mockups/groceries_realistic.png" : "/mockups/vegetables_realistic.png")}
+                                  alt={sub.name}
+                                  className="w-full h-full object-cover rounded-xl"
+                                />
+                                {isGroceries && (
+                                  <div className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-xs">
+                                    Coming Soon
+                                  </div>
+                                )}
+                              </div>
+                              <div className="mt-3">
+                                <span className={`text-sm sm:text-base font-bold text-slate-900 ${textHoverClass} transition-colors block`}>
+                                  {sub.name}
+                                </span>
+                                <span className="text-[11px] text-slate-500 font-medium mt-0.5 block leading-tight">
+                                  {sub.desc || sub.tagline || ""}
+                                </span>
+                                <span className={`inline-block mt-2 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${badgeBgClass}`}>
+                                  {isGroceries ? "⏳ " : "🌱 "}{sub.badge || ""}
+                                </span>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Sub-Module Detail Catalog View */
+                    <div>
+                      {selectedFoodSubModuleId === "groceries" ? (
+                        <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-b from-amber-50/60 to-orange-50/20 border-2 border-amber-200/70 text-center my-4">
+                          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl overflow-hidden mx-auto mb-4 border-2 border-amber-200 shadow-lg">
+                            <img
+                              src="/mockups/groceries_realistic.png"
+                              alt="Groceries Coming Soon"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-extrabold mb-3 border border-amber-300 shadow-2xs">
+                            <span>⏳</span> Coming Soon to Hosur
+                          </div>
+                          <h4 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                            Groceries Delivery is Coming Soon!
+                          </h4>
+                          <p className="text-xs sm:text-sm text-slate-600 font-medium mt-2 max-w-md mx-auto leading-relaxed">
+                            We are currently expanding our express fulfillment network in Hosur to deliver packaged staples, daily essentials, and dairy directly to your doorstep.
+                          </p>
+                          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedFoodSubModuleId(foodHealthSub[1].id)
+                                setFoodOrderPlaced(false)
+                                setVegSearchQuery("")
+                                setVegCategoryFilter("All")
+                              }}
+                              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm transition-all shadow-md cursor-pointer flex items-center gap-2"
+                            >
+                              <span>Order Fresh Vegetables</span>
+                              <span>&rarr;</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedFoodSubModuleId(null)
+                                setFoodOrderPlaced(false)
+                              }}
+                              className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm transition-all border border-slate-200 cursor-pointer"
+                            >
+                              Back to Categories
+                            </button>
+                          </div>
+                        </div>
+                      ) : foodOrderPlaced ? (
+                        <div className="p-8 rounded-3xl bg-gradient-to-b from-emerald-50 to-teal-50 border-2 border-emerald-200 text-center my-6">
+                          <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-600/30">
+                            <Check className="w-8 h-8 stroke-[3]" />
+                          </div>
+                          <h5 className="text-xl font-extrabold text-emerald-950">
+                            Order Confirmed Successfully!
+                          </h5>
+                          <p className="text-xs sm:text-sm text-emerald-800 font-medium mt-1.5 max-w-md mx-auto">
+                            Your fresh {selectedFoodSubModule?.name?.toLowerCase() || ""} order has been placed. Our Hosur delivery partner is packing and dispatching your items within 8-10 minutes.
+                          </p>
+                          <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-emerald-800 text-xs font-bold border border-emerald-200">
+                            <span>📍 Delivery to:</span> Hosur Central &bull; ⏱ ETA: 8-12 mins
+                          </div>
+                          <div className="mt-6">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFoodCart({})
+                                setFoodOrderPlaced(false)
+                                setSelectedFoodSubModuleId(null)
+                              }}
+                              className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 cursor-pointer shadow-md transition-all"
+                            >
+                              Back to Home
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Products Grid matching Quick Commerce Layout */}
+                          {(selectedFoodSubModule?.items || []).filter((item) => {
+                            const q = vegSearchQuery.toLowerCase()
+                            const matchesSearch =
+                              !vegSearchQuery ||
+                              item.name.toLowerCase().includes(q) ||
+                              (item.category && item.category.toLowerCase().includes(q))
+                            const matchesCat =
+                              vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                            return matchesSearch && matchesCat
+                          }).length === 0 ? (
+                            <div className="py-12 text-center">
+                              <p className="text-sm font-bold text-slate-500">No items found matching your search.</p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVegSearchQuery("")
+                                  setVegCategoryFilter("All")
+                                }}
+                                className="mt-2 text-xs font-bold text-emerald-600 hover:underline"
+                              >
+                                Clear filters
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-3.5 mb-2">
+                              {selectedFoodSubModule.items
+                                .filter((item) => {
+                                  const q = vegSearchQuery.toLowerCase()
+                                  const matchesSearch =
+                                    !vegSearchQuery ||
+                                    item.name.toLowerCase().includes(q) ||
+                                    (item.category && item.category.toLowerCase().includes(q))
+                                  const matchesCat =
+                                    vegCategoryFilter === "All" || item.category === vegCategoryFilter
+                                  return matchesSearch && matchesCat
+                                })
+                                .map((item, idx) => {
+                                  const hasOptions = item.options && item.options.length > 0
+                                  const count = hasOptions
+                                    ? item.options.reduce((sum, opt) => sum + (foodCart[`${item.name} (${opt.unit})`] || 0), 0)
+                                    : (foodCart[item.name] || 0)
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="group rounded-2xl border border-slate-200/90 bg-white hover:border-emerald-500 hover:shadow-md flex flex-col justify-between transition-shadow duration-150 overflow-hidden"
+                                      style={{
+                                        contentVisibility: "auto",
+                                        containIntrinsicSize: "0 230px",
+                                      }}
+                                    >
+                                      <div>
+                                        {/* Real Studio Photographic Product Image */}
+                                        <div className="relative w-full aspect-square bg-[#f5f1eb] overflow-hidden">
+                                          <img
+                                            src={item.image || getFoodItemPhoto(item.name, selectedFoodSubModule.id === "groceries")}
+                                            alt={item.name}
+                                            loading="lazy"
+                                            decoding="async"
+                                            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                            onError={(e) => {
+                                              if (e.target.src.includes("/mockups/")) {
+                                                e.target.onerror = null
+                                                e.target.src = "/mockups/category_food_health.png"
+                                              } else {
+                                                e.target.src = getFoodItemPhoto(item.name, selectedFoodSubModule?.id === "groceries")
+                                              }
+                                            }}
+                                          />
+                                          <div className="absolute top-2 left-2 flex items-center gap-1 bg-white px-2 py-0.5 rounded-md text-[10px] font-black text-slate-700 shadow-2xs">
+                                            <Clock className="w-2.5 h-2.5 text-emerald-600" />
+                                            <span>{item.delivery || "8 MINS"}</span>
+                                          </div>
+                                          {item.discount && (
+                                            <div className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wider">
+                                              {item.discount}
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {/* Details */}
+                                        <div className="p-2.5">
+                                          <h5 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight min-h-[30px]" title={item.name}>
+                                            {item.name}
+                                          </h5>
+                                          <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
+                                            {item.unit}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {/* Price and Add CTA */}
+                                      <div className="p-2.5 pt-0 flex items-center justify-between gap-1.5 mt-auto">
+                                        <div>
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                                              ₹{item.price}
+                                            </span>
+                                          </div>
+                                          {item.mrp && (
+                                            <span className="text-[10px] text-slate-400 line-through">
+                                              ₹{item.mrp}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {hasOptions ? (
+                                          count > 0 ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => setVariantModalItem(item)}
+                                              className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-extrabold text-[11px] shadow-xs flex items-center gap-1 cursor-pointer"
+                                            >
+                                              <span>{count} in Cart</span>
+                                              <ChevronDown className="w-2.5 h-2.5" />
+                                            </button>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() => setVariantModalItem(item)}
+                                              className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white flex items-center gap-1"
+                                            >
+                                              <span>ADD</span>
+                                              <ChevronDown className="w-2.5 h-2.5" />
+                                            </button>
+                                          )
+                                        ) : count > 0 ? (
+                                          <div className="flex items-center bg-emerald-600 text-white rounded-lg px-1.5 py-1 shadow-xs">
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setFoodCart((prev) => ({
+                                                  ...prev,
+                                                  [item.name]: Math.max(0, (prev[item.name] || 0) - 1),
+                                                }))
+                                              }
+                                              className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                            >
+                                              -
+                                            </button>
+                                            <span className="text-xs font-extrabold min-w-[14px] text-center px-0.5">
+                                              {count}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setFoodCart((prev) => ({
+                                                  ...prev,
+                                                  [item.name]: (prev[item.name] || 0) + 1,
+                                                }))
+                                              }
+                                              className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                            >
+                                              +
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setFoodCart((prev) => ({
+                                                ...prev,
+                                                [item.name]: 1,
+                                              }))
+                                            }
+                                            className="px-3.5 py-1 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer active:scale-95 bg-white"
+                                          >
+                                            ADD
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                            </div>
+                          )}
+
+                          {/* Quick Pack/Weight Options Modal */}
+                          {variantModalItem && (
+                            <div
+                              className="fixed inset-0 z-[10000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+                              onClick={() => setVariantModalItem(null)}
+                            >
+                              <div
+                                className="relative bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {/* Floating Close Button on top */}
+                                <button
+                                  type="button"
+                                  onClick={() => setVariantModalItem(null)}
+                                  className="absolute -top-4 right-1/2 translate-x-1/2 sm:translate-x-0 sm:right-3 sm:-top-4 w-9 h-9 rounded-full bg-slate-900 text-white hover:bg-slate-800 flex items-center justify-center shadow-lg transition-transform hover:scale-105 cursor-pointer z-10"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+
+                                {/* Modal Header */}
+                                <h4 className="text-base sm:text-lg font-black text-slate-900 mb-4 pr-6">
+                                  {variantModalItem.name}
+                                </h4>
+
+                                {/* Options List */}
+                                <div className="space-y-3">
+                                  {variantModalItem.options?.map((opt, oIdx) => {
+                                    const cartKey = `${variantModalItem.name} (${opt.unit})`
+                                    const optCount = foodCart[cartKey] || 0
+                                    return (
+                                      <div
+                                        key={oIdx}
+                                        className="bg-white rounded-2xl border border-slate-200/90 p-3 flex items-center justify-between gap-3 shadow-xs hover:border-emerald-500 transition-all"
+                                      >
+                                        {/* Left: Product Thumbnail */}
+                                        <div className="w-14 h-14 rounded-xl bg-[#f5f1eb] overflow-hidden shrink-0">
+                                          <img
+                                            src={variantModalItem.image || getFoodItemPhoto(variantModalItem.name, false)}
+                                            alt={variantModalItem.name}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        </div>
+
+                                        {/* Middle: Unit & Price */}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-xs font-bold text-slate-800">
+                                            {opt.unit}
+                                          </div>
+                                          <div className="flex items-center gap-1.5 mt-0.5">
+                                            <span className="text-xs sm:text-sm font-black text-slate-900">
+                                              ₹{opt.price}
+                                            </span>
+                                            {opt.mrp && (
+                                              <span className="text-[10px] text-slate-400 line-through">
+                                                ₹{opt.mrp}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {/* Right: Add/Quantity Control */}
+                                        <div className="shrink-0">
+                                          {optCount > 0 ? (
+                                            <div className="flex items-center bg-emerald-600 text-white rounded-lg px-1.5 py-1 shadow-xs">
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setFoodCart((prev) => ({
+                                                    ...prev,
+                                                    [cartKey]: Math.max(0, (prev[cartKey] || 0) - 1),
+                                                  }))
+                                                }
+                                                className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                              >
+                                                -
+                                              </button>
+                                              <span className="text-xs font-extrabold min-w-[14px] text-center px-0.5">
+                                                {optCount}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setFoodCart((prev) => ({
+                                                    ...prev,
+                                                    [cartKey]: (prev[cartKey] || 0) + 1,
+                                                  }))
+                                                }
+                                                className="text-white hover:text-emerald-100 font-black text-xs cursor-pointer px-1"
+                                              >
+                                                +
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setFoodCart((prev) => ({
+                                                  ...prev,
+                                                  [cartKey]: 1,
+                                                }))
+                                              }
+                                              className="px-4 py-1.5 rounded-lg border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white font-extrabold text-xs transition-all cursor-pointer active:scale-95 bg-white"
+                                            >
+                                              ADD
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Pinned Fixed Bottom Action Bar */}
+                {selectedFoodSubModule && selectedFoodSubModule.id !== "groceries" && !foodOrderPlaced && (
+                  <div className="px-5 sm:px-7 py-3.5 bg-white border-t border-slate-200 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] rounded-b-3xl">
+                    <div className="text-xs text-slate-600 font-semibold">
+                      {Object.values(foodCart).reduce((a, b) => a + b, 0) > 0 ? (
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-extrabold text-xs">
+                            {Object.values(foodCart).reduce((a, b) => a + b, 0)} items in cart
+                          </span>
+                          <span className="text-slate-800 font-bold">
+                            Total: ₹
+                            {Object.entries(foodCart).reduce((sum, [nameWithUnit, qty]) => {
+                              if (qty <= 0) return sum
+                              let matchedPrice = 0
+                              if (selectedFoodSubModule?.items) {
+                                for (const it of selectedFoodSubModule.items) {
+                                  if (it.options) {
+                                    for (const opt of it.options) {
+                                      if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                        matchedPrice = opt.price
+                                        break
+                                      }
+                                    }
+                                  }
+                                  if (matchedPrice) break
+                                  if (it.name === nameWithUnit) {
+                                    matchedPrice = it.price
+                                    break
+                                  }
+                                }
+                              }
+                              return sum + matchedPrice * qty
+                            }, 0)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span>Select vegetables above for instant Hosur door delivery</span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
+                      onClick={() => {
+                        const itemsList = []
+                        Object.entries(foodCart).forEach(([nameWithUnit, qty]) => {
+                          if (qty <= 0) return
+                          let matchedItem = null
+                          let unit = "1 unit"
+                          let price = 0
+                          let mrp = 0
+                          let baseName = nameWithUnit
+
+                          if (selectedFoodSubModule?.items) {
+                            for (const it of selectedFoodSubModule.items) {
+                              if (it.options) {
+                                for (const opt of it.options) {
+                                  if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                    matchedItem = it
+                                    unit = opt.unit
+                                    price = opt.price
+                                    mrp = opt.mrp || Math.round(opt.price * 1.2)
+                                    baseName = it.name
+                                    break
+                                  }
+                                }
+                              }
+                              if (matchedItem) break
+                              if (it.name === nameWithUnit) {
+                                matchedItem = it
+                                unit = it.unit
+                                price = it.price
+                                mrp = it.mrp || Math.round(it.price * 1.2)
+                                baseName = it.name
+                                break
+                              }
+                            }
+                          }
+
+                          itemsList.push({
+                            id: `veg_${nameWithUnit.replace(/[^a-zA-Z0-9]/g, "_")}`,
+                            name: baseName,
+                            displayName: nameWithUnit,
+                            unit: unit,
+                            price: price || 30,
+                            mrp: mrp || (price ? Math.round(price * 1.2) : 36),
+                            quantity: qty,
+                            image: matchedItem?.image || getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
+                            serviceType: "vegetables_quick_delivery",
+                            deliveryMins: "15-25 mins",
+                          })
+                        })
+
+                        if (itemsList.length === 0) return
+
+                        document.body.style.overflow = ""
+                        setIsFoodHealthModalOpen(false)
+                        setSelectedFoodSubModuleId(null)
+                        navigate(routes.booking_checkout, {
+                          state: {
+                            category: {
+                              id: "vegetables_quick_delivery",
+                              name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
+                              isQuickCommerce: true,
+                              deliveryTime: "15-25 mins",
+                              foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                            },
+                            cart: itemsList,
+                            isQuickCommerce: true,
+                            foodCart: foodCart,
+                            foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                          }
+                        })
+                      }}
+                      className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        }`}
+                    >
+                      <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>,
+            document.body
+          )}
+
+        {/* ── 2. For You Curated Services Modal Popup ── */}
+        {isForYouModalOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="foryou-modal-title"
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+              onClick={() => setIsForYouModalOpen(false)}
+            >
+              <div
+                className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsForYouModalOpen(false)}
+                  aria-label="Close popup"
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer z-10"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                <div className="text-center mb-6">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold uppercase tracking-wider mb-2">
+                    ✦ Personalized Recommendations
+                  </div>
+                  <h3
+                    id="foryou-modal-title"
+                    className="text-xl sm:text-2xl font-extrabold text-slate-900"
+                  >
+                    Curated For You
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md mx-auto">
+                    Top-rated doorstep services and instant transport tailored for fast booking in your locality.
+                  </p>
+                </div>
+
+                {/* Service Alert Message (When clicking unavailable service) */}
+                {serviceAlertMessage && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                      <span>{serviceAlertMessage}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setServiceAlertMessage("")}
+                      className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Grid of 6 For You Sub Services */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {FOR_YOU_SUB.map((item, idx) => {
+                    const isAvailable = isServiceAvailableInZone(item.name)
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          if (!isAvailable) {
+                            showUnavailableServiceAlert(item.name)
+                            return
+                          }
+                          setIsForYouModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          if (item.action === "truck") {
+                            navigate(routes.truck_booking_hosur)
+                          } else if (item.action === "two_wheeler") {
+                            navigate(routes.two_wheeler_booking_hosur)
+                          } else if (item.categoryId === "cleaning") {
+                            setIsHomePestModalOpen(true)
+                          } else if (item.categoryId === "hvac") {
+                            setIsAcModalOpen(true)
+                          } else if (item.categoryId === "electrical") {
+                            setIsElecModalOpen(true)
+                          } else {
+                            goToCategoryServices(item.categoryId)
+                          }
+                        }}
+                        className={`group p-4 rounded-2xl border-2 ${isAvailable ? 'border-slate-100 hover:border-emerald-500 bg-slate-50/60 hover:bg-emerald-50/30' : 'border-slate-200/60 bg-slate-50/50 opacity-60'} flex flex-col justify-between text-left transition-all hover:shadow-md cursor-pointer relative`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            {!isAvailable ? (
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                                Not Available
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                {item.badge}
+                              </span>
+                            )}
+                            <ArrowRight className={`w-3.5 h-3.5 ${isAvailable ? 'text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5' : 'text-slate-300'} transition-transform`} />
+                          </div>
+                          <div className="w-14 h-14 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center p-2 mb-3 group-hover:scale-105 transition-transform">
+                            <item.graphic className={`w-10 h-10 ${!isAvailable ? 'grayscale-[50%]' : ''}`} />
+                          </div>
+                          <h4 className={`text-sm font-extrabold transition-colors ${isAvailable ? 'text-slate-900 group-hover:text-emerald-700' : 'text-slate-400'}`}>
+                            {item.name}
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
+                            {item.subtitle}
+                          </p>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
+        {/* ── 3. Home, Repair & Transport Services Combined Modal Popup ── */}
+        {isHomeServicesCombinedModalOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="home-combined-modal-title"
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+              onClick={() => setIsHomeServicesCombinedModalOpen(false)}
+            >
+              <div
+                className="bg-white rounded-3xl p-6 sm:p-8 max-w-4xl w-full shadow-2xl border border-slate-100 relative max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsHomeServicesCombinedModalOpen(false)}
+                  aria-label="Close popup"
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-teal-50 text-slate-500 hover:text-teal-800 flex items-center justify-center transition-colors cursor-pointer z-10"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-extrabold uppercase tracking-wider mb-2">
+                    ⚡ 6 Core Specialized Pillars
+                  </div>
+                  <h3
+                    id="home-combined-modal-title"
+                    className="text-xl sm:text-2xl font-extrabold text-slate-900"
+                  >
+                    Home, Repair &amp; Transport Services
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg mx-auto">
+                    Select any service below to explore specific options, verified technicians, and transparent pricing.
+                  </p>
+                </div>
+
+                {/* Service Alert Message (When clicking unavailable service) */}
+                {serviceAlertMessage && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                      <span>{serviceAlertMessage}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setServiceAlertMessage("")}
+                      className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {/* 6 Combined Services Grid matching the exact items from the 3rd image */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
+                  {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => {
+                    const isAvailable = isServiceAvailableInZone(label)
+                    return (
+                      <button
+                        key={label}
+                        onClick={() => {
+                          if (!isAvailable) {
+                            showUnavailableServiceAlert(label)
+                            return
+                          }
+                          setIsHomeServicesCombinedModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          if (label === "Goods & Transports") {
+                            setIsGoodsModalOpen(true)
+                          } else if (label.includes("Electrician") || label.includes("Plumbing") || label.includes("Carpentry")) {
+                            setIsElecModalOpen(true)
+                          } else if (label.includes("AC") || label.includes("Appliance")) {
+                            setIsAcModalOpen(true)
+                          } else if (label === "Home Services & Pest Control") {
+                            setIsHomePestModalOpen(true)
+                          } else {
+                            goToCategoryServices(serviceCategoryId)
+                          }
+                        }}
+                        className={`group flex flex-col bg-white rounded-2xl border-2 ${isAvailable ? 'border-slate-100 hover:border-teal-500' : 'border-slate-200/60 opacity-60'} overflow-hidden text-center hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer relative`}
+                      >
+                        {photo ? (
+                          <div className="h-24 w-full overflow-hidden bg-slate-100 relative">
+                            <img
+                              src={photo}
+                              alt={label}
+                              className={`w-full h-full object-cover ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform duration-300`}
+                            />
+                            {!isAvailable && (
+                              <span className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-rose-50/95 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                                Not Available
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="h-24 w-full bg-teal-50 flex items-center justify-center relative">
+                            <Icon className={`w-8 h-8 ${isAvailable ? 'text-teal-600' : 'text-slate-400'}`} strokeWidth={1.5} />
+                            {!isAvailable && (
+                              <span className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-rose-50/95 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                                Not Available
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <span className={`text-xs font-extrabold leading-snug p-3 transition-colors ${isAvailable ? 'text-slate-700 group-hover:text-teal-800' : 'text-slate-400'}`}>
+                          {label}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>,
@@ -2629,26 +3881,9 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* ── App download banner ────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-6 pb-14">
-          <div className="bg-gradient-to-r from-rose-500 to-amber-500 rounded-3xl px-8 py-7 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-white/25 flex items-center justify-center text-white shrink-0">
-                <Smartphone className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-white">Book on the go!</p>
-                <p className="text-lg font-extrabold text-white">Download the CalServices App</p>
-                <p className="text-xs text-rose-100">Faster booking, real-time tracking &amp; exclusive app offers.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Get it on Google Play</button>
-              <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Download on App Store</button>
-            </div>
-          </div>
-        </section>
-
+        {/* ── App Download Banner & Full Footer with Legal & Support Links ── */}
+        {!activeCategory && <AppBannerAndFooter />}
+      </div>
 
       <BkStyles />
       {activeCategory && (
@@ -2739,7 +3974,6 @@ export function LandingPage() {
             }}
           />
         ) : (
-
           <CustomCleaningPackageModal
             category={activeCategory}
             cart={modalCart}
@@ -2780,14 +4014,36 @@ export function LandingPage() {
               </button>
 
               {/* Modal Title */}
-              <div className="text-left mb-6">
+              <div className="text-left mb-4">
                 <h3
                   id="homepest-modal-title"
                   className="text-lg sm:text-xl font-extrabold text-slate-900"
                 >
                   Home Cleaning &amp; Pest Control
                 </h3>
+                {zoneCheckResult?.zone?.name && (
+                  <div className="text-[11px] font-bold text-slate-400 mt-0.5">
+                    Service area: <span className="text-emerald-700 font-extrabold">📍 {zoneCheckResult.zone.name}</span>
+                  </div>
+                )}
               </div>
+
+              {/* Service Alert Message (When clicking unavailable service) */}
+              {serviceAlertMessage && (
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-200 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                    <span>{serviceAlertMessage}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setServiceAlertMessage("")}
+                    className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
 
               {/* Cleaning Section */}
               <div className="mb-6">
@@ -2795,40 +4051,51 @@ export function LandingPage() {
                   Home Cleaning
                 </h4>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                  {HOME_SERVICES_SUB.map((item) => (
-                    <button
-                      key={item.name}
-                      type="button"
-                      onClick={() => {
-                        setIsHomePestModalOpen(false)
-                        document.body.style.overflow = "unset"
-                        if (item.name === "Kitchen Cleaning") {
-                          navigate(`?category=kitchen_cleaning`)
-                        } else if (item.name === "Sofa Cleaning") {
-                          navigate(`?category=sofa_cleaning`)
-                        } else if (item.name === "Bathroom Cleaning") {
-                          navigate(`?category=bathroom_cleaning`)
-                        } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
-                          navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
-                        } else {
-                          navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
-                        }
-                      }}
-                      className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                    >
-                      <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                        <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                        {item.badge && (
-                          <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                            {item.badge}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                        {item.name}
-                      </span>
-                    </button>
-                  ))}
+                  {HOME_SERVICES_SUB.map((item) => {
+                    const isAvailable = isServiceAvailableInZone(item.name)
+                    return (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => {
+                          if (!isAvailable) {
+                            showUnavailableServiceAlert(item.name)
+                            return
+                          }
+                          setIsHomePestModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          if (item.name === "Kitchen Cleaning") {
+                            navigate(`?category=kitchen_cleaning`)
+                          } else if (item.name === "Sofa Cleaning") {
+                            navigate(`?category=sofa_cleaning`)
+                          } else if (item.name === "Bathroom Cleaning") {
+                            navigate(`?category=bathroom_cleaning`)
+                          } else if (item.name === "Full House Cleaning" || item.name === "Full House Deep Cleaning") {
+                            navigate(`?category=cleaning&subtab=Occupied%20Apartment`)
+                          } else {
+                            navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                          }
+                        }}
+                        className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
+                      >
+                        <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
+                          <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                          {!isAvailable ? (
+                            <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                              Not Available
+                            </div>
+                          ) : item.badge && (
+                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
+                              {item.badge}
+                            </div>
+                          )}
+                        </div>
+                        <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
+                          {item.name}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -2838,30 +4105,41 @@ export function LandingPage() {
                   Pest Control
                 </h4>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-2 gap-y-4 justify-items-center">
-                  {PEST_CONTROL_SUB.map((item) => (
-                    <button
-                      key={item.name}
-                      type="button"
-                      onClick={() => {
-                        setIsHomePestModalOpen(false)
-                        document.body.style.overflow = "unset"
-                        navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
-                      }}
-                      className="group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center"
-                    >
-                      <div className="relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 group-hover:bg-emerald-50/50 group-hover:border-emerald-200 border border-transparent flex items-center justify-center transition-all">
-                        <item.graphic className="w-12 h-12 sm:w-14 sm:h-14 group-hover:scale-105 transition-transform" />
-                        {item.badge && (
-                          <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
-                            {item.badge}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[10px] sm:text-[11px] font-semibold text-slate-700 mt-2.5 leading-tight group-hover:text-emerald-700 transition-colors max-w-[90px] sm:max-w-[105px] break-words">
-                        {item.name}
-                      </span>
-                    </button>
-                  ))}
+                  {PEST_CONTROL_SUB.map((item) => {
+                    const isAvailable = isServiceAvailableInZone(item.name)
+                    return (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => {
+                          if (!isAvailable) {
+                            showUnavailableServiceAlert(item.name)
+                            return
+                          }
+                          setIsHomePestModalOpen(false)
+                          document.body.style.overflow = "unset"
+                          navigate(`?category=${item.categoryId}&subtab=${encodeURIComponent(item.name)}`)
+                        }}
+                        className={`group flex flex-col items-center focus:outline-none cursor-pointer w-full text-center relative ${!isAvailable ? 'opacity-55' : ''}`}
+                      >
+                        <div className={`relative w-[84px] h-[68px] sm:w-[98px] sm:h-[78px] rounded-xl bg-slate-100/60 ${isAvailable ? 'group-hover:bg-emerald-50/50 group-hover:border-emerald-200' : 'bg-slate-200/40 border-slate-200'} border border-transparent flex items-center justify-center transition-all`}>
+                          <item.graphic className={`w-12 h-12 sm:w-14 sm:h-14 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[50%]'} transition-transform`} />
+                          {!isAvailable ? (
+                            <div className="absolute -bottom-2 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm scale-90 whitespace-nowrap">
+                              Not Available
+                            </div>
+                          ) : item.badge && (
+                            <div className="absolute -bottom-1.5 bg-white border border-slate-200 text-slate-500 text-[8px] font-bold px-1 rounded shadow-sm scale-90 whitespace-nowrap">
+                              {item.badge}
+                            </div>
+                          )}
+                        </div>
+                        <span className={`text-[10px] sm:text-[11px] font-semibold ${isAvailable ? 'text-slate-700 group-hover:text-emerald-700' : 'text-slate-400'} mt-2.5 leading-tight transition-colors max-w-[90px] sm:max-w-[105px] break-words`}>
+                          {item.name}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -4112,228 +5390,6 @@ export function LandingPage() {
           document.body
         )}
 
-      {/* ── Trust strip ────────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6">
-        <div className="bg-slate-50 border border-slate-200 rounded-3xl grid sm:grid-cols-2 lg:grid-cols-5 gap-6 p-8">
-          {TRUST_STRIP.map(({ icon: Icon, title, body }, idx) => {
-            const iconColors = ["text-teal-600", "text-rose-500", "text-violet-600", "text-amber-500", "text-sky-500"]
-            return (
-              <div key={title} className="flex flex-col items-start gap-2">
-                <Icon className={`w-6 h-6 ${iconColors[idx % iconColors.length]}`} strokeWidth={1.75} />
-                <p className="text-sm font-bold text-slate-800 leading-snug">{title}</p>
-                <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ── Offers ─────────────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6 py-14 grid lg:grid-cols-[220px_1fr] gap-6 items-stretch">
-        <div className="bg-gradient-to-br from-teal-600 to-emerald-700 rounded-3xl p-6 flex flex-col justify-center">
-          <p className="text-lg font-extrabold text-white mb-1">Limited Time Offers!</p>
-          <p className="text-xs text-teal-100 mb-4">Great deals on services you love.</p>
-          <button onClick={goToBooking} className="bg-white text-teal-700 hover:bg-teal-50 text-xs font-bold px-4 py-2 rounded-full self-start transition-colors">
-            Explore Offers
-          </button>
-        </div>
-        <div className="grid sm:grid-cols-3 gap-4">
-          {[
-            { tag: "UPTO", big: "20% OFF", sub: "on Home Cleaning", bg: "bg-amber-50 hover:bg-amber-100", tag_color: "text-amber-600", link_color: "text-amber-700" },
-            { tag: "FLAT", big: "15% OFF", sub: "on Painting",      bg: "bg-rose-50 hover:bg-rose-100",   tag_color: "text-rose-600",  link_color: "text-rose-700"  },
-            { tag: "UPTO", big: "₹500 OFF", sub: "on AC Service",   bg: "bg-violet-50 hover:bg-violet-100", tag_color: "text-violet-600", link_color: "text-violet-700" },
-          ].map((offer) => (
-            <button
-              key={offer.sub}
-              onClick={goToBooking}
-              className={`${offer.bg} rounded-3xl p-6 text-left hover:shadow-md transition-all`}
-            >
-              <p className={`text-[11px] font-bold tracking-wide ${offer.tag_color}`}>{offer.tag}</p>
-              <p className="text-2xl font-extrabold text-slate-900 mb-1">{offer.big}</p>
-              <p className="text-sm text-slate-600 mb-4">{offer.sub}</p>
-              <span className={`text-xs font-semibold ${offer.link_color}`}>Book Now &rarr;</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* ── How It Works ───────────────────────────────────── */}
-      <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-10">
-        <h2 className="text-xl font-bold text-slate-900 text-center mb-10">How It Works</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-8">
-          {STEPS.map(({ icon: Icon, title, body }, i) => {
-            const stepColors = [
-              { bg: "bg-teal-50",   icon: "text-teal-600",   badge: "bg-teal-600"   },
-              { bg: "bg-rose-50",   icon: "text-rose-500",   badge: "bg-rose-500"   },
-              { bg: "bg-violet-50", icon: "text-violet-600", badge: "bg-violet-600" },
-              { bg: "bg-amber-50",  icon: "text-amber-500",  badge: "bg-amber-500"  },
-              { bg: "bg-sky-50",    icon: "text-sky-500",    badge: "bg-sky-500"    },
-            ]
-            const c = stepColors[i % stepColors.length]
-            return (
-              <div key={title} className="flex flex-col items-center text-center gap-3">
-                <div className="relative">
-                  <div className={`w-16 h-16 rounded-full ${c.bg} flex items-center justify-center`}>
-                    <Icon className={`w-7 h-7 ${c.icon}`} strokeWidth={1.75} />
-                  </div>
-                  <span className={`absolute -top-1 -left-1 w-5 h-5 rounded-full ${c.badge} text-white text-[10px] font-bold flex items-center justify-center`}>
-                    {i + 1}
-                  </span>
-                </div>
-                <p className="text-sm font-bold text-slate-800">{title}</p>
-                <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ── Stats ──────────────────────────────────────────── */}
-      <section className="bg-slate-800 py-10">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-5 gap-6 text-center text-white">
-          {STATS.map((s) => (
-            <div key={s.label}>
-              <p className="text-2xl font-extrabold">{s.value}</p>
-              <p className="text-xs text-slate-300">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Featured Professionals ─────────────────────────── */}
-      <section id="professionals" className="max-w-7xl mx-auto px-6 py-14">
-        <h2 className="text-xl font-bold text-slate-900 text-center mb-2">Featured Professionals</h2>
-        <p className="text-sm text-slate-500 text-center mb-10">Top-rated experts ready to help</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-          {PROFESSIONALS.map((p) => (
-            <div key={p.name} className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
-              <img src={p.photo} alt={p.name} className="w-full h-36 object-cover" />
-              <div className="p-4">
-                <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                <p className="text-xs text-slate-500 mb-2">{p.role}</p>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="inline-flex items-center gap-1 font-semibold text-amber-500">
-                    <Star className="w-3.5 h-3.5 fill-current" /> {p.rating}
-                  </span>
-                  <span className="text-slate-400">{p.jobs}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Testimonials ───────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">What Our Customers Say</h2>
-          <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">View all reviews &rarr;</a>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setTestimonialIdx((i) => (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)}
-            className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <div className="grid sm:grid-cols-3 gap-5 flex-1">
-            {TESTIMONIALS.map((t, i) => (
-              <div key={t.name} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                    {t.initials}
-                  </span>
-                  <div className="flex gap-0.5 text-amber-400">
-                    {Array.from({ length: 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
-                  </div>
-                </div>
-                <p className="text-sm text-slate-600 mb-3 leading-relaxed">{t.text}</p>
-                <p className="text-sm font-bold text-slate-800">&mdash; {t.name}</p>
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={() => setTestimonialIdx((i) => (i + 1) % TESTIMONIALS.length)}
-            className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="flex justify-center gap-1.5 mt-6">
-          {TESTIMONIALS.map((_, i) => (
-            <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === testimonialIdx ? "bg-teal-600" : "bg-slate-200"}`} />
-          ))}
-        </div>
-      </section>
-
-      {/* ── App download banner ────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-6 pb-14">
-        <div className="bg-gradient-to-r from-rose-500 to-amber-500 rounded-3xl px-8 py-7 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-white/25 flex items-center justify-center text-white shrink-0">
-              <Smartphone className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white">Book on the go!</p>
-              <p className="text-lg font-extrabold text-white">Download the CalServices App</p>
-              <p className="text-xs text-rose-100">Faster booking, real-time tracking &amp; exclusive app offers.</p>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Get it on Google Play</button>
-            <button className="bg-white text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-rose-50 transition-colors">Download on App Store</button>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Footer ─────────────────────────────────────────── */}
-      <footer id="about" className="border-t border-slate-200 bg-slate-900">
-        <div className="max-w-7xl mx-auto px-6 py-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
-          <div>
-            <div className="flex items-center gap-2 select-none">
-              <div className="w-9 h-9 rounded-xl bg-teal-500 flex items-center justify-center text-white">
-                <Home className="w-5 h-5" strokeWidth={2.5} />
-              </div>
-              <span className="text-lg font-extrabold tracking-tight text-white">{homeConfig.footer?.brandName || "CalServices"}</span>
-            </div>
-            <p className="text-xs text-slate-400 mt-3 leading-relaxed max-w-[220px]">
-              {homeConfig.footer?.tagline || "Your trusted partner for all home services. Quality you can count on."}
-            </p>
-            <div className="flex gap-3 mt-4 text-slate-400 hover:[&>*]:text-teal-400">
-              <FacebookMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
-              <InstagramMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
-              <YoutubeMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
-              <TwitterMark className="w-4 h-4 cursor-pointer hover:text-teal-400 transition-colors" />
-            </div>
-          </div>
-          <div>
-            <p className="text-sm font-bold text-white mb-3">{homeConfig.footer?.servicesColTitle || "Services"}</p>
-            <ul className="space-y-2 text-xs text-slate-400">
-              {(homeConfig.footer?.servicesLinks || ["Home Services & Pest Control", "Paintings", "Mason", "AC & Appliance"]).map((link, idx) => (
-                <li key={idx} className="hover:text-white cursor-pointer transition-colors">{link}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <p className="text-sm font-bold text-white mb-3">{homeConfig.footer?.companyColTitle || "Company"}</p>
-            <ul className="space-y-2 text-xs text-slate-400">
-              {(homeConfig.footer?.companyLinks || ["About Us", "Careers", "Blog", "Become a Partner"]).map((link, idx) => (
-                <li key={idx} className="hover:text-white cursor-pointer transition-colors">{link}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <p className="text-sm font-bold text-white mb-3">{homeConfig.footer?.helpColTitle || "Need Help?"}</p>
-            <ul className="space-y-2 text-xs text-slate-400">
-              <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-teal-400" /> {homeConfig.footer?.phone || "+91 98765 43210"}</li>
-              <li className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-teal-400" /> {homeConfig.footer?.email || "support@calservices.com"}</li>
-              <li className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-teal-400" /> {homeConfig.footer?.workingHours || "Mon – Sun (8 AM – 8 PM)"}</li>
-            </ul>
-          </div>
-        </div>
-      </footer>
-    </div>
-
     <BkStyles />
     {activeCategory && (
       (activeCategory.id === "kitchen_cleaning" || activeCategory.slug === "kitchen_cleaning" || String(activeCategory.id) === "kitchen_cleaning" || activeCategory.name?.toLowerCase()?.includes("kitchen")) ? (
@@ -4378,7 +5434,7 @@ export function LandingPage() {
             navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
           }}
         />
-      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.slug === "masons" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase() === "mason" || activeCategory.name?.toLowerCase() === "masonry") ? (
+      ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.id === "civil" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase()?.includes("mason") || activeCategory.name?.toLowerCase()?.includes("civil")) ? (
         <MasonPackageModal
           category={activeCategory}
           cart={modalCart}

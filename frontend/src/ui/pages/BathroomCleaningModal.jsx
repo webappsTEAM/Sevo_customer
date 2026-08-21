@@ -680,10 +680,11 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
 
           {/* Tab Banner Image */}
           {(() => {
+            const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
             const banners = {
-              packages: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=1200&q=80&fit=crop",
-              minis: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=1200&q=80&fit=crop",
-              subscription: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=1200&q=80&fit=crop"
+              packages: customB.packages || "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=1200&q=80&fit=crop",
+              minis: customB.minis || "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=1200&q=80&fit=crop",
+              subscription: customB.subscription || "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=1200&q=80&fit=crop"
             };
             const bannerUrl = banners[activeTab];
             if (!bannerUrl) return null;
@@ -761,7 +762,14 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                           </div>
                         ) : (
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleQuickAdd(service); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activeTab === "minis") {
+                                handleQuickAdd(service);
+                              } else {
+                                handleOpenDetails(service);
+                              }
+                            }}
                             className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
                           >
                             <ShoppingCart size={14} /> Add

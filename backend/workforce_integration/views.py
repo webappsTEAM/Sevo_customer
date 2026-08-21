@@ -263,6 +263,10 @@ class WorkforceWebhookView(APIView):
 
                 # ── 5. ARRIVED ──────────────────────────────────────────────────────
                 elif event_type in ["employee_arrived", "job.arrived"]:
+                    loc_dict = payload.get("location") or {}
+                    if loc_dict.get("latitude") and loc_dict.get("longitude"):
+                        sr.technician_latitude = loc_dict.get("latitude")
+                        sr.technician_longitude = loc_dict.get("longitude")
                     if sr.status in ["accepted", "on_the_way"]:
                         safe_apply_transition(sr, "arrived")
                     sr.save()

@@ -132,7 +132,7 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
                     customer = User.objects.get(pk=customer_id)
                 except (User.DoesNotExist, ValueError):
                     return self.error_response(f"User with ID {customer_id} does not exist.")
-            elif request.user.is_authenticated:
+            elif request.user.is_authenticated and getattr(request.user, "role", "") == "customer":
                 customer = request.user
 
             cust_name = request.data.get("customer_name") or (customer.get_full_name() if customer else "") or (customer.username if customer else "")

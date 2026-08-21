@@ -1064,12 +1064,13 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
 
           {/* Tab Banner Image */}
           {(() => {
+            const customB = dbPackages[0]?.service_customization?.subtab_banners || {};
             const banners = {
-              full_apartment: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1200&q=80&fit=crop",
-              unoccupied_apartment: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=1200&q=80&fit=crop",
-              full_bungalow: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1200&q=80&fit=crop",
-              unoccupied_bungalow: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&q=80&fit=crop",
-              partial_home: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80&fit=crop"
+              full_apartment: customB.full_apartment || "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1200&q=80&fit=crop",
+              unoccupied_apartment: customB.unoccupied_apartment || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=1200&q=80&fit=crop",
+              full_bungalow: customB.full_bungalow || "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1200&q=80&fit=crop",
+              unoccupied_bungalow: customB.unoccupied_bungalow || "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&q=80&fit=crop",
+              partial_home: customB.partial_home || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&q=80&fit=crop"
             };
             const bannerUrl = banners[activeTab];
             if (!bannerUrl) return null;
@@ -1148,7 +1149,14 @@ export function FullHouseCleaningModal({ activeSubTab: propActiveSubTab, cart, s
                           </div>
                         ) : (
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleQuickAdd(service); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activeTab === "partial_home") {
+                                handleQuickAdd(service);
+                              } else {
+                                handleOpenDetails(service);
+                              }
+                            }}
                             className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
                           >
                             <ShoppingCart size={14} /> Add

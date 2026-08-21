@@ -1143,7 +1143,7 @@ export function LoginPage() {
                               {agreedTerms && <Check size={12} strokeWidth={4} />}
                             </div>
                             <input type="checkbox" className="hidden" checked={agreedTerms} onChange={() => setAgreedTerms(!agreedTerms)} />
-                            <span className="text-[12px] font-medium text-slate-600 leading-tight">Agree to <span className="text-indigo-400 font-bold">Terms</span> & <span className="text-indigo-400 font-bold">Privacy</span>.</span>
+                            <span className="text-[12px] font-medium text-slate-600 leading-tight">Agree to <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold" onClick={(e) => e.stopPropagation()}>Terms</a> &amp; <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>.</span>
                           </label>
                         </div>
 

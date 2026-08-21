@@ -1573,150 +1573,6 @@ const STATIC_SERVICE_DETAIL_DATA = {
     faqs: [
       { q: "Do you clean the door frames?", a: "Yes, we clean both panels and frames." }
     ]
-  },
-  "pest-kb-main": {
-    tools: [
-      "Professional pest control equipment",
-      "Approved pest treatment solutions",
-      "Targeted gel bait application"
-    ],
-    ready: [
-      "Keep food items covered",
-      "Store utensils safely after clearing"
-    ],
-    reviews: [
-      { name: "Rajesh K.", rating: "5.0", text: '"Excellent service. The technician cleared the utensils carefully and put gel in all hinges."' },
-      { name: "Anjali S.", rating: "4.0", text: '"Very professional. The treatment is odorless and highly effective."' }
-    ],
-    faqs: [
-      { q: "Is the treatment safe for kids and pets?", a: "Yes, we use government-approved odorless chemicals that are completely safe. However, we recommend keeping them away during active spraying." },
-      { q: "Do you clear the utensils?", a: "Before the inspection and treatment, our technician will assist in removing the utensils. After treatment, the customer is requested to put them back." },
-      { q: "How long does a session take?", a: "Typically, a kitchen cockroach treatment takes about 45min." },
-      { q: "How quickly do cockroaches die?", a: "You will start seeing a significant reduction within 48 hours, and complete elimination of active roaches in 1 day." },
-      { q: "Do I need to leave the house?", a: "It is not required to leave the house." },
-      { q: "Does the spray stain cabinets?", a: "No, our water-based chemicals are non-staining and odorless, making them safe for wooden, laminate, and steel modular kitchens." }
-    ]
-  },
-  "pest-apt-main": {
-    tools: [
-      "Professional pest control equipment",
-      "Approved pest treatment solutions",
-      "Targeted gel bait application"
-    ],
-    ready: [
-      "Keep food items covered",
-      "Store utensils safely after clearing"
-    ],
-    reviews: [
-      { name: "Vikram M.", rating: "5.0", text: '"Roach problem resolved completely. Best service ever."' },
-      { name: "Neha G.", rating: "5.0", text: '"Awesome odorless spray. They handled the kitchen prep too."' }
-    ],
-    faqs: [
-      { q: "How long does the effect last?", a: "The treatment prevents pest return for up to 90 days. A second visit at 14 days is included to ensure complete eradication." },
-      { q: "Is pre-cleaning of the rooms required?", a: "No, but clearing toys, clothes, and loose items from skirting boards helps the partner spray more efficiently." },
-      { q: "Does this spray have a strong chemical smell?", a: "No, we use premium water-soluble odorless chemical sprays that leave no foul scent behind." },
-      { q: "What should I do after the treatment?", a: "Keep ventilation open for 15 minutes, avoid wet wiping the skirting boards for at least 48 hours so the chemical barrier stays intact." },
-      { q: "Do you treat electrical boxes?", a: "Yes, we use Eco-safe Herbal Gel bait instead of liquid spray inside electrical switch boards and sockets." },
-      { q: "Are balcony areas covered in the apartment plan?", a: "Yes, balcony drains, washing areas, and main entry doors are sprayed to block external entry points." },
-      { q: "What chemicals do you use?", a: "We use only government-approved, low-toxicity synthetic pyrethroids which are highly target-specific for insects." },
-      { q: "Is there any preparation for pet food bowls?", a: "Yes, please remove and store all pet food bowls and water bowls before our technician begins the spray." }
-    ]
-  },
-  "pest-bung-main": {
-    tools: [
-      "Professional pest control equipment",
-      "Approved pest treatment solutions",
-      "Targeted gel bait application"
-    ],
-    ready: [
-      "Keep food items covered",
-      "Store utensils safely after clearing"
-    ],
-    reviews: [
-      { name: "Suresh P.", rating: "4.0", text: '"Detailed inspection and gel application. Highly recommended."' }
-    ],
-    faqs: [
-      { q: "Do you cover all floors of the bungalow?", a: "Yes, we treat all rooms, staircase areas, terraces, and external verandas." },
-      { q: "How long does a bungalow cockroach treatment take?", a: "It takes about 1.5 to 2.5 hours depending on the total floor count and rooms." },
-      { q: "Do you treat external drainage chambers?", a: "Yes, external manholes and drain chambers are treated with chemical sprays to prevent entry from the drainage system." },
-      { q: "Is garden area spraying included?", a: "No, this is an indoor-focused treatment. However, we spray immediate porches, verandas, and outer door frames." },
-      { q: "Can we clean the house immediately after treatment?", a: "You can sweep, but avoid washing or mopping along skirting boards for 2 to 3 days to maximize residual action." },
-      { q: "What type of gel do you use?", a: "We use advanced fipronil/imidacloprid gels which act as highly palatable bait for roaches." },
-      { q: "What is the warranty period for bungalows?", a: "We provide a 90-day complete protection warranty from the date of the first service." },
-      { q: "How many partners are sent for a bungalow?", a: "Usually 1 to 2 trained service partners are assigned depending on the size of the duplex/villa." }
-    ]
-  },
-  "pest-termite-kb": {
-    tools: [
-      "Professional pest control equipment",
-      "Approved pest treatment solutions",
-      "Targeted gel bait application"
-    ],
-    ready: [
-      "Keep food items covered",
-      "Store utensils safely after clearing"
-    ],
-    reviews: [
-      { name: "Mahesh S.", rating: "5.0", text: '"Excellent termite control. Wood cabinets are completely safe now."' }
-    ],
-    faqs: [
-      { q: "Does the drilling damage walls?", a: "No, we use fine-tip drills and seal the holes cleanly with color-matched cement/putty." },
-      { q: "What chemicals do you use for termites?", a: "We use premium termiticides containing imidacloprid or fipronil, which create a chemical barrier to block and destroy termites." },
-      { q: "Is termite treatment odorless?", a: "Yes, the chemical solutions are completely odorless and do not cause any respiratory discomfort." },
-      { q: "How deep do you drill?", a: "We drill about 4 to 6 inches deep into the base of walls at regular intervals to inject chemicals into the foundation." },
-      { q: "Can termites return after drilling?", a: "Our treatment kills the existing infestation and prevents return. We offer a long-term warranty to secure your kitchen wood structures." },
-      { q: "Do I need to empty my kitchen cabinets?", a: "Yes, emptying cabinets in the treatment zone is required so we can access and inject chemicals behind the wood ply." },
-      { q: "How long does this termite treatment take?", a: "It takes about 2 to 3 hours depending on the number of bathrooms and kitchen cabinets treated." },
-      { q: "Does it kill termite eggs?", a: "Termiticide is a systemic chemical. Termites carry it back to their colony, which leads to total colony elimination, including eggs." }
-    ]
-  },
-  "pest-termite-apt": {
-    tools: [
-      "Professional pest control equipment",
-      "Approved pest treatment solutions",
-      "Targeted gel bait application"
-    ],
-    ready: [
-      "Keep food items covered",
-      "Store utensils safely after clearing"
-    ],
-    reviews: [
-      { name: "Karan T.", rating: "5.0", text: '"Professional termite drilling. They gave a 5-year warranty certificate."' }
-    ],
-    faqs: [
-      { q: "What does the 5-year warranty cover?", a: "If termites reappear anywhere in the treated zones within 5 years, we will re-treat the area completely free of charge." },
-      { q: "Is the entire apartment treated in this plan?", a: "Yes, we drill and inject termiticide along the floor-wall junctions of all rooms in the apartment." },
-      { q: "How safe is the chemical inside rooms?", a: "The termiticide is injected deep inside the walls and sealed, so there is no chemical exposure to children or pets." },
-      { q: "Do we need to vacate the house during treatment?", a: "No, there is no need to vacate as the service is clean, non-toxic, and odorless." },
-      { q: "Will the drill noise disturb neighbors?", a: "There will be drill noises during the first 1-2 hours. We recommend informing neighbors beforehand." },
-      { q: "How do you seal the drilled holes?", a: "We fill the holes with white cement mixed with wall putty, smoothing them out so they blend with your floor trim." },
-      { q: "Does this cover wooden wardrobes?", a: "Yes, we spray anti-termite chemicals on the back boards and frames of all fixed wooden wardrobes." },
-      { q: "Can we clean floors after termite drilling?", a: "You can mop the center of the rooms immediately. Avoid washing wall-floor junctions for 24 hours." }
-    ]
-  },
-  "pest-termite-bung": {
-    tools: [
-      "Professional pest control equipment",
-      "Approved pest treatment solutions",
-      "Targeted gel bait application"
-    ],
-    ready: [
-      "Keep food items covered",
-      "Store utensils safely after clearing"
-    ],
-    reviews: [
-      { name: "Pooja V.", rating: "5.0", text: '"Very thorough treatment. They spent hours securing our duplex. Great service!"' }
-    ],
-    faqs: [
-      { q: "Do we need to vacate the bungalow?", a: "No vacation needed. The chemicals are safe and completely odorless." },
-      { q: "What does the bungalow termite plan cover?", a: "It covers drilling and chemical injection of all levels of the bungalow, wardrobe backboards, and soil barrier misting around the duplex perimeter." },
-      { q: "How long does a bungalow termite service take?", a: "A complete bungalow service takes about 4 to 6 hours depending on the size." },
-      { q: "Is external soil treatment included?", a: "Yes, we spray the soil borders around the bungalow's foundation to prevent termites from migrating inside." },
-      { q: "What is the warranty period?", a: "We provide a 5-year warranty with a physical certificate for the bungalow termite treatment." },
-      { q: "Do you treat wooden staircases?", a: "Yes, wooden stair casings and railings are carefully injected and sprayed to protect them." },
-      { q: "How many technicians are sent?", a: "Usually 2 to 3 trained professionals equipped with heavy hammer drills and high-pressure chemical pumps." },
-      { q: "What happens if termites appear in my furniture?", a: "During the 5-year warranty, if any termites emerge in treated structures, contact us and we will re-inject them at no extra cost." }
-    ]
   }
 }
 
@@ -2973,6 +2829,7 @@ export function CatalogPackagesPage() {
         reviews_list: Array.isArray(cust.reviews_list) && cust.reviews_list.length > 0
                   ? cust.reviews_list
                   : (Array.isArray(defaults.reviews_list) ? defaults.reviews_list : []),
+        subtab_banners: cust.subtab_banners || defaults.subtab_banners || {},
       }
     })
     setCustomizerTab("general")
@@ -3314,7 +3171,7 @@ export function CatalogPackagesPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {visibleServices.map((svcItem) => {
+          {visibleServices.map((svcItem, idx) => {
             const SubIcon = svcItem.icon
             const pkgList = svcItem.packages
 
@@ -3334,16 +3191,27 @@ export function CatalogPackagesPage() {
                         <span className="text-xs font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-full">
                           {pkgList.length} {pkgList.length === 1 ? "option" : "options"}
                         </span>
-                        {activeCategoryKey === "paintings" || activeCategoryKey === "mason" ? (
-                          <button
-                            type="button"
-                            onClick={() => openServiceCustomizer(svcItem.service)}
-                            title="Customise Booking Card & Detail Page Content"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
-                          >
-                            <SlidersHorizontal className="w-3.5 h-3.5" />
-                            <span>Customise Page</span>
-                          </button>
+                        {(activeCategoryKey === "paintings" || activeCategoryKey === "mason") ||
+                         ((activeCategoryKey === "home_pest_control" || activeCategoryKey === "pest_control" || svcItem.service.slug.includes("clean") || svcItem.service.slug.includes("pest") || svcItem.service.slug.includes("sofa")) && idx === 0) ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openServiceCustomizer(svcItem.service)}
+                              title="Customise Booking Card & Detail Page Content"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold border border-indigo-200/80 shadow-xs transition-all cursor-pointer"
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                              <span>Customise Page</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setServiceEditing({ ...svcItem.service })}
+                              title="Edit Sub-Service Heading & Description"
+                              className="p-1 rounded-lg text-slate-400 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         ) : (
                           <button
                             type="button"
@@ -3702,118 +3570,239 @@ export function CatalogPackagesPage() {
               </div>
 
               {/* Pill Tabs Selector */}
-              <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100/70 dark:bg-slate-900/60 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 no-print">
-                {[
-                  { id: "general", label: "Card & General Settings", icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
-                  { id: "content", label: "Includes & Excludes", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
-                  { id: "details", label: "Badges, Steps & FAQs", icon: <Layers className="w-3.5 h-3.5" /> },
-                  { id: "pricing", label: "Price List & Materials", icon: <DollarSign className="w-3.5 h-3.5" /> },
-                ].map((t) => {
-                  const isSelected = customizerTab === t.id
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setCustomizerTab(t.id)}
-                      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
-                        isSelected
-                          ? "bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 shadow-xs border border-slate-200/50 dark:border-slate-700/50"
-                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                      }`}
-                    >
-                      {t.icon}
-                      <span>{t.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
+              {!["kitchen-cleaning", "bathroom-cleaning", "sofa-cleaning", "cleaning"].includes(serviceCustomizing.slug) && (
+                <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100/70 dark:bg-slate-900/60 rounded-2xl border border-slate-200/40 dark:border-slate-800/40 no-print">
+                  {[
+                    { id: "general", label: "Card & General Settings", icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
+                    { id: "content", label: "Includes & Excludes", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+                    { id: "details", label: "Badges, Steps & FAQs", icon: <Layers className="w-3.5 h-3.5" /> },
+                    { id: "pricing", label: "Price List & Materials", icon: <DollarSign className="w-3.5 h-3.5" /> },
+                  ].map((t) => {
+                    const isSelected = customizerTab === t.id
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setCustomizerTab(t.id)}
+                        className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 shadow-xs border border-slate-200/50 dark:border-slate-700/50"
+                            : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                        }`}
+                      >
+                        {t.icon}
+                        <span>{t.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Tab 1: General & Card settings */}
             {customizerTab === "general" && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Sub-Service Name"
-                    required
-                    value={serviceCustomizing.name || ""}
-                    onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, name: e.target.value })}
-                  />
-                  <Input
-                    label="Display Order (sort_order)"
-                    type="number"
-                    value={serviceCustomizing.sort_order || 0}
-                    onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, sort_order: parseInt(e.target.value) || 0 })}
-                  />
-                </div>
-
-                <TextArea
-                  label="Description"
-                  value={serviceCustomizing.description || ""}
-                  onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, description: e.target.value })}
-                />
-
-                {/* Service Image Customizer Section */}
-                <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
-                  <div>
-                    <span className="text-xs font-bold text-slate-800">Service Banner Image</span>
-                    <p className="text-[11px] text-slate-500 mt-0.5">Upload a custom service banner image or paste an image URL.</p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-center gap-4">
-                    {serviceCustomizing.image ? (
-                      <div className="relative w-24 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
-                        <img src={serviceCustomizing.image} alt="Preview" className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setServiceCustomizing((prev) => ({ ...prev, image: "" }))}
-                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="w-24 h-16 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
-                        No Image
-                      </div>
-                    )}
-                    <div className="flex-1 w-full space-y-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            const formData = new FormData()
-                            formData.append("image", file)
-                            try {
-                              const res = await apiRequest("/settings/catalog/upload-image/", {
-                                method: "POST",
-                                body: formData,
-                              })
-                              if (res.success && res.url) {
-                                setServiceCustomizing((prev) => ({ ...prev, image: res.url }))
-                                showToast("Image uploaded successfully!")
-                              } else {
-                                showToast(res.message || "Upload failed", "error")
-                              }
-                            } catch (err) {
-                              showToast("Upload failed", "error")
-                            }
-                          }
-                        }}
-                        className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                {!["kitchen-cleaning", "bathroom-cleaning", "sofa-cleaning", "cleaning"].includes(serviceCustomizing.slug) && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Input
+                        label="Sub-Service Name"
+                        required
+                        value={serviceCustomizing.name || ""}
+                        onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, name: e.target.value })}
                       />
                       <Input
-                        label="Or Image URL"
-                        placeholder="https://images.unsplash.com/..."
-                        value={serviceCustomizing.image || ""}
-                        onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, image: e.target.value })}
+                        label="Display Order (sort_order)"
+                        type="number"
+                        value={serviceCustomizing.sort_order || 0}
+                        onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, sort_order: parseInt(e.target.value) || 0 })}
                       />
                     </div>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <TextArea
+                      label="Description"
+                      value={serviceCustomizing.description || ""}
+                      onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, description: e.target.value })}
+                    />
+
+                    {/* Service Image Customizer Section */}
+                    <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
+                      <div>
+                        <span className="text-xs font-bold text-slate-800">Service Banner Image</span>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Upload a custom service banner image or paste an image URL.</p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-center gap-4">
+                        {serviceCustomizing.image ? (
+                          <div className="relative w-24 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                            <img src={serviceCustomizing.image} alt="Preview" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setServiceCustomizing((prev) => ({ ...prev, image: "" }))}
+                              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="w-24 h-16 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
+                            No Image
+                          </div>
+                        )}
+                        <div className="flex-1 w-full space-y-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                const formData = new FormData()
+                                formData.append("image", file)
+                                try {
+                                  const res = await apiRequest("/settings/catalog/upload-image/", {
+                                    method: "POST",
+                                    body: formData,
+                                  })
+                                  if (res.success && res.url) {
+                                    setServiceCustomizing((prev) => ({ ...prev, image: res.url }))
+                                    showToast("Image uploaded successfully!")
+                                  } else {
+                                    showToast(res.message || "Upload failed", "error")
+                                  }
+                                } catch (err) {
+                                  showToast("Upload failed", "error")
+                                }
+                              }
+                            }}
+                            className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                          />
+                          <Input
+                            label="Or Image URL"
+                            placeholder="https://images.unsplash.com/..."
+                            value={serviceCustomizing.image || ""}
+                            onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, image: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Sub-tab Banner Images Customizer Section */}
+                {["kitchen-cleaning", "bathroom-cleaning", "sofa-cleaning", "cleaning"].includes(serviceCustomizing.slug) && (
+                  <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-4">
+                    <div>
+                      <span className="text-xs font-bold text-slate-800">Sub-tab Banner Images</span>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Customize the top banner image for each sub-tab in this service category.</p>
+                    </div>
+                    <div className="space-y-4">
+                      {((serviceCustomizing.slug === "kitchen-cleaning" && [
+                        { id: "packages", label: "Full Kitchen Packages" },
+                        { id: "appliance", label: "Single Appliance Cleaning" },
+                        { id: "cabinet_tile", label: "Cabinet & Tile Care" },
+                        { id: "addons", label: "Quick Extra Services" },
+                      ]) || (serviceCustomizing.slug === "bathroom-cleaning" && [
+                        { id: "packages", label: "Full Clean" },
+                        { id: "minis", label: "Quick Extra Services" },
+                        { id: "subscription", label: "Weekly Bathroom Cleaning Subscription" },
+                      ]) || (serviceCustomizing.slug === "sofa-cleaning" && [
+                        { id: "sofa", label: "Sofa Cleaning" },
+                        { id: "mattress", label: "Mattress Cleaning" },
+                        { id: "carpet", label: "Carpet Cleaning" },
+                      ]) || (serviceCustomizing.slug === "cleaning" && [
+                        { id: "full_apartment", label: "Occupied Apartment" },
+                        { id: "unoccupied_apartment", label: "Unoccupied Apartment" },
+                        { id: "full_bungalow", label: "Occupied Bungalow/duplex" },
+                        { id: "unoccupied_bungalow", label: "Unoccupied Bungalow/duplex" },
+                        { id: "partial_home", label: "Quick Extra Services / Partial Home" },
+                      ]) || []).map((subtab) => {
+                        const currentVal = serviceCustomizing.customization.subtab_banners?.[subtab.id] || "";
+                        return (
+                          <div key={subtab.id} className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-white rounded-xl border border-slate-100 shadow-2xs">
+                            <div className="w-24 text-xs font-bold text-slate-700 sm:text-right shrink-0">{subtab.label}</div>
+                            {currentVal ? (
+                              <div className="relative w-24 h-14 rounded-lg border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
+                                <img src={currentVal} alt="Preview" className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updatedBanners = { ...serviceCustomizing.customization.subtab_banners };
+                                    delete updatedBanners[subtab.id];
+                                    setServiceCustomizing({
+                                      ...serviceCustomizing,
+                                      customization: { ...serviceCustomizing.customization, subtab_banners: updatedBanners }
+                                    });
+                                  }}
+                                  className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold transition-opacity"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="w-24 h-14 rounded-lg border border-dashed border-slate-200 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[9px] font-bold">
+                                Default Banner
+                              </div>
+                            )}
+                            <div className="flex-1 w-full space-y-2">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) {
+                                    const formData = new FormData()
+                                    formData.append("image", file)
+                                    try {
+                                      const res = await apiRequest("/settings/catalog/upload-image/", {
+                                        method: "POST",
+                                        body: formData,
+                                      })
+                                      if (res.success && res.url) {
+                                        const updatedBanners = {
+                                          ...serviceCustomizing.customization.subtab_banners,
+                                          [subtab.id]: res.url
+                                        };
+                                        setServiceCustomizing({
+                                          ...serviceCustomizing,
+                                          customization: { ...serviceCustomizing.customization, subtab_banners: updatedBanners }
+                                        });
+                                        showToast("Image uploaded successfully!")
+                                      } else {
+                                        showToast(res.message || "Upload failed", "error")
+                                      }
+                                    } catch (err) {
+                                      showToast("Upload failed", "error")
+                                    }
+                                  }
+                                }}
+                                className="block w-full text-[10px] text-slate-500 file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[9px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Or Paste Banner Image URL"
+                                value={currentVal}
+                                onChange={(e) => {
+                                  const updatedBanners = {
+                                    ...serviceCustomizing.customization.subtab_banners,
+                                    [subtab.id]: e.target.value
+                                  };
+                                  setServiceCustomizing({
+                                    ...serviceCustomizing,
+                                    customization: { ...serviceCustomizing.customization, subtab_banners: updatedBanners }
+                                  });
+                                }}
+                                className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:border-indigo-500 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {!["kitchen-cleaning", "bathroom-cleaning", "sofa-cleaning", "cleaning"].includes(serviceCustomizing.slug) && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Input
                     label="Marketing Rating"
                     value={serviceCustomizing.customization.rating ?? ""}
@@ -3984,6 +3973,8 @@ export function CatalogPackagesPage() {
                     + Add Card Point
                   </button>
                 </div>
+                  </>
+                )}
               </div>
             )}
 

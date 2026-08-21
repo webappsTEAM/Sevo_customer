@@ -86,6 +86,7 @@ const ADMIN_NAV_ITEMS = [
     children: [
       { label: "Hero Banner", to: `${routes.homepage_customizer}?tab=hero`, icon: <Globe size={16} />, color: "#F59E0B" },
       { label: "Browse Categories", to: `${routes.homepage_customizer}?tab=categories`, icon: <FolderOpen size={16} />, color: "#3B82F6" },
+      { label: "Vendor Hire Banner", to: `${routes.homepage_customizer}?tab=vendorBanner`, icon: <Users size={16} />, color: "#0D9488" },
       { label: "Promotional Offers", to: `${routes.homepage_customizer}?tab=offers`, icon: <Gift size={16} />, color: "#EC4899" },
       { label: "Why Choose Us", to: `${routes.homepage_customizer}?tab=trust`, icon: <ShieldCheck size={16} />, color: "#10B981" },
       { label: "How It Works", to: `${routes.homepage_customizer}?tab=workflow`, icon: <Repeat2 size={16} />, color: "#8B5CF6" },

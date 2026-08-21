@@ -54,6 +54,31 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       enabled: true
     }
   ],
+  vendorBanner: {
+    enabled: true,
+    badgeText: "We're Looking for Professionals",
+    badgeIcon: "🤝",
+    titlePrefix: "We Hire",
+    titleHighlight: "Technicians, Employees",
+    titleSuffix: "& Vendors",
+    subtitle: "Join our team of skilled professionals and be part of a growing service community that works with trust and quality.",
+    ctaText: "Join as a Professional",
+    ctaUrl: "https://calservices-vendor.vercel.app",
+    learnMoreText: "Learn more",
+    learnMoreUrl: "https://calservices-vendor.vercel.app",
+    image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top",
+    features: [
+      { id: "vf-1", icon: "📅", label: "Flexible Timings" },
+      { id: "vf-2", icon: "💼", label: "Stable Work" },
+      { id: "vf-3", icon: "🤝", label: "Team Support" }
+    ],
+    benefits: [
+      { id: "vb-1", icon: "✅", text: "Verified & trusted customers" },
+      { id: "vb-2", icon: "🕐", text: "On-time service & support" },
+      { id: "vb-3", icon: "📍", text: "Work close to your area" },
+      { id: "vb-4", icon: "🌟", text: "Recognition for quality work" }
+    ]
+  },
   offers: {
     title: "Limited Time Offers!",
     subtitle: "Great deals on services you love.",
@@ -257,9 +282,9 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     companyLinks: ["About Us", "Careers", "Blog", "Become a Partner"],
     helpColTitle: "Need Help?",
     phone: "+91 98765 43210",
-    email: "support@calservices.com",
+    email: "support@caldimengg.com",
     workingHours: "Mon – Sun (8 AM – 8 PM)",
-    copyrightText: "© 2026 CalServices Inc. All rights reserved."
+    copyrightText: "© 2026 CALDIM ENGINEERING PRIVATE LIMITED. All rights reserved."
   }
 }
 
@@ -305,6 +330,7 @@ function mergeWithDefaultConfig(parsed) {
       collageImages: mergedCollage
     },
     categories: mergedCategories,
+    vendorBanner: { ...DEFAULT_HOME_PAGE_CONFIG.vendorBanner, ...(parsed.vendorBanner || {}) },
     offers: { ...DEFAULT_HOME_PAGE_CONFIG.offers, ...(parsed.offers || {}) },
     howItWorks: { ...DEFAULT_HOME_PAGE_CONFIG.howItWorks, ...(parsed.howItWorks || {}) },
     featuredPros: { ...DEFAULT_HOME_PAGE_CONFIG.featuredPros, ...(parsed.featuredPros || {}) },

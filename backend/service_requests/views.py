@@ -614,48 +614,65 @@ def _build_tracking_payload(sr, has_full_access):
     if is_accepted:
         tech_obj = tracking.get("technician") if (tracking and isinstance(tracking, dict) and tracking.get("technician")) else {}
 
-        # 1. Real technician details strictly from database fields first
-        tech_name = sr.technician_name or tech_obj.get("name") or tech_obj.get("full_name") or ""
-        tech_phone = sr.technician_phone or tech_obj.get("phone") or ""
-        tech_photo = sr.technician_photo or tech_obj.get("photo") or None
-        tech_rating = float(sr.technician_rating) if sr.technician_rating else (float(tech_obj.get("rating")) if tech_obj.get("rating") else None)
-        tech_jobs = getattr(sr, "technician_jobs_completed", None) or tech_obj.get("jobs_completed") or None
-        tech_job_id = sr.workforce_job_id or sr.external_assignment_id or ""
+        # 1. Real technician details in strict order: (1) Workforce API, (2) BookingAssignment, (3) ServiceRequest
+        tech_name = None
+        tech_phone = None
+        tech_photo = None
+        tech_rating = None
+        tech_jobs = None
+        tech_job_id = None
 
-        # 2. Real live GPS coordinates from database or workforce telemetry
+        if tech_obj:
+            tech_name = tech_obj.get("name") or tech_obj.get("full_name") or None
+            tech_phone = tech_obj.get("phone") or None
+            tech_photo = tech_obj.get("photo") or None
+            tech_rating = float(tech_obj.get("rating")) if tech_obj.get("rating") is not None else None
+            tech_jobs = tech_obj.get("jobs_completed") or None
+            tech_job_id = tech_obj.get("id") or tech_obj.get("job_id") or None
+
+        if not tech_name and hasattr(sr, "assignments"):
+            assignment = sr.assignments.filter(
+                status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]
+            ).order_by("-id").first()
+            if assignment:
+                tech_name = assignment.technician_name or None
+                tech_phone = assignment.technician_phone or tech_phone or None
+                tech_photo = assignment.technician_photo or tech_photo or None
+                tech_rating = float(assignment.technician_rating) if assignment.technician_rating is not None else tech_rating
+                tech_job_id = assignment.workforce_job_id or assignment.assignment_id or tech_job_id
+
+        if not tech_name:
+            tech_name = sr.technician_name or None
+            tech_phone = sr.technician_phone or tech_phone or None
+            tech_photo = sr.technician_photo or tech_photo or None
+            tech_rating = float(sr.technician_rating) if sr.technician_rating is not None else tech_rating
+            tech_jobs = getattr(sr, "technician_jobs_completed", None) or tech_jobs
+            tech_job_id = sr.workforce_job_id or sr.external_assignment_id or tech_job_id
+
+        # 2. Real live GPS coordinates strictly from database or workforce telemetry — NO fake coordinates
         loc = tracking.get("location") if (tracking and isinstance(tracking, dict)) else {}
         if is_terminal:
             tech_lat = None
             tech_lng = None
         else:
-            tech_lat = float(sr.technician_latitude) if sr.technician_latitude is not None else (float(loc.get("latitude")) if (loc and loc.get("latitude")) else None)
-            tech_lng = float(sr.technician_longitude) if sr.technician_longitude is not None else (float(loc.get("longitude")) if (loc and loc.get("longitude")) else None)
-            if (tech_lat is None or tech_lng is None) and sr.status == "arrived" and dest_lat is not None and dest_lng is not None:
-                tech_lat = dest_lat - 0.00018
-                tech_lng = dest_lng - 0.00015
-        current_loc_name = sr.technician_location_name or loc.get("location_name") or ""
+            tech_lat = float(sr.technician_latitude) if sr.technician_latitude is not None else (float(loc.get("latitude")) if (loc and loc.get("latitude") is not None) else None)
+            tech_lng = float(sr.technician_longitude) if sr.technician_longitude is not None else (float(loc.get("longitude")) if (loc and loc.get("longitude") is not None) else None)
+
+        current_loc_name = sr.technician_location_name or loc.get("location_name") or None
 
         # Heading & speed
-        resolved_heading = db_heading if db_heading > 0 else (float(loc.get("heading")) if loc.get("heading") else 0.0)
-        resolved_speed = db_speed if db_speed > 0 else (float(loc.get("speed")) if loc.get("speed") else 0.0)
+        resolved_heading = db_heading if db_heading > 0 else (float(loc.get("heading")) if (loc and loc.get("heading") is not None) else 0.0)
+        resolved_speed = db_speed if db_speed > 0 else (float(loc.get("speed")) if (loc and loc.get("speed") is not None) else 0.0)
 
-        # 3. GPS Freshness calculation
+        # 3. GPS Freshness calculation strictly based on real coordinates availability
         if is_terminal:
             freshness = "COMPLETED" if sr.status not in ["cancelled", "rejected"] else "CANCELLED"
         elif tech_lat is not None and tech_lng is not None:
-            if sr.status == "arrived":
-                freshness = "LIVE"
-            else:
-                freshness = "LIVE"
+            freshness = "LIVE"
         else:
-            if sr.status in ["assigned", "accepted"]:
-                freshness = "WAITING_FOR_LOCATION"
-            elif sr.status == "on_the_way":
-                freshness = "LOCATION_LOST"
-            else:
-                freshness = "WAITING_FOR_LOCATION"
+            freshness = "UNAVAILABLE"
 
-        # 4. Truthful Distance and ETA Calculation
+        # 4. Real Distance and ETA Calculation — only computed when real GPS exists
         if sr.status == "arrived":
             distance_m = 0
             distance_km = 0.0
@@ -671,10 +688,15 @@ def _build_tracking_payload(sr, has_full_access):
             if raw_meters is not None:
                 distance_m = int(round(raw_meters))
                 distance_km = round(distance_m / 1000.0, 1)
-                # Estimate ~25 km/h urban travel speed
                 eta_mins = max(1, int(round((distance_km / 25.0) * 60)))
                 eta_minutes = eta_mins
                 eta_seconds = eta_mins * 60
+        else:
+            distance_m = None
+            distance_km = None
+            eta_seconds = None
+            eta_minutes = None
+
         if tracking and isinstance(tracking, dict) and tracking.get("eta_minutes") is not None:
             eta_minutes = tracking.get("eta_minutes")
         if tracking and isinstance(tracking, dict) and tracking.get("distance_km") is not None:
@@ -684,13 +706,13 @@ def _build_tracking_payload(sr, has_full_access):
             "id": tech_job_id,
             "job_id": tech_job_id,
             "name": tech_name,
-            "phone": tech_phone,
+            "phone": tech_phone if has_full_access else None,
             "rating": tech_rating,
             "photo": tech_photo,
             "latitude": tech_lat,
             "longitude": tech_lng,
-            "heading": resolved_heading if not is_terminal else 0.0,
-            "speed": resolved_speed if not is_terminal else 0.0,
+            "heading": resolved_heading if tech_lat is not None else 0.0,
+            "speed": resolved_speed if tech_lat is not None else 0.0,
             "status": sr.status,
             "eta_minutes": eta_minutes,
             "distance_km": distance_km,
