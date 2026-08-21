@@ -104,6 +104,31 @@ class HomePageConfigAPIView(APIView):
                         {"id": "cat-2", "title": "Food and Health", "subtitle": "Groceries & farm-fresh vegetables", "badge": "Groceries & Veggies", "image": "/mockups/category_food_health.png", "link": "/booking?category=groceries", "enabled": True, "display_order": 2},
                         {"id": "cat-3", "title": "Home, Repair & Transport Services", "subtitle": "Cleaning, repairs, painting & logistics", "badge": "8 Services", "image": "/mockups/category_home_transport.png", "link": "/booking?category=home_repairs", "enabled": True, "display_order": 3}
                     ],
+                    "vendorBanner": {
+                        "enabled": True,
+                        "badgeText": "We're Looking for Professionals",
+                        "badgeIcon": "🤝",
+                        "titlePrefix": "We Hire",
+                        "titleHighlight": "Technicians, Employees",
+                        "titleSuffix": "& Vendors",
+                        "subtitle": "Join our team of skilled professionals and be part of a growing service community that works with trust and quality.",
+                        "ctaText": "Join as a Professional",
+                        "ctaUrl": "https://calservices-vendor.vercel.app",
+                        "learnMoreText": "Learn more",
+                        "learnMoreUrl": "https://calservices-vendor.vercel.app",
+                        "image": "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=320&h=420&q=90&fit=crop&crop=top",
+                        "features": [
+                            {"id": "vf-1", "icon": "📅", "label": "Flexible Timings"},
+                            {"id": "vf-2", "icon": "💼", "label": "Stable Work"},
+                            {"id": "vf-3", "icon": "🤝", "label": "Team Support"}
+                        ],
+                        "benefits": [
+                            {"id": "vb-1", "icon": "✅", "text": "Verified & trusted customers"},
+                            {"id": "vb-2", "icon": "🕐", "text": "On-time service & support"},
+                            {"id": "vb-3", "icon": "📍", "text": "Work close to your area"},
+                            {"id": "vb-4", "icon": "🌟", "text": "Recognition for quality work"}
+                        ]
+                    },
                     "offers": {
                         "mainCard": {"title": "Limited Time Offers!", "subtitle": "Great deals on services you love.", "buttonText": "Explore Offers"},
                         "items": [

@@ -1774,24 +1774,7 @@ export function LandingPage() {
                     navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
                   }}
                 />
-              ) : (activeCategory.id === "mason" || activeCategory.slug === "mason" || activeCategory.slug === "masons" || String(activeCategory.id) === "11" || activeCategory.name?.toLowerCase() === "mason" || activeCategory.name?.toLowerCase() === "masonry") ? (
-                <MasonPackageModal
-                  category={activeCategory}
-                  cart={modalCart}
-                  setCart={setModalCart}
-                  packagesData={packagesData}
-                  onClose={handleCloseCategory}
-                  onCheckout={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(cleanConsultationItems(finalCart));
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart } });
-                  }}
-                  onGetEstimate={(customCart) => {
-                    const finalCart = resolveCartArg(customCart);
-                    setModalCart(cleanConsultationItems(finalCart));
-                    navigate(routes.booking_checkout, { state: { category: activeCategory, cart: finalCart, triggerLocPicker: true } });
-                  }}
-                />
+
               ) : (activeCategory.id === "pest_control" || activeCategory.slug === "pest_control" || activeSubTabParam === "Cockroach & Termite Control" || activeSubTabParam === "Cockroach Control" || activeSubTabParam === "Termite Control") && (activeSubTabParam !== "Ants & Bed Bugs Control" && activeSubTabParam !== "Ants Control" && activeSubTabParam !== "Bedbugs Control" && activeSubTabParam !== "Ants and bed bugs control") ? (
                 <CockroachControlModal
                   category={{ id: "pest_control", name: "Pest Control" }}
