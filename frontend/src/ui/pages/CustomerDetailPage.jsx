@@ -66,7 +66,14 @@ export function CustomerDetailPage({ customerId, isInline = false }) {
             {profile?.name?.slice(0, 2).toUpperCase()}
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white leading-tight">{profile?.name}</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white leading-tight">{profile?.name}</h2>
+              {profile?.customer_id && (
+                <span className="font-mono text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-lg shadow-xs">
+                  {profile.customer_id}
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1.5"><span className="text-slate-400">📞</span> {profile?.phone || "—"}</span>
               <span className="flex items-center gap-1.5"><span className="text-slate-400">📧</span> {profile?.email || "—"}</span>

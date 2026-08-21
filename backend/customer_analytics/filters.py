@@ -82,7 +82,8 @@ def parse_analytics_filters(request):
             Q(customer_name__icontains=q) |
             Q(phone__icontains=q) |
             Q(email__icontains=q) |
-            Q(request_id__icontains=q)
+            Q(request_id__icontains=q) |
+            Q(customer__customer_id__icontains=q)
         )
         
     # Statuses
@@ -185,7 +186,8 @@ def get_annotated_customers(request):
             Q(name__icontains=q) |
             Q(phone__icontains=q) |
             Q(email__icontains=q) |
-            Q(user__username__icontains=q)
+            Q(user__username__icontains=q) |
+            Q(user__customer_id__icontains=q)
         )
         
     # Is repeat customer
