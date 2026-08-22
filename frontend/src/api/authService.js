@@ -159,7 +159,7 @@ export function resetAuthSessionState(hasSession = true) {
  * Has a 15-second timeout to handle slow DB connections after login.
  * On initial page load a 6-second fallback in AuthProvider ensures isReady=true.
  */
-export async function apiFetchMe() {
+export async function apiFetchMe(customSignal = null) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 15000)
   try {
@@ -170,10 +170,20 @@ export async function apiFetchMe() {
       if (token) headers.set("Authorization", `Bearer ${token}`)
     } catch (_) {}
 
+    // Link caller signal if provided
+    let effectiveSignal = controller.signal
+    if (customSignal) {
+      if (typeof AbortSignal !== "undefined" && typeof AbortSignal.any === "function") {
+        effectiveSignal = AbortSignal.any([controller.signal, customSignal])
+      } else {
+        customSignal.addEventListener("abort", () => controller.abort(), { once: true })
+      }
+    }
+
     let res = await fetch(url, {
       credentials: "include",
       headers,
-      signal: controller.signal,
+      signal: effectiveSignal,
     })
 
     // If access token is expired or forbidden (401 or 403), attempt a silent refresh using the refresh cookie
@@ -189,7 +199,7 @@ export async function apiFetchMe() {
         res = await fetch(url, {
           credentials: "include",
           headers: retryHeaders,
-          signal: controller.signal,
+          signal: effectiveSignal,
         })
       }
     }
@@ -212,6 +222,9 @@ export async function apiFetchMe() {
     return data
   } catch (err) {
     clearTimeout(timeoutId)
+    if (err?.name === "AbortError" || err?.message?.includes("aborted")) {
+      return null
+    }
     console.error("apiFetchMe exception:", err)
     return null
   }

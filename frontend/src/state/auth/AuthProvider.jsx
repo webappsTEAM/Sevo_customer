@@ -71,7 +71,9 @@ export function AuthProvider({ children }) {
     try {
       me = await apiFetchMe()
     } catch (e) {
-      console.error("apiFetchMe exception:", e)
+      if (e?.name !== "AbortError" && !e?.message?.includes("aborted")) {
+        console.error("apiFetchMe exception:", e)
+      }
     }
 
     const u = formatUser(me)
