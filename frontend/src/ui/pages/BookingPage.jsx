@@ -33,6 +33,7 @@ import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
+import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -1098,7 +1099,7 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
 function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTimeChange, onNext, onBack, cart }) {
   const dateScrollRef = useRef()
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const isFreeCategory = category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id.includes("mason") || c.id.includes("paint")))
+  const isFreeCategory = category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))
   const totalGst = isFreeCategory ? 0 : (cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity * ((c.gst_rate !== undefined ? Number(c.gst_rate) : 18) / 100)), 0) : 0)
   const roundedGst = Math.round(totalGst)
   const gstRate = cart && cart.length > 0 && cart[0].gst_rate !== undefined ? Number(cart[0].gst_rate) : 18
@@ -1697,7 +1698,7 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
   const UC_TIME_FORMATS = (t) => { if (!t) return ''; const [h] = t.split(':').map(Number); const ampm = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:00 ${ampm}` }
   const displayTime = UC_TIME_FORMATS(time)
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (pkg?.price || 0)
-  const isFreeCategory = category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id.includes("mason") || c.id.includes("paint")))
+  const isFreeCategory = category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))
   const itemsList = cart && cart.length > 0 ? cart : (pkg ? [pkg] : [])
   const totalGst = isFreeCategory ? 0 : itemsList.reduce((a, c) => a + ((c.price || 0) * (c.quantity || 1) * ((c.gst_rate !== undefined ? Number(c.gst_rate) : 18) / 100)), 0)
   const roundedGst = Math.round(totalGst)
@@ -3507,6 +3508,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
   const [profileEmail, setProfileEmail] = useState('')
+  const [profileCustomerId, setProfileCustomerId] = useState(user?.customer_id || user?.customerId || '')
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || user?.avatar || '')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState('')
@@ -3519,10 +3521,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       setProfileName(uFullName)
       setProfilePhone(user?.phone || '')
       setProfileEmail(user?.email || '')
+      setProfileCustomerId(user?.customer_id || user?.customerId || '')
       if (user?.avatar_url || user?.avatar) {
         setAvatarPreview(user.avatar_url || user.avatar)
       }
     }
+
+    // Always fetch fresh customer profile on modal open to ensure customer_id is loaded
+    apiRequest('/auth/customer/profile/')
+      .then(res => {
+        const data = res?.data || res
+        if (data?.customer_id) {
+          setProfileCustomerId(data.customer_id)
+        }
+      })
+      .catch(() => {
+        if (typeof refreshMe === 'function') refreshMe()
+      })
   }, [user])
 
   const handleAvatarUpload = async (e) => {
@@ -4186,7 +4201,14 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 )}
               </div>
               <div>
-                <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: 4 }}>{userFullName}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>{userFullName}</span>
+                  {(profileCustomerId || user?.customer_id || user?.customerId) && (
+                    <span style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 700, fontFamily: 'monospace' }}>
+                      {profileCustomerId || user?.customer_id || user?.customerId}
+                    </span>
+                  )}
+                </div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 12 }}>{userEmail || userPhone}</div>
                 <input
                   ref={avatarInputRef}
@@ -4209,6 +4231,20 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             {profileSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, marginBottom: 16 }}>{profileSuccess}</div>}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
+                  <span>Customer ID</span>
+                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
+                </label>
+                <input
+                  type="text"
+                  value={profileCustomerId || user?.customer_id || user?.customerId || "—"}
+                  disabled
+                  readOnly
+                  title="Customer ID (Non-editable)"
+                  style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
+                />
+              </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>Full Name</label>
                 <input
@@ -4233,7 +4269,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
                 />
               </div>
-              <div style={{ gridColumn: '1/-1' }}>
+              <div>
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
                   <span>Email Address</span>
                   <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
@@ -6268,16 +6304,21 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         {/* Sidebar */}
         <div style={{ width: 280, background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '2.25rem 0', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '0 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg,#ede9fe,#ddd6fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #c4b5fd', flexShrink: 0, overflow: 'hidden' }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0', flexShrink: 0, overflow: 'hidden' }}>
               {avatarPreview || user?.avatar_url || user?.avatar ? (
                 <img src={avatarPreview || user?.avatar_url || user?.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <User size={22} color="#6366f1" />
+                <User size={22} color="#94a3b8" />
               )}
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userFullName}</div>
               <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail || userPhone}</div>
+              {(profileCustomerId || user?.customer_id || user?.customerId) && (
+                <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace' }}>
+                  🆔 {profileCustomerId || user?.customer_id || user?.customerId}
+                </div>
+              )}
             </div>
           </div>
 
@@ -7346,7 +7387,6 @@ function StepWorkflowCheckout({
         ? Math.min(itemTotal, appliedCoupon.discountValue)
         : Math.min(appliedCoupon.maxDiscount || itemTotal, Math.floor(itemTotal * (appliedCoupon.discountValue / 100)))))
     : (couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 0)
-
   const totalGst = isFreeCategory ? 0 : items.reduce((sum, item) => {
     const rate = item.gst_rate !== undefined ? Number(item.gst_rate) : 18
     return sum + (item.price * item.quantity * (rate / 100))
@@ -8148,9 +8188,9 @@ function StepWorkflowCheckout({
 export function resolveCategoryFromCart(currentCategory, cartItems) {
   if (cartItems && cartItems.length > 0) {
     const first = cartItems[0];
-    const catName = (first.categoryName || first.category || first.catId || "").toLowerCase();
-    const idName = (first.id || "").toLowerCase();
-    const itemName = (first.name || "").toLowerCase();
+    const catName = String(first.categoryName || first.category || first.catId || "").toLowerCase();
+    const idName = String(first.id || "").toLowerCase();
+    const itemName = String(first.name || "").toLowerCase();
     const combined = `${catName} ${idName} ${itemName}`;
 
     if (combined.includes("carp") || combined.includes("lock") || combined.includes("handle") || combined.includes("door") || combined.includes("furniture") || combined.includes("hinge") || combined.includes("wood") || combined.includes("drawer")) {
@@ -8960,7 +9000,7 @@ export function BookingPage() {
             className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
             onClick={() => {
               setShowSubCategoryChoiceModal(false);
-              navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+              navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
             }}
           >
             <motion.div
@@ -8973,7 +9013,7 @@ export function BookingPage() {
               <button
                 onClick={() => {
                   setShowSubCategoryChoiceModal(false);
-                  navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                  navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
                 }}
                 className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer"
               >
@@ -9071,7 +9111,7 @@ export function BookingPage() {
                   packagesData={packagesData}
                   onClose={() => {
                     setShowPackageModal(false);
-                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
                   }}
                   onCheckout={() => { setShowPackageModal(false); setStep(3); }}
                   onGetEstimate={() => {
@@ -9088,7 +9128,7 @@ export function BookingPage() {
                   packagesData={packagesData}
                   onClose={() => {
                     setShowPackageModal(false);
-                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
                   }}
                   onCheckout={() => { setShowPackageModal(false); setStep(3); }}
                   onGetEstimate={() => {
@@ -9105,7 +9145,7 @@ export function BookingPage() {
                   packagesData={packagesData}
                   onClose={() => {
                     setShowPackageModal(false);
-                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && !c.id.includes("paint") && !c.id.includes("mason")) } });
+                    navigate(routes.landing, { state: { cart: cart.filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false) } });
                   }}
                   onCheckout={() => { setShowPackageModal(false); setStep(3); }}
                 />
@@ -11840,11 +11880,14 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     const foundKey = Object.keys(packagesData).find(key =>
       packagesData[key] && packagesData[key].some(p => p.category_slug === "mason" || p.category_slug === "masons" || String(p.category) === "mason" || String(p.category) === "11")
     );
+    console.log("DEBUG: [MasonPackageModal] foundKey:", foundKey);
     return foundKey || null;
   }, [packagesData]);
 
   const dbPackages = React.useMemo(() => {
-    return masonKey ? packagesData[masonKey] : [];
+    const pkgs = masonKey ? packagesData[masonKey] : [];
+    console.log("DEBUG: [MasonPackageModal] dbPackages size:", pkgs.length, pkgs);
+    return pkgs;
   }, [packagesData, masonKey]);
 
   const MASON_CATEGORIES = React.useMemo(() => {
@@ -12047,8 +12090,8 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
     })
     : MASON_SERVICES.filter(s => s.catId === activeTab);
 
-  const totalQuantity = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = cart.filter(c => c.id.includes("mason")).reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const totalQuantity = cart.filter(c => c.id && String(c.id).includes("mason")).reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = cart.filter(c => c.id && String(c.id).includes("mason")).reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
 
 
@@ -12661,7 +12704,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
 
                 <div className="uc-paint-cart-card">
                   <h4 className="uc-paint-cart-card-title">Your Cart</h4>
-                  {cart.filter(c => c.id.includes("mason")).length === 0 ? (
+                  {cart.filter(c => c.id && String(c.id).includes("mason")).length === 0 ? (
                     <div>
                       <ShoppingCart className="uc-paint-empty-cart-img" style={{ color: "#94a3b8" }} />
                       <p className="uc-paint-empty-cart-text">No items in your cart</p>
@@ -12669,7 +12712,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   ) : (
                     <div>
                       <div className="uc-paint-cart-items">
-                        {cart.filter(c => c.id.includes("mason")).map(item => (
+                        {cart.filter(c => c.id && String(c.id).includes("mason")).map(item => (
                           <div key={item.id} className="uc-paint-cart-item">
                             <div className="uc-paint-cart-item-info">
                               <span className="uc-paint-cart-item-name">{item.name}</span>
@@ -13721,6 +13764,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     "Carpenter On-Demand",
     "Furniture Repair"
   ];
+  const masonSubtabs = [
+    "Brick & Block Work",
+    "Plastering & Wall Repair",
+    "Wall & Partition Construction",
+    "Wall Breaking & Demolition"
+  ];
   const applianceSubtabs = ["Microwave Repair", "Water Purifier & RO", "Refrigerator & Fridge", "Microwave & Purifier"];
   const hvacSubtabs = [
     "AC Service & Cleaning",
@@ -13751,6 +13800,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (subtabParam === "Electrician" || subtabParam === "electrical" || subtabParam === "Electrician Services") return "Switches & Sockets";
     if (subtabParam === "Plumber" || subtabParam === "plumbing" || subtabParam === "Plumber Services" || subtabParam === "Taps & Mixers") return "Tap & Mixer";
     if (subtabParam === "Carpentry" || subtabParam === "carpentry" || subtabParam === "Carpenter Services") return "Lock & Handle";
+    if (subtabParam === "Mason" || subtabParam === "mason") return "Brick & Block Work";
     if (subtabParam === "Full House Cleaning" || subtabParam === "Full House Deep Cleaning" || subtabParam === "Full house cleaning" || subtabParam === "Home Cleaning" || subtabParam === "cleaning") return "Occupied Apartment";
     if (subtabParam) return subtabParam;
     // No URL param — derive default from normalizedKey / category / cart
@@ -13759,6 +13809,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     if (nk === "electrical" || cn.includes("electric")) return "Switches & Sockets";
     if (nk === "plumbing" || cn.includes("plumb")) return "Tap & Mixer";
     if (nk === "carpentry" || cn.includes("carpenter") || cn.includes("carpentry")) return "Lock & Handle";
+    if (nk === "mason" || String(nk) === "11" || cn.includes("mason") || cn.includes("civil")) return "Brick & Block Work";
     if (nk === "refrigerator" || cn.includes("fridge") || cn.includes("refrigerator")) return "Refrigerator Service & Repair";
     if (nk === "washing_machine" || cn.includes("washing")) return "Washing Machine Jet Service";
     if (nk === "tv_display" || cn.includes("tv")) return "TV Service & Repair";
@@ -13793,6 +13844,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     effectiveKey = "plumbing";
   } else if (normalizedKey === "carpentry" || (category && (category.id === "carpentry" || category.name === "Carpentry" || category.name === "Carpenter"))) {
     effectiveKey = "carpentry";
+  } else if (normalizedKey === "mason" || String(normalizedKey) === "11" || (category && (category.id === "mason" || String(category.id) === "11" || category.name === "Mason"))) {
+    effectiveKey = "mason";
   } else if (tvSubtabs.includes(activeSubTab)) {
     effectiveKey = "tv_display";
   } else if (washingMachineSubtabs.includes(activeSubTab)) {
@@ -13809,6 +13862,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     effectiveKey = "plumbing";
   } else if (carpentrySubtabs.includes(activeSubTab)) {
     effectiveKey = "carpentry";
+  } else if (masonSubtabs.includes(activeSubTab)) {
+    effectiveKey = "mason";
   } else if (hvacSubtabs.includes(activeSubTab)) {
     effectiveKey = "hvac";
   }
@@ -13837,6 +13892,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         setActiveSubTab("Tap & Mixer");
       } else if (param === "Carpentry" || param === "carpentry" || param === "Carpenter Services") {
         setActiveSubTab("Lock & Handle");
+      } else if (param === "Mason" || param === "mason") {
+        setActiveSubTab("Brick & Block Work");
       } else if (param === "Full House Cleaning" || param === "Full House Deep Cleaning" || param === "Full house cleaning" || param === "Home Cleaning" || param === "cleaning") {
         setActiveSubTab("Occupied Apartment");
       } else {
@@ -14635,16 +14692,16 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       const tab = (activeSubTab || "").toLowerCase();
 
       if (normalizedKey === "mason") {
-        if (tab.includes("partition") || tab.includes("construction") || tab.includes("wall")) {
-          return sSlug.includes("part") || sSlug.includes("construction") || sName.includes("partition") || sName.includes("construction") || sName.includes("wall") || pName.includes("construction") || pName.includes("partition");
-        }
-        if (tab.includes("brick") || tab.includes("block")) {
+        if (tab === "brick & block work" || tab.includes("brick") || tab.includes("block")) {
           return sSlug.includes("brick") || sSlug.includes("block") || sName.includes("brick") || sName.includes("block");
         }
-        if (tab.includes("plastering") || tab.includes("repair")) {
+        if (tab === "plastering & wall repair" || tab.includes("plastering")) {
           return sSlug.includes("plaster") || sName.includes("plaster") || sName.includes("repair");
         }
-        if (tab.includes("breaking") || tab.includes("demolition") || tab.includes("removal")) {
+        if (tab === "wall & partition construction" || (tab.includes("partition") && !tab.includes("breaking") && !tab.includes("demolition"))) {
+          return sSlug.includes("part") || sSlug.includes("construction") || sName.includes("partition") || sName.includes("construction");
+        }
+        if (tab === "wall breaking & demolition" || tab.includes("breaking") || tab.includes("demolition") || tab.includes("removal")) {
           return sSlug.includes("demo") || sName.includes("demolition") || sName.includes("breaking") || sName.includes("removal");
         }
       }
@@ -19761,7 +19818,7 @@ const APPLIANCE_SERVICES = [
         price: 399,
         rating: "4.85",
         reviews: "65K reviews",
-        image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=200&q=80&fit=crop",
+        image: "/mockups/fridge_single_door.jpg",
         duration: "1 hr"
       },
       {
@@ -19770,7 +19827,7 @@ const APPLIANCE_SERVICES = [
         price: 549,
         rating: "4.83",
         reviews: "93K reviews",
-        image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=200&q=80&fit=crop",
+        image: "/mockups/fridge_double_door.jpg",
         duration: "1.5 hrs"
       },
       {
@@ -19779,7 +19836,7 @@ const APPLIANCE_SERVICES = [
         price: 799,
         rating: "4.80",
         reviews: "9K reviews",
-        image: "/mockups/appliance_cleaning_thumb.png",
+        image: "/mockups/fridge_triple_door.jpg",
         duration: "2 hrs"
       }
     ]
@@ -19850,7 +19907,7 @@ const APPLIANCE_SERVICES = [
         price: 99,
         rating: "4.81",
         reviews: "30K reviews",
-        image: "/mockups/gas_stove_clean.png",
+        image: "/mockups/stove_2b.jpg",
         duration: "30 mins"
       },
       {
@@ -19859,7 +19916,7 @@ const APPLIANCE_SERVICES = [
         price: 149,
         rating: "4.79",
         reviews: "15K reviews",
-        image: "/mockups/gas_stove_clean.png",
+        image: "/mockups/stove_3b.jpg",
         duration: "45 mins"
       },
       {
@@ -19868,7 +19925,7 @@ const APPLIANCE_SERVICES = [
         price: 199,
         rating: "4.78",
         reviews: "15K reviews",
-        image: "/mockups/gas_stove_clean.png",
+        image: "/mockups/stove_4b.jpg",
         duration: "1 hr"
       }
     ]
@@ -20763,11 +20820,15 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
             item.tag = parentDbMatch.tag || "";
             item.popular = parentDbMatch.popular || false;
+            if (parentDbMatch.image) {
+              item.image = parentDbMatch.image;
+            }
           }
 
           item.subOptions = item.subOptions.map(subOpt => {
             const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
             if (dbMatch) {
+              const baseIncludes = Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes);
               return {
                 ...subOpt,
                 name: dbMatch.name,
@@ -20776,20 +20837,22 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 platform_fee: dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29,
                 duration: dbMatch.duration || subOpt.duration,
                 description: dbMatch.description || subOpt.description,
-                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes),
+                image: dbMatch.image ? dbMatch.image : subOpt.image,
+                includes: baseIncludes.filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false)),
                 tag: dbMatch.tag || "",
                 popular: dbMatch.popular || false,
-                tools: Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0 ? dbMatch.tools : (subOpt.tools || []),
-                ready: Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0 ? dbMatch.ready : (subOpt.ready || []),
-                reviews: Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || []),
-                faqs: Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0 ? dbMatch.faqs : (subOpt.faqs || []),
+                tools: (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0 ? dbMatch.tools : (subOpt.tools || [])).filter(t => typeof t === "string" ? true : (t?.checked !== false && t?.enabled !== false)),
+                ready: (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0 ? dbMatch.ready : (subOpt.ready || [])).filter(r => typeof r === "string" ? true : (r?.checked !== false && r?.enabled !== false)),
+                reviews: (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || [])).filter(r => r?.enabled !== false),
+                reviews_list: (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || [])).filter(r => r?.enabled !== false),
+                faqs: (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0 ? dbMatch.faqs : (subOpt.faqs || [])).filter(f => f?.checked !== false && f?.enabled !== false),
               };
             }
             return {
               ...subOpt,
               gst_rate: subOpt.gst_rate || 18,
               platform_fee: subOpt.platform_fee || 29,
-              includes: subOpt.includes || item.includes
+              includes: (subOpt.includes || item.includes || []).filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false))
             };
           });
           if (item.subOptions.length > 0) {
@@ -20806,12 +20869,21 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             item.platform_fee = dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29;
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            item.includes = Array.isArray(dbMatch.includes) 
+              ? dbMatch.includes.filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false))
+              : item.includes;
             item.tag = dbMatch.tag || "";
             item.popular = dbMatch.popular || false;
+            // Overwrite the image if the database has a customized image path set
+            if (dbMatch.image) {
+              item.image = dbMatch.image;
+            }
             if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
             if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
-            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) {
+              item.reviews = dbMatch.reviews.filter(r => r.enabled !== false);
+              item.reviews_list = dbMatch.reviews.filter(r => r.enabled !== false);
+            }
             if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
           } else {
             item.gst_rate = item.gst_rate || 18;
@@ -20968,19 +21040,22 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                       {service.includes && service.includes.length > 0 && (
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
                           {(() => {
+                            const activeIncludes = service.includes
+                              .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false))
+                              .map(inc => typeof inc === "string" ? inc : inc.text);
+
                             const isBasic = service.id === "occ-basic";
                             const isDeep = service.id === "occ-deep";
-                            const isExpanded = isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true);
+                            const hasMoreThanThree = activeIncludes.length > 3;
+                            const isExpanded = (isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true)) && hasMoreThanThree;
                             const displayIncludes = ((isBasic || isDeep) && !isExpanded
-                              ? service.includes.slice(0, 3)
-                              : service.includes)
-                              .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false))
-                              .map(inc => typeof inc === "string" ? inc : inc.text);
+                              ? activeIncludes.slice(0, 3)
+                              : activeIncludes);
 
                             return (
                               <>
                                 {displayIncludes.map((item, i) => {
-                                  const isLastOfThree = (isBasic || isDeep) && !isExpanded && i === 2;
+                                  const isLastOfThree = (isBasic || isDeep) && !isExpanded && i === 2 && hasMoreThanThree;
                                   return (
                                     <li key={i} className="flex items-start gap-2">
                                       <span className="text-emerald-600 font-bold mt-0.5">✓</span>
@@ -21005,7 +21080,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                                     </li>
                                   );
                                 })}
-                                {(isBasic || isDeep) && isExpanded && (
+                                {(isBasic || isDeep) && isExpanded && hasMoreThanThree && (
                                   <div className="text-left mt-1 pl-3">
                                     <span
                                       onClick={(e) => {
@@ -21033,36 +21108,67 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                     </div>
 
                     {/* Image + add button */}
-                    <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
-                      <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
-                        <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
-                        {count > 0 ? (
-                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
-                            <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
-                            <span>{count}</span>
-                            <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration, service.gst_rate, service.platform_fee)} className="hover:text-emerald-900">+</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              if (service.subOptions) {
-                                setSelectedServiceDetails(service);
-                              } else {
-                                addItemToCart(service.id, service.name, service.price, service.duration, service.gst_rate, service.platform_fee);
-                              }
-                            }}
-                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
-                          >
-                            <ShoppingCart size={12} /> Add
-                          </button>
+                    {service.image && (
+                      <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
+                        <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
+                          <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
+                          {count > 0 ? (
+                            <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                              <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
+                              <span>{count}</span>
+                              <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration, service.gst_rate, service.platform_fee)} className="hover:text-emerald-900">+</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (service.subOptions) {
+                                  setSelectedServiceDetails(service);
+                                } else {
+                                  addItemToCart(service.id, service.name, service.price, service.duration, service.gst_rate, service.platform_fee);
+                                }
+                              }}
+                              className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
+                            >
+                              <ShoppingCart size={12} /> Add
+                            </button>
+                          )}
+                        </div>
+                        {service.options && (
+                          <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
                         )}
                       </div>
-                      {service.options && (
-                        <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
-                      )}
-                    </div>
+                    )}
+                    {!service.image && (
+                      <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
+                        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
+                          {count > 0 ? (
+                            <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                              <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
+                              <span>{count}</span>
+                              <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration, service.gst_rate, service.platform_fee)} className="hover:text-emerald-900">+</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (service.subOptions) {
+                                  setSelectedServiceDetails(service);
+                                } else {
+                                  addItemToCart(service.id, service.name, service.price, service.duration, service.gst_rate, service.platform_fee);
+                                }
+                              }}
+                              className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
+                            >
+                              <ShoppingCart size={12} /> Add
+                            </button>
+                          )}
+                        </div>
+                        {service.options && (
+                          <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

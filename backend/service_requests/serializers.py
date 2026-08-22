@@ -250,6 +250,8 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     priority_display       = serializers.CharField(source="get_priority_display", read_only=True)
     payment_method_display = serializers.CharField(source="get_payment_method_display", read_only=True)
     payment_status_display = serializers.CharField(source="get_payment_status_display", read_only=True)
+    customer_id            = serializers.SerializerMethodField()
+    customer_user_id       = serializers.IntegerField(source="customer.id", read_only=True)
     start_otp              = serializers.SerializerMethodField()
     active_extension       = serializers.SerializerMethodField()
     extension_amount       = serializers.SerializerMethodField()
@@ -266,7 +268,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     class Meta:
         model = ServiceRequest
         fields = (
-            "id", "request_id", "customer_name", "phone", "email",
+            "id", "request_id", "customer_id", "customer_user_id", "customer_name", "phone", "email",
             "service_category", "service_category_display",
             "issue_title", "description", "address", "preferred_date", "preferred_time",
             "status", "status_display", "priority", "priority_display",
@@ -277,6 +279,11 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             "workforce_job_id", "external_assignment_id",
             "start_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
         )
+
+    def get_customer_id(self, obj):
+        if obj.customer and hasattr(obj.customer, "customer_id"):
+            return obj.customer.customer_id
+        return None
 
     def get_technician_name(self, obj):
         # Strictly hidden before partner accepts
@@ -441,6 +448,8 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     priority_display       = serializers.CharField(source="get_priority_display", read_only=True)
     payment_method_display = serializers.CharField(source="get_payment_method_display", read_only=True)
     payment_status_display = serializers.CharField(source="get_payment_status_display", read_only=True)
+    customer_id            = serializers.SerializerMethodField()
+    customer_user_id       = serializers.IntegerField(source="customer.id", read_only=True)
     latest_reschedule      = serializers.SerializerMethodField()
     photo_url              = serializers.SerializerMethodField()
     allowed_transitions    = serializers.SerializerMethodField()
@@ -458,7 +467,7 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = ServiceRequest
         fields = (
-            "id", "request_id", "customer_name", "phone", "email",
+            "id", "request_id", "customer_id", "customer_user_id", "customer_name", "phone", "email",
             "service_category", "service_category_display",
             "issue_title", "description", "address", "latitude", "longitude", "preferred_date", "preferred_time",
             "total_amount", "base_amount", "extension_amount", "cart_data",
@@ -472,6 +481,11 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
             "has_feedback", "feedback_token", "feedback",
             "created_at", "updated_at",
         )
+
+    def get_customer_id(self, obj):
+        if obj.customer and hasattr(obj.customer, "customer_id"):
+            return obj.customer.customer_id
+        return None
 
     def get_technician(self, obj):
         if obj.technician_name or obj.workforce_job_id:

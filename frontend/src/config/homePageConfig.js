@@ -45,12 +45,22 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     },
     {
       id: "cat-3",
-      title: "Home, Repair & Transport Services",
-      subtitle: "Cleaning, repairs, painting & logistics",
-      badge: "8 Services",
+      title: "Home & Repair Services",
+      subtitle: "Cleaning, repairs, painting & masonry",
+      badge: "5 Services",
       badgeColor: "blue",
       image: "/mockups/category_home_transport.png",
       link: "/booking?category=home_repairs",
+      enabled: true
+    },
+    {
+      id: "cat-4",
+      title: "Goods & Transport",
+      subtitle: "Mini trucks, 2-wheelers & logistics",
+      badge: "Transport",
+      badgeColor: "teal",
+      image: "/mockups/service_transport.jpg",
+      link: "/logistics",
       enabled: true
     }
   ],
