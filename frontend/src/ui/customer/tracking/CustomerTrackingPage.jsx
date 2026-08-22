@@ -102,7 +102,7 @@ export function CustomerTrackingPage() {
   const openWA = () => {
     if (!techPhone) return
     const msg = encodeURIComponent(
-      `Hi ${techName}, following up on CalServices booking #${data?.request_id || activeIdentifier}.`
+      `Hi ${techName}, following up on Sevo booking #${data?.request_id || activeIdentifier}.`
     )
     window.open(`https://wa.me/91${techPhone.replace(/\D/g, "")}?text=${msg}`, "_blank")
   }
@@ -173,7 +173,7 @@ export function CustomerTrackingPage() {
               <div style={{ fontSize: "0.92rem", color: "#065f46", fontWeight: 800 }}>👤 {techName} {vendorName ? `(${vendorName})` : ""}</div>
             </div>
           )}
-          <p className="ltp-error-hint" style={{ color: "#047857", marginBottom: 14 }}>Thank you for choosing CalServices!</p>
+          <p className="ltp-error-hint" style={{ color: "#047857", marginBottom: 14 }}>Thank you for choosing Sevo!</p>
           <button
             className="ltp-retry-btn"
             style={{ background: "#059669", borderColor: "#059669", width: "100%", justifyContent: "center" }}

@@ -442,8 +442,8 @@ export function AppShell() {
           <div className="flex items-center gap-4">
             <CalTrackLogo size="sm" className="hover:scale-105 transition-transform" />
             <div className="flex flex-col">
-              <span className="font-bold text-slate-900 dark:text-white text-base tracking-tight truncate max-w-[200px]" title={orgName || "CalTrack"}>
-                {orgName || "CalTrack"}
+              <span className="font-bold text-slate-900 dark:text-white text-base tracking-tight truncate max-w-[200px]" title={orgName || "Sevo"}>
+                {orgName || "Sevo"}
               </span>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[10px] professional-subtitle text-blue-500 leading-none">Enterprise</span>

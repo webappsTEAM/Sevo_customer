@@ -587,7 +587,7 @@ def _build_tracking_payload(sr, has_full_access):
 
     vendor_data = None
     if is_accepted:
-        comp_name = "CalServices"
+        comp_name = "Sevo"
         comp_id = sr.company_id or 1
         if sr.company_id:
             try:
