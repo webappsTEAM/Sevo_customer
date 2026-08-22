@@ -220,7 +220,7 @@ export function CustomerTrackingMap({
   const handleWhatsApp = () => {
     if (!techPhone) return
     const msg = encodeURIComponent(
-      `Hi ${techName || "Partner"}, following up on CalServices booking #${requestId || ""}.`
+      `Hi ${techName || "Partner"}, following up on Sevo booking #${requestId || ""}.`
     )
     window.open(`https://wa.me/91${techPhone.replace(/\D/g, "")}?text=${msg}`, "_blank")
   }
@@ -758,7 +758,7 @@ export function CustomerTrackingMap({
                 ) : (
                   <span className="ltp-map-drawer-rating">★ 4.9</span>
                 )}
-                <span>• {vendorName || "CalServices"}</span>
+                <span>• {vendorName || "Sevo"}</span>
               </div>
             </div>
           </div>

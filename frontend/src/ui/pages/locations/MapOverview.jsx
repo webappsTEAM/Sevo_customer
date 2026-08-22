@@ -1,7 +1,7 @@
 /**
  * MapOverview.jsx
  *
- * CalServices Admin Live Service Coverage & Operations Map Overview.
+ * Sevo Admin Live Service Coverage & Operations Map Overview.
  *
  * Real Data Integration:
  *  - Queries `/api/settings/service-zones/` for real customer coverage geofences (circles & polygons).

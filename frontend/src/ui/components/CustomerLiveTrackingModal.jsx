@@ -523,7 +523,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                         ETA: ~{finalEta} mins ({finalDistance} km road distance)
                       </div>
                       <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: 2 }}>
-                        Verified CalServices Professional
+                        Verified Sevo Professional
                       </div>
                     </div>
                   </Popup>
@@ -625,7 +625,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                       Work Finished Successfully
                     </div>
                     <div style={{ fontSize: "0.78rem", color: "#059669", fontWeight: 600, marginTop: 2 }}>
-                      Thank you for choosing CalServices!
+                      Thank you for choosing Sevo!
                     </div>
                   </>
                 ) : waitingForGps ? (
@@ -842,7 +842,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
 
                     <button
                       onClick={() => {
-                        const message = encodeURIComponent(`Hi ${techName}, I am following up on my CalServices booking #${booking?.request_id}.`)
+                        const message = encodeURIComponent(`Hi ${techName}, I am following up on my Sevo booking #${booking?.request_id}.`)
                         window.open(`https://wa.me/91${techPhone.replace(/\D/g, "")}?text=${message}`, "_blank")
                       }}
                       style={{

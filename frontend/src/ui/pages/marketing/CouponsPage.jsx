@@ -833,7 +833,7 @@ export default function CouponsPage() {
                   </label>
 
                   {[
-                    { id: "New Customers Only", title: "New Customers Only", desc: "First-time registered users on CalServices" },
+                    { id: "New Customers Only", title: "New Customers Only", desc: "First-time registered users on Sevo" },
                     { id: "All Customers", title: "All Customers", desc: "Available for both new and returning customers" },
                     { id: "Existing Customers", title: "Existing Customers", desc: "Customers who have completed at least 1 booking" },
                     { id: "First Order Only", title: "First Order Only", desc: "Restricted strictly to the user's initial booking" }

@@ -1895,7 +1895,7 @@ export function MiniTruckBookingHosurPage() {
         </div>
       </section>
 
-      {/* ── Section: Think Logistics, Think CalServices! (Page 2) ── */}
+      {/* ── Section: Think Logistics, Think Sevo! (Page 2) ── */}
       <section className="py-12 bg-emerald-900 text-white relative overflow-hidden">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="text-center md:text-left max-w-lg">
@@ -1903,10 +1903,10 @@ export function MiniTruckBookingHosurPage() {
               Mobile App Experience
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-              Think Logistics, Think CalServices!
+              Think Logistics, Think Sevo!
             </h2>
             <p className="text-sm text-emerald-100 mt-2">
-              Get the CalServices mobile app to start booking your mini trucks, track live deliveries, and manage invoices with a single tap.
+              Get the Sevo mobile app to start booking your mini trucks, track live deliveries, and manage invoices with a single tap.
             </p>
             <div className="mt-5 flex items-center justify-center md:justify-start gap-3">
               <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
@@ -1977,13 +1977,13 @@ export function MiniTruckBookingHosurPage() {
           </h2>
           <div className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-3">
             <p>
-              Transport your goods hassle-free with CalServices! Download CalServices and book a truck to transport business or personal goods anywhere in Hosur.
+              Transport your goods hassle-free with Sevo! Download Sevo and book a truck to transport business or personal goods anywhere in Hosur.
             </p>
             <p>
-              CalServices offers cost-effective solutions, allowing you to shift items within your budget. You can count on CalServices to move your goods safely and reliably. With a truck just a few taps away, say goodbye to logistics hassles and trust CalServices for your transportation needs.
+              Sevo offers cost-effective solutions, allowing you to shift items within your budget. You can count on Sevo to move your goods safely and reliably. With a truck just a few taps away, say goodbye to logistics hassles and trust Sevo for your transportation needs.
             </p>
             <p className="font-semibold text-slate-800">
-              Book now and experience smooth, affordable, and efficient goods transportation with CalServices in Hosur!
+              Book now and experience smooth, affordable, and efficient goods transportation with Sevo in Hosur!
             </p>
           </div>
         </div>
@@ -2852,7 +2852,7 @@ export function MiniTruckBookingHosurPage() {
                   <h4 className="text-2xl font-black leading-tight tracking-tight">Supercharge Your<br />Logistics!</h4>
                 </div>
                 <div className="bg-emerald-950/60 border border-emerald-400/40 rounded-xl px-2.5 py-1 text-right">
-                  <p className="text-[10px] font-bold tracking-wider uppercase opacity-90">CALSERVICES</p>
+                  <p className="text-[10px] font-bold tracking-wider uppercase opacity-90">SEVO</p>
                   <p className="text-xs font-black text-amber-300">4.8 ★</p>
                 </div>
               </div>
@@ -3074,7 +3074,7 @@ export function MiniTruckBookingHosurPage() {
           </div>
 
           <div className="border-t border-slate-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
-            <p>© 2026 CalServices Logistics Solutions Pvt. Ltd. All rights reserved.</p>
+            <p>© 2026 Sevo Logistics Solutions Pvt. Ltd. All rights reserved.</p>
             <p>Affordable and Trusted Mini Truck Booking in Hosur</p>
           </div>
         </div>
