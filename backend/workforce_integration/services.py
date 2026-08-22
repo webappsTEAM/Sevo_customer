@@ -254,3 +254,35 @@ class WorkforceIntegrationService:
 
         return {"success": True, "fallback": True}
 
+    @classmethod
+    def get_quote_by_token(cls, token: str) -> dict:
+        """
+        Calls the vendor's public endpoint to retrieve quote details by token.
+        """
+        try:
+            url = f"{WORKFORCE_API_BASE_URL}/customer/quote-token/{token}/"
+            response = requests.get(url, headers=cls._headers(), timeout=5)
+            if response.status_code == 200:
+                return {"success": True, "quote": response.json()}
+            else:
+                logger.warning(f"Workforce API get_quote_by_token responded with status {response.status_code}: {response.text}")
+                return {"success": False, "message": f"Workforce API error ({response.status_code})"}
+        except Exception as e:
+            logger.info(f"Workforce API get_quote_by_token failed: {e}")
+            return {"success": False, "message": "Workforce service unreachable"}
+
+    @classmethod
+    def get_quote_by_booking_id(cls, booking_id: str) -> dict:
+        """
+        Calls the vendor's endpoint to retrieve quote details associated with a booking/request ID.
+        """
+        try:
+            url = f"{WORKFORCE_API_BASE_URL}/customer/bookings/{booking_id}/quote/"
+            response = requests.get(url, headers=cls._headers(), timeout=5)
+            if response.status_code == 200:
+                return {"success": True, "quote": response.json()}
+            return {"success": False, "message": "No quote found"}
+        except Exception as e:
+            logger.info(f"Workforce API get_quote_by_booking_id failed: {e}")
+            return {"success": False, "message": "Workforce service unreachable"}
+

@@ -264,6 +264,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
     technician_phone       = serializers.SerializerMethodField()
     technician_photo       = serializers.SerializerMethodField()
     technician_rating      = serializers.SerializerMethodField()
+    child_requests         = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceRequest
@@ -278,12 +279,20 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             "technician", "technician_name", "technician_phone", "technician_photo", "technician_rating",
             "workforce_job_id", "external_assignment_id",
             "start_otp", "tracking_token", "active_extension", "latest_reschedule", "available_actions", "created_at", "updated_at",
+            "parent_request", "request_kind", "quote_number", "child_requests",
         )
+
+    def get_child_requests(self, obj):
+        children = obj.child_requests.all().order_by("created_at")
+        if children.exists():
+            return ServiceRequestListSerializer(children, many=True, context=self.context).data
+        return []
 
     def get_customer_id(self, obj):
         if obj.customer and hasattr(obj.customer, "customer_id"):
             return obj.customer.customer_id
         return None
+
 
     def get_technician_name(self, obj):
         # Strictly hidden before partner accepts

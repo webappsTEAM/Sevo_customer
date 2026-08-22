@@ -16,6 +16,7 @@ from .views import (
     CatalogCategoryListView,
     CatalogServiceListView,
     CatalogSubServiceListView,
+    CustomerQuoteDetailView,
 
     # Admin — Service Requests
     AdminSRListView,
@@ -118,6 +119,7 @@ urlpatterns = [
     path("workforce/jobs/<int:pk>/live-tracking/", CustomerBookingLiveLocationView.as_view(), name="workforce-job-live-tracking"),
     path("workforce/jobs/<str:identifier>/live-tracking/", CustomerBookingLiveLocationView.as_view(), name="workforce-job-live-tracking-str"),
     path("tracking/<str:tracking_token>/",   CustomerPublicTrackingView.as_view(), name="sr-public-tracking-token"),
+    path("booking/quote/<str:token>/",       CustomerQuoteDetailView.as_view(), name="sr-customer-quote-detail"),
     path("booking/<int:pk>/verify-start-otp/", BookingVerifyStartOTPView.as_view(), name="sr-booking-verify-start-otp"),
     path("booking/<str:identifier>/verify-start-otp/", BookingVerifyStartOTPView.as_view(), name="sr-booking-verify-start-otp-identifier"),
     path("booking/<int:pk>/cancel/",         CustomerBookingCancelView.as_view(),       name="sr-booking-cancel"),

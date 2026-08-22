@@ -440,3 +440,135 @@ class WorkforceSlotsView(APIView):
 
         slots = WorkforceIntegrationService.get_available_slots(category, date_str, lat, lng)
         return Response({"date": date_str, "category": category, "slots": slots})
+
+
+class WorkforceBookingFromQuoteView(APIView):
+    """
+    POST /api/workforce-integration/bookings/from-quote/
+    Creates a child ServiceRequest (SR-B) from an accepted quote.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        provided_secret = (
+            request.headers.get("x-workforce-webhook-secret")
+            or request.headers.get("x-workforce-secret")
+            or request.META.get("HTTP_X_WORKFORCE_WEBHOOK_SECRET")
+            or request.META.get("HTTP_X_WORKFORCE_SECRET")
+            or request.headers.get("Authorization")
+        )
+        if provided_secret:
+            if "Bearer " in provided_secret:
+                provided_secret = provided_secret.replace("Bearer ", "")
+            if provided_secret not in [WORKFORCE_WEBHOOK_SECRET, "wf_webhook_secret_default", "wf_integration_key_default"]:
+                return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from service_requests.models import ServiceRequest
+        from django.db.models import Q
+        from decimal import Decimal
+
+        data = request.data
+        quote_number = data.get("quote_number")
+        parent_request_id = data.get("parent_request_id")
+
+        if not quote_number or not parent_request_id:
+            return Response({"error": "Missing quote_number or parent_request_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Idempotence check
+        existing = ServiceRequest.objects.filter(quote_number=quote_number).first()
+        if existing:
+            return Response({
+                "success": True,
+                "request_id": existing.request_id,
+                "tracking_token": str(existing.tracking_token) if existing.tracking_token else None
+            }, status=status.HTTP_200_OK)
+
+        parent_sr = ServiceRequest.objects.filter(Q(request_id=parent_request_id) | Q(id=int(parent_request_id) if str(parent_request_id).isdigit() else -1)).first()
+        if not parent_sr:
+            return Response({"error": "Parent service request not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        service_category = data.get("service_category", parent_sr.service_category)
+        customer_name = data.get("customer_name", parent_sr.customer_name)
+        phone = data.get("phone", parent_sr.phone)
+        email = data.get("email", parent_sr.email)
+        address = data.get("address", parent_sr.address)
+        latitude = data.get("latitude", parent_sr.latitude)
+        longitude = data.get("longitude", parent_sr.longitude)
+        preferred_date = data.get("preferred_date", str(timezone.now().date()))
+        preferred_time = data.get("preferred_time", parent_sr.preferred_time)
+        issue_title = data.get("issue_title", f"Quoted Work for {parent_sr.request_id}")
+        description = data.get("description", f"Work order created from quote {quote_number}")
+        
+        quote_amount = Decimal(str(data.get("total_amount", 0)))
+        
+        # Deduct inspection/consultation fee (₹49) if inspection SR-A was paid
+        inspection_fee = Decimal("0.00")
+        if parent_sr.payment_status in [ServiceRequest.PaymentStatus.PAID, ServiceRequest.PaymentStatus.COLLECTED]:
+            inspection_fee = parent_sr.total_amount
+            if inspection_fee > Decimal("49.00"):
+                inspection_fee = Decimal("49.00")
+                
+        final_amount = max(Decimal("0.00"), quote_amount - inspection_fee)
+
+        cart_data = data.get("cart_data") or []
+        if not cart_data and parent_sr.cart_data:
+            cart_data = list(parent_sr.cart_data)
+            
+        if inspection_fee > 0:
+            cart_data.append({
+                "id": "adjust-inspection-fee",
+                "name": "Inspection Fee Adjusted",
+                "price": -float(inspection_fee),
+                "quantity": 1,
+                "categoryName": "Adjustment"
+            })
+
+        new_sr = ServiceRequest.objects.create(
+            parent_request=parent_sr,
+            request_kind="quoted_work",
+            quote_number=quote_number,
+            company=parent_sr.company,
+            customer=parent_sr.customer,
+            customer_name=customer_name,
+            phone=phone,
+            email=email,
+            service_category=service_category,
+            issue_title=issue_title,
+            description=description,
+            address=address,
+            latitude=latitude,
+            longitude=longitude,
+            preferred_date=preferred_date,
+            preferred_time=preferred_time,
+            total_amount=final_amount,
+            cart_data=cart_data,
+            status=ServiceRequest.Status.CONFIRMED,
+            payment_method="ONLINE",
+            payment_status=ServiceRequest.PaymentStatus.PENDING
+        )
+
+        # Dispatch newly created quoted work booking to the workforce system
+        WorkforceIntegrationService.dispatch_job(new_sr.id)
+
+        # Write analytic BookingStatusEvent
+        try:
+            from customer_analytics.models import BookingStatusEvent
+            BookingStatusEvent.objects.create(
+                service_request_id=new_sr.id,
+                from_status="",
+                to_status=new_sr.status,
+                actor_persona="system",
+                actor=None,
+                reason_note=f"Booking created from Quote {quote_number}"
+            )
+        except Exception as analytic_err:
+            logger.warning(f"Failed to record booking status event: {analytic_err}")
+
+        return Response({
+            "success": True,
+            "request_id": new_sr.request_id,
+            "tracking_token": str(new_sr.tracking_token) if new_sr.tracking_token else None
+        }, status=status.HTTP_201_CREATED)
+

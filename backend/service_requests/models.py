@@ -20,8 +20,6 @@ CATEGORY_PREFIX_MAP = {
     "electrical_repair": "EL",
     "carpentry": "CP",
     "hvac": "AC",
-
-    
     "ac_repair": "AC",
     "ac_service": "AC",
     "air_conditioner": "AC",
@@ -40,7 +38,7 @@ CATEGORY_PREFIX_MAP = {
     "pest-control": "PC",
     "painting": "PA",
     "security": "SC",
-    "mason": "MA",
+    "mason": "MS",
     "general": "GM",
     "logistics": "LG",
     "goods_transport": "GT",
@@ -265,6 +263,15 @@ class ServiceRequest(models.Model):
     # customer tracking page (/track/:bookingId?token=<tracking_token>).
     # Booking ID alone is never sufficient to authorize viewing sensitive data.
     tracking_token          = models.UUIDField(null=True, blank=True, unique=True, db_index=True)
+
+    parent_request = models.ForeignKey("self", on_delete=models.SET_NULL,
+                                       null=True, blank=True,
+                                       related_name="child_requests")
+    request_kind   = models.CharField(max_length=20, default="standard", db_index=True,
+                                      choices=[("standard", "Standard"),
+                                               ("inspection", "Inspection"),
+                                               ("quoted_work", "Quoted Work")])
+    quote_number   = models.CharField(max_length=64, blank=True, null=True, unique=True, db_index=True)
 
     # Coupon snapshot fields
     coupon               = models.ForeignKey("Coupon", on_delete=models.SET_NULL, null=True, blank=True, related_name="service_requests")
