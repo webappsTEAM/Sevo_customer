@@ -1569,6 +1569,7 @@ export function LandingPage() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const searchContainerRef = useRef(null)
   const [homeConfig, setHomeConfig] = useState(() => getHomePageConfig())
+  const [testimonialIdx, setTestimonialIdx] = useState(0)
 
   useEffect(() => {
     fetchPublishedHomePageConfig().then((cfg) => {
@@ -4683,47 +4684,58 @@ export function LandingPage() {
         </section>
 
         {/* ── Testimonials ───────────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">{homeConfig.testimonials?.title || "What Our Customers Say"}</h2>
-            <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">{homeConfig.testimonials?.viewAllText || "View all reviews →"}</a>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setTestimonialIdx((i) => (i - 1 + (homeConfig.testimonials?.reviews?.length || 1)) % (homeConfig.testimonials?.reviews?.length || 1))}
-              className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="grid sm:grid-cols-3 gap-5 flex-1">
-              {(homeConfig.testimonials?.reviews || []).map((t, i) => (
-                <div key={t.id || i} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                      {t.initials}
-                    </span>
-                    <div className="flex gap-0.5 text-amber-400">
-                      {Array.from({ length: t.rating || 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
+        {(() => {
+          const testimonialList = (homeConfig.testimonials?.reviews && homeConfig.testimonials.reviews.length > 0)
+            ? homeConfig.testimonials.reviews
+            : TESTIMONIALS;
+          const listLength = testimonialList.length || 1;
+
+          return (
+            <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">{homeConfig.testimonials?.title || "What Our Customers Say"}</h2>
+                <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">{homeConfig.testimonials?.viewAllText || "View all reviews →"}</a>
+              </div>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setTestimonialIdx((i) => (i - 1 + listLength) % listLength)}
+                  className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
+                  aria-label="Previous Testimonial"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div className="grid sm:grid-cols-3 gap-5 flex-1">
+                  {testimonialList.map((t, i) => (
+                    <div key={t.id || i} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                          {t.initials || (t.name ? t.name.charAt(0) : "U")}
+                        </span>
+                        <div className="flex gap-0.5 text-amber-400">
+                          {Array.from({ length: t.rating || 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
+                        </div>
+                      </div>
+                      <p className="text-sm text-slate-600 mb-3 leading-relaxed">{t.text}</p>
+                      <p className="text-sm font-bold text-slate-800">&mdash; {t.name}</p>
                     </div>
-                  </div>
-                  <p className="text-sm text-slate-600 mb-3 leading-relaxed">{t.text}</p>
-                  <p className="text-sm font-bold text-slate-800">&mdash; {t.name}</p>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setTestimonialIdx((i) => (i + 1) % TESTIMONIALS.length)}
-              className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex justify-center gap-1.5 mt-6">
-            {TESTIMONIALS.map((_, i) => (
-              <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === testimonialIdx ? "bg-teal-600" : "bg-slate-200"}`} />
-            ))}
-          </div>
-        </section>
+                <button
+                  onClick={() => setTestimonialIdx((i) => (i + 1) % listLength)}
+                  className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
+                  aria-label="Next Testimonial"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex justify-center gap-1.5 mt-6">
+                {testimonialList.map((_, i) => (
+                  <span key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === testimonialIdx ? "bg-teal-600 w-3" : "bg-slate-200"}`} />
+                ))}
+              </div>
+            </section>
+          );
+        })()}
 
         {/* ── App Download Banner & Full Footer with Legal & Support Links ── */}
         {!activeCategory && <AppBannerAndFooter />}
