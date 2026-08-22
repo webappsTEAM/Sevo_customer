@@ -13,3 +13,9 @@ export async function createBooking(payload) {
 export async function cancelBooking(identifier, reason = "Customer requested cancellation") {
   return apiRequest(`/booking/${identifier}/cancel/`, { method: "POST", json: { reason } })
 }
+
+export async function getBookingStatus(identifier, token = "") {
+  const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : ""
+  return apiRequest(`/booking/${identifier}/live-location/${tokenQuery}`)
+}
+
