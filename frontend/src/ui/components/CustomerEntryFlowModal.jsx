@@ -521,7 +521,7 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
               <div className="cef-brand-logo-sq">
                 <Home size={19} strokeWidth={2.2} />
               </div>
-              <span className="cef-brand-title">CalServices</span>
+              <span className="cef-brand-title">Sevo</span>
               <span className="cef-brand-pill">Customer Access</span>
             </div>
             <button className="cef-close-circle" onClick={onClose} aria-label="Close modal">

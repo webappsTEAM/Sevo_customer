@@ -93,14 +93,14 @@ export function SupportHelpCenterModal({ isOpen, onClose }) {
               <div className="w-7 h-7 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
                 <Truck className="w-4 h-4" />
               </div>
-              <span className="text-sm sm:text-base font-extrabold tracking-tight">Drive with CalServices</span>
+              <span className="text-sm sm:text-base font-extrabold tracking-tight">Drive with Sevo</span>
             </div>
             <div className="space-y-2.5 text-xs sm:text-sm text-slate-600">
               <p>
                 <strong className="text-slate-900">Tempo &amp; Mini Truck Owners:</strong> Increase your earnings by partnering with us in Hosur &amp; SIPCOT corridors.
               </p>
               <p>
-                <strong className="text-slate-900">Two-Wheeler Riders:</strong> Earn money by fulfilling on-demand local transportation and parcel orders assigned by CalServices.
+                <strong className="text-slate-900">Two-Wheeler Riders:</strong> Earn money by fulfilling on-demand local transportation and parcel orders assigned by Sevo.
               </p>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -182,7 +182,7 @@ export function SupportHelpCenterModal({ isOpen, onClose }) {
             </div>
             <div className="space-y-1 text-xs sm:text-sm text-slate-700 pl-9">
               <p className="font-semibold text-slate-900">
-                CalServices Logistics Solutions Pvt. Ltd.
+                Sevo Logistics Solutions Pvt. Ltd.
               </p>
               <p>Plot 23, 24, 25 Near RTO Checkpost, Bagalur Road, Hosur – 635 103, Tamil Nadu</p>
               <div className="pt-2 flex flex-wrap items-center gap-4 text-xs font-medium text-slate-600">

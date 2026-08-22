@@ -106,7 +106,7 @@ def notify_reschedule_processed(ticket, reschedule_request, approved):
             f"We are pleased to inform you that your request to reschedule service booking {booking_id} has been APPROVED.\n\n"
             f"New Appointment Date: {reschedule_request.new_date}\n"
             f"New Appointment Slot: {reschedule_request.new_time_slot}\n\n"
-            f"Thank you for choosing CalServices!"
+            f"Thank you for choosing Sevo!"
         )
     else:
         subject = f"Reschedule Request Update - {booking_id}"
@@ -195,7 +195,7 @@ def notify_ticket_resolved(ticket):
         f"Ticket details:\n"
         f"- Ticket Number: {ticket_num}\n"
         f"- Status: RESOLVED\n\n"
-        f"Thank you for choosing CalServices! Please let us know if there is anything else we can do for you."
+        f"Thank you for choosing Sevo! Please let us know if there is anything else we can do for you."
     )
 
     send_dispatch_notifications(

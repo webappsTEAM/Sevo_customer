@@ -1459,7 +1459,7 @@ export function TwoWheelerBookingHosurPage() {
         </div>
       </section>
 
-      {/* ── Section: Think Delivery, Think CalServices! (App Banner) ── */}
+      {/* ── Section: Think Delivery, Think Sevo! (App Banner) ── */}
       <section className="py-12 bg-emerald-900 text-white relative overflow-hidden">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="text-center md:text-left max-w-lg">
@@ -1467,10 +1467,10 @@ export function TwoWheelerBookingHosurPage() {
               Mobile App Experience
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-              Think Delivery, Think CalServices!
+              Think Delivery, Think Sevo!
             </h2>
             <p className="text-sm text-emerald-100 mt-2">
-              Get the CalServices mobile app to start booking your two-wheeler courier deliveries, track live riders, and manage corporate dispatches with a single tap.
+              Get the Sevo mobile app to start booking your two-wheeler courier deliveries, track live riders, and manage corporate dispatches with a single tap.
             </p>
             <div className="mt-5 flex items-center justify-center md:justify-start gap-3">
               <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
@@ -1541,10 +1541,10 @@ export function TwoWheelerBookingHosurPage() {
           </h2>
           <div className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-3">
             <p>
-              Send parcels, documents, and corporate supplies across Hosur hassle-free with CalServices! Download CalServices and book an on-demand two-wheeler delivery partner in under 60 seconds.
+              Send parcels, documents, and corporate supplies across Hosur hassle-free with Sevo! Download Sevo and book an on-demand two-wheeler delivery partner in under 60 seconds.
             </p>
             <p>
-              CalServices offers transparent, economical per-km rates allowing you to send packages anywhere in Hosur, SIPCOT industrial zones, and nearby Karnataka borders safely.
+              Sevo offers transparent, economical per-km rates allowing you to send packages anywhere in Hosur, SIPCOT industrial zones, and nearby Karnataka borders safely.
             </p>
           </div>
         </div>
@@ -1985,7 +1985,7 @@ export function TwoWheelerBookingHosurPage() {
                   <h4 className="text-2xl font-black leading-tight tracking-tight">Supercharge Your<br />Logistics!</h4>
                 </div>
                 <div className="bg-emerald-950/60 border border-emerald-400/40 rounded-xl px-2.5 py-1 text-right">
-                  <p className="text-[10px] font-bold tracking-wider uppercase opacity-90">CALSERVICES</p>
+                  <p className="text-[10px] font-bold tracking-wider uppercase opacity-90">SEVO</p>
                   <p className="text-xs font-black text-amber-300">4.8 ★</p>
                 </div>
               </div>

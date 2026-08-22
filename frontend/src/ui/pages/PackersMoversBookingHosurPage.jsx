@@ -1087,7 +1087,7 @@ export function PackersMoversBookingHosurPage() {
   // FAQs
   const FAQS = [
     {
-      q: "What packing materials are included with CalServices Packers and Movers?",
+      q: "What packing materials are included with Sevo Packers and Movers?",
       a: "We provide high-grade multi-layer bubble wrap, waterproof stretch film, heavy-duty 5-ply corrugated cartons, corner protectors, and heavy furniture blankets to ensure zero damage."
     },
     {
@@ -1742,7 +1742,7 @@ export function PackersMoversBookingHosurPage() {
         </div>
       </section>
 
-      {/* ── Section: Think Logistics, Think CalServices! (App Banner) ── */}
+      {/* ── Section: Think Logistics, Think Sevo! (App Banner) ── */}
       <section className="py-12 bg-emerald-900 text-white relative overflow-hidden">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="text-center md:text-left max-w-lg">
@@ -1750,10 +1750,10 @@ export function PackersMoversBookingHosurPage() {
               Mobile App Experience
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">
-              Think Logistics, Think CalServices!
+              Think Logistics, Think Sevo!
             </h2>
             <p className="text-sm text-emerald-100 mt-2">
-              Get the CalServices mobile app to manage your household shifting, track container trucks in real time, and download invoices easily.
+              Get the Sevo mobile app to manage your household shifting, track container trucks in real time, and download invoices easily.
             </p>
             <div className="mt-5 flex items-center justify-center md:justify-start gap-3">
               <div className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur rounded-xl border border-white/20 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors">
@@ -1775,7 +1775,7 @@ export function PackersMoversBookingHosurPage() {
       {/* ── Section: How CalServices Packers and Movers Works ── */}
       <section className="py-12 max-w-6xl mx-auto px-4 sm:px-6">
         <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight text-center mb-10">
-          How CalServices Packers and Movers Works?
+          How Sevo Packers and Movers Works?
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
           <div className="hidden lg:block absolute top-8 left-[12%] right-[12%] h-[2px] bg-slate-200 border-t-2 border-dashed border-slate-300"></div>
@@ -1814,18 +1814,18 @@ export function PackersMoversBookingHosurPage() {
         </div>
       </section>
 
-      {/* ── Section: CalServices vs Local Vendors ── */}
+      {/* ── Section: Sevo vs Local Vendors ── */}
       <section className="py-12 bg-white border-y border-slate-200/70">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight text-center mb-8">
-            CalServices compared to local vendors
+            Sevo compared to local vendors
           </h2>
           <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50">
                   <th className="p-4 font-bold text-slate-700 border-b border-slate-200">Services</th>
-                  <th className="p-4 font-bold text-emerald-700 border-b border-l border-slate-200 text-center bg-emerald-50/50">CalServices</th>
+                  <th className="p-4 font-bold text-emerald-700 border-b border-l border-slate-200 text-center bg-emerald-50/50">Sevo</th>
                   <th className="p-4 font-bold text-slate-500 border-b border-l border-slate-200 text-center">Local Vendors</th>
                 </tr>
               </thead>
@@ -1953,7 +1953,7 @@ export function PackersMoversBookingHosurPage() {
           </h2>
           <div className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-3">
             <p>
-              Shift your home or corporate office stress-free with CalServices! Our certified packing professionals use premium materials to pack every fragile item, manage heavy lifting, and transport your possessions safely across Hosur, SIPCOT industrial zones, and intercity destinations.
+              Shift your home or corporate office stress-free with Sevo! Our certified packing professionals use premium materials to pack every fragile item, manage heavy lifting, and transport your possessions safely across Hosur, SIPCOT industrial zones, and intercity destinations.
             </p>
           </div>
         </div>

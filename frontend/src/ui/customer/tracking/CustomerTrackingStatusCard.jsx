@@ -49,7 +49,7 @@ export function CustomerTrackingStatusCard({
   const openWA = () => {
     if (!techPhone) return
     const msg = encodeURIComponent(
-      `Hi ${techName}, following up on CalServices booking #${data?.request_id}.`
+      `Hi ${techName}, following up on Sevo booking #${data?.request_id}.`
     )
     window.open(`https://wa.me/91${techPhone.replace(/\D/g, "")}?text=${msg}`, "_blank")
   }
@@ -122,7 +122,7 @@ export function CustomerTrackingStatusCard({
               ) : isInProgress ? (
                 "Service is actively underway"
               ) : isCompleted ? (
-                "Thank you for choosing CalServices!"
+                "Thank you for choosing Sevo!"
               ) : hasGps ? (
                 <>
                   {cleanDist && <strong>{cleanDist}</strong>}

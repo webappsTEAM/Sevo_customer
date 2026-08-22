@@ -10225,7 +10225,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                     )}
                   </div>
 
-                  {/* CalServices vs Local Vendor Comparison Table */}
+                  {/* Sevo vs Local Vendor Comparison Table */}
                   <div className="uc-paint-comparison-section" style={{ margin: "2rem 0", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.03)" }}>
                     <div style={{ padding: "1.25rem 1.5rem 0.75rem", borderBottom: "1px solid #f1f5f9" }}>
                       <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", textAlign: "left" }}>Why choose Sevo Painting?</h3>
@@ -10317,7 +10317,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
                   {/* How Painting Works */}
                   <div className="uc-paint-process-section">
-                    <h3 className="uc-paint-process-title">How CalServices Painting Works</h3>
+                    <h3 className="uc-paint-process-title">How Sevo Painting Works</h3>
                     <div className="uc-paint-process-steps">
                       <div className="uc-paint-process-step">
                         <div className="uc-paint-process-icon-box" style={{ background: "#eff6ff", color: "#6366f1", boxShadow: "0 0 0 1.5px #c7d2fe" }}>
@@ -10504,7 +10504,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                   </div>
                   <div className="uc-paint-app-banner-text">
                     <span className="uc-paint-app-banner-tag">Book on the go!</span>
-                    <h4 className="uc-paint-app-banner-title">Download the CalServices App</h4>
+                    <h4 className="uc-paint-app-banner-title">Download the Sevo App</h4>
                     <p className="uc-paint-app-banner-desc">Faster booking, real-time tracking & exclusive app offers.</p>
                   </div>
                 </div>
@@ -10522,7 +10522,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                 <div className="uc-paint-footer-col">
                   <div className="uc-paint-footer-logo-row">
                     <CalTrackLogo size={24} />
-                    <span className="uc-paint-footer-brand">CalServices</span>
+                    <span className="uc-paint-footer-brand">Sevo</span>
                   </div>
                   <p className="uc-paint-footer-brand-desc">
                     Your trusted partner for all home services. Quality you can count on.
@@ -10567,7 +10567,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                     </li>
                     <li>
                       <Mail size={14} />
-                      <span>support@calservices.com</span>
+                      <span>support@sevo.com</span>
                     </li>
                     <li>
                       <Clock size={14} />
@@ -11953,7 +11953,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
       },
       {
         q: `Is there a warranty on the structural masonry work?`,
-        a: "Yes! CalServices provides a 1-year service warranty covering workmanship, joint stability, and alignment protection for all civil works."
+        a: "Yes! Sevo provides a 1-year service warranty covering workmanship, joint stability, and alignment protection for all civil works."
       }
     ];
   };
@@ -11983,7 +11983,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
           rating: pkg.service_customization?.rating || staticTemplate?.rating || "4.8",
           reviews: pkg.service_customization?.reviews || staticTemplate?.reviews || "100+",
           image: pkg.image || staticTemplate?.image || "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
-          includes: Array.isArray(pkg.includes) && pkg.includes.length > 0 ? pkg.includes : (staticTemplate?.includes || ["Quality masonry work", "CalServices warranty"]),
+          includes: Array.isArray(pkg.includes) && pkg.includes.length > 0 ? pkg.includes : (staticTemplate?.includes || ["Quality masonry work", "Sevo warranty"]),
           excludes: Array.isArray(pkg.excludes) ? pkg.excludes : (staticTemplate?.excludes || []),
           inspectionHighlights: staticTemplate?.inspectionHighlights || ["Visual inspection", "Measurement scan"],
           steps: staticTemplate?.steps || ["Site prep", "Execution", "Clean-up"],
@@ -12563,11 +12563,11 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   </div>
                 </div>
 
-                {/* CalServices vs Local Contractor Comparison Block */}
+                {/* Sevo vs Local Contractor Comparison Block */}
                 <div className="uc-paint-comparison-section" style={{ margin: "2rem 0", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.03)" }}>
                   <div style={{ padding: "1.25rem 1.5rem 0.75rem", borderBottom: "1px solid #f1f5f9" }}>
-                    <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", textAlign: "left" }}>Why choose CalServices Masonry?</h3>
-                    <p style={{ margin: "4px 0 0", fontSize: "0.78rem", color: "#64748b", textAlign: "left" }}>See how CalServices compares to typical local contractors.</p>
+                    <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", textAlign: "left" }}>Why choose Sevo Masonry?</h3>
+                    <p style={{ margin: "4px 0 0", fontSize: "0.78rem", color: "#64748b", textAlign: "left" }}>See how Sevo compares to typical local contractors.</p>
                   </div>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "500px" }}>
@@ -12752,7 +12752,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                   </div>
                   <div className="uc-paint-app-banner-text">
                     <span className="uc-paint-app-banner-tag">Book on the go!</span>
-                    <h4 className="uc-paint-app-banner-title">Download the CalServices App</h4>
+                    <h4 className="uc-paint-app-banner-title">Download the Sevo App</h4>
                     <p className="uc-paint-app-banner-desc">Faster booking, real-time tracking & exclusive app offers.</p>
                   </div>
                 </div>
@@ -12769,7 +12769,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                 <div className="uc-paint-footer-col">
                   <div className="uc-paint-footer-logo-row">
                     <CalTrackLogo size={24} />
-                    <span className="uc-paint-footer-brand">CalServices</span>
+                    <span className="uc-paint-footer-brand">Sevo</span>
                   </div>
                   <p className="uc-paint-footer-brand-desc">
                     Your trusted partner for all home services. Quality you can count on.
@@ -12814,7 +12814,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                     </li>
                     <li>
                       <Mail size={14} />
-                      <span>support@calservices.com</span>
+                      <span>support@sevo.com</span>
                     </li>
                     <li>
                       <Clock size={14} />
@@ -13387,7 +13387,7 @@ function getCategoryFaqsAndReviews(pkg) {
     ],
     faqs: [
       { q: "Are spare parts included in the service cost?", a: "Standard diagnostic and labor are included. Any required replacement spare parts are billed transparently as per the official rate card." },
-      { q: "Is service warranty provided?", a: "Yes, all service packages and genuine spare parts come with a 30 to 60-day CalServices warranty." },
+      { q: "Is service warranty provided?", a: "Yes, all service packages and genuine spare parts come with a 30 to 60-day Sevo warranty." },
       { q: "How can I reschedule or cancel my booking?", a: "You can easily reschedule or cancel your appointment directly through the app or by contacting customer support up to 2 hours before the slot." },
       { q: "What safety guidelines do your technicians follow?", a: "All technicians undergo background verification, carry identity cards, wear protective shoe covers, and use sanitized professional equipment." }
     ]
@@ -15641,7 +15641,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               </div>
               <div className="uc-paint-app-banner-text">
                 <span className="uc-paint-app-banner-tag">Book on the go!</span>
-                <h4 className="uc-paint-app-banner-title">Download the CalServices App</h4>
+                <h4 className="uc-paint-app-banner-title">Download the Sevo App</h4>
                 <p className="uc-paint-app-banner-desc">Faster booking, real-time tracking & exclusive app offers.</p>
               </div>
             </div>
@@ -15659,7 +15659,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
             <div className="uc-paint-footer-col">
               <div className="uc-paint-footer-logo-row">
                 <CalTrackLogo size={24} />
-                <span className="uc-paint-footer-brand">CalServices</span>
+                <span className="uc-paint-footer-brand">Sevo</span>
               </div>
               <p className="uc-paint-footer-brand-desc">
                 Your trusted partner for all home services. Quality you can count on.
@@ -15704,7 +15704,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 </li>
                 <li>
                   <Mail size={14} />
-                  <span>support@calservices.com</span>
+                  <span>support@sevo.com</span>
                 </li>
                 <li>
                   <Clock size={14} />

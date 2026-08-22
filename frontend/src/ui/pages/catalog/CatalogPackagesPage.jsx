@@ -176,7 +176,7 @@ const SERVICE_DEFAULT_CUSTOMIZATIONS = {
       "High-Build Waterproofing Seal",
       "Epoxy Grout Application",
       "Pressure Grouting Checks",
-      "CalServices Warranty"
+      "Sevo Warranty"
     ],
     excludes: [
       "Breaking structural slabs",
@@ -406,7 +406,7 @@ const SERVICE_DEFAULT_CUSTOMIZATIONS = {
     faqs: [
       { q: "What materials are included in the masonry service?", a: "All standard tools, machinery, and equipment required are included. Raw materials (cement, sand, bricks, aggregates) can be supplied by us or procured by you based on the site inspection." },
       { q: "How long does the site inspection take?", a: "A professional site inspection takes approximately 30 to 45 minutes, during which our structural expert measures the area and provides an itemized material and labor estimate." },
-      { q: "Is there a warranty on the structural masonry work?", a: "Yes! CalServices provides a 1-year service warranty covering workmanship, joint stability, and alignment protection for all civil works." }
+      { q: "Is there a warranty on the structural masonry work?", a: "Yes! Sevo provides a 1-year service warranty covering workmanship, joint stability, and alignment protection for all civil works." }
     ],
     includes_heading: "WHAT'S INCLUDED",
     excludes_heading: "WHAT'S NOT INCLUDED",

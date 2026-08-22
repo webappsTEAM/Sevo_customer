@@ -76,8 +76,7 @@ export function AppBannerAndFooter() {
             {/* Col 1: Brand & Corporate */}
             <div className="uc-paint-footer-col">
               <div className="uc-paint-footer-logo-row">
-                <CalTrackLogo size={24} />
-                <span className="uc-paint-footer-brand">Sevo</span>
+                <CalTrackLogo size={24} theme="dark" />
               </div>
               <p className="uc-paint-footer-brand-desc">
                 Your trusted partner for doorstep home and commercial services. Quality, verified professionals, and transparent pricing.
