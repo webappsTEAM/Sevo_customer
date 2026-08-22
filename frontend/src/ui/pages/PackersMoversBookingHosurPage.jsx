@@ -1199,7 +1199,7 @@ export function PackersMoversBookingHosurPage() {
             </div>
             <div className="flex flex-col">
               <span className="text-lg font-extrabold tracking-tight text-slate-900 leading-none">
-                CalServices
+                Sevo
               </span>
               <span className="text-[10px] font-semibold text-emerald-700 tracking-wide uppercase mt-0.5">
                 Packers &amp; Movers

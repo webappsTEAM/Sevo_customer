@@ -199,7 +199,7 @@ export default function InvoicesSection() {
         {selectedInvoice && (
           <InvoicePreview 
             invoice={selectedInvoice}
-            company={{ company_name: user?.companyName || 'CalServices' }}
+            company={{ company_name: user?.companyName || 'Sevo' }}
             themeKey={activeTheme}
             setTheme={setActiveTheme}
             onClose={() => setSelectedInvoice(null)}

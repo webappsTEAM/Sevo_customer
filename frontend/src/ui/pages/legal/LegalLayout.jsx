@@ -13,9 +13,9 @@ import {
   Building,
   CheckCircle2,
   ExternalLink,
+  Home,
 } from "lucide-react";
 import { AppBannerAndFooter } from "../../components/AppBannerAndFooter.jsx";
-import { CalTrackLogo } from "../../components/CalTrackLogo.jsx";
 import { useLegalConfig } from "./legalConfig.js";
 
 const LEGAL_NAV = [
@@ -80,48 +80,51 @@ export function LegalLayout({ children, activePage, pageTitle, subtitle, version
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between selection:bg-emerald-100 selection:text-emerald-900 font-sans text-slate-800 antialiased">
-      {/* ── Top Floating Header ── */}
+      {/* ── Top Header Navigation ── */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4 sm:gap-6">
           <div className="flex items-center gap-3 sm:gap-6">
-            <button
-              type="button"
-              onClick={() => navigate("/home")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold text-xs border border-slate-200 hover:border-emerald-200 transition-all cursor-pointer shadow-2xs active:scale-95"
-            >
-              <ArrowLeft size={14} />
-              <span className="hidden sm:inline">Back to Home</span>
-              <span className="sm:hidden">Home</span>
-            </button>
-
-            <Link to="/home" className="flex items-center gap-2.5 group">
-              <CalTrackLogo size={28} />
+            <Link to="/home" className="flex items-center gap-2.5 select-none cursor-pointer group">
+              <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white font-black text-lg shadow-sm shrink-0 group-hover:bg-teal-700 transition-colors">
+                <Home size={18} strokeWidth={2.5} />
+              </div>
               <div className="flex flex-col">
-                <span className="font-extrabold text-base sm:text-lg text-slate-900 leading-none tracking-tight group-hover:text-emerald-700 transition-colors">
-                  CalServices
+                <span className="text-lg font-extrabold tracking-tight text-slate-900 leading-none group-hover:text-teal-700 transition-colors">
+                  Sevo
                 </span>
-                <span className="text-[10px] font-semibold text-slate-400 leading-tight">
+                <span className="text-[10px] font-semibold text-slate-400 leading-tight mt-0.5">
                   Legal &amp; Policy Portal
                 </span>
               </div>
             </Link>
           </div>
 
+          <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600">
+            <Link to="/home" className="hover:text-teal-600 transition-colors">Home</Link>
+            <Link to="/home#categories" className="hover:text-teal-600 transition-colors">Services</Link>
+            <Link to="/privacy" className="text-teal-600 font-semibold">Privacy &amp; Terms</Link>
+            <Link to="/contact" className="hover:text-teal-600 transition-colors">Contact Us</Link>
+            <Link to="/help" className="hover:text-teal-600 transition-colors">Help &amp; Support</Link>
+          </nav>
+
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden md:flex flex-col text-right">
-              <span className="text-[11px] font-extrabold text-slate-700 leading-tight">
-                {config.company_legal_name}
-              </span>
-              <span className="text-[9px] font-mono text-slate-400">
-                GSTIN: {config.gstin}
-              </span>
-            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/home")}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-700 font-bold text-xs border border-slate-200 hover:border-teal-200 transition-all cursor-pointer shadow-2xs active:scale-95"
+            >
+              <ArrowLeft size={14} />
+              <span className="hidden sm:inline">Back to Home</span>
+              <span className="sm:hidden">Home</span>
+            </button>
+
             <Link
               to="/contact"
-              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
+              className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 active:scale-95"
             >
               <Mail size={13} />
-              <span>Contact Support</span>
+              <span className="hidden sm:inline">Contact Support</span>
+              <span className="sm:hidden">Support</span>
             </Link>
           </div>
         </div>

@@ -271,6 +271,31 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
     }
   }, [step, resendCooldown])
 
+  // ── 1. Google OAuth Hook (Always called unconditionally at top level) ──
+  const googleLoginHandler = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setLoading(true)
+      setErrorMsg("")
+      try {
+        if (loginWithCustomerGoogle) {
+          await loginWithCustomerGoogle(tokenResponse.access_token)
+        } else {
+          await apiCustomerGoogleLogin(tokenResponse.access_token)
+          if (typeof refreshMe === "function") await refreshMe()
+        }
+        if (typeof onComplete === "function") onComplete()
+        onClose()
+      } catch (err) {
+        setErrorMsg(err?.body?.detail || err?.message || "Google sign-in failed. Please try with phone or email.")
+      } finally {
+        setLoading(false)
+      }
+    },
+    onError: () => {
+      setErrorMsg("Google Sign-In was cancelled or failed.")
+    }
+  })
+
   if (!isOpen) return null
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -278,37 +303,6 @@ export function CustomerEntryFlowModal({ isOpen, onClose, onComplete }) {
   const isIdentifierValid = channel === "EMAIL"
     ? EMAIL_RE.test(identifier)
     : /^[6-9]\d{9}$/.test(identifier)
-
-  // ── 1. Google OAuth Hook ──────────────────────────────────────────────────
-  let googleLoginHandler = () => {}
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    googleLoginHandler = useGoogleLogin({
-      onSuccess: async (tokenResponse) => {
-        setLoading(true)
-        setErrorMsg("")
-        try {
-          if (loginWithCustomerGoogle) {
-            await loginWithCustomerGoogle(tokenResponse.access_token)
-          } else {
-            await apiCustomerGoogleLogin(tokenResponse.access_token)
-            if (typeof refreshMe === "function") await refreshMe()
-          }
-          if (typeof onComplete === "function") onComplete()
-          onClose()
-        } catch (err) {
-          setErrorMsg(err?.body?.detail || err?.message || "Google sign-in failed. Please try with phone or email.")
-        } finally {
-          setLoading(false)
-        }
-      },
-      onError: () => {
-        setErrorMsg("Google Sign-In was cancelled or failed.")
-      }
-    })
-  } catch (err) {
-    console.warn("Google Login hook notice:", err)
-  }
 
   // ── 2. Request OTP ────────────────────────────────────────────────────────
   const handleRequestOTP = async (isResend = false) => {

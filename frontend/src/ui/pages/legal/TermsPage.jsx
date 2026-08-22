@@ -10,7 +10,7 @@ export function TermsPage() {
     <LegalLayout
       activePage="terms"
       pageTitle="Terms and Conditions of Service"
-      subtitle="Comprehensive legal agreement governing the access and use of CalServices customer applications, service bookings, on-site execution, and payments."
+      subtitle="Comprehensive legal agreement governing the access and use of Sevo customer applications, service bookings, on-site execution, and payments."
       versionKey="terms"
     >
       <div className="space-y-8 text-slate-700 text-sm sm:text-base leading-relaxed">
@@ -21,7 +21,7 @@ export function TermsPage() {
             <span>Important Customer Agreement</span>
           </div>
           <p>
-            Please read these Terms and Conditions carefully before creating an account or placing a booking on <strong>CalServices</strong>. By accessing our platform, submitting a service request, or completing payment, you agree to be bound by these Terms entered into with <strong>{config.company_legal_name}</strong>.
+            Please read these Terms and Conditions carefully before creating an account or placing a booking on <strong>Sevo</strong>. By accessing our platform, submitting a service request, or completing payment, you agree to be bound by these Terms entered into with <strong>{config.company_legal_name}</strong>.
           </p>
         </div>
 
@@ -31,10 +31,10 @@ export function TermsPage() {
             1. Introduction &amp; Corporate Identity
           </h2>
           <p>
-            These Terms &amp; Conditions (&quot;Terms&quot;) govern the use of the <strong>CalServices</strong> website, mobile applications, customer portal, and associated technology platforms (collectively, the &quot;Platform&quot;), owned and operated by <strong>{config.company_legal_name}</strong>, a company incorporated under the Companies Act, having its registered office at {config.registered_address} (CIN: {config.cin}, GSTIN: {config.gstin}).
+            These Terms &amp; Conditions (&quot;Terms&quot;) govern the use of the <strong>Sevo</strong> website, mobile applications, customer portal, and associated technology platforms (collectively, the &quot;Platform&quot;), owned and operated by <strong>{config.company_legal_name}</strong>, a company incorporated under the Companies Act, having its registered office at {config.registered_address} (CIN: {config.cin}, GSTIN: {config.gstin}).
           </p>
           <p>
-            Throughout these Terms, the words &quot;we&quot;, &quot;us&quot;, &quot;our&quot;, and &quot;CalServices&quot; refer to {config.company_legal_name}, and &quot;you&quot;, &quot;user&quot;, or &quot;customer&quot; refer to any individual or entity browsing the Platform or booking home and commercial services.
+            Throughout these Terms, the words &quot;we&quot;, &quot;us&quot;, &quot;our&quot;, and &quot;Sevo&quot; refer to {config.company_legal_name}, and &quot;you&quot;, &quot;user&quot;, or &quot;customer&quot; refer to any individual or entity browsing the Platform or booking home and commercial services.
           </p>
         </section>
 
@@ -59,11 +59,11 @@ export function TermsPage() {
           <div className="flex items-start gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-600">
             <MapPin size={18} className="text-emerald-600 shrink-0 mt-0.5" />
             <p>
-              CalServices operates via verified geographical service zones (&quot;Service Areas&quot;). Service availability, package pricing, and specific trade offerings are dynamically determined based on your selected address and GPS coordinates.
+              Sevo operates via verified geographical service zones (&quot;Service Areas&quot;). Service availability, package pricing, and specific trade offerings are dynamically determined based on your selected address and GPS coordinates.
             </p>
           </div>
           <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
-            <li>Bookings can only be confirmed for addresses falling within an active, authorized CalServices Service Area.</li>
+            <li>Bookings can only be confirmed for addresses falling within an active, authorized Sevo Service Area.</li>
             <li>Specific service categories (e.g. Painting, Pest Control, Cleaning, Logistics) may be enabled or disabled per service zone based on operational capacity.</li>
             <li>If an address is outside operational service coverage, the Platform will notify you and prevent booking submission for that location.</li>
           </ul>
@@ -75,7 +75,7 @@ export function TermsPage() {
             4. Service Booking &amp; Dispatch Process
           </h2>
           <p>
-            When you place a booking on CalServices, the booking undergoes the following structured operational lifecycle:
+            When you place a booking on Sevo, the booking undergoes the following structured operational lifecycle:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
@@ -132,8 +132,8 @@ export function TermsPage() {
           <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
             <li>The scope of work is strictly defined by the packages and add-ons selected in your confirmed booking.</li>
             <li>If inspection on-site reveals additional requirements, material costs, or scope expansion, the service professional will create a digital <strong>Work Extension Request</strong>.</li>
-            <li>No additional work shall be performed or charged without your prior explicit digital or recorded approval through the CalServices customer portal.</li>
-            <li>Supplementary charges must be settled through official CalServices payment methods (Online / Official COD invoice).</li>
+            <li>No additional work shall be performed or charged without your prior explicit digital or recorded approval through the Sevo customer portal.</li>
+            <li>Supplementary charges must be settled through official Sevo payment methods (Online / Official COD invoice).</li>
           </ul>
         </section>
 
@@ -144,7 +144,7 @@ export function TermsPage() {
           </h2>
           <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
             <li>All prices displayed are in Indian Rupees (INR ₹) and are inclusive of applicable taxes unless stated otherwise.</li>
-            <li><strong>Online Payments:</strong> Processed securely via authorized payment gateways. CalServices does not store your credit/debit card numbers, CVV, or UPI PINs.</li>
+            <li><strong>Online Payments:</strong> Processed securely via authorized payment gateways. Sevo does not store your credit/debit card numbers, CVV, or UPI PINs.</li>
             <li><strong>Cash on Delivery (COD):</strong> Where available for selected categories, payment must be handed over upon completion of the service.</li>
             <li><strong>Invoices:</strong> Digital GST-compliant invoices are automatically generated and made available in your customer account upon service completion.</li>
           </ul>
@@ -159,7 +159,7 @@ export function TermsPage() {
             To the maximum extent permitted by applicable law:
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
-            <li>CalServices provides the platform on an &quot;as is&quot; and &quot;as available&quot; basis without warranties of any kind.</li>
+            <li>Sevo provides the platform on an &quot;as is&quot; and &quot;as available&quot; basis without warranties of any kind.</li>
             <li>While we perform background verification and skill screening on service partners, {config.company_legal_name} shall not be liable for indirect, incidental, punitive, or consequential damages resulting from doorstep service execution beyond the invoice value of the affected booking.</li>
             <li>We are not responsible for delays or service failure caused by Force Majeure events, extreme weather, traffic gridlocks, or civil unrest.</li>
           </ul>

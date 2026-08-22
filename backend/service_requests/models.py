@@ -702,6 +702,8 @@ class Package(models.Model):
     sort_order     = models.PositiveIntegerField(default=0)
     button_text    = models.CharField(max_length=50, blank=True, default="Add")
     icon           = models.CharField(max_length=100, blank=True, default="")
+    gst_rate       = models.DecimalField(max_digits=5, decimal_places=2, default=18.00, help_text="GST percentage (e.g. 18.00)")
+    platform_fee   = models.DecimalField(max_digits=10, decimal_places=2, default=29.00, help_text="Platform / Convenience Fee in INR (e.g. 29.00)")
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
