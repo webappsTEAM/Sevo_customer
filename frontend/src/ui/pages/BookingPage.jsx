@@ -8642,6 +8642,19 @@ export function BookingPage() {
       return () => clearTimeout(timer);
     }
   }, [cart, step, trackParam, incomingCategory, navigate]);
+
+  // Synchronize step and successData when active tracking ID changes
+  useEffect(() => {
+    if (trackParam) {
+      setStep(0);
+      const saved = sessionStorage.getItem("calservice_last_booking")
+      if (saved) {
+        try {
+          setSuccessData(JSON.parse(saved))
+        } catch (e) { }
+      }
+    }
+  }, [trackParam]);
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")

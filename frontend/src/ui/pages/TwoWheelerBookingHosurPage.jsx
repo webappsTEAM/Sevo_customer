@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
-import { createBooking, cancelBooking } from "../../api/bookingService.js"
+import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { apiRequestCustomerPhoneOTP, apiVerifyCustomerPhoneOTP } from "../../api/authService.js"
 import { verifyOtpViaWebSocket } from "../../api/websocketService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
@@ -288,20 +288,66 @@ function filterLocationSuggestions(searchText) {
 }
 
 /* ── Slots & Dates Helper ── */
+const DELIVERY_SLOTS = {
+  "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
+  "Afternoon": ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"],
+  "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
+}
+
+const isSlotPassed = (slot, dateObj) => {
+  const today = new Date()
+  if (dateObj.toDateString() !== today.toDateString()) return false
+
+  const parts = slot.split("-")
+  if (parts.length < 2) return false
+  const endTimeStr = parts[1].trim()
+  
+  const match = endTimeStr.match(/^(\d+)(AM|PM)$/i)
+  if (!match) return false
+  let hour = parseInt(match[1], 10)
+  const ampm = match[2].toUpperCase()
+  if (ampm === "PM" && hour < 12) hour += 12
+  if (ampm === "AM" && hour === 12) hour = 0
+
+  const currentHour = today.getHours()
+  const currentMinute = today.getMinutes()
+
+  if (currentHour > hour) return true
+  if (currentHour === hour && currentMinute > 0) return true
+
+  return false
+}
+
 const generateUpcomingDates = () => {
   const dates = []
   const today = new Date()
-  for (let i = 1; i <= 7; i++) {
+  
+  const hasRemainingSlots = (dateObj) => {
+    for (const slots of Object.values(DELIVERY_SLOTS)) {
+      for (const slot of slots) {
+        if (!isSlotPassed(slot, dateObj)) return true
+      }
+    }
+    return false
+  }
+
+  let startOffset = 0
+  if (!hasRemainingSlots(today)) {
+    startOffset = 1
+  }
+
+  for (let i = startOffset; i < startOffset + 7; i++) {
     const nextDate = new Date(today)
     nextDate.setDate(today.getDate() + i)
-    
+
     let dayName = ""
-    if (i === 1) dayName = "Tomorrow"
+    if (i === 0) dayName = "Today"
+    else if (i === 1) dayName = "Tomorrow"
     else dayName = nextDate.toLocaleDateString("en-US", { weekday: "short" })
-    
+
     const dateNum = nextDate.getDate().toString().padStart(2, "0")
     const monthStr = nextDate.toLocaleDateString("en-US", { month: "short" })
-    
+
     dates.push({
       id: `date_${i}`,
       label: dayName,
@@ -312,13 +358,18 @@ const generateUpcomingDates = () => {
   return dates
 }
 
-const DELIVERY_DATES = generateUpcomingDates()
-
-const DELIVERY_SLOTS = {
-  "Morning": ["6AM-7AM", "7AM-8AM", "8AM-9AM", "9AM-10AM", "10AM-11AM", "11AM-12PM"],
-  "Afternoon": ["12PM-1PM", "1PM-2PM", "2PM-3PM", "3PM-4PM", "4PM-5PM"],
-  "Evening": ["5PM-6PM", "6PM-7PM", "7PM-8PM", "8PM-9PM", "9PM-10PM"]
+const getFirstAvailableSlotAndCategory = (dateObj) => {
+  for (const [category, slots] of Object.entries(DELIVERY_SLOTS)) {
+    for (const slot of slots) {
+      if (!isSlotPassed(slot, dateObj)) {
+        return { category, slot }
+      }
+    }
+  }
+  return { category: "Morning", slot: "" }
 }
+
+const DELIVERY_DATES = generateUpcomingDates()
 
 /* ── Two-Wheeler Booking in Hosur Page ── */
 export function TwoWheelerBookingHosurPage() {
@@ -338,8 +389,22 @@ export function TwoWheelerBookingHosurPage() {
   const [slotStepperOpen, setSlotStepperOpen] = useState(false)
   const [stepperStep, setStepperStep] = useState(3)
   const [selectedDate, setSelectedDate] = useState(DELIVERY_DATES[0])
-  const [selectedSlot, setSelectedSlot] = useState("9AM-10AM")
-  const [expandedSlotCategory, setExpandedSlotCategory] = useState("Morning")
+  const [selectedSlot, setSelectedSlot] = useState(() => {
+    const defaultDate = DELIVERY_DATES[0]?.fullDate || new Date()
+    return getFirstAvailableSlotAndCategory(defaultDate).slot
+  })
+  const [expandedSlotCategory, setExpandedSlotCategory] = useState(() => {
+    const defaultDate = DELIVERY_DATES[0]?.fullDate || new Date()
+    return getFirstAvailableSlotAndCategory(defaultDate).category
+  })
+
+  useEffect(() => {
+    if (selectedDate) {
+      const { category, slot } = getFirstAvailableSlotAndCategory(selectedDate.fullDate)
+      setSelectedSlot(slot)
+      setExpandedSlotCategory(category)
+    }
+  }, [selectedDate])
   const [bookingSuccessOpen, setBookingSuccessOpen] = useState(false)
   const [supportModalOpen, setSupportModalOpen] = useState(false)
   const [noServiceRoute, setNoServiceRoute] = useState(false)
@@ -390,6 +455,8 @@ export function TwoWheelerBookingHosurPage() {
       if (interval) clearInterval(interval)
     }
   }, [lookingForPartnerOpen])
+
+
 
   const formatCountdown = (secs) => {
     const m = Math.floor(secs / 60)
@@ -466,6 +533,67 @@ export function TwoWheelerBookingHosurPage() {
   const [bookingError, setBookingError] = useState("")
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [lastBookingId, setLastBookingId] = useState(null)
+  const [lastTrackingToken, setLastTrackingToken] = useState(null)
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
+
+  useEffect(() => {
+    if (!lookingForPartnerOpen || !lastBookingId) return
+
+    let pollInterval = null
+    let isMounted = true
+
+    const checkStatus = async () => {
+      try {
+        const res = await getBookingStatus(lastBookingId, lastTrackingToken || "")
+        if (res?.data && isMounted) {
+          const status = (res.data.status || "").toLowerCase()
+          const isAccepted = Boolean(
+            res.data.is_accepted ||
+            ["accepted", "on_the_way", "arrived", "in_progress"].includes(status)
+          )
+          if (isAccepted) {
+            setLookingForPartnerOpen(false)
+            try {
+              sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
+              sessionStorage.setItem("calservice_last_booking", JSON.stringify({
+                id: lastBookingId,
+                request_id: lastBookingId,
+                tracking_token: lastTrackingToken
+              }))
+            } catch (e) {}
+            navigate(routes.booking_checkout)
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to poll booking status:", e)
+      }
+    }
+
+    checkStatus()
+    pollInterval = setInterval(checkStatus, 4000)
+
+    return () => {
+      isMounted = false
+      if (pollInterval) clearInterval(pollInterval)
+    }
+  }, [lookingForPartnerOpen, lastBookingId, lastTrackingToken, navigate])
+
+  useEffect(() => {
+    if (!lookingForPartnerOpen) return
+
+    window.history.pushState(null, null, window.location.pathname)
+
+    const handlePopState = () => {
+      window.history.pushState(null, null, window.location.pathname)
+      setShowExitConfirm(true)
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+    }
+  }, [lookingForPartnerOpen])
+
 
   useEffect(() => {
     let cancelled = false
@@ -759,7 +887,9 @@ export function TwoWheelerBookingHosurPage() {
 
       const res = await createBooking(payload)
       const bookingId = res?.data?.request_id || res?.request_id || ("CRN" + Math.floor(100000000000 + Math.random() * 900000000000))
+      const token = res?.data?.tracking_token || res?.tracking_token || null
       setLastBookingId(bookingId)
+      setLastTrackingToken(token)
       setVehicleSelectorOpen(false)
       setSlotStepperOpen(false)
       setGoodsTypeModalOpen(false)
@@ -768,6 +898,7 @@ export function TwoWheelerBookingHosurPage() {
       console.warn("Booking creation fallback:", err)
       const fallbackCRN = "CRN" + Math.floor(100000000000 + Math.random() * 900000000000)
       setLastBookingId(fallbackCRN)
+      setLastTrackingToken(null)
       setVehicleSelectorOpen(false)
       setSlotStepperOpen(false)
       setGoodsTypeModalOpen(false)
@@ -863,12 +994,67 @@ export function TwoWheelerBookingHosurPage() {
     }
   }
 
+  const handleLogoClick = () => {
+    if (lookingForPartnerOpen) {
+      setShowExitConfirm(true)
+    } else {
+      navigate(routes.landing)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#FAFCFB] text-slate-800 font-sans antialiased">
       {/* ── Top Header Navigation (Uniform Image 2 Style) ─────────────── */}
+      {/* Exit Confirmation Modal */}
+      {showExitConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-amber-50 border-2 border-amber-100 flex items-center justify-center mx-auto mb-4 text-amber-600">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-2">Do you want to exit?</h3>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed mb-6">
+              Exiting will close the partner search screen. Your booking request will remain active in your bookings.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExitConfirm(false)
+                  setLookingForPartnerOpen(false)
+                  try {
+                    sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
+                    sessionStorage.setItem("calservice_last_booking", JSON.stringify({
+                      id: lastBookingId,
+                      request_id: lastBookingId,
+                      tracking_token: lastTrackingToken
+                    }))
+                  } catch (e) {}
+                  navigate(routes.booking_checkout)
+                }}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/10"
+              >
+                Yes, Exit
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowExitConfirm(false)}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-extrabold text-sm rounded-xl transition-all cursor-pointer"
+              >
+                No, Stay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate(routes.landing)}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={handleLogoClick}>
             <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-sm">
               <Bike className="w-5 h-5" strokeWidth={2.5} />
             </div>
@@ -889,8 +1075,8 @@ export function TwoWheelerBookingHosurPage() {
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>Services</span>
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={() => navigate(routes.landing)}>For Enterprise</span>
+            <span className="hover:text-emerald-600 cursor-pointer" onClick={handleLogoClick}>Services</span>
+            <span className="hover:text-emerald-600 cursor-pointer" onClick={handleLogoClick}>For Enterprise</span>
             <span className="hover:text-emerald-600 cursor-pointer" onClick={() => setSupportModalOpen(true)}>Support</span>
             {user ? (
               <button
@@ -2224,19 +2410,26 @@ export function TwoWheelerBookingHosurPage() {
                               
                               {isExpanded && (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                                  {slots.map(slot => (
-                                    <div 
-                                      key={slot}
-                                      onClick={() => setSelectedSlot(slot)}
-                                      className={`py-2 px-1 rounded-xl border text-center cursor-pointer transition-all ${
-                                        selectedSlot === slot 
-                                          ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm" 
-                                          : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium"
-                                      }`}
-                                    >
-                                      <span className="text-[12px]">{slot}</span>
-                                    </div>
-                                  ))}
+                                  {slots.map(slot => {
+                                    const passed = isSlotPassed(slot, selectedDate?.fullDate || new Date())
+                                    return (
+                                      <button
+                                        key={slot}
+                                        type="button"
+                                        disabled={passed}
+                                        onClick={() => setSelectedSlot(slot)}
+                                        className={`py-2 px-1 rounded-xl border text-center transition-all ${
+                                          selectedSlot === slot
+                                            ? "border-[#0B8860] bg-[#0B8860]/5 text-[#0B8860] font-bold shadow-sm"
+                                            : passed
+                                            ? "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed pointer-events-none"
+                                            : "border-slate-200 bg-white hover:border-slate-300 text-slate-600 font-medium cursor-pointer"
+                                        }`}
+                                      >
+                                        <span className="text-[12px]">{slot}</span>
+                                      </button>
+                                    )
+                                  })}
                                 </div>
                               )}
                             </div>
