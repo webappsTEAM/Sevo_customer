@@ -206,7 +206,9 @@ export function MapPickerScreen({
   serviceSlug = "",
   onClose,
   onConfirm,
-  onCenterChange
+  onCenterChange,
+  initialFlat = "",
+  initialLandmark = ""
 }) {
   const [step, setStep]                   = useState("map") // "map" | "details"
   const [selectedAddressData, setSelectedAddressData] = useState(null)
@@ -409,6 +411,8 @@ export function MapPickerScreen({
       longitude: currentCenter.lng,
       zone_id: zoneStatus.zoneName ? 2 : null,
       zone_name: zoneStatus.zoneName || null,
+      flat_house_no: selectedAddressData?.flat_house_no || initialFlat,
+      landmark: selectedAddressData?.landmark || initialLandmark,
     }
     setSelectedAddressData(finalObj)
     setStep("details")

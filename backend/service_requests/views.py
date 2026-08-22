@@ -788,6 +788,7 @@ def _build_tracking_payload(sr, has_full_access):
         "eta_minutes": eta_minutes,
         "start_otp": start_otp,
         "tracking_token": str(sr.tracking_token) if (has_full_access and sr.tracking_token) else None,
+        "quote": WorkforceIntegrationService.get_quote_by_booking_id(sr.request_id).get("quote") if sr.status not in ["draft", "new_request"] else None,
     }
 
 
@@ -861,6 +862,20 @@ class CustomerPublicTrackingView(APIView):
 
         payload = _build_tracking_payload(sr, has_full_access=True)
         return _success(data=payload)
+
+
+class CustomerQuoteDetailView(APIView):
+    """
+    GET /api/booking/quote/<str:token>/
+    Fetches the quote detail by quote decision/tracking token from the vendor.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, token):
+        res = WorkforceIntegrationService.get_quote_by_token(token)
+        if res.get("success"):
+            return _success(data=res.get("quote"))
+        return _error(res.get("message", "Failed to fetch quote detail."), 400)
 
 
 class FeedbackTokenView(APIView):

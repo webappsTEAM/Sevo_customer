@@ -11,14 +11,40 @@ from django.db import models
 from django.utils import timezone
 
 
-def _generate_request_id():
-    """Generate SR-XXXX style human-readable ID."""
+CATEGORY_PREFIX_MAP = {
+    "painting": "PA",
+    "mason": "MS",
+}
+
+
+def _generate_request_id(service_category=None):
+    """Generate category-specific human-readable ID."""
+    prefix = "SR"
+    is_custom = False
+    
+    if service_category:
+        if service_category in CATEGORY_PREFIX_MAP:
+            prefix = CATEGORY_PREFIX_MAP[service_category]
+            is_custom = True
+        elif service_category == "goods_transport_truck":
+            prefix = "GT"
+            is_custom = True
+            
     last = ServiceRequest.objects.order_by("-id").first()
     num = (last.id + 1) if last and last.id else 1
-    req_id = f"SR-{str(num).zfill(4)}"
+    
+    if is_custom:
+        req_id = f"{prefix}{str(num).zfill(4)}"
+    else:
+        req_id = f"SR-{str(num).zfill(4)}"
+        
     while ServiceRequest.objects.filter(request_id=req_id).exists():
         num += 1
-        req_id = f"SR-{str(num).zfill(4)}"
+        if is_custom:
+            req_id = f"{prefix}{str(num).zfill(4)}"
+        else:
+            req_id = f"SR-{str(num).zfill(4)}"
+            
     return req_id
 
 
@@ -201,6 +227,15 @@ class ServiceRequest(models.Model):
     # Booking ID alone is never sufficient to authorize viewing sensitive data.
     tracking_token          = models.UUIDField(null=True, blank=True, unique=True, db_index=True)
 
+    parent_request = models.ForeignKey("self", on_delete=models.SET_NULL,
+                                       null=True, blank=True,
+                                       related_name="child_requests")
+    request_kind   = models.CharField(max_length=20, default="standard", db_index=True,
+                                      choices=[("standard", "Standard"),
+                                               ("inspection", "Inspection"),
+                                               ("quoted_work", "Quoted Work")])
+    quote_number   = models.CharField(max_length=64, blank=True, null=True, unique=True, db_index=True)
+
     # Coupon snapshot fields
     coupon               = models.ForeignKey("Coupon", on_delete=models.SET_NULL, null=True, blank=True, related_name="service_requests")
     coupon_code_snapshot = models.CharField(max_length=50, blank=True, default="")
@@ -243,7 +278,7 @@ class ServiceRequest(models.Model):
             old_status = ServiceRequest.objects.filter(pk=self.pk).values_list("status", flat=True).first() or ""
 
         if not self.request_id:
-            self.request_id = _generate_request_id()
+            self.request_id = _generate_request_id(self.service_category)
         if not self.start_otp:
             import hashlib
             h = hashlib.sha256(f"calservices_booking_otp_{self.request_id}_{self.phone}_{self.customer_name}".encode()).hexdigest()

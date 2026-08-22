@@ -303,13 +303,17 @@ export function AddAddressSearchModal({
   onSelectLocation,
   onUseCurrentLocation,
   serviceSlug = "",
-  initialCoords
+  initialCoords,
+  initialFlat = "",
+  initialLandmark = ""
 }) {
   return (
     <MapPickerScreen
       initialCoords={initialCoords}
       serviceSlug={serviceSlug}
       onClose={onClose}
+      initialFlat={initialFlat}
+      initialLandmark={initialLandmark}
       onConfirm={(resolvedAddr) => {
         if (typeof onSelectLocation === "function") {
           onSelectLocation(resolvedAddr, { lat: resolvedAddr.latitude, lng: resolvedAddr.longitude })
@@ -2175,6 +2179,39 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [showMapModal, setShowMapModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
+  const [showDeclineReasonModal, setShowDeclineReasonModal] = useState(false)
+  const [declineReasonCode, setDeclineReasonCode] = useState("")
+  const [declineReasonNotes, setDeclineReasonNotes] = useState("")
+  const [quoteExpanded, setQuoteExpanded] = useState(false)
+
+  const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
+    try {
+      const quoteToken = liveData?.quote?.decision_token
+      if (!quoteToken) return
+      
+      const response = await fetch(`http://localhost:8001/customer/quote-token/${quoteToken}/decide/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          decision,
+          reason_code: reasonCode,
+          reason_notes: reasonNotes
+        })
+      })
+      const result = await response.json()
+      if (result.success) {
+        alert(`Quote successfully ${decision === "CUSTOMER_ACCEPTED" ? "accepted" : "declined"}!`)
+        window.location.reload()
+      } else {
+        alert("Error saving quote decision: " + (result.message || "Unknown error"))
+      }
+    } catch (err) {
+      console.error("Quote decision failed:", err)
+      alert("Connection to vendor server failed. Please try again.")
+    }
+  }
 
   // Real-Time status polling
   useEffect(() => {
@@ -2908,6 +2945,269 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             <span>{startOtp}</span>
             {copiedOtp ? <Check size={13} color="#10B981" /> : <Copy size={13} color="#ea580c" />}
           </div>
+        </div>
+      )}
+
+      {/* ─────────────────── ACTIVE QUOTE DECISION CARD (PHASE 3) ─────────────────── */}
+      {liveData?.quote && liveData.quote.status === "SENT_TO_CUSTOMER" && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          style={{
+            background: 'white',
+            borderRadius: 20,
+            padding: '1.5rem',
+            marginBottom: '1rem',
+            boxShadow: '0 8px 30px rgba(79, 70, 229, 0.15)',
+            border: '2px solid #4F46E5',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 900, color: '#4F46E5', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Quotation Details
+              </div>
+              <h3 style={{ margin: '4px 0 0', fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>
+                Total Estimate: ₹{liveData.quote.total_amount}
+              </h3>
+            </div>
+            <span style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 8, fontWeight: 800, background: '#EFF6FF', color: '#1E40AF' }}>
+              Pending Approval
+            </span>
+          </div>
+
+          <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 12 }}>
+            Valid till: {new Date(liveData.quote.valid_until).toLocaleDateString()}
+          </div>
+
+          {/* Expandable items section */}
+          <div style={{ border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+            <button
+              onClick={() => setQuoteExpanded(!quoteExpanded)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '10px 14px',
+                background: '#f8fafc',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                color: '#0f172a'
+              }}
+            >
+              <span>{quoteExpanded ? "Hide Line Items" : "View Line Items"}</span>
+              <span>{quoteExpanded ? "▲" : "▼"}</span>
+            </button>
+            {quoteExpanded && (
+              <div style={{ padding: '10px 14px', background: 'white', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {liveData.quote.items && liveData.quote.items.map((item, idx) => (
+                  <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                    <div>
+                      <div style={{ fontWeight: 800, color: '#0f172a' }}>
+                        {item.name} {item.warranty_months ? `(Warranty: ${item.warranty_months} mo)` : "(No Warranty)"}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                        Source: {item.source_type === "CUSTOMER" ? "Customer Supplied" : "CalTrack Supplied"}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 900, color: '#0f172a' }}>
+                      ₹{item.source_type === "CUSTOMER" ? "0" : item.price * item.quantity}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* PDF Download link */}
+          <div style={{ marginBottom: 16 }}>
+            <a
+              href={`http://localhost:8001/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              📄 Download PDF Quotation
+            </a>
+          </div>
+
+          {/* Accept / Decline / Request changes buttons */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => handleQuoteDecision("CUSTOMER_ACCEPTED")}
+              style={{
+                flex: 1.2,
+                padding: '10px 14px',
+                background: 'linear-gradient(135deg, #10B981, #059669)',
+                color: 'white',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                border: 'none',
+                borderRadius: 10,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
+              }}
+            >
+              Accept Quote
+            </button>
+            <button
+              onClick={() => {
+                handleQuoteDecision("CHANGE_REQUESTED");
+              }}
+              style={{
+                flex: 1,
+                padding: '10px 14px',
+                background: '#f1f5f9',
+                color: '#0f172a',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                border: 'none',
+                borderRadius: 10,
+                cursor: 'pointer'
+              }}
+            >
+              Request Changes
+            </button>
+            <button
+              onClick={() => setShowDeclineReasonModal(true)}
+              style={{
+                flex: 1,
+                padding: '10px 14px',
+                background: '#fef2f2',
+                color: '#dc2626',
+                fontWeight: 800,
+                fontSize: '0.82rem',
+                border: 'none',
+                borderRadius: 10,
+                cursor: 'pointer'
+              }}
+            >
+              Decline
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Decline Reason Modal Overlay */}
+      {showDeclineReasonModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1.5rem'
+        }}>
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={{
+              background: 'white',
+              borderRadius: 20,
+              padding: '1.75rem',
+              maxWidth: 420,
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}
+          >
+            <h3 style={{ margin: '0 0 10px', fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>
+              Decline Quotation
+            </h3>
+            <p style={{ margin: '0 0 16px', fontSize: '0.85rem', color: '#64748b' }}>
+              Please select a reason for declining the quote to help us improve our service:
+            </p>
+            
+            <select
+              value={declineReasonCode}
+              onChange={(e) => setDeclineReasonCode(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: 10,
+                border: '1px solid #cbd5e1',
+                fontSize: '0.88rem',
+                marginBottom: 14,
+                fontWeight: 700,
+                background: 'white'
+              }}
+            >
+              <option value="">-- Select Reason --</option>
+              <option value="TOO_EXPENSIVE">Too Expensive / Out of Budget</option>
+              <option value="DELAYED_TIMELINE">Timeline too slow / Delayed start</option>
+              <option value="CHANGE_OF_PLANS">Change of plans / Cancelled project</option>
+              <option value="COMPETITOR_CHOSEN">Went with another service provider</option>
+              <option value="OTHER">Other reason</option>
+            </select>
+
+            <textarea
+              placeholder="Any additional feedback... (optional)"
+              value={declineReasonNotes}
+              onChange={(e) => setDeclineReasonNotes(e.target.value)}
+              style={{
+                width: '100%',
+                height: 80,
+                padding: '10px 12px',
+                borderRadius: 10,
+                border: '1px solid #cbd5e1',
+                fontSize: '0.85rem',
+                marginBottom: 16,
+                resize: 'none'
+              }}
+            />
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowDeclineReasonModal(false)
+                  setDeclineReasonCode("")
+                  setDeclineReasonNotes("")
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: '#f1f5f9',
+                  color: '#0f172a',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!declineReasonCode) {
+                    alert("Please select a reason code first.")
+                    return
+                  }
+                  handleQuoteDecision("CUSTOMER_DECLINED", declineReasonCode, declineReasonNotes)
+                  setShowDeclineReasonModal(false)
+                }}
+                style={{
+                  padding: '8px 18px',
+                  background: '#dc2626',
+                  color: 'white',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer'
+                }}
+              >
+                Confirm Decline
+              </button>
+            </div>
+          </motion.div>
         </div>
       )}
 
@@ -4204,7 +4504,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                     + Book a Service Now
                   </button>
                 </div>
-              ) : realBookings.map(b => {
+              ) : realBookings.filter(b => !b.parent_request).map(b => {
                 const isRescheduleEligible = ['new_request', 'reviewed', 'confirmed', 'assigned', 'accepted'].includes(b.status)
                 const getRescheduleNotice = (st) => {
                   if (['completed', 'closed', 'verified', 'feedback_pending', 'feedback_received'].includes(st)) {
@@ -4225,8 +4525,9 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                 return (
                   <React.Fragment key={b.id}>
-                    <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
-                      <div>
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: 16, padding: '1.25rem', display: 'flex', flexDirection: 'column', background: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', position: 'relative', zIndex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                           <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>{(b.service_category_display || b.issue_title || 'Service Booking').replace(/•“/g, ' - ').replace(/•”/g, ' - ').replace(/&amp;/g, '&')}</span>
                           <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>{b.status_display || b.status}</span>
@@ -4280,6 +4581,35 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                           </button>
                         </div>
                       </div>
+                    </div>
+
+                    {b.child_requests && b.child_requests.length > 0 && (
+                        <div style={{ width: '100%', marginTop: '1.25rem', borderTop: '1px dashed #e2e8f0', paddingTop: '1rem' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Booking Stages</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 14px', borderRadius: 12, border: '1px solid #f1f5f9' }}>
+                              <div>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>Stage 1: Site Consultation & Inspection</div>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {b.request_id} • {b.preferred_date}</div>
+                              </div>
+                              <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>
+                                {b.status_display || b.status}
+                              </span>
+                            </div>
+                            {b.child_requests.map((child, idx) => (
+                              <div key={child.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 14px', borderRadius: 12, border: '1px solid #f1f5f9' }}>
+                                <div>
+                                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>Stage {idx + 2}: Quoted Work ({child.issue_title})</div>
+                                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {child.request_id} • {child.preferred_date}</div>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', padding: '4px 10px', borderRadius: 99, fontWeight: 800, background: '#05966915', color: '#059669', border: '1px solid #05966930' }}>
+                                  {child.status_display || child.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {selectedMockBooking?.id === b.id && (
@@ -7853,14 +8183,21 @@ function StepWorkflowCheckout({
             lat: Number(formData.latitude) || 12.754598,
             lng: Number(formData.longitude) || 77.834477,
           }}
+          initialFlat={formData.flat_house_no || ""}
+          initialLandmark={formData.landmark || ""}
           serviceSlug={category?.id || categoryKey || "general"}
           onClose={() => setShowMapModal(false)}
           onConfirm={(addrObj) => {
             if (addrObj) {
               const fullAddr = addrObj.formatted_address || [addrObj.address_line1, addrObj.locality, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(", ");
-              onChange({ target: { name: "address", value: fullAddr } });
-              if (addrObj.latitude) onChange({ target: { name: "latitude", value: String(addrObj.latitude) } });
-              if (addrObj.longitude) onChange({ target: { name: "longitude", value: String(addrObj.longitude) } });
+              setFormData(prev => ({
+                ...prev,
+                address: fullAddr,
+                latitude: addrObj.latitude ? String(addrObj.latitude) : prev.latitude,
+                longitude: addrObj.longitude ? String(addrObj.longitude) : prev.longitude,
+                flat_house_no: addrObj.flat_house_no || "",
+                landmark: addrObj.landmark || ""
+              }))
               if (typeof setLocation === "function") setLocation(fullAddr);
               try { localStorage.setItem("calservice_user_location", fullAddr); } catch (e) { }
             }
@@ -8116,7 +8453,7 @@ export function BookingPage() {
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
   const [notes, setNotes] = useState("")
-  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "", latitude: "", longitude: "" })
+  const [formData, setFormData] = useState({ customer_name: "", phone: "", email: "", issue_title: "", description: "", address: "", landmark: "", latitude: "", longitude: "", flat_house_no: "" })
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [showPackageModal, setShowPackageModal] = useState(false)
@@ -8921,20 +9258,28 @@ export function BookingPage() {
       {showLocPicker && (
         <AddAddressSearchModal
           onClose={() => setShowLocPicker(false)}
+          initialFlat={formData.flat_house_no || ""}
+          initialLandmark={formData.landmark || ""}
           onSelectLocation={(loc, coords) => {
             setShowLocPicker(false)
             if (loc) {
-              const addrStr = typeof loc === "string" ? loc : (loc.display || loc.address || "");
+              const addrStr = typeof loc === "string"
+                ? loc
+                : (loc.formatted_address || loc.display || loc.address || [loc.address_line1, loc.locality, loc.city, loc.state, loc.pincode].filter(Boolean).join(", ") || "");
               const latVal = coords?.lat || loc?.latitude || loc?.lat || "";
               const lngVal = coords?.lng || loc?.longitude || loc?.lng || "";
-              setLocation(addrStr)
-              setFormData(prev => ({
-                ...prev,
-                address: addrStr,
-                latitude: latVal ? String(latVal) : prev.latitude,
-                longitude: lngVal ? String(lngVal) : prev.longitude
-              }))
-              localStorage.setItem("calservice_user_location", addrStr)
+              if (addrStr) {
+                setLocation(addrStr)
+                setFormData(prev => ({
+                  ...prev,
+                  address: addrStr,
+                  latitude: latVal ? String(latVal) : prev.latitude,
+                  longitude: lngVal ? String(lngVal) : prev.longitude,
+                  flat_house_no: loc.flat_house_no || "",
+                  landmark: loc.landmark || ""
+                }))
+                localStorage.setItem("calservice_user_location", addrStr)
+              }
             }
           }}
           onUseCurrentLocation={() => {
@@ -9783,7 +10128,15 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
             onClose={() => setShowLocSearchModal(false)}
             onSelectLocation={(loc) => {
               setShowLocSearchModal(false);
-              if (loc) { setPaintLocation(loc); localStorage.setItem("calservice_user_location", loc); }
+              if (loc) {
+                const addrStr = typeof loc === "string"
+                  ? loc
+                  : (loc.formatted_address || loc.display || loc.address || [loc.address_line1, loc.locality, loc.city, loc.state, loc.pincode].filter(Boolean).join(", ") || "");
+                if (addrStr) {
+                  setPaintLocation(addrStr);
+                  localStorage.setItem("calservice_user_location", addrStr);
+                }
+              }
             }}
             onUseCurrentLocation={() => {
               setShowLocSearchModal(false);

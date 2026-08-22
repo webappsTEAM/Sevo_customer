@@ -44,17 +44,17 @@ function validate(state) {
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
 const INIT = (addressData, user) => ({
-  flat_house_no:   "",
-  landmark:        "",
-  locality:        addressData?.locality   ?? "",
-  city:            addressData?.city       ?? "",
-  state:           addressData?.state      ?? "",
-  pincode:         addressData?.pincode    ?? "",
-  label:           null,                            // "home" | "work" | "other"
-  receiver_name:   user
+  flat_house_no:   addressData?.flat_house_no ?? addressData?.flat ?? "",
+  landmark:        addressData?.landmark      ?? "",
+  locality:        addressData?.locality      ?? "",
+  city:            addressData?.city          ?? "",
+  state:           addressData?.state         ?? "",
+  pincode:         addressData?.pincode       ?? "",
+  label:           addressData?.label         ?? null,         // "home" | "work" | "other"
+  receiver_name:   addressData?.receiver_name ?? (user
     ? [user.firstName, user.lastName].filter(Boolean).join(" ")
-    : "",
-  receiver_phone:  user?.phone ?? "",
+    : ""),
+  receiver_phone:  addressData?.receiver_phone ?? user?.phone ?? "",
   // Track which fields have been "touched" (blurred) so we only show errors after interaction
   touched: {},
   // Field-level errors (computed on submit or blur)
