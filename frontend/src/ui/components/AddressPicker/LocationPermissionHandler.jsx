@@ -137,10 +137,12 @@ export function LocationPermissionHandler({ onClose, onManualSearch, onLocationC
         initialCoords={defaultCoords}
         onClose={onClose}
         onManualSearch={onManualSearch}
-        onCenterChange={(lat, lng, resolvedAddress) => {
-          if (resolvedAddress) {
-            setConfirmedAddress(resolvedAddress)
-            setScreen("details")
+        onConfirm={(confirmedData) => {
+          if (typeof onLocationConfirmed === "function") {
+            onLocationConfirmed(confirmedData)
+          }
+          if (typeof onClose === "function") {
+            onClose()
           }
         }}
       />

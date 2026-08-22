@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom"
 import {
@@ -24,7 +24,7 @@ import { apiUpdateCustomerLastLocation } from "../../api/authService.js"
 import { apiRequest } from "../../api/client.js"
 import { getAddress } from "../../api/geocoding.js"
 import { motion, AnimatePresence } from "framer-motion"
-import { getHomePageConfig, fetchPublishedHomePageConfig } from "../../config/homePageConfig.js"
+import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -886,7 +886,6 @@ const CATEGORIES = [
   { label: "Mason", icon: Building2, photo: "/mockups/service_building.png", bg: "bg-sky-50", ring: "border-sky-100", fg: "text-sky-600", hoverBg: "group-hover:bg-sky-100", serviceCategoryId: "mason" },
   { label: "AC & Appliance", icon: AirVent, photo: "/mockups/service_hvac.png", bg: "bg-rose-50", ring: "border-rose-100", fg: "text-rose-600", hoverBg: "group-hover:bg-rose-100", serviceCategoryId: "hvac" },
   { label: "Electrician, Plumbing & Carpentry", icon: Hammer, photo: "/mockups/service_electrical.png", bg: "bg-violet-50", ring: "border-violet-100", fg: "text-violet-600", hoverBg: "group-hover:bg-violet-100", serviceCategoryId: "electrical" },
-  { label: "Goods & Transports", icon: Boxes, photo: "/mockups/service_transport.jpg", bg: "bg-teal-50", ring: "border-teal-100", fg: "text-teal-600", hoverBg: "group-hover:bg-teal-100", serviceCategoryId: null },
 ]
 
 const HOME_SERVICES_SUB = [
@@ -941,7 +940,7 @@ const PROFESSIONALS = [
 const TESTIMONIALS = [
   { name: "Kavya R.", initials: "KR", text: "Booked cleaning service and the professional was punctual and did a fantastic job!" },
   { name: "Arvind S.", initials: "AS", text: "Very professional electrician. Fixed the issue quickly and the pricing was fair." },
-  { name: "Priya M.", initials: "PM", text: "Great experience with the painting service. Highly recommend CalServices!" },
+  { name: "Priya M.", initials: "PM", text: "Great experience with the painting service. Highly recommend Sevo!" },
 ]
 
 function Logo() {
@@ -950,18 +949,14 @@ function Logo() {
       <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
         <Home className="w-5 h-5" strokeWidth={2.5} />
       </div>
-      <span className="text-lg font-extrabold tracking-tight text-slate-900">CalServices</span>
+      <span className="text-lg font-extrabold tracking-tight text-slate-900">Sevo</span>
     </div>
   )
 }
 
-// ── Location dropdown (Operating Cities Selector) ─────────────────────────
+// ── Location dropdown (Operating Cities Selector - Hosur Only) ────────────
 const OPERATING_CITIES = [
   { name: "Hosur", state: "Tamil Nadu", isHub: true },
-  { name: "Coimbatore", state: "Tamil Nadu", isHub: false },
-  { name: "Chennai", state: "Tamil Nadu", isHub: false },
-  { name: "Bengaluru", state: "Karnataka", isHub: false },
-  { name: "Salem", state: "Tamil Nadu", isHub: false }
 ]
 
 function LocationDropdown({ className = "", activeCity, onCityChange }) {
@@ -1000,22 +995,781 @@ function LocationDropdown({ className = "", activeCity, onCityChange }) {
   )
 }
 
+// ── All platform searchable services & individual packages for instant search ──
+const ALL_SEARCHABLE_SERVICES = [
+  // ── AC & Cooling Services ──
+  {
+    id: "hvac-fj-split",
+    title: "Foam & Power Jet AC Service — Split",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Service & Cleaning",
+    price: "₹599",
+    badge: "Best Seller",
+    tags: ["foam", "power jet", "jet service", "ac service", "split ac", "cooling", "air conditioner", "hvac", "ac jet wash"]
+  },
+  {
+    id: "hvac-fj-win",
+    title: "Foam & Power Jet AC Service — Window",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Service & Cleaning",
+    price: "₹499",
+    badge: "Window Care",
+    tags: ["foam", "power jet", "window ac", "ac service", "jet cleaning", "cooling", "air conditioner"]
+  },
+  {
+    id: "hvac-pj-split",
+    title: "Power Jet AC Service — Split",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Service & Cleaning",
+    price: "₹499",
+    badge: "High Pressure",
+    tags: ["power jet", "split ac", "ac cleaning", "jet wash", "air conditioner"]
+  },
+  {
+    id: "hvac-pj-win",
+    title: "Power Jet AC Service — Window",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Service & Cleaning",
+    price: "₹399",
+    tags: ["power jet", "window ac", "ac cleaning", "jet spray"]
+  },
+  {
+    id: "hvac-ar-3",
+    title: "Anti-Rust Deep Clean AC Service",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Service & Cleaning",
+    price: "₹799",
+    badge: "Ultimate Care",
+    tags: ["anti-rust", "rust protection", "ac deep clean", "coil coating"]
+  },
+  {
+    id: "hvac-rep-1",
+    title: "AC Repair — Split/Window",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Repair",
+    price: "₹599",
+    badge: "Expert Fix",
+    tags: ["ac repair", "ac servicing", "cooling breakdown", "split ac repair", "window ac repair"]
+  },
+  {
+    id: "hvac-rep-2",
+    title: "Less / No Cooling AC Diagnostic",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Repair",
+    price: "₹499",
+    badge: "Cooling Restore",
+    tags: ["no cooling", "less cooling", "ac not cooling", "hot air", "compressor check"]
+  },
+  {
+    id: "hvac-rep-4",
+    title: "AC Water Leakage Repair",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Repair",
+    price: "₹399",
+    tags: ["water dripping", "water leakage", "drain pipe", "ac water leak"]
+  },
+  {
+    id: "hvac-gas-1",
+    title: "AC Gas Leak Fix & Refill",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Gas & Refrigerant",
+    price: "₹1,799",
+    badge: "Full Gas Fill",
+    tags: ["gas refill", "gas charging", "gas leak", "freon", "r32", "r410a", "ac gas"]
+  },
+  {
+    id: "hvac-inst-split",
+    title: "Split AC Installation",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Installation & Uninstallation",
+    price: "₹1,299",
+    badge: "Popular",
+    tags: ["split ac installation", "ac fitting", "ac mounting", "core drilling"]
+  },
+  {
+    id: "hvac-uninst-1",
+    title: "AC Uninstallation",
+    category: "AC & Appliances",
+    categoryId: "hvac",
+    subTab: "AC Installation & Uninstallation",
+    price: "₹699",
+    tags: ["ac uninstallation", "dismount", "ac removal", "gas pump down"]
+  },
+
+  // ── Electrical & Fan Services ──
+  {
+    id: "elec-fan-1",
+    title: "Ceiling Fan Installation",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Fan & Light",
+    price: "₹199",
+    badge: "Popular",
+    tags: ["fan", "ceiling fan", "fan installation", "fan fitting", "hang fan", "new fan", "electrician", "electrical"]
+  },
+  {
+    id: "elec-fan-2",
+    title: "Ceiling Fan Repair / Uninstallation",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Fan & Light",
+    price: "₹149",
+    badge: "Quick Fix",
+    tags: ["fan", "fan repair", "ceiling fan repair", "fan slow", "fan noise", "fan capacitor", "fan wobble", "electrician"]
+  },
+  {
+    id: "elec-fan-3",
+    title: "Exhaust Fan Installation",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Fan & Light",
+    price: "₹199",
+    badge: "Ventilation",
+    tags: ["fan", "exhaust fan", "kitchen exhaust", "bathroom exhaust", "exhaust fan fitting", "electrician"]
+  },
+  {
+    id: "elec-fan-4",
+    title: "LED Light / Panel Light Installation",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Fan & Light",
+    price: "₹149",
+    badge: "Energy Save",
+    tags: ["light", "led light", "bulb", "tube light", "spotlight", "panel light", "electrician", "lighting"]
+  },
+  {
+    id: "elec-fan-5",
+    title: "Fan Regulator Replacement",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Fan & Light",
+    price: "₹149",
+    badge: "Speed Control",
+    tags: ["fan", "regulator", "fan regulator", "speed control", "dimmer", "fan switch", "electrician"]
+  },
+  {
+    id: "elec-fan-6",
+    title: "Light Fixture Replacement",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Fan & Light",
+    price: "₹199",
+    tags: ["light fixture", "bulb holder", "batten light", "electrician"]
+  },
+  {
+    id: "elec-sw-1",
+    title: "Switch / Socket Replacement",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Switches & Sockets",
+    price: "₹99",
+    badge: "Fast Dispatch",
+    tags: ["switch", "socket", "plug", "power point", "switchboard", "electrician", "electrical socket"]
+  },
+  {
+    id: "elec-sw-2",
+    title: "Switchboard Repair & Wiring",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Switches & Sockets",
+    price: "₹149",
+    tags: ["switchboard", "board repair", "switch wiring", "electrician"]
+  },
+  {
+    id: "elec-mcb-1",
+    title: "MCB Replacement & Trip Fix",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "MCB & Wiring",
+    price: "₹299",
+    badge: "Safety",
+    tags: ["mcb", "fuse", "breaker", "trip", "power trip", "short circuit", "db box", "electrician"]
+  },
+  {
+    id: "elec-mcb-4",
+    title: "Short Circuit & Burnt Wire Repair",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "MCB & Wiring",
+    price: "₹499",
+    badge: "Emergency",
+    tags: ["short circuit", "sparking", "burnt wire", "mcb trip", "electrician"]
+  },
+  {
+    id: "elec-inv-1",
+    title: "Inverter Battery Checkup & Maintenance",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Inverter & Heavy Appliance",
+    price: "₹299",
+    badge: "Battery Audit",
+    tags: ["inverter", "battery", "ups", "power backup", "acid water", "electrician"]
+  },
+  {
+    id: "elec-inv-2",
+    title: "Inverter Repair & PCB Fix",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Inverter & Heavy Appliance",
+    price: "₹599",
+    tags: ["inverter repair", "ups repair", "inverter not charging", "electrician"]
+  },
+  {
+    id: "elec-inv-4",
+    title: "Geyser Installation",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Inverter & Heavy Appliance",
+    price: "₹399",
+    badge: "Hot Water",
+    tags: ["geyser", "water heater", "hot water geyser", "electrician", "plumber"]
+  },
+  {
+    id: "elec-inv-5",
+    title: "Geyser Repair",
+    category: "Electrical & Plumbing",
+    categoryId: "electrical",
+    subTab: "Inverter & Heavy Appliance",
+    price: "₹499",
+    tags: ["geyser repair", "element change", "thermostat", "geyser not heating"]
+  },
+
+  // ── Plumbing Services ──
+  {
+    id: "plumb-tap-1",
+    title: "Tap Repair / Replacement",
+    category: "Electrical & Plumbing",
+    categoryId: "plumbing",
+    subTab: "Taps & Mixers",
+    price: "₹149",
+    badge: "Popular",
+    tags: ["tap", "faucet", "water tap", "tap leak", "spout", "plumber", "plumbing"]
+  },
+  {
+    id: "plumb-tap-2",
+    title: "Wall Mixer Installation & Repair",
+    category: "Electrical & Plumbing",
+    categoryId: "plumbing",
+    subTab: "Taps & Mixers",
+    price: "₹249",
+    tags: ["wall mixer", "mixer tap", "shower mixer", "plumber"]
+  },
+  {
+    id: "plumb-pipe-1",
+    title: "Water Leakage & Pipe Repair",
+    category: "Electrical & Plumbing",
+    categoryId: "plumbing",
+    subTab: "Pipe & Drainage",
+    price: "₹199",
+    badge: "Leak Fix",
+    tags: ["leakage", "water leak", "pipe burst", "pipe repair", "plumber", "plumbing"]
+  },
+  {
+    id: "plumb-pipe-2",
+    title: "Drainage & Washbasin Blockage Removal",
+    category: "Electrical & Plumbing",
+    categoryId: "plumbing",
+    subTab: "Pipe & Drainage",
+    price: "₹249",
+    tags: ["blockage", "sink block", "drain clean", "clog", "washbasin", "plumber"]
+  },
+  {
+    id: "plumb-toi-1",
+    title: "Flush Tank Repair & Fitting",
+    category: "Electrical & Plumbing",
+    categoryId: "plumbing",
+    subTab: "Toilet & Sanitary",
+    price: "₹199",
+    tags: ["flush tank", "toilet", "commode", "flush leak", "plumber"]
+  },
+
+  // ── Carpentry Services ──
+  {
+    id: "carp-lock-1",
+    title: "Door Lock Repair & Installation",
+    category: "Electrical & Plumbing",
+    categoryId: "carpentry",
+    subTab: "Lock & Hardware",
+    price: "₹249",
+    badge: "Skilled",
+    tags: ["lock", "door lock", "godrej", "latch", "handle", "carpenter", "carpentry"]
+  },
+  {
+    id: "carp-bed-1",
+    title: "Bed Assembly / Dismantling",
+    category: "Electrical & Plumbing",
+    categoryId: "carpentry",
+    subTab: "Furniture Repair",
+    price: "₹399",
+    tags: ["bed", "cot", "furniture assembly", "carpenter"]
+  },
+  {
+    id: "carp-ward-1",
+    title: "Wardrobe Hinge & Magnet Repair",
+    category: "Electrical & Plumbing",
+    categoryId: "carpentry",
+    subTab: "Wardrobe & Cabinets",
+    price: "₹199",
+    tags: ["wardrobe", "cupboard", "hinge", "magnet", "carpenter"]
+  },
+
+  // ── Appliances (Washing Machine, Refrigerator, RO, TV, Microwave) ──
+  {
+    id: "wm-jet-1",
+    title: "Washing Machine Jet Service",
+    category: "AC & Appliances",
+    categoryId: "washing_machine",
+    subTab: "Washing Machine Jet Service",
+    price: "₹599",
+    badge: "Best Seller",
+    tags: ["washing machine", "washer", "jet cleaning", "drum descaling", "appliance"]
+  },
+  {
+    id: "wm-chk-1",
+    title: "Washing Machine Diagnostic Check-up",
+    category: "AC & Appliances",
+    categoryId: "washing_machine",
+    subTab: "Washing Machine Check-up",
+    price: "₹299",
+    tags: ["washing machine repair", "not spinning", "vibration", "washer noise"]
+  },
+  {
+    id: "ref-chk-1",
+    title: "Refrigerator Checkup & Repair",
+    category: "AC & Appliances",
+    categoryId: "refrigerator",
+    subTab: "Refrigerator Repair",
+    price: "₹249",
+    badge: "Quick Fix",
+    tags: ["fridge", "refrigerator", "freezer", "single door", "double door", "inverter fridge", "cooling"]
+  },
+  {
+    id: "ro-svc-1",
+    title: "RO Water Purifier Full Service & Filter Change",
+    category: "AC & Appliances",
+    categoryId: "water_purifier",
+    subTab: "Water Purifier (RO)",
+    price: "₹349",
+    badge: "100% Pure",
+    tags: ["ro", "water purifier", "kent", "aquaguard", "filter change", "tds", "membrane"]
+  },
+  {
+    id: "tv-mount-1",
+    title: "TV Wall Mounting & Installation",
+    category: "AC & Appliances",
+    categoryId: "tv_display",
+    subTab: "TV & Display",
+    price: "₹299",
+    badge: "Same Day",
+    tags: ["tv", "wall mount", "television", "led tv", "screen mount", "smart tv"]
+  },
+  {
+    id: "mw-rep-1",
+    title: "Microwave & Oven Repair",
+    category: "AC & Appliances",
+    categoryId: "microwave",
+    subTab: "Microwave Oven",
+    price: "₹249",
+    tags: ["microwave", "oven", "not heating", "magnetron", "otg"]
+  },
+
+  // ── Home Cleaning & Pest Control ──
+  {
+    id: "clean-1bhk",
+    title: "1 BHK Full House Deep Cleaning",
+    category: "Home Cleaning",
+    categoryId: "cleaning",
+    subTab: "Full House Deep Cleaning",
+    price: "₹1,499",
+    badge: "Popular",
+    tags: ["cleaning", "1 bhk", "deep clean", "house cleaning", "full home", "maid", "sanitize"]
+  },
+  {
+    id: "clean-2bhk",
+    title: "2 BHK Full House Deep Cleaning",
+    category: "Home Cleaning",
+    categoryId: "cleaning",
+    subTab: "Full House Deep Cleaning",
+    price: "₹1,999",
+    badge: "Popular",
+    tags: ["cleaning", "2 bhk", "deep clean", "house cleaning", "full home", "maid"]
+  },
+  {
+    id: "clean-3bhk",
+    title: "3 BHK Full House Deep Cleaning",
+    category: "Home Cleaning",
+    categoryId: "cleaning",
+    subTab: "Full House Deep Cleaning",
+    price: "₹2,599",
+    tags: ["cleaning", "3 bhk", "deep clean", "house cleaning", "full home"]
+  },
+  {
+    id: "sofa-shamp",
+    title: "Sofa Deep Shampooing & Stain Removal",
+    category: "Home Cleaning",
+    categoryId: "sofa_cleaning",
+    subTab: "Sofa & Upholstery",
+    price: "₹499",
+    badge: "4.8 ★",
+    tags: ["sofa", "couch", "cushion", "sofa shampoo", "fabric clean", "leather clean", "cleaning"]
+  },
+  {
+    id: "bath-deep",
+    title: "Bathroom Deep Cleaning & Scale Removal",
+    category: "Home Cleaning",
+    categoryId: "bathroom_cleaning",
+    subTab: "Bathroom Cleaning",
+    price: "₹399",
+    badge: "Express",
+    tags: ["bathroom", "washroom", "toilet", "hard water stains", "tiles cleaning", "cleaning"]
+  },
+  {
+    id: "kitch-deep",
+    title: "Kitchen Deep Cleaning & Degreasing",
+    category: "Home Cleaning",
+    categoryId: "kitchen_cleaning",
+    subTab: "Kitchen Cleaning",
+    price: "₹899",
+    badge: "Trending",
+    tags: ["kitchen", "chimney", "oil stains", "tiles", "sink", "kitchen clean", "cleaning"]
+  },
+  {
+    id: "pest-cock",
+    title: "Cockroach Control Gel Treatment",
+    category: "Pest Control",
+    categoryId: "pest_control",
+    subTab: "Cockroach & Termite Control",
+    price: "₹799",
+    badge: "Guaranteed",
+    tags: ["cockroach", "cockroach control", "pest", "gel treatment", "pest control"]
+  },
+  {
+    id: "pest-term",
+    title: "Termite Anti-Infestation Treatment",
+    category: "Pest Control",
+    categoryId: "pest_control",
+    subTab: "Cockroach & Termite Control",
+    price: "₹1,299",
+    badge: "5-Yr Warranty",
+    tags: ["termite", "termite control", "wood pest", "borer", "pest control"]
+  },
+  {
+    id: "pest-bedbug",
+    title: "Bed Bugs Intensive 2-Visit Treatment",
+    category: "Pest Control",
+    categoryId: "pest_control",
+    subTab: "Ants & Bed Bugs Control",
+    price: "₹899",
+    badge: "Safe Chemical",
+    tags: ["bed bugs", "bedbugs", "ants", "mattress", "insect control", "pest control"]
+  },
+
+  // ── Painting & Masonry ──
+  {
+    id: "paint-full",
+    title: "Full House Painting Consultation",
+    category: "Paintings",
+    categoryId: "painting",
+    subTab: "Full House Painting",
+    price: "Free Consultation",
+    badge: "Free Estimate",
+    tags: ["painting", "paint", "house painting", "interior", "exterior", "whitewash", "wall color", "asian paints"]
+  },
+  {
+    id: "paint-waterproof",
+    title: "Terrace Waterproofing & Leak Proofing",
+    category: "Paintings",
+    categoryId: "painting",
+    subTab: "Waterproofing",
+    price: "Custom Estimate",
+    badge: "Leak-Proof",
+    tags: ["waterproofing", "terrace", "roof leak", "seepage", "dampness", "painting"]
+  },
+  {
+    id: "mason-tile",
+    title: "Tile Replacement & Masonry Repair",
+    category: "Mason",
+    categoryId: "mason",
+    subTab: "Masonry & Tiles",
+    price: "₹349",
+    tags: ["mason", "tile", "plaster", "brickwork", "cement", "civil work"]
+  },
+
+  // ── Goods & Transport (Hosur) ──
+  {
+    id: "log-truck",
+    title: "Mini Truck Hire (Tata Ace, Pickup 8ft)",
+    category: "Goods & Transport",
+    action: "navigate",
+    url: "/trucks/hosur",
+    price: "From ₹250 (Hosur)",
+    badge: "Live GPS",
+    tags: ["truck", "mini truck", "tata ace", "pickup", "transport", "goods", "tempo", "chota hathi", "lorry", "delivery", "hosur"]
+  },
+  {
+    id: "log-courier",
+    title: "2-Wheeler Parcel & Bike Courier",
+    category: "Goods & Transport",
+    action: "navigate",
+    url: "/trucks/hosur",
+    price: "From ₹40 (Hosur)",
+    badge: "Under 60 Mins",
+    tags: ["bike", "two wheeler", "courier", "parcel", "documents", "package delivery", "instant delivery", "rider", "hosur"]
+  },
+  {
+    id: "log-packers",
+    title: "Packers & Movers (House & Office Shifting)",
+    category: "Goods & Transport",
+    action: "navigate",
+    url: "/trucks/hosur",
+    price: "From ₹2,499 (Hosur)",
+    badge: "Verified Drivers",
+    tags: ["packers and movers", "packers", "movers", "house shifting", "office relocation", "luggage", "furniture shifting", "hosur"]
+  },
+
+  // ── Fresh Farm & Groceries ──
+  {
+    id: "fresh-vegetables",
+    title: "Farm Fresh Vegetables Express",
+    category: "Food & Health",
+    action: "food_health",
+    subId: "vegetables",
+    price: "Farm Rates",
+    badge: "8-min Delivery",
+    tags: ["vegetables", "veggies", "tomato", "potato", "onion", "greens", "organic", "fresh produce", "farm", "veg"]
+  },
+  {
+    id: "daily-groceries",
+    title: "Daily Essentials & Groceries",
+    category: "Food & Health",
+    action: "food_health",
+    subId: "groceries",
+    price: "Market Price",
+    badge: "Coming Soon",
+    tags: ["groceries", "milk", "bread", "eggs", "rice", "dal", "oil", "spices", "kitchen staples", "grocery"]
+  }
+]
+
 export function LandingPage() {
   const { user, refreshMe } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState("")
+  const [packagesData, setPackagesData] = useState(null)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const searchContainerRef = useRef(null)
+  const [homeConfig, setHomeConfig] = useState(() => getHomePageConfig())
   const [testimonialIdx, setTestimonialIdx] = useState(0)
-  const location = useLocation()
+
+  useEffect(() => {
+    fetchPublishedHomePageConfig().then((cfg) => {
+      if (cfg) setHomeConfig(cfg)
+    })
+
+    const handleHomepageUpdate = (e) => {
+      if (e?.detail) setHomeConfig(e.detail)
+    }
+    window.addEventListener("calservices:homepage_updated", handleHomepageUpdate)
+    return () => window.removeEventListener("calservices:homepage_updated", handleHomepageUpdate)
+  }, [])
+
+  // Robust multi-token and fuzzy matching across all services + backend packages
+  const filteredSearchResults = useMemo(() => {
+    const rawQ = query.trim()
+    if (!rawQ) {
+      const topPicks = [
+        "elec-fan-1",      // Ceiling Fan Installation (Electrical)
+        "clean-1bhk",      // 1 BHK Full House Deep Cleaning (Cleaning)
+        "hvac-fj-split",   // Foam & Power Jet AC Service — Split (AC)
+        "plumb-tap-1",     // Tap Repair / Replacement (Plumbing)
+        "log-truck",       // Mini Truck Hire (Logistics & Transport)
+        "pest-cock",       // Cockroach Control Gel Treatment (Pest Control)
+        "paint-full",      // Full House Painting Consultation (Painting)
+        "fresh-vegetables",// Farm Fresh Vegetables Express (Produce)
+      ]
+      const curated = topPicks
+        .map(id => ALL_SEARCHABLE_SERVICES.find(s => s.id === id))
+        .filter(Boolean)
+      return curated.length > 0 ? curated : ALL_SEARCHABLE_SERVICES.slice(0, 8)
+    }
+
+    // Clean and tokenize query (split by spaces, punctuation, dashes, ampersands)
+    const normalize = (str) => {
+      if (str == null) return ""
+      if (typeof str === "object") {
+        if (typeof str.name === "string") return normalize(str.name)
+        if (typeof str.title === "string") return normalize(str.title)
+        if (typeof str.text === "string") return normalize(str.text)
+        return ""
+      }
+      return String(str)
+        .toLowerCase()
+        .replace(/[—\-_&/,.()|:]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+    }
+
+    const cleanQ = normalize(rawQ)
+    const tokens = cleanQ.split(" ").filter(t => t.length > 0 && !["in", "and", "or", "the", "for", "a", "an", "of", "to", "with"].includes(t))
+    const searchTokens = tokens.length > 0 ? tokens : [cleanQ]
+
+    // Match helper for any candidate item
+    const scoreItem = (item) => {
+      if (!item) return 0
+      const titleNorm = normalize(item.title || item.name)
+      const catNorm = normalize(item.category)
+      const subNorm = normalize(item.subTab || item.subCategory)
+      const tagsNorm = (Array.isArray(item.tags) ? item.tags : [])
+        .map(t => normalize(t))
+        .filter(Boolean)
+        .join(" ")
+      const allText = `${titleNorm} ${catNorm} ${subNorm} ${tagsNorm}`
+
+      // Exact or direct substring match on full query
+      if (titleNorm === cleanQ) return 100
+      if (titleNorm.includes(cleanQ)) return 80
+      if (allText.includes(cleanQ)) return 60
+
+      // Token matching score
+      let matchCount = 0
+      let titleMatchCount = 0
+      for (const token of searchTokens) {
+        if (titleNorm.includes(token)) {
+          titleMatchCount++
+          matchCount++
+        } else if (allText.includes(token)) {
+          matchCount++
+        }
+      }
+
+      if (matchCount === searchTokens.length) {
+        return 40 + (titleMatchCount * 10)
+      } else if (matchCount > 0) {
+        return matchCount * 10
+      }
+      return 0
+    }
+
+    // Combine static catalog with any dynamic backend packages
+    const dynamicCatalogItems = []
+    if (packagesData && typeof packagesData === "object") {
+      Object.entries(packagesData).forEach(([catId, pkgs]) => {
+        if (Array.isArray(pkgs)) {
+          pkgs.forEach(pkg => {
+            if (pkg && pkg.name) {
+              const exists = ALL_SEARCHABLE_SERVICES.some(s => s.id === pkg.id || normalize(s.title) === normalize(pkg.name))
+              if (!exists) {
+                dynamicCatalogItems.push({
+                  id: pkg.id,
+                  title: pkg.name,
+                  category: BOOKING_CATEGORIES.find(c => c.id === catId)?.name || "Services",
+                  categoryId: catId,
+                  subTab: pkg.subCategory || null,
+                  price: pkg.price ? `₹${pkg.price}` : "Affordable",
+                  badge: pkg.popular ? "Popular" : pkg.tag || null,
+                  tags: [
+                    pkg.name,
+                    pkg.duration,
+                    ...(Array.isArray(pkg.includes) ? pkg.includes.map(inc => typeof inc === "object" ? inc?.name || "" : String(inc || "")) : [])
+                  ]
+                })
+              }
+            }
+          })
+        }
+      })
+    }
+
+    const pool = [...ALL_SEARCHABLE_SERVICES, ...dynamicCatalogItems]
+
+    return pool
+      .map(item => ({ item, score: scoreItem(item) }))
+      .filter(entry => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(entry => entry.item)
+      .slice(0, 10)
+  }, [query, packagesData])
+
+  // Handle outside clicks to close search dropdown
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setIsSearchOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    document.addEventListener("touchstart", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      document.removeEventListener("touchstart", handleClickOutside)
+    }
+  }, [])
+
+  // Execute search item action
+  const handleExecuteSearch = (item) => {
+    setIsSearchOpen(false)
+    if (!item) return
+
+    if (item.action === "navigate" && item.url) {
+      navigate(item.url)
+      return
+    }
+
+    if (item.action === "food_health") {
+      setSelectedFoodSubModuleId(item.subId || "vegetables")
+      setIsFoodHealthModalOpen(true)
+      return
+    }
+
+    // Direct modal opening via URL params with category & subtab
+    if (item.categoryId) {
+      let url = `?category=${item.categoryId}`
+      if (item.subTab) {
+        url += `&subtab=${encodeURIComponent(item.subTab)}&subTab=${encodeURIComponent(item.subTab)}`
+      }
+      navigate(url)
+      return
+    }
+
+    if (item.action === "home_pest") {
+      setIsHomePestModalOpen(true)
+    } else if (item.action === "ac_modal") {
+      setIsAcModalOpen(true)
+    } else if (item.action === "elec_modal") {
+      setIsElecModalOpen(true)
+    } else {
+      setIsHomeServicesCombinedModalOpen(true)
+    }
+  }
+
+  // Fallback or Enter key submission
+  const goToBooking = () => {
+    if (filteredSearchResults && filteredSearchResults.length > 0) {
+      handleExecuteSearch(filteredSearchResults[0])
+    } else if (query.trim()) {
+      navigate(`/booking?search=${encodeURIComponent(query.trim())}`)
+    } else {
+      setIsHomeServicesCombinedModalOpen(true)
+    }
+  }
+
   const [modalCart, setModalCart] = useState(() => (location.state?.cart || []).filter(c => c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false))
   const [isGoodsModalOpen, setIsGoodsModalOpen] = useState(location.state?.openGoodsModal || false)
   const [isElecModalOpen, setIsElecModalOpen] = useState(location.state?.openElecModal || false)
   const [isAcModalOpen, setIsAcModalOpen] = useState(location.state?.openAcModal || false)
   const [isHomePestModalOpen, setIsHomePestModalOpen] = useState(location.state?.openHomePestModal || false)
   const [isForYouModalOpen, setIsForYouModalOpen] = useState(false)
-  const [isFoodHealthModalOpen, setIsFoodHealthModalOpen] = useState(
-    () => Boolean(location.state?.openFoodHealthModal || location.state?.openVegetablesModal || location.state?.openFoodSubModuleId) || false
-  )
+  const [isFoodHealthModalOpen, setIsFoodHealthModalOpen] = useState(false)
   const [isHomeServicesCombinedModalOpen, setIsHomeServicesCombinedModalOpen] = useState(false)
   const [foodHealthSub, setFoodHealthSub] = useState(FOOD_HEALTH_SUB)
   const [selectedFoodSubModuleId, setSelectedFoodSubModuleId] = useState(
@@ -1055,7 +1809,6 @@ export function LandingPage() {
       return JSON.parse(localStorage.getItem("calservice_zone_result") || "null")
     } catch { return null }
   })
-  const [packagesData, setPackagesData] = useState(null)
   const [serviceAlertMessage, setServiceAlertMessage] = useState("")
 
   // Verify service zone for customer coordinates
@@ -1075,7 +1828,7 @@ export function LandingPage() {
     }
   }
 
-  // Initial zone check on mount
+  // Initial zone check on mount - only if user previously selected/detected coordinates
   useEffect(() => {
     const storedCoords = localStorage.getItem("calservice_user_coords")
     if (storedCoords) {
@@ -1083,12 +1836,9 @@ export function LandingPage() {
         const parsed = JSON.parse(storedCoords)
         if (parsed?.lat && parsed?.lng) {
           verifyServiceZone(parsed.lat, parsed.lng)
-          return
         }
       } catch (e) { }
     }
-    // Fallback default coordinates (Hosur / Bangalore Hub)
-    verifyServiceZone(12.754598, 77.834477)
   }, [])
 
   // Check if a service is enabled in customer's current zone
@@ -1274,26 +2024,6 @@ export function LandingPage() {
     loadCatalog()
   }, [])
 
-  const [homeConfig, setHomeConfig] = useState(() => getHomePageConfig())
-
-  useEffect(() => {
-    let isMounted = true
-    fetchPublishedHomePageConfig().then((cfg) => {
-      if (cfg && isMounted) {
-        setHomeConfig(cfg)
-      }
-    })
-
-    const handleConfigUpdate = (e) => {
-      setHomeConfig(e.detail || getHomePageConfig())
-    }
-    window.addEventListener("calservices:homepage_updated", handleConfigUpdate)
-    return () => {
-      isMounted = false
-      window.removeEventListener("calservices:homepage_updated", handleConfigUpdate)
-    }
-  }, [])
-
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -1433,14 +2163,30 @@ export function LandingPage() {
   }, [])
 
   useEffect(() => {
-    if (location.state?.openHomePestModal) setIsHomePestModalOpen(true)
-    if (location.state?.openAcModal) setIsAcModalOpen(true)
-    if (location.state?.openElecModal) setIsElecModalOpen(true)
-    if (location.state?.openGoodsModal) setIsGoodsModalOpen(true)
-  }, [location.state])
+    if (location.state?.openHomePestModal) {
+      setIsHomePestModalOpen(true)
+      navigate(".", { replace: true, state: {} })
+    } else if (location.state?.openAcModal) {
+      setIsAcModalOpen(true)
+      navigate(".", { replace: true, state: {} })
+    } else if (location.state?.openElecModal) {
+      setIsElecModalOpen(true)
+      navigate(".", { replace: true, state: {} })
+    } else if (location.state?.openGoodsModal) {
+      setIsGoodsModalOpen(true)
+      navigate(".", { replace: true, state: {} })
+    }
+  }, [location.state, navigate])
 
   const handleCloseCategory = () => {
     setModalCart(prev => prev.filter(c => c.id && String(c.id).includes("mason") === false && String(c.id).includes("paint") === false));
+    setIsHomePestModalOpen(false)
+    setIsAcModalOpen(false)
+    setIsElecModalOpen(false)
+    setIsGoodsModalOpen(false)
+    setIsHomeServicesCombinedModalOpen(false)
+    setIsForYouModalOpen(false)
+    setIsFoodHealthModalOpen(false)
     const rawCatKey = (activeCategory?.id || activeCategory?.slug || activeCategoryId || "").toLowerCase()
     if (["hvac", "ac", "appliance"].some(k => rawCatKey.includes(k))) {
       navigate("/home", { state: { openAcModal: true } })
@@ -1451,7 +2197,7 @@ export function LandingPage() {
     } else if (["painting", "mason"].some(k => rawCatKey.includes(k))) {
       navigate("/home")
     } else {
-      navigate("/home", { state: { openHomePestModal: true } })
+      navigate(".", { replace: true, state: {} })
     }
   }
 
@@ -1464,7 +2210,6 @@ export function LandingPage() {
     return list.filter(c => c && typeof c === "object" && c.categoryName !== "Painting" && c.categoryName !== "Mason" && c.id && typeof c.id === "string" && String(c.id).includes("paint") === false && String(c.id).includes("mason") === false);
   };
 
-  const goToBooking = () => navigate(routes.booking)
   const goToLogin = () => setShowCustomerEntryModal(true)
   const goToCategoryServices = (serviceCategoryId, subTabName) => {
     let url = serviceCategoryId ? `${routes.booking_services}?category=${serviceCategoryId}` : routes.booking_services;
@@ -1598,7 +2343,7 @@ export function LandingPage() {
     const displayLocationText = activeLocationLabel ||
       (typeof user?.last_known_location === "string" ? user?.last_known_location : user?.last_known_location?.label) ||
       (typeof user?.lastKnownLocation === "string" ? user?.lastKnownLocation : user?.lastKnownLocation?.label) ||
-      user?.address || "Hosur, Tamil Nadu";
+      user?.address || "Select Location";
 
     return (
       <>
@@ -1613,28 +2358,15 @@ export function LandingPage() {
 
                 <div className="h-6 w-px bg-slate-200 hidden sm:block" />
 
-                {/* Urban Location Selector Pill (Matching exact home page location view style) */}
+                {/* Location Selector Pill */}
                 <button
                   type="button"
                   onClick={() => setShowLocationPickerModal(true)}
-                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-extrabold transition-all cursor-pointer shadow-2xs max-w-[240px] sm:max-w-[340px] truncate ${zoneCheckResult && zoneCheckResult.in_zone === false
-                      ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
-                      : "border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-slate-800"
-                    }`}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-slate-800 text-xs font-bold transition-all cursor-pointer shadow-2xs max-w-[200px] sm:max-w-[280px] truncate"
                   title="Select Location"
                 >
-                  <MapPin className={`w-4 h-4 shrink-0 ${zoneCheckResult && zoneCheckResult.in_zone === false ? "text-red-500" : "text-indigo-600"}`} />
+                  <MapPin className="w-4 h-4 shrink-0 text-indigo-600" />
                   <span className="truncate">{displayLocationText}</span>
-                  {zoneCheckResult && zoneCheckResult.in_zone === false && (
-                    <span className="text-[9px] bg-red-200 text-red-800 font-black px-1.5 py-0.5 rounded-full shrink-0">
-                      Outside Area
-                    </span>
-                  )}
-                  {zoneCheckResult && zoneCheckResult.in_zone === true && zoneCheckResult.zone?.name && (
-                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-black px-1.5 py-0.5 rounded-full shrink-0">
-                      ✓ {zoneCheckResult.zone.name}
-                    </span>
-                  )}
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-auto" />
                 </button>
               </div>
@@ -1862,7 +2594,7 @@ export function LandingPage() {
               <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white">
                 <Home className="w-5 h-5" strokeWidth={2.5} />
               </div>
-              <span className="text-lg font-extrabold tracking-tight text-slate-900">CalServices</span>
+              <span className="text-lg font-extrabold tracking-tight text-slate-900">Sevo</span>
             </div>
 
             <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600">
@@ -1874,17 +2606,14 @@ export function LandingPage() {
             </nav>
 
             <div className="flex items-center gap-8">
-              {/* Location Selector Pill (Matching exact home page location view style) */}
+              {/* Location Selector Pill */}
               <button
                 type="button"
                 onClick={() => setShowLocationPickerModal(true)}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-extrabold transition-all cursor-pointer shadow-2xs max-w-[240px] sm:max-w-[340px] truncate ${zoneCheckResult && zoneCheckResult.in_zone === false
-                    ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
-                    : "border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-slate-800"
-                  }`}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-slate-800 text-xs font-bold transition-all cursor-pointer shadow-2xs max-w-[200px] sm:max-w-[280px] truncate"
                 title="Select Location"
               >
-                <MapPin className={`w-4 h-4 shrink-0 ${zoneCheckResult && zoneCheckResult.in_zone === false ? "text-red-500" : "text-indigo-600"}`} />
+                <MapPin className="w-4 h-4 shrink-0 text-indigo-600" />
                 <span className="truncate">
                   {(() => {
                     if (activeLocationLabel) return activeLocationLabel
@@ -1894,19 +2623,9 @@ export function LandingPage() {
                       if (locObj.label) return locObj.label
                     }
                     if (user?.address) return user.address
-                    return "Hosur, Tamil Nadu, India"
+                    return "Select Location"
                   })()}
                 </span>
-                {zoneCheckResult && zoneCheckResult.in_zone === false && (
-                  <span className="text-[9px] bg-red-200 text-red-800 font-black px-1.5 py-0.5 rounded-full shrink-0">
-                    Outside Area
-                  </span>
-                )}
-                {zoneCheckResult && zoneCheckResult.in_zone === true && zoneCheckResult.zone?.name && (
-                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-black px-1.5 py-0.5 rounded-full shrink-0">
-                    ✓ {zoneCheckResult.zone.name}
-                  </span>
-                )}
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-auto" />
               </button>
 
@@ -2020,32 +2739,131 @@ export function LandingPage() {
               {homeConfig.hero?.subtitle || "Quick booking. Quality work. Guaranteed satisfaction."}
             </p>
 
-            <form
-              onSubmit={(e) => { e.preventDefault(); goToBooking() }}
-              className="flex items-center bg-white rounded-2xl shadow-sm border border-slate-200 p-1.5 mb-6 max-w-xl"
-            >
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={homeConfig.hero?.searchPlaceholder || "What service do you need?"}
-                className="flex-1 bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-slate-400"
-              />
-              <LocationDropdown
-                className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3"
-                activeCity={activeLocationLabel ? (activeLocationLabel.includes("Hosur") ? "Hosur" : activeLocationLabel.includes("Coimbatore") ? "Coimbatore" : activeLocationLabel.includes("Chennai") ? "Chennai" : activeLocationLabel.includes("Bengaluru") ? "Bengaluru" : activeLocationLabel.includes("Salem") ? "Salem" : activeLocationLabel.split(",")[0]) : undefined}
-                onCityChange={(newCity) => {
-                  setActiveLocationLabel(newCity)
-                  localStorage.setItem("calservice_user_location", newCity)
-                }}
-              />
-              <button
-                type="submit"
-                aria-label="Search services"
-                className="ml-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl w-11 h-11 flex items-center justify-center shrink-0 transition-colors"
+            <div ref={searchContainerRef} className="relative w-full max-w-xl mb-6 z-30">
+              <form
+                onSubmit={(e) => { e.preventDefault(); goToBooking() }}
+                className={`flex items-center bg-white rounded-2xl border transition-all duration-200 p-1.5 shadow-sm ${
+                  isSearchOpen ? "border-teal-500 ring-4 ring-teal-500/10 shadow-md" : "border-slate-200 hover:border-slate-300"
+                }`}
               >
-                <Search className="w-4.5 h-4.5" />
-              </button>
-            </form>
+                <div className="pl-3 pr-1 text-slate-400">
+                  <Search className="w-5 h-5" />
+                </div>
+                <input
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value)
+                    if (!isSearchOpen) setIsSearchOpen(true)
+                  }}
+                  onFocus={() => setIsSearchOpen(true)}
+                  placeholder={homeConfig.hero?.searchPlaceholder || "What service do you need?"}
+                  className="flex-1 bg-transparent px-2.5 py-2.5 text-sm font-medium outline-none placeholder:text-slate-400 text-slate-800"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors mr-1 cursor-pointer"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                <LocationDropdown
+                  className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3"
+                  activeCity={activeLocationLabel ? (activeLocationLabel.includes("Hosur") ? "Hosur" : activeLocationLabel.split(",")[0]) : "Hosur"}
+                  onCityChange={(newCity) => {
+                    setActiveLocationLabel(newCity)
+                    localStorage.setItem("calservice_user_location", newCity)
+                  }}
+                />
+                <button
+                  type="submit"
+                  aria-label="Search services"
+                  className="ml-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl w-11 h-11 flex items-center justify-center shrink-0 transition-colors cursor-pointer shadow-sm hover:shadow active:scale-95"
+                >
+                  <Search className="w-4.5 h-4.5" />
+                </button>
+              </form>
+
+              {/* Live Auto-Suggest Search Results Dropdown */}
+              <AnimatePresence>
+                {isSearchOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden z-50 divide-y divide-slate-100 max-h-[380px] overflow-y-auto"
+                  >
+                    <div className="p-2.5 bg-slate-50/80 flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      <span>{query.trim() ? `Matching Services (${filteredSearchResults.length})` : "Popular & Trending Services"}</span>
+                      <span className="text-[10px] text-teal-600 font-semibold lowercase">Instant Booking</span>
+                    </div>
+
+                    {filteredSearchResults.length > 0 ? (
+                      <div className="p-1.5 space-y-1">
+                        {filteredSearchResults.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleExecuteSearch(item)}
+                            className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-teal-50/60 transition-colors text-left group cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-teal-100 flex items-center justify-center text-slate-600 group-hover:text-teal-700 shrink-0 transition-colors">
+                                {item.category === "Home Cleaning" && <Home className="w-4 h-4" />}
+                                {item.category === "Pest Control" && <SprayCan className="w-4 h-4" />}
+                                {item.category === "AC & Appliances" && <AirVent className="w-4 h-4" />}
+                                {item.category === "Electrical & Plumbing" && <Hammer className="w-4 h-4" />}
+                                {item.category === "Paintings" && <PaintRoller className="w-4 h-4" />}
+                                {item.category === "Goods & Transport" && <Boxes className="w-4 h-4" />}
+                                {item.category === "Food & Health" && <Carrot className="w-4 h-4" />}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-slate-800 group-hover:text-teal-900 truncate">
+                                    {item.title}
+                                  </span>
+                                  {item.badge && (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 shrink-0">
+                                      {item.badge}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-slate-500 block truncate">
+                                  {item.category} • {item.price}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center text-teal-600 font-bold text-xs shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-2">
+                              <span>Book</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-6 text-center text-slate-500">
+                        <p className="text-sm font-semibold text-slate-700 mb-1">No exact matches for &quot;{query}&quot;</p>
+                        <p className="text-xs text-slate-400 mb-3">Browse all available categories or try a different keyword.</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSearchOpen(false)
+                            setIsHomeServicesCombinedModalOpen(true)
+                          }}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          <span>Explore All Services</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs font-medium text-slate-500">
               {(homeConfig.hero?.quickBadges || []).map((badge, idx) => (
@@ -2060,33 +2878,51 @@ export function LandingPage() {
             </div>
           </div>
 
-          {/* Real photo collage */}
-          <div className="relative h-[420px] hidden sm:block">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 via-violet-50 to-orange-50 rounded-[3rem] -z-10" />
-            <img
-              src={homeConfig.hero?.collageImages_url?.[0] || homeConfig.hero?.collageImages?.[0] || "/mockups/service_hvac.png"}
-              onError={(e) => { e.currentTarget.src = "/mockups/service_hvac.png" }}
-              alt="Service photo 1"
-              className="absolute top-0 left-0 w-[62%] h-[65%] object-cover rounded-3xl shadow-lg border-4 border-white"
-            />
-            <img
-              src={homeConfig.hero?.collageImages_url?.[1] || homeConfig.hero?.collageImages?.[1] || "/mockups/service_electrical.png"}
-              onError={(e) => { e.currentTarget.src = "/mockups/service_electrical.png" }}
-              alt="Service photo 2"
-              className="absolute bottom-0 left-[8%] w-[48%] h-[45%] object-cover rounded-3xl shadow-lg border-4 border-white"
-            />
-            <img
-              src={homeConfig.hero?.collageImages_url?.[2] || homeConfig.hero?.collageImages?.[2] || "/mockups/service_cleaning.png"}
-              onError={(e) => { e.currentTarget.src = "/mockups/service_cleaning.png" }}
-              alt="Service photo 3"
-              className="absolute top-[8%] right-0 w-[46%] h-[52%] object-cover rounded-3xl shadow-lg border-4 border-white"
-            />
-            <img
-              src={homeConfig.hero?.collageImages_url?.[3] || homeConfig.hero?.collageImages?.[3] || "/mockups/service_plumbing.png"}
-              onError={(e) => { e.currentTarget.src = "/mockups/service_plumbing.png" }}
-              alt="Service photo 4"
-              className="absolute bottom-[4%] right-[2%] w-[42%] h-[42%] object-cover rounded-3xl shadow-lg border-4 border-white"
-            />
+          {/* Real photo collage - 4K Crisp Organic Layered Layout */}
+          <div className="relative h-[430px] hidden sm:block">
+            {/* Card 1: Top-Left (Hero Showcase) */}
+            <div className="absolute top-0 left-0 w-[60%] h-[61%] rounded-3xl overflow-hidden shadow-[0_10px_25px_rgba(15,23,42,0.12)] border-[3.5px] border-white ring-1 ring-slate-900/10 bg-white z-10 hover:z-30 hover:scale-[1.02] transition-all duration-300">
+              <img
+                src={resolveDisplayImageUrl(homeConfig.hero?.collageImages_url?.[0] || homeConfig.hero?.collageImages?.[0], "/mockups/service_hvac.png")}
+                onError={(e) => { e.currentTarget.src = "/mockups/service_hvac.png" }}
+                alt="Service photo 1"
+                className="w-full h-full object-cover object-left-top"
+                style={{ imageRendering: "-webkit-optimize-contrast" }}
+              />
+            </div>
+
+            {/* Card 3: Top-Right (Transport & Logistics) */}
+            <div className="absolute top-[4%] right-0 w-[47%] h-[49%] rounded-3xl overflow-hidden shadow-[0_10px_25px_rgba(15,23,42,0.12)] border-[3.5px] border-white ring-1 ring-slate-900/10 bg-white z-10 hover:z-30 hover:scale-[1.02] transition-all duration-300">
+              <img
+                src={resolveDisplayImageUrl(homeConfig.hero?.collageImages_url?.[2] || homeConfig.hero?.collageImages?.[2], "/mockups/service_cleaning.png")}
+                onError={(e) => { e.currentTarget.src = "/mockups/service_cleaning.png" }}
+                alt="Service photo 3"
+                className="w-full h-full object-cover object-center"
+                style={{ imageRendering: "-webkit-optimize-contrast" }}
+              />
+            </div>
+
+            {/* Card 2: Bottom-Left (Home Appliance Repair) */}
+            <div className="absolute bottom-0 left-[5%] w-[51%] h-[46%] rounded-3xl overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.16)] border-[3.5px] border-white ring-1 ring-slate-900/10 bg-white z-20 hover:z-30 hover:scale-[1.02] transition-all duration-300">
+              <img
+                src={resolveDisplayImageUrl(homeConfig.hero?.collageImages_url?.[1] || homeConfig.hero?.collageImages?.[1], "/mockups/service_electrical.png")}
+                onError={(e) => { e.currentTarget.src = "/mockups/service_electrical.png" }}
+                alt="Service photo 2"
+                className="w-full h-full object-cover object-center"
+                style={{ imageRendering: "-webkit-optimize-contrast" }}
+              />
+            </div>
+
+            {/* Card 4: Bottom-Right (Plumbing & Electrical) */}
+            <div className="absolute bottom-[2%] right-[1%] w-[45%] h-[45%] rounded-3xl overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.16)] border-[3.5px] border-white ring-1 ring-slate-900/10 bg-white z-20 hover:z-30 hover:scale-[1.02] transition-all duration-300">
+              <img
+                src={resolveDisplayImageUrl(homeConfig.hero?.collageImages_url?.[3] || homeConfig.hero?.collageImages?.[3], "/mockups/service_plumbing.png")}
+                onError={(e) => { e.currentTarget.src = "/mockups/service_plumbing.png" }}
+                alt="Service photo 4"
+                className="w-full h-full object-cover object-center"
+                style={{ imageRendering: "-webkit-optimize-contrast" }}
+              />
+            </div>
           </div>
         </section>
 
@@ -2096,28 +2932,37 @@ export function LandingPage() {
             <h2 className="text-xl font-bold text-slate-900">Browse by Category</h2>
           </div>
 
-          {/* Dynamic Category Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl">
+          {/* Dynamic Category Cards - One Single Line on Desktop */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5 w-full">
             {(homeConfig.categories || []).filter(c => c.enabled !== false && c.is_enabled !== false).map((cat, idx) => {
               const defaultCatImgs = [
                 "/mockups/category_for_you.png",
                 "/mockups/category_food_health.png",
-                "/mockups/category_home_transport.png"
+                "/mockups/category_home_transport.png",
+                "/mockups/service_transport.jpg"
               ]
               const fallbackCatImg = defaultCatImgs[idx % defaultCatImgs.length]
-              const displayImg = (cat.image_url && cat.image_url.trim()) || (cat.image && cat.image.trim()) || fallbackCatImg
+              const displayImg = resolveDisplayImageUrl(cat.image_url || cat.image, fallbackCatImg)
               return (
                 <button
                   key={cat.id || idx}
                   type="button"
                   onClick={() => {
-                    if (idx === 0) setIsForYouModalOpen(true)
-                    else if (idx === 1) { setSelectedFoodSubModuleId(null); setIsFoodHealthModalOpen(true) }
-                    else setIsHomeServicesCombinedModalOpen(true)
+                    const titleLower = (cat.title || "").toLowerCase()
+                    if (cat.id === "cat-1" || titleLower.includes("for you") || idx === 0) {
+                      setIsForYouModalOpen(true)
+                    } else if (cat.id === "cat-2" || titleLower.includes("food") || titleLower.includes("health") || titleLower.includes("grocer") || idx === 1) {
+                      setSelectedFoodSubModuleId(null)
+                      setIsFoodHealthModalOpen(true)
+                    } else if (cat.id === "cat-4" || titleLower.includes("transport") || titleLower.includes("truck") || titleLower.includes("goods") || titleLower.includes("mover") || idx === 3) {
+                      navigate("/trucks/hosur")
+                    } else {
+                      setIsHomeServicesCombinedModalOpen(true)
+                    }
                   }}
-                  className="group flex flex-col bg-white rounded-2xl border border-slate-100 hover:border-emerald-500 overflow-hidden text-center hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
+                  className="group flex flex-col bg-white rounded-2xl border border-slate-200 hover:border-emerald-500 overflow-hidden text-center hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer shadow-xs"
                 >
-                  <div className="h-28 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
+                  <div className="h-32 sm:h-36 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
                     <img
                       src={displayImg}
                       onError={(e) => { e.currentTarget.src = fallbackCatImg }}
@@ -2125,16 +2970,16 @@ export function LandingPage() {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                     {cat.badge && (
-                      <span className="absolute top-2 left-2 bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                      <span className="absolute top-2.5 left-2.5 bg-emerald-600/95 backdrop-blur-xs text-white text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-xs">
                         {cat.badge}
                       </span>
                     )}
                   </div>
-                  <div className="p-3">
-                    <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors block truncate">
+                  <div className="p-3.5 sm:p-4 flex flex-col justify-center flex-1">
+                    <span className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-emerald-700 transition-colors block truncate">
                       {cat.title}
                     </span>
-                    <span className="text-[11px] text-slate-500 font-medium mt-0.5 block truncate">
+                    <span className="text-xs text-slate-500 font-medium mt-1 block truncate">
                       {cat.subtitle}
                     </span>
                   </div>
@@ -2517,8 +3362,8 @@ export function LandingPage() {
                           goToCategoryServices(item.cat, `${item.name} Services`)
                         }}
                         className={`group relative flex flex-col items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
-                            ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                            : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
+                          ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                          : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
                           }`}
                       >
                         <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative">
@@ -2621,8 +3466,8 @@ export function LandingPage() {
                           goToCategoryServices(item.cat, item.subTab)
                         }}
                         className={`group relative flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
-                            ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                            : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
+                          ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                          : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
                           }`}
                       >
                         <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative">
@@ -2723,8 +3568,8 @@ export function LandingPage() {
                           navigate(item.route)
                         }}
                         className={`group relative flex flex-col items-center justify-between p-2.5 sm:p-3 rounded-2xl transition-all text-center focus:outline-none cursor-pointer border-2 ${isAvailable
-                            ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
-                            : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
+                          ? "border-transparent hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-md"
+                          : "border-slate-200/60 bg-slate-50/50 opacity-60 cursor-pointer"
                           }`}
                       >
                         <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100/80 border border-slate-200/60 group-hover:bg-slate-200/80 flex items-center justify-center p-2 group-hover:scale-105 transition-all relative">
@@ -2878,8 +3723,8 @@ export function LandingPage() {
                                 type="button"
                                 onClick={() => setVegCategoryFilter(cat)}
                                 className={`px-3 py-1 rounded-full text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${vegCategoryFilter === cat
-                                    ? "bg-emerald-600 text-white shadow-xs"
-                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                  ? "bg-emerald-600 text-white shadow-xs"
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                   }`}
                               >
                                 {cat}
@@ -3460,8 +4305,8 @@ export function LandingPage() {
                         })
                       }}
                       className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                          ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
-                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
                         }`}
                     >
                       <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
@@ -3621,13 +4466,13 @@ export function LandingPage() {
 
                 <div className="text-center mb-8">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-extrabold uppercase tracking-wider mb-2">
-                    ⚡ 6 Core Specialized Pillars
+                    ⚡ 5 Core Specialized Pillars
                   </div>
                   <h3
                     id="home-combined-modal-title"
                     className="text-xl sm:text-2xl font-extrabold text-slate-900"
                   >
-                    Home, Repair &amp; Transport Services
+                    Home &amp; Repair Services
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg mx-auto">
                     Select any service below to explore specific options, verified technicians, and transparent pricing.
@@ -3651,8 +4496,8 @@ export function LandingPage() {
                   </div>
                 )}
 
-                {/* 6 Combined Services Grid matching the exact items from the 3rd image */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
+                {/* 5 Combined Services Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
                   {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => {
                     const isAvailable = isServiceAvailableInZone(label)
                     return (
@@ -3839,47 +4684,58 @@ export function LandingPage() {
         </section>
 
         {/* ── Testimonials ───────────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">{homeConfig.testimonials?.title || "What Our Customers Say"}</h2>
-            <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">{homeConfig.testimonials?.viewAllText || "View all reviews →"}</a>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setTestimonialIdx((i) => (i - 1 + (homeConfig.testimonials?.reviews?.length || 1)) % (homeConfig.testimonials?.reviews?.length || 1))}
-              className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="grid sm:grid-cols-3 gap-5 flex-1">
-              {(homeConfig.testimonials?.reviews || []).map((t, i) => (
-                <div key={t.id || i} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                      {t.initials}
-                    </span>
-                    <div className="flex gap-0.5 text-amber-400">
-                      {Array.from({ length: t.rating || 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
+        {(() => {
+          const testimonialList = (homeConfig.testimonials?.reviews && homeConfig.testimonials.reviews.length > 0)
+            ? homeConfig.testimonials.reviews
+            : TESTIMONIALS;
+          const listLength = testimonialList.length || 1;
+
+          return (
+            <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">{homeConfig.testimonials?.title || "What Our Customers Say"}</h2>
+                <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">{homeConfig.testimonials?.viewAllText || "View all reviews →"}</a>
+              </div>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setTestimonialIdx((i) => (i - 1 + listLength) % listLength)}
+                  className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
+                  aria-label="Previous Testimonial"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div className="grid sm:grid-cols-3 gap-5 flex-1">
+                  {testimonialList.map((t, i) => (
+                    <div key={t.id || i} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                          {t.initials || (t.name ? t.name.charAt(0) : "U")}
+                        </span>
+                        <div className="flex gap-0.5 text-amber-400">
+                          {Array.from({ length: t.rating || 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
+                        </div>
+                      </div>
+                      <p className="text-sm text-slate-600 mb-3 leading-relaxed">{t.text}</p>
+                      <p className="text-sm font-bold text-slate-800">&mdash; {t.name}</p>
                     </div>
-                  </div>
-                  <p className="text-sm text-slate-600 mb-3 leading-relaxed">{t.text}</p>
-                  <p className="text-sm font-bold text-slate-800">&mdash; {t.name}</p>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setTestimonialIdx((i) => (i + 1) % TESTIMONIALS.length)}
-              className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex justify-center gap-1.5 mt-6">
-            {TESTIMONIALS.map((_, i) => (
-              <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === testimonialIdx ? "bg-teal-600" : "bg-slate-200"}`} />
-            ))}
-          </div>
-        </section>
+                <button
+                  onClick={() => setTestimonialIdx((i) => (i + 1) % listLength)}
+                  className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
+                  aria-label="Next Testimonial"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex justify-center gap-1.5 mt-6">
+                {testimonialList.map((_, i) => (
+                  <span key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === testimonialIdx ? "bg-teal-600 w-3" : "bg-slate-200"}`} />
+                ))}
+              </div>
+            </section>
+          );
+        })()}
 
         {/* ── App Download Banner & Full Footer with Legal & Support Links ── */}
         {!activeCategory && <AppBannerAndFooter />}
@@ -5331,21 +6187,21 @@ export function LandingPage() {
 
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-extrabold uppercase tracking-wider mb-2">
-                  ⚡ 6 Core Specialized Pillars
+                  ⚡ 5 Core Specialized Pillars
                 </div>
                 <h3
                   id="home-combined-modal-title"
                   className="text-xl sm:text-2xl font-extrabold text-slate-900"
                 >
-                  Home, Repair &amp; Transport Services
+                  Home &amp; Repair Services
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg mx-auto">
                   Select any service below to explore specific options, verified technicians, and transparent pricing.
                 </p>
               </div>
 
-              {/* 6 Combined Services Grid matching the exact items from the 3rd image */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
+              {/* 5 Combined Services Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
                 {CATEGORIES.map(({ label, icon: Icon, photo, serviceCategoryId }) => (
                   <button
                     key={label}

@@ -45,12 +45,22 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
     },
     {
       id: "cat-3",
-      title: "Home, Repair & Transport Services",
-      subtitle: "Cleaning, repairs, painting & logistics",
-      badge: "8 Services",
+      title: "Home & Repair Services",
+      subtitle: "Cleaning, repairs, painting & masonry",
+      badge: "5 Services",
       badgeColor: "blue",
       image: "/mockups/category_home_transport.png",
       link: "/booking?category=home_repairs",
+      enabled: true
+    },
+    {
+      id: "cat-4",
+      title: "Goods & Transport",
+      subtitle: "Mini trucks, 2-wheelers & logistics",
+      badge: "Transport",
+      badgeColor: "teal",
+      image: "/mockups/service_transport.jpg",
+      link: "/logistics",
       enabled: true
     }
   ],
@@ -262,14 +272,14 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
         initials: "PM",
         name: "Priya M.",
         rating: 5,
-        text: "Great experience with the painting service. Highly recommend CalServices!",
+        text: "Great experience with the painting service. Highly recommend Sevo!",
         cat: "painting",
         badgeColor: "bg-teal-600"
       }
     ]
   },
   footer: {
-    brandName: "CalServices",
+    brandName: "Sevo",
     tagline: "Your trusted partner for all home services. Quality you can count on.",
     servicesColTitle: "Services",
     servicesLinks: [
@@ -302,13 +312,39 @@ export function getHomePageConfig() {
   return DEFAULT_HOME_PAGE_CONFIG
 }
 
+export function resolveDisplayImageUrl(path, fallback = "") {
+  if (!path || typeof path !== "string") return fallback
+  const trimmed = path.trim()
+  if (!trimmed) return fallback
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("/mockups/") ||
+    trimmed.startsWith("mockups/") ||
+    trimmed.startsWith("/assets/") ||
+    trimmed.startsWith("assets/") ||
+    trimmed.startsWith("/media/") ||
+    trimmed.startsWith("media/")
+  ) {
+    return trimmed.startsWith("/") || trimmed.startsWith("http") || trimmed.startsWith("data:") ? trimmed : `/${trimmed}`
+  }
+  if (trimmed.startsWith("homepage/")) {
+    return `/media/${trimmed}`
+  }
+  return `https://zqghatybqkztzgjmmlpl.supabase.co/storage/v1/object/public/admin-media/${trimmed.replace(/^\//, "")}`
+}
+
 function mergeWithDefaultConfig(parsed) {
   if (!parsed) return DEFAULT_HOME_PAGE_CONFIG
 
   const parsedHero = parsed.hero || {}
   const rawCollage = Array.isArray(parsedHero.collageImages) ? parsedHero.collageImages : []
   const defaultCollage = DEFAULT_HOME_PAGE_CONFIG.hero.collageImages
-  const mergedCollage = [0, 1, 2, 3].map((i) => rawCollage[i] || defaultCollage[i])
+  const mergedCollage = [0, 1, 2, 3].map((i) => {
+    const rawVal = rawCollage[i] || defaultCollage[i]
+    return resolveDisplayImageUrl(rawVal, defaultCollage[i])
+  })
 
   const defaultCategoryImages = [
     "/mockups/category_for_you.png",
@@ -316,16 +352,21 @@ function mergeWithDefaultConfig(parsed) {
     "/mockups/category_home_transport.png"
   ]
   const rawCategories = Array.isArray(parsed.categories) && parsed.categories.length > 0 ? parsed.categories : DEFAULT_HOME_PAGE_CONFIG.categories
-  const mergedCategories = rawCategories.map((cat, idx) => ({
-    ...cat,
-    image: (cat.image && cat.image.trim()) || (cat.image_url && cat.image_url.trim()) || defaultCategoryImages[idx % defaultCategoryImages.length]
-  }))
+  const mergedCategories = rawCategories.map((cat, idx) => {
+    const fallbackImg = defaultCategoryImages[idx % defaultCategoryImages.length]
+    const resolved = resolveDisplayImageUrl(cat.image || cat.image_url, fallbackImg)
+    return {
+      ...cat,
+      image: resolved,
+      image_url: resolved
+    }
+  })
 
   return {
     ...DEFAULT_HOME_PAGE_CONFIG,
     ...parsed,
-    hero: { 
-      ...DEFAULT_HOME_PAGE_CONFIG.hero, 
+    hero: {
+      ...DEFAULT_HOME_PAGE_CONFIG.hero,
       ...parsedHero,
       collageImages: mergedCollage
     },
@@ -388,7 +429,9 @@ export async function publishHomePageConfig(newConfig) {
 }
 
 export function saveHomePageConfig(newConfig) {
-  window.dispatchEvent(new CustomEvent("calservices:homepage_updated", { detail: newConfig }))
+  const merged = mergeWithDefaultConfig(newConfig)
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+  window.dispatchEvent(new CustomEvent("calservices:homepage_updated", { detail: merged }))
   publishHomePageConfig(newConfig)
   return true
 }

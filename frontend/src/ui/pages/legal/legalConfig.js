@@ -3,7 +3,7 @@ import { apiRequest } from "../../../api/client.js";
 
 export const DEFAULT_LEGAL_CONFIG = {
   company_legal_name: "CALDIM ENGINEERING PRIVATE LIMITED",
-  brand_name: "CalServices",
+  brand_name: "Sevo",
   cin: "U72900KA2026PTC123456",
   gstin: "33AAGCC4916J1ZP",
   registered_address: "Minmac center #118, First Floor, Arcot Road, Valasaravakkam, Chennai - 600087, Tamil Nadu, India",

@@ -42,13 +42,8 @@ export function applyFontSize(size) {
 
 export function initTheme() {
   const prefs = loadPrefs()
-  
-  // Force reset theme to 'light' (white color scheme) to satisfy user request
-  prefs.theme = "light"
-  savePrefs(prefs)
-  localStorage.setItem("quicktims.theme", "light")
-
-  applyTheme("light")
+  const theme = prefs.theme || "light"
+  applyTheme(theme)
   
   if (prefs.accent) {
     const ACCENT_MAP = {
@@ -63,6 +58,9 @@ export function initTheme() {
 
   // Re-apply if system preference changes at runtime
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    applyTheme("light")
+    const current = loadPrefs()
+    if (current.theme === "system") {
+      applyTheme("system")
+    }
   })
 }

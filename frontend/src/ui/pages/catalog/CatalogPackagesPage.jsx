@@ -1010,12 +1010,6 @@ const STATIC_SERVICE_DETAIL_DATA = {
     ]
   },
   "bath-exhaust-fan": {
-    bathroomRates: [
-      { label: "1 Fan", price: 89 },
-      { label: "2 Fans", price: 178 },
-      { label: "3 Fans", price: 267 },
-      { label: "4 Fans", price: 356 }
-    ]
   },
   "pest-kb-main": {
     rates: [
@@ -1828,7 +1822,7 @@ export function CatalogPackagesPage() {
       if (svc.slug === "sofa-cleaning") {
         const addonPkgs = packages.filter((p) =>
           p.slug.startsWith("quick-") ||
-          p.slug.startsWith("fridge-") ||
+          (p.slug.startsWith("fridge-") && (p.slug === "fridge-clean" || p.slug === "fridge-single" || p.slug === "fridge-double" || p.slug === "fridge-triple")) ||
           p.slug.startsWith("sink-") ||
           p.slug.startsWith("dining-") ||
           p.slug.startsWith("fan-") ||
@@ -2342,17 +2336,17 @@ export function CatalogPackagesPage() {
         const groups = [
           {
             subSlug: "packages",
-            displayName: "Bathroom Cleaning Packages",
+            displayName: "Full Clean",
             filterFn: (p) => p.slug === "bath-deep-clean" || p.slug === "bath-intense-clean",
           },
           {
             subSlug: "subscription",
-            displayName: "Weekly Subscription Cleaning",
+            displayName: "Weekly Bathroom Cleaning Subscription",
             filterFn: (p) => p.slug.includes("sub-bath"),
           },
           {
             subSlug: "minis",
-            displayName: "Quick extra service",
+            displayName: "Quick Extra Services",
             filterFn: (p) => !p.slug.includes("sub-bath") && p.slug !== "bath-deep-clean" && p.slug !== "bath-intense-clean",
           }
         ]
@@ -2568,12 +2562,70 @@ export function CatalogPackagesPage() {
       STATIC_SERVICE_DETAIL_DATA[pkg.id] || 
       {}
 
+    const DEFAULT_STATIC_PACKAGE_IMAGES = {
+      // Kitchen cleaning tabs: single appliance cleaning, Cabinet & Tile Care, Quick Extra Services
+      "fridge-clean": "/mockups/appliance_cleaning_thumb.png",
+      "fridge-parent": "/mockups/appliance_cleaning_thumb.png",
+      "fridge-single": "/mockups/fridge_single_door.jpg",
+      "fridge-double": "/mockups/fridge_double_door.jpg",
+      "fridge-triple": "/mockups/fridge_triple_door.jpg",
+      "microwave-clean": "/mockups/microwave_clean.png",
+      "kitchen-microwave-clean": "/mockups/microwave_clean.png",
+      "chimney-clean": "/mockups/chimney_clean.png",
+      "chimney-stove-clean": "/mockups/chimney_stove_clean.png",
+      "stove-clean": "/mockups/gas_stove_clean.png",
+      "stove-parent": "/mockups/gas_stove_clean.png",
+      "stove-2b": "/mockups/stove_2b.jpg",
+      "stove-3b": "/mockups/stove_3b.jpg",
+      "stove-4b": "/mockups/stove_4b.jpg",
+      "dishwasher-clean": "/mockups/dishwasher_clean.png",
+      "air-fryer-clean": "/mockups/air_fryer_clean.png",
+      "otg-clean": "/mockups/otg_clean.png",
+      "sandwich-clean": "/mockups/sandwich_griller.png",
+      "kitchen-tiles-slabs": "/mockups/kitchen_tiles_slabs_clean.png",
+      "cabinet-trolley-clean": "/mockups/cabinet_trolley_clean.png",
+      "quick-sink-under-sink": "/mockups/washbasin.png",
+      "quick-kitchen-window": "/mockups/washbasin.png", // uses same fallback structure
+      "quick-dining-table": "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=600&q=80&fit=crop",
+      "quick-fan-clean": "/mockups/ceiling_fan.png",
+      "quick-exhaust-fan-clean": "/mockups/exhaust_fan.png",
+      "quick-balcony-upto-4ft": "/mockups/ceiling_fan.png",
+      "quick-balcony-above-4ft": "/mockups/ceiling_fan.png",
+      "quick-door-clean": "/mockups/door_cleaning.png",
+      "occ-basic": "/mockups/kitchen_basic_cleaning.png",
+      "occ-deep": "https://images.unsplash.com/photo-1556912173-3bb406ef7e77?w=600&q=80&fit=crop",
+      "empty-kitchen": "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=600&q=80&fit=crop",
+
+      // Sofa cleaning tabs: quick extra services + sofas/mattresses/carpets
+      "fabric-sofa-clean": "/mockups/sofa_cleaning.png",
+      "fabric-sofa-cushion-clean": "/mockups/sofa_cleaning.png",
+      "leather-sofa-clean": "/mockups/leather_sofa_cleaning.png",
+      "leather-sofa-cushion-clean": "/mockups/leather_sofa_cleaning.png",
+      "mattress-deep": "/mockups/mattress_deep_cleaning.png",
+      "mattress-pillow-refresh": "/mockups/mattress_pillow_refresh.png",
+      "carpet-deep": "/mockups/carpet_cleaning.png",
+
+      // Bathroom cleaning tabs: Full Clean, Subscription, Minis (Quick extra service)
+      "bath-deep-clean": "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=300&q=80&fit=crop",
+      "bath-intense-clean": "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=300&q=80&fit=crop",
+      "bath-exhaust-fan": "/mockups/exhaust_fan.png",
+      "bath-washbasin-add": "/mockups/washbasin.png",
+      "bath-ceiling-fan": "/mockups/ceiling_fan.png",
+      "bath-door-add": "/mockups/bath_door.png",
+      "bath-mirror-add": "/mockups/mirror_cleaning.png",
+      "bath-drain-clean": "/mockups/drain_clean.png",
+      "sub-bath-machine": "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=300&q=80&fit=crop",
+      "sub-bath-hands-on": "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=300&q=80&fit=crop"
+    }
+
     setQuickPriceEditing({
       ...pkg,
       base_price: Math.round(Number(pkg.base_price) || 0),
+      gst_rate: pkg.gst_rate !== undefined && pkg.gst_rate !== null ? parseFloat(pkg.gst_rate) : 18,
+      platform_fee: pkg.platform_fee !== undefined && pkg.platform_fee !== null ? parseFloat(pkg.platform_fee) : 29,
       tag: pkg.tag || (pkg.popular ? "Popular" : ""),
       checklist: items,
-      image: pkg.image || "",
+      image: pkg.image || DEFAULT_STATIC_PACKAGE_IMAGES[slug] || DEFAULT_STATIC_PACKAGE_IMAGES[pkg.id] || "",
       sort_order: pkg.sort_order || 0,
       button_text: pkg.button_text || "Add",
       icon: pkg.icon || "",
@@ -2633,6 +2685,8 @@ export function CatalogPackagesPage() {
         name: quickPriceEditing.name,
         description: quickPriceEditing.description || "",
         base_price: Math.round(Number(quickPriceEditing.base_price) || 0),
+        gst_rate: quickPriceEditing.gst_rate !== undefined && quickPriceEditing.gst_rate !== "" ? parseFloat(quickPriceEditing.gst_rate) : 18.0,
+        platform_fee: quickPriceEditing.platform_fee !== undefined && quickPriceEditing.platform_fee !== "" ? parseFloat(quickPriceEditing.platform_fee) : 29.0,
         tag: quickPriceEditing.tag || "",
         popular: isPop,
         duration: quickPriceEditing.duration || "",
@@ -3307,8 +3361,13 @@ export function CatalogPackagesPage() {
 
                               {/* Starting Fare / Price */}
                               <td className="py-3.5 px-4 sm:px-5">
-                                <div className="inline-flex items-center gap-1 text-sm font-extrabold text-indigo-700 bg-blue-50/80 border border-indigo-200/90 px-2.5 py-1 rounded-lg">
-                                  <span>₹{Math.round(Number(pkg.base_price) || 0).toLocaleString("en-IN")}</span>
+                                <div className="inline-flex flex-col items-start gap-1">
+                                  <div className="inline-flex items-center gap-1 text-sm font-extrabold text-indigo-700 bg-blue-50/80 border border-indigo-200/90 px-2.5 py-1 rounded-lg">
+                                    <span>₹{Math.round(Number(pkg.base_price) || 0).toLocaleString("en-IN")}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 font-semibold pl-0.5">
+                                    +{pkg.gst_rate !== undefined ? pkg.gst_rate : 18}% GST • ₹{pkg.platform_fee !== undefined ? pkg.platform_fee : 29} fee
+                                  </span>
                                 </div>
                               </td>
 
@@ -5140,6 +5199,50 @@ export function CatalogPackagesPage() {
                   setQuickPriceEditing({ ...quickPriceEditing, duration: e.target.value })
                 }
               />
+            </div>
+
+            {/* GST & Platform Fee Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="GST Percentage (%)"
+                type="number"
+                step="0.01"
+                placeholder="e.g. 18"
+                value={quickPriceEditing.gst_rate ?? 18}
+                onChange={(e) =>
+                  setQuickPriceEditing({ ...quickPriceEditing, gst_rate: e.target.value })
+                }
+              />
+              <Input
+                label="Platform / Convenience Fee (₹)"
+                type="number"
+                step="0.01"
+                placeholder="e.g. 29"
+                value={quickPriceEditing.platform_fee ?? 29}
+                onChange={(e) =>
+                  setQuickPriceEditing({ ...quickPriceEditing, platform_fee: e.target.value })
+                }
+              />
+            </div>
+
+            {/* Customer Price Calculation Live Preview Card */}
+            <div className="p-3.5 bg-gradient-to-r from-blue-50/80 via-indigo-50/70 to-blue-50/80 rounded-xl border border-indigo-100/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-0.5">
+                <span className="font-bold text-indigo-950">Customer Bill Preview:</span>
+                <div className="text-[11px] text-slate-600 font-medium flex items-center gap-2 flex-wrap">
+                  <span>Base: ₹{Math.round(Number(quickPriceEditing.base_price) || 0)}</span>
+                  <span>+</span>
+                  <span className="text-indigo-700 font-bold">GST ({Number(quickPriceEditing.gst_rate) || 18}%): ₹{Math.round((Number(quickPriceEditing.base_price) || 0) * ((Number(quickPriceEditing.gst_rate) || 18) / 100))}</span>
+                  <span>+</span>
+                  <span className="text-emerald-700 font-bold">Platform Fee: ₹{Math.round(Number(quickPriceEditing.platform_fee) || 29)}</span>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 block">Total Customer Price</span>
+                <span className="text-sm font-black text-indigo-900">
+                  ₹{Math.round(Number(quickPriceEditing.base_price) || 0) + Math.round((Number(quickPriceEditing.base_price) || 0) * ((Number(quickPriceEditing.gst_rate) || 18) / 100)) + Math.round(Number(quickPriceEditing.platform_fee) || 29)}
+                </span>
+              </div>
             </div>
 
             <div>

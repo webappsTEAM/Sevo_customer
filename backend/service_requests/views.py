@@ -403,6 +403,7 @@ class BookingCreateView(APIView):
             data={
                 "request_id": sr.request_id,
                 "id": sr.id,
+                "customer_id": sr.customer.customer_id if (sr.customer and hasattr(sr.customer, "customer_id")) else None,
                 "payment_method": sr.payment_method,
                 "payment_status": sr.payment_status,
                 "booking_status": sr.status,
@@ -974,6 +975,7 @@ class AdminSRListView(APIView):
         if search_param:
             qs = qs.filter(
                 Q(request_id__icontains=search_param) |
+                Q(customer__customer_id__icontains=search_param) |
                 Q(customer_name__icontains=search_param) |
                 Q(phone__icontains=search_param) |
                 Q(issue_title__icontains=search_param)

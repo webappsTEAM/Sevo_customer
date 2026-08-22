@@ -21,7 +21,7 @@ export function CancellationRefundPage() {
             <span>Fair &amp; Transparent Cancellation Rules</span>
           </div>
           <p>
-            At <strong>CalServices</strong> (operated by <strong>{config.company_legal_name}</strong>), we understand that schedules change. Our cancellation and refund policy balances customer flexibility with fair compensation for dispatched service professionals.
+            At <strong>Sevo</strong> (operated by <strong>{config.company_legal_name}</strong>), we understand that schedules change. Our cancellation and refund policy balances customer flexibility with fair compensation for dispatched service professionals.
           </p>
         </div>
 
@@ -81,7 +81,7 @@ export function CancellationRefundPage() {
           <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
             <li>You can easily reschedule your booking to another available time slot directly through the customer portal or mobile app.</li>
             <li>Rescheduling is free of charge when requested before the service professional departs for your location.</li>
-            <li>If a technician is unable to fulfill a confirmed slot due to an emergency, CalServices will notify you immediately and auto-reassign another top-rated professional or suggest alternate slots.</li>
+            <li>If a technician is unable to fulfill a confirmed slot due to an emergency, Sevo will notify you immediately and auto-reassign another top-rated professional or suggest alternate slots.</li>
           </ul>
         </section>
 
@@ -109,7 +109,7 @@ export function CancellationRefundPage() {
           </h2>
           <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
             <li><strong>Original Payment Method:</strong> All eligible refunds for online transactions are credited back to the original funding source (Card / UPI / NetBanking).</li>
-            <li><strong>Processing Timeline:</strong> CalServices initiates approved refunds within <strong>24 to 48 hours</strong>. Depending on your issuing bank or payment provider, credits typically reflect in your account within <strong>3 to 7 business days</strong>.</li>
+            <li><strong>Processing Timeline:</strong> Sevo initiates approved refunds within <strong>24 to 48 hours</strong>. Depending on your issuing bank or payment provider, credits typically reflect in your account within <strong>3 to 7 business days</strong>.</li>
             <li><strong>Cash on Delivery (COD):</strong> For COD cancellations, no advance refund is necessary as payment is collected only on completion.</li>
           </ul>
         </section>

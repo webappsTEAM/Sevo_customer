@@ -18,30 +18,36 @@ const CHANNELS = [
 
 const EVENT_GROUPS = [
   {
+    group: "Service & Bookings",
+    color: "#059669",
+    events: [
+      { key: "new_bookings", label: "New customer booking", desc: "Instant notification when a customer places a new service booking.", email: true, inapp: true, sms: true },
+      { key: "cancellation_alerts", label: "Booking cancellation & reschedule", desc: "Alert when a booking is cancelled or rescheduled.", email: true, inapp: true, sms: true },
+      { key: "completion_alerts", label: "Job completion & invoicing", desc: "Notification when a technician marks a service complete with generated invoice.", email: true, inapp: true, sms: false },
+    ],
+  },
+  {
+    group: "Customer Care & Dispatch",
+    color: "#D97706",
+    events: [
+      { key: "complaint_alerts", label: "Customer complaints & escalations", desc: "Urgent alerts when a customer files a complaint or submits a negative rating.", email: true, inapp: true, sms: true },
+      { key: "unassigned_alerts", label: "Unassigned booking warning", desc: "Alert when an upcoming booking has no technician assigned 30 mins before schedule.", email: true, inapp: true, sms: false },
+    ],
+  },
+  {
     group: "Security & Account",
     color: "#DC2626",
     events: [
-      { key: "security_alerts", label: "Security alerts", desc: "Suspicious login attempts or policy violations.", email: true, inapp: true, sms: true },
-      { key: "login_alerts", label: "Login from new device", desc: "Notify when your account is accessed from a new location.", email: true, inapp: true, sms: false },
+      { key: "security_alerts", label: "Security alerts", desc: "Suspicious login attempts, MFA triggers, or policy violations.", email: true, inapp: true, sms: true },
+      { key: "login_alerts", label: "Login from new device", desc: "Notify when your admin account is accessed from a new device or IP.", email: true, inapp: true, sms: false },
     ],
   },
   {
-    group: "Workforce",
-    color: "#1A56DB",
-    events: [
-      { key: "leave_updates", label: "Leave request updates", desc: "Approval, rejection, or changes to leave requests.", email: true, inapp: true, sms: false },
-      { key: "task_assigned", label: "Task assigned", desc: "When a new task is assigned to you.", email: true, inapp: true, sms: false },
-      { key: "shift_reminders", label: "Shift reminders", desc: "Upcoming shift start notifications.", email: true, inapp: true, sms: true },
-      { key: "payroll_ready", label: "Payslip ready", desc: "When your payroll period is processed.", email: true, inapp: true, sms: false },
-    ],
-  },
-  {
-    group: "Digests & Updates",
+    group: "Reports & Digests",
     color: "#7C3AED",
     events: [
-      { key: "weekly_digest", label: "Weekly digest", desc: "Summary of your team's activity each week.", email: true, inapp: false, sms: false },
-      { key: "product_updates", label: "Product updates", desc: "New features and platform improvements.", email: true, inapp: false, sms: false },
-      { key: "announcements", label: "Workspace announcements", desc: "Important messages from admins.", email: false, inapp: true, sms: false },
+      { key: "weekly_digest", label: "Weekly business digest", desc: "Summary of bookings, revenue, and active coverage zones each week.", email: true, inapp: false, sms: false },
+      { key: "announcements", label: "System announcements", desc: "Platform maintenance notices and operational hub updates.", email: false, inapp: true, sms: false },
     ],
   },
 ]
@@ -61,7 +67,14 @@ export default function NotificationsSection({ showToast, SectionHeader }) {
 
   const getPref = (channel, eventKey) => {
     const key = `${channel}_${eventKey}`
-    return prefs[key] ?? false
+    if (prefs[key] !== undefined && prefs[key] !== null) {
+      return prefs[key]
+    }
+    if (["new_bookings", "cancellation_alerts", "complaint_alerts", "unassigned_alerts", "completion_alerts", "security_alerts", "login_alerts"].includes(eventKey)) {
+      if (channel === "email" || channel === "inapp") return true
+      if (channel === "sms" && (eventKey === "new_bookings" || eventKey === "complaint_alerts")) return true
+    }
+    return false
   }
 
   const setPref = (channel, eventKey, value) => {

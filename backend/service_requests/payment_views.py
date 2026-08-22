@@ -106,7 +106,7 @@ class PaymentVerifyView(APIView):
         sr.transaction_id = payment_id or f"TXN_{uuid.uuid4().hex[:12].upper()}"
         sr.payment_gateway = "gateway"
         if not sr.invoice_id:
-            sr.invoice_id = f"INV-{sr.request_id.replace('SR-', '')}-{uuid.uuid4().hex[:6].upper()}"
+            sr.invoice_id = f"INV-{sr.request_id}-{uuid.uuid4().hex[:6].upper()}"
         sr.save(update_fields=["status", "payment_status", "transaction_id", "payment_gateway", "invoice_id", "updated_at"])
 
         return _success(
@@ -150,7 +150,7 @@ class AdminPaymentUpdateView(APIView):
             sr.payment_collected_by_name = request.data.get("collected_by_name") or request.user.get_full_name() or request.user.username
             sr.collection_method = request.data.get("collection_method") or "Cash"
             if not sr.invoice_id:
-                sr.invoice_id = f"INV-{sr.request_id.replace('SR-', '')}-{uuid.uuid4().hex[:6].upper()}"
+                sr.invoice_id = f"INV-{sr.request_id}-{uuid.uuid4().hex[:6].upper()}"
             sr.save(update_fields=["payment_status", "payment_collected_at", "payment_collected_by_name", "collection_method", "invoice_id", "updated_at"])
         else:
             sr.save(update_fields=["payment_status", "updated_at"])
@@ -212,7 +212,7 @@ class InvoiceDownloadView(APIView):
         c.rect(0, H - 80, W, 80, fill=1, stroke=0)
         c.setFillColor(white)
         c.setFont("Helvetica-Bold", 22)
-        c.drawString(30, H - 45, "CalServices")
+        c.drawString(30, H - 45, "Sevo")
         c.setFont("Helvetica", 11)
         c.drawString(30, H - 62, "Professional Home & Business Services")
         c.setFont("Helvetica-Bold", 14)
@@ -378,8 +378,8 @@ class InvoiceDownloadView(APIView):
         c.rect(0, 0, W, 45, fill=1, stroke=0)
         c.setFillColor(HexColor("#64748B"))
         c.setFont("Helvetica", 8)
-        c.drawCentredString(W / 2, 28, "Thank you for choosing CalServices!")
-        c.drawCentredString(W / 2, 14, "For support: support@calservices.in | Computer-generated invoice.")
+        c.drawCentredString(W / 2, 28, "Thank you for choosing Sevo!")
+        c.drawCentredString(W / 2, 14, "For support: support@sevo.in | Computer-generated invoice.")
 
         c.save()
         buffer.seek(0)

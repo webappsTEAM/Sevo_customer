@@ -68,9 +68,7 @@ class HomePageConfigAPIView(APIView):
     """
 
     def get_permissions(self):
-        if self.request.method == "GET":
-            return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
 
     def get(self, request):
         try:
@@ -102,7 +100,8 @@ class HomePageConfigAPIView(APIView):
                     "categories": [
                         {"id": "cat-1", "title": "For You", "subtitle": "Curated services & recommendations", "badge": "For You", "image": "/mockups/category_for_you.png", "link": "/booking?category=for_you", "enabled": True, "display_order": 1},
                         {"id": "cat-2", "title": "Food and Health", "subtitle": "Groceries & farm-fresh vegetables", "badge": "Groceries & Veggies", "image": "/mockups/category_food_health.png", "link": "/booking?category=groceries", "enabled": True, "display_order": 2},
-                        {"id": "cat-3", "title": "Home, Repair & Transport Services", "subtitle": "Cleaning, repairs, painting & logistics", "badge": "8 Services", "image": "/mockups/category_home_transport.png", "link": "/booking?category=home_repairs", "enabled": True, "display_order": 3}
+                        {"id": "cat-3", "title": "Home & Repair Services", "subtitle": "Cleaning, repairs, painting & masonry", "badge": "5 Services", "image": "/mockups/category_home_transport.png", "link": "/booking?category=home_repairs", "enabled": True, "display_order": 3},
+                        {"id": "cat-4", "title": "Goods & Transport", "subtitle": "Mini trucks, 2-wheelers & logistics", "badge": "Transport", "image": "/mockups/service_transport.jpg", "link": "/logistics", "enabled": True, "display_order": 4}
                     ],
                     "vendorBanner": {
                         "enabled": True,
@@ -177,11 +176,11 @@ class HomePageConfigAPIView(APIView):
                         "reviews": [
                             {"id": "rev-1", "initials": "KR", "name": "Kavya R.", "rating": 5, "text": "Booked cleaning service and the professional was punctual and did a fantastic job!"},
                             {"id": "rev-2", "initials": "AS", "name": "Arvind S.", "rating": 5, "text": "Very professional electrician. Fixed the issue quickly and the pricing was fair."},
-                            {"id": "rev-3", "initials": "PM", "name": "Priya M.", "rating": 5, "text": "Great experience with the painting service. Highly recommend CalServices!"}
+                            {"id": "rev-3", "initials": "PM", "name": "Priya M.", "rating": 5, "text": "Great experience with the painting service. Highly recommend Sevo!"}
                         ]
                     },
                     "footer": {
-                        "brandName": "CalServices",
+                        "brandName": "Sevo",
                         "tagline": "Your trusted partner for all home services. Quality you can count on.",
                         "phone": "+91 98765 43210",
                         "email": "support@calservices.com",
@@ -319,7 +318,7 @@ class HomePageImageUploadAPIView(APIView):
                 dimensions = f"{img_converted.width}x{img_converted.height}"
 
             out_buffer = io.BytesIO()
-            img_converted.save(out_buffer, format="WEBP", quality=85, optimize=True)
+            img_converted.save(out_buffer, format="WEBP", quality=96, method=6)
             webp_bytes = out_buffer.getvalue()
 
         except Exception as e:

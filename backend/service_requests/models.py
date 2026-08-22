@@ -11,40 +11,69 @@ from django.db import models
 from django.utils import timezone
 
 
+# ── Category prefix mapping for unique human-readable Service Request IDs ────
 CATEGORY_PREFIX_MAP = {
+    "home_services": "HM",
+    "home": "HM",
+    "plumbing": "PL",
+    "electrical": "EL",
+    "electrical_repair": "EL",
+    "carpentry": "CP",
+    "hvac": "AC",
+    "ac_repair": "AC",
+    "ac_service": "AC",
+    "air_conditioner": "AC",
+    "appliance_repair": "AC",
+    "appliances": "AC",
+    "appliance": "AC",
+    "washing_machine": "AC",
+    "refrigerator": "AC",
+    "tv_display": "AC",
+    "cleaning": "CL",
+    "deep_cleaning": "CL",
+    "deep-cleaning": "CL",
+    "kitchen_cleaning": "KC",
+    "sofa_cleaning": "SC",
+    "pest_control": "PC",
+    "pest-control": "PC",
     "painting": "PA",
+    "security": "SC",
     "mason": "MS",
+    "general": "GM",
+    "logistics": "LG",
+    "goods_transport": "GT",
+    "goods_transport_truck": "GT",
+    "goods_transport_two_wheeler": "GT",
+    "truck": "GT",
+    "packers_movers": "PM",
 }
 
 
-def _generate_request_id(service_category=None):
-    """Generate category-specific human-readable ID."""
+def _generate_request_id(category_or_slug=None):
+    """
+    Generate category-prefixed unique ID (e.g. HM0001, AC0001, PL0001, EL0001).
+    Guarantees global uniqueness across all ServiceRequests.
+    """
     prefix = "SR"
-    is_custom = False
-    
-    if service_category:
-        if service_category in CATEGORY_PREFIX_MAP:
-            prefix = CATEGORY_PREFIX_MAP[service_category]
-            is_custom = True
-        elif service_category == "goods_transport_truck":
-            prefix = "GT"
-            is_custom = True
-            
-    last = ServiceRequest.objects.order_by("-id").first()
-    num = (last.id + 1) if last and last.id else 1
-    
-    if is_custom:
-        req_id = f"{prefix}{str(num).zfill(4)}"
-    else:
-        req_id = f"SR-{str(num).zfill(4)}"
-        
+    if category_or_slug:
+        slug_clean = str(category_or_slug).strip().lower().replace("-", "_")
+        prefix = CATEGORY_PREFIX_MAP.get(slug_clean)
+        if not prefix:
+            # Fallback: derive 2-letter uppercase prefix from category string
+            words = [w for w in slug_clean.split("_") if w]
+            if len(words) >= 2:
+                prefix = f"{words[0][0]}{words[1][0]}".upper()
+            elif len(slug_clean) >= 2:
+                prefix = slug_clean[:2].upper()
+            else:
+                prefix = "SR"
+
+    last = ServiceRequest.objects.filter(request_id__startswith=prefix).order_by("-id").first()
+    num = (last.id + 1) if last and last.id else (ServiceRequest.objects.count() + 1)
+    req_id = f"{prefix}{str(num).zfill(4)}"
     while ServiceRequest.objects.filter(request_id=req_id).exists():
         num += 1
-        if is_custom:
-            req_id = f"{prefix}{str(num).zfill(4)}"
-        else:
-            req_id = f"SR-{str(num).zfill(4)}"
-            
+        req_id = f"{prefix}{str(num).zfill(4)}"
     return req_id
 
 
@@ -139,6 +168,14 @@ class ServiceRequest(models.Model):
         on_delete=models.SET_NULL,
         related_name="service_requests_as_customer",
         null=True, blank=True,
+    )
+    customer_code = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name="Customer ID",
+        help_text="Permanent Customer ID snapshot (e.g. CUS0006)"
     )
     customer_name = models.CharField(max_length=200)
     phone         = models.CharField(max_length=30)
@@ -279,6 +316,25 @@ class ServiceRequest(models.Model):
 
         if not self.request_id:
             self.request_id = _generate_request_id(self.service_category)
+        if self.customer and getattr(self.customer, "customer_id", None):
+            self.customer_code = self.customer.customer_id
+        elif not self.customer_code and (self.phone or self.email):
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            q = models.Q()
+            if self.phone:
+                q |= models.Q(phone=self.phone) | models.Q(mobile_number=self.phone)
+            if self.email:
+                q |= models.Q(email=self.email)
+            u = User.objects.filter(q).first()
+            if u:
+                if not u.customer_id:
+                    from accounts.models import _generate_customer_id
+                    u.customer_id = _generate_customer_id()
+                    u.save(update_fields=["customer_id"])
+                self.customer_code = u.customer_id
+                if not self.customer:
+                    self.customer = u
         if not self.start_otp:
             import hashlib
             h = hashlib.sha256(f"calservices_booking_otp_{self.request_id}_{self.phone}_{self.customer_name}".encode()).hexdigest()
@@ -653,6 +709,8 @@ class Package(models.Model):
     sort_order     = models.PositiveIntegerField(default=0)
     button_text    = models.CharField(max_length=50, blank=True, default="Add")
     icon           = models.CharField(max_length=100, blank=True, default="")
+    gst_rate       = models.DecimalField(max_digits=5, decimal_places=2, default=18.00, help_text="GST percentage (e.g. 18.00)")
+    platform_fee   = models.DecimalField(max_digits=10, decimal_places=2, default=29.00, help_text="Platform / Convenience Fee in INR (e.g. 29.00)")
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
@@ -1383,6 +1441,70 @@ class WorkforceWebhookEvent(models.Model):
 
     def __str__(self):
         return f"WebhookEvent {self.event_id} ({self.event_type} - {self.processing_status})"
+
+
+class Payment(models.Model):
+    """
+    Payment transaction record linking Customer (CUS0025) and ServiceRequest (AC0826).
+    Supports Razorpay orders, payments, webhooks, and reconciliations.
+    """
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="payments",
+        null=True, blank=True,
+    )
+    customer_id_snapshot = models.CharField(max_length=30, blank=True, default="", db_index=True)
+    service_request = models.ForeignKey(
+        "ServiceRequest",
+        on_delete=models.CASCADE,
+        related_name="payments",
+    )
+    service_request_id_snapshot = models.CharField(max_length=30, blank=True, default="", db_index=True)
+
+    razorpay_order_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    razorpay_signature = models.CharField(max_length=255, blank=True, null=True)
+
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    currency = models.CharField(max_length=10, default="INR")
+    status = models.CharField(
+        max_length=30,
+        choices=ServiceRequest.PaymentStatus.choices,
+        default=ServiceRequest.PaymentStatus.PENDING,
+        db_index=True,
+    )
+    method = models.CharField(max_length=20, default="ONLINE")
+    gateway = models.CharField(max_length=50, default="razorpay")
+    error_code = models.CharField(max_length=100, blank=True, default="")
+    error_description = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["customer", "created_at"]),
+            models.Index(fields=["customer_id_snapshot", "created_at"]),
+            models.Index(fields=["service_request", "created_at"]),
+            models.Index(fields=["razorpay_order_id"]),
+            models.Index(fields=["razorpay_payment_id"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.customer and hasattr(self.customer, "customer_id") and self.customer.customer_id:
+            self.customer_id_snapshot = self.customer.customer_id
+        if self.service_request and self.service_request.request_id:
+            self.service_request_id_snapshot = self.service_request.request_id
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        cid = self.customer_id_snapshot or (self.customer.customer_id if self.customer else "N/A")
+        srid = self.service_request_id_snapshot or (self.service_request.request_id if self.service_request else "N/A")
+        return f"Payment #{self.id} — Customer: {cid} | SR: {srid} | {self.status} (₹{self.amount})"
+
 
 
 

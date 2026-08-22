@@ -10,7 +10,7 @@ export function PrivacyPage() {
     <LegalLayout
       activePage="privacy"
       pageTitle="Privacy & Data Protection Policy"
-      subtitle="How CalServices collects, uses, protects, and handles your personal information, location coordinates, and service transaction history."
+      subtitle="How Sevo collects, uses, protects, and handles your personal information, location coordinates, and service transaction history."
       versionKey="privacy"
     >
       <div className="space-y-8 text-slate-700 text-sm sm:text-base leading-relaxed">
@@ -21,7 +21,7 @@ export function PrivacyPage() {
             <span>Our Privacy Commitment</span>
           </div>
           <p>
-            At <strong>CalServices</strong> (operated by <strong>{config.company_legal_name}</strong>), we respect your privacy and are committed to protecting your personal data in accordance with the Digital Personal Data Protection Act (DPDPA), Information Technology Act, 2000, and global data protection standards.
+            At <strong>Sevo</strong> (operated by <strong>{config.company_legal_name}</strong>), we respect your privacy and are committed to protecting your personal data in accordance with the Digital Personal Data Protection Act (DPDPA), Information Technology Act, 2000, and global data protection standards.
           </p>
         </div>
 
@@ -61,7 +61,7 @@ export function PrivacyPage() {
             <div>
               <p>Location data is used strictly for operational service fulfillment:</p>
               <ul className="list-disc pl-4 space-y-1 mt-1">
-                <li><strong>Service Zone Verification:</strong> Validating that your requested address falls within an active CalServices service boundary.</li>
+                <li><strong>Service Zone Verification:</strong> Validating that your requested address falls within an active Sevo service boundary.</li>
                 <li><strong>Technician Dispatch:</strong> Routing the nearest qualified professional to your doorstep.</li>
                 <li><strong>Live Tracking Display:</strong> Transmitting live travel updates during the <code>ON THE WAY</code> stage. The technician&apos;s GPS is supplied by the workforce telemetry system; customer location is never tracked continuously in the background when the app is closed.</li>
               </ul>
@@ -75,7 +75,7 @@ export function PrivacyPage() {
             3. Sharing Data with Authorized Service Professionals
           </h2>
           <p>
-            To perform the booked service, CalServices shares safe, limited information with the assigned technician or workforce partner:
+            To perform the booked service, Sevo shares safe, limited information with the assigned technician or workforce partner:
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
             <li>Customer name, contact phone number, and service delivery address.</li>
@@ -92,7 +92,7 @@ export function PrivacyPage() {
           <div className="flex items-start gap-3 p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs sm:text-sm text-blue-950">
             <Lock size={18} className="text-blue-700 shrink-0 mt-0.5" />
             <p>
-              All online payments on CalServices are processed via PCI-DSS certified payment gateways (such as Razorpay / UPI). <strong>CalServices does not store credit/debit card numbers, CVVs, or bank PINs on its servers.</strong>
+              All online payments on Sevo are processed via PCI-DSS certified payment gateways (such as Razorpay / UPI). <strong>Sevo does not store credit/debit card numbers, CVVs, or bank PINs on its servers.</strong>
             </p>
           </div>
         </section>
@@ -133,7 +133,7 @@ export function PrivacyPage() {
             7. Children&apos;s Privacy
           </h2>
           <p>
-            CalServices does not knowingly collect or solicit personal data from persons under the age of 18. If we learn that we have collected personal data from a minor without parental consent, we will promptly delete that information.
+            Sevo does not knowingly collect or solicit personal data from persons under the age of 18. If we learn that we have collected personal data from a minor without parental consent, we will promptly delete that information.
           </p>
         </section>
 

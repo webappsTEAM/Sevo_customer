@@ -4,7 +4,7 @@ import {
   MapPin, ChevronDown, ChevronUp, ArrowRight, ShieldCheck,
   Clock, Package, Boxes, X, Sparkles, Navigation, Truck,
   CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed,
-  User, Mail, MessageSquare, AlertCircle, Bike, Check, Zap, Calendar
+  User, Mail, MessageSquare, AlertCircle, Bike, Check, Zap, Calendar, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
@@ -16,6 +16,7 @@ import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx
 import { useAuth } from "../../state/auth/useAuth.js"
 import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import { getAddress } from "../../api/geocoding.js"
 
 const LOGISTICS_CITY = "hosur"
@@ -425,6 +426,8 @@ export function TwoWheelerBookingHosurPage() {
   const [cancelReason, setCancelReason] = useState("")
   const [cancelComments, setCancelComments] = useState("")
   const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [cancelledBookingModalOpen, setCancelledBookingModalOpen] = useState(false)
+  const [cancelledReasonText, setCancelledReasonText] = useState("")
 
   // Lock body scroll when any modal or drawer is open to freeze background
   const isAnyModalOpen = Boolean(
@@ -433,6 +436,7 @@ export function TwoWheelerBookingHosurPage() {
     goodsTypeModalOpen ||
     lookingForPartnerOpen ||
     cancelModalOpen ||
+    cancelledBookingModalOpen ||
     slotStepperOpen ||
     bookingSuccessOpen ||
     supportModalOpen ||
@@ -870,7 +874,7 @@ export function TwoWheelerBookingHosurPage() {
             </div>
             <div className="flex flex-col">
               <span className="text-lg font-extrabold tracking-tight text-slate-900 leading-none">
-                CalServices
+                Sevo
               </span>
               <span className="text-[10px] font-semibold text-emerald-700 tracking-wide uppercase mt-0.5">
                 Two-Wheeler Delivery
@@ -2026,95 +2030,86 @@ export function TwoWheelerBookingHosurPage() {
         </div>
       )}
 
-      {/* ── Cancel Trip Modal (Matching Porter Cancellation Dialog) ── */}
+      {/* ── Cancel Trip Modal (Matching Image 3) ── */}
       {cancelModalOpen && (
+        <BookingCancellationModal
+          bookingId={lastBookingId}
+          requestId={lastBookingId}
+          isAccepted={false}
+          onClose={() => setCancelModalOpen(false)}
+          onCancelled={(data) => {
+            const reason = data?.cancellation_reason || data?.reason || "Customer requested cancellation"
+            setCancelledReasonText(reason)
+            setCancelModalOpen(false)
+            setLookingForPartnerOpen(false)
+            setCancelledBookingModalOpen(true)
+          }}
+        />
+      )}
+
+      {/* ── Booking Cancelled Screen / Modal (Matching Image 2) ── */}
+      {cancelledBookingModalOpen && (
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
-          onClick={() => setCancelModalOpen(false)}
+          className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setCancelledBookingModalOpen(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 p-6 sm:p-7 relative animate-in fade-in zoom-in-95 duration-150"
+            className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 p-6 sm:p-8 text-center relative animate-in fade-in zoom-in-95 duration-150"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-black text-slate-900">Why do you want to cancel?</h3>
-              <button
-                type="button"
-                onClick={() => setCancelModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+            <button
+              type="button"
+              onClick={() => setCancelledBookingModalOpen(false)}
+              className="absolute right-5 top-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Red Prohibition Icon Badge */}
+            <div className="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 shadow-sm shadow-red-200/50">
+              <Ban className="w-8 h-8" />
             </div>
 
-            {/* Radio Options */}
-            <div className="space-y-3 my-5">
-              {[
-                "Driver was not allocated",
-                "Changed my mind",
-                "My reason is not listed"
-              ].map((reason) => (
-                <label
-                  key={reason}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
-                    cancelReason === reason
-                      ? "border-emerald-600 bg-emerald-50/50 text-slate-900 font-bold"
-                      : "border-slate-200 hover:border-slate-300 text-slate-700 font-medium"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="cancel_reason_2w"
-                    value={reason}
-                    checked={cancelReason === reason}
-                    onChange={() => setCancelReason(reason)}
-                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
-                  />
-                  <span className="text-sm">{reason}</span>
-                </label>
-              ))}
+            {/* Header */}
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-1">
+              Booking Cancelled
+            </h2>
+            <p className="text-sm text-slate-500 font-medium mb-6">
+              Your booking <strong className="text-slate-900 font-extrabold">#{lastBookingId || "GT0586"}</strong> has been cancelled.
+            </p>
+
+            {/* Cancellation Details Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 text-left shadow-xs mb-6">
+              <div className="text-[11px] font-black text-slate-400 tracking-wider uppercase mb-2.5">
+                Cancellation Details
+              </div>
+
+              {/* Reason for cancellation box */}
+              <div className="bg-red-50 border border-red-200/80 rounded-xl p-3.5 mb-3">
+                <div className="text-[10px] font-extrabold text-red-700 tracking-wider uppercase">
+                  Reason for Cancellation
+                </div>
+                <div className="text-sm font-bold text-red-950 mt-0.5">
+                  {cancelledReasonText || "Customer requested cancellation"}
+                </div>
+              </div>
+
+              {/* Refund Info Note */}
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-600 leading-relaxed">
+                💡 If any advance payment was deducted, your full refund will be credited back within 2-4 business days.
+              </div>
             </div>
 
-            {/* Additional comments textarea */}
-            <div className="mb-6">
-              <textarea
-                rows={3}
-                value={cancelComments}
-                onChange={(e) => setCancelComments(e.target.value)}
-                placeholder="You can add additional comments to help us improve!"
-                className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-hidden placeholder:text-slate-400 resize-none"
-              />
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setCancelModalOpen(false)}
-                className="flex-1 py-3 px-4 rounded-xl border border-blue-600 text-blue-600 hover:bg-blue-50 font-bold text-sm transition-colors cursor-pointer text-center"
-              >
-                Go Back
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmCancelTrip}
-                disabled={!cancelReason || cancelSubmitting}
-                className="flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed text-center flex items-center justify-center gap-1.5"
-                style={
-                  cancelReason
-                    ? { backgroundColor: "#dc2626", color: "#ffffff", boxShadow: "0 4px 14px 0 rgba(220, 38, 38, 0.3)" }
-                    : { backgroundColor: "#f1f5f9", color: "#94a3b8" }
-                }
-              >
-                {cancelSubmitting ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Cancelling...</>
-                ) : (
-                  <span>Cancel Trip</span>
-                )}
-              </button>
-            </div>
+            {/* Close / Action Button */}
+            <button
+              type="button"
+              onClick={() => setCancelledBookingModalOpen(false)}
+              className="w-full py-3.5 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-md transition-colors cursor-pointer"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}

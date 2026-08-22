@@ -24,6 +24,9 @@ export function AuthProvider({ children }) {
   const formatUser = (data) => {
     if (!data?.username || !data?.role) return null
     return {
+      id:        data.id         ?? null,
+      customer_id: data.customer_id ?? data.customer_code ?? "",
+      customerId: data.customer_id ?? data.customer_code ?? "",
       username:  data.username,
       email:     data.email      ?? "",
       firstName: data.first_name ?? "",
@@ -68,7 +71,9 @@ export function AuthProvider({ children }) {
     try {
       me = await apiFetchMe()
     } catch (e) {
-      console.error("apiFetchMe exception:", e)
+      if (e?.name !== "AbortError" && !e?.message?.includes("aborted")) {
+        console.error("apiFetchMe exception:", e)
+      }
     }
 
     const u = formatUser(me)

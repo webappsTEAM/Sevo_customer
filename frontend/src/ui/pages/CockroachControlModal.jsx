@@ -312,18 +312,18 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
     };
   }, [selectedServiceDetails]);
 
-  const addItemToCart = (id, name, price, duration) => {
+  const addItemToCart = (id, name, price, duration, gst_rate, platform_fee) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === id);
       if (existing) return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { id, name, price, duration, quantity: 1 }];
+      return [...prev, { id, name, price, duration, gst_rate: Number(gst_rate || 18), platform_fee: Number(platform_fee || 29), quantity: 1 }];
     });
   };
 
-  const addCustomizedItemToCart = (baseId, name, price, duration, detailsString) => {
+  const addCustomizedItemToCart = (baseId, name, price, duration, detailsString, gst_rate, platform_fee) => {
     const uniqueId = `${baseId}-${Date.now()}`;
-    const cartName = `${name} (${detailsString})`;
-    setCart(prev => [...prev, { id: uniqueId, name: cartName, price, duration, quantity: 1 }]);
+    const cartName = detailsString ? `${name} (${detailsString})` : name;
+    setCart(prev => [...prev, { id: uniqueId, name: cartName, price, duration, gst_rate: Number(gst_rate || 18), platform_fee: Number(platform_fee || 29), quantity: 1 }]);
   };
 
   const removeItemFromCart = (id) => {
@@ -346,6 +346,8 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
           if (dbMatch) {
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
+            item.platform_fee = dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29;
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
             if (Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0) {
@@ -353,10 +355,11 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                 .filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false))
                 .map(inc => typeof inc === "string" ? inc : (inc.text || ""));
             }
-            // Do NOT overwrite item.reviews (a display string like "164K reviews")
-            // with dbMatch.reviews which is an array of objects {name, text, rating}
             item.image = dbMatch.image || item.image;
             item.badge = dbMatch.tag || item.badge;
+          } else {
+            item.gst_rate = item.gst_rate || 18;
+            item.platform_fee = item.platform_fee || 29;
           }
           return item;
         });
@@ -389,7 +392,9 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
       selectedServiceDetails.name,
       finalPrice,
       selectedServiceDetails.duration,
-      sizeLabel
+      sizeLabel,
+      selectedServiceDetails.gst_rate,
+      selectedServiceDetails.platform_fee
     );
     setSelectedServiceDetails(null);
   };
@@ -801,12 +806,39 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
               </div>
             )}
 
-            <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
-              <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
-                <span>Total Amount</span>
-                <span>₹{subtotal.toLocaleString("en-IN")}</span>
+            {cart.length > 0 ? (() => {
+              const itemTotal = cart.reduce((s, i) => s + (i.price * (i.quantity || 1)), 0);
+              const totalGst = cart.reduce((s, i) => s + Math.round((i.price * (i.quantity || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
+              const platformFee = cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
+              const grandTotal = itemTotal + totalGst + platformFee;
+              return (
+                <div className="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-500 font-semibold">
+                    <span>Item Total</span>
+                    <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500 font-semibold">
+                    <span>Taxes & GST (18%)</span>
+                    <span className="text-indigo-600 font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500 font-semibold">
+                    <span>Platform Fee</span>
+                    <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-2 border-t border-slate-100">
+                    <span>Total Amount</span>
+                    <span className="text-emerald-700">₹{grandTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+              );
+            })() : (
+              <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
+                <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
+                  <span>Total Amount</span>
+                  <span>₹0</span>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="pt-2">
               <button
@@ -1037,15 +1069,32 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
               })()}
             </div>
 
-            {/* Sticky Footer */}
+            {/* Sticky Footer with live breakdown */}
             <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Price</div>
-                <div className="text-base font-black text-slate-900">₹{getModalPrice()}</div>
+                {(() => {
+                  const baseFare = getModalPrice();
+                  const gstPct = selectedServiceDetails.gst_rate !== undefined ? Number(selectedServiceDetails.gst_rate) : 18;
+                  const gstAmt = Math.round(baseFare * (gstPct / 100));
+                  const platFee = selectedServiceDetails.platform_fee !== undefined ? Number(selectedServiceDetails.platform_fee) : 29;
+                  const total = baseFare + gstAmt + platFee;
+                  return (
+                    <div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold flex-wrap">
+                        <span>Fare: ₹{baseFare}</span>
+                        <span>•</span>
+                        <span className="text-indigo-600 font-bold">GST ({gstPct}%): ₹{gstAmt}</span>
+                        <span>•</span>
+                        <span className="text-emerald-600 font-bold">Fee: ₹{platFee}</span>
+                      </div>
+                      <div className="text-base font-black text-slate-900 mt-0.5">Total Amount: ₹{total}</div>
+                    </div>
+                  );
+                })()}
               </div>
               <button
                 onClick={handleProceedFromModal}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider cursor-pointer border-none"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all uppercase tracking-wider cursor-pointer border-none active:scale-95"
               >
                 Proceed
               </button>

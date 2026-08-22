@@ -59,7 +59,7 @@ export function AppBannerAndFooter() {
               </div>
               <div className="uc-paint-app-banner-text">
                 <span className="uc-paint-app-banner-tag">Book on the go!</span>
-                <h4 className="uc-paint-app-banner-title">Download the CalServices App</h4>
+                <h4 className="uc-paint-app-banner-title">Download the Sevo App</h4>
                 <p className="uc-paint-app-banner-desc">Faster booking, real-time tracking &amp; exclusive app offers.</p>
               </div>
             </div>
@@ -77,7 +77,7 @@ export function AppBannerAndFooter() {
             <div className="uc-paint-footer-col">
               <div className="uc-paint-footer-logo-row">
                 <CalTrackLogo size={24} />
-                <span className="uc-paint-footer-brand">CalServices</span>
+                <span className="uc-paint-footer-brand">Sevo</span>
               </div>
               <p className="uc-paint-footer-brand-desc">
                 Your trusted partner for doorstep home and commercial services. Quality, verified professionals, and transparent pricing.

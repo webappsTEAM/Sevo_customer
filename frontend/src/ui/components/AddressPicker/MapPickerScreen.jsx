@@ -399,6 +399,41 @@ export function MapPickerScreen({
   const isServiceBlocked = zoneStatus.inZone === true && zoneStatus.serviceAllowed === false
 
   const handleConfirmLocation = (resolvedAddr) => {
+    // If user selected an ALREADY SAVED address (from "SAVED LOCATIONS"),
+    // it already has complete details (label, flat/house no, landmark, locality, etc.).
+    // Confirm immediately and do NOT show the AddressDetailsForm again!
+    if (resolvedAddr && (resolvedAddr.id || resolvedAddr.isSaved || resolvedAddr.is_saved)) {
+      const fullDisplay = resolvedAddr.formatted_address || [
+        resolvedAddr.address_line1 || resolvedAddr.flat_house_no,
+        resolvedAddr.landmark,
+        resolvedAddr.locality,
+        resolvedAddr.city,
+        resolvedAddr.state,
+        resolvedAddr.pincode
+      ].filter(Boolean).join(", ")
+
+      const confirmedData = {
+        ...resolvedAddr,
+        formatted_address: fullDisplay,
+        address_line1: resolvedAddr.address_line1 || resolvedAddr.flat_house_no || "",
+        latitude: Number(resolvedAddr.latitude || resolvedAddr.lat || currentCenter.lat),
+        longitude: Number(resolvedAddr.longitude || resolvedAddr.lng || currentCenter.lng),
+        zone_id: zoneStatus.zoneName ? 2 : null,
+        zone_name: zoneStatus.zoneName || null,
+      }
+
+      if (typeof onConfirm === "function") {
+        onConfirm(confirmedData)
+      }
+      if (typeof onCenterChange === "function") {
+        onCenterChange(confirmedData.latitude, confirmedData.longitude, confirmedData)
+      }
+      if (typeof onClose === "function") {
+        onClose()
+      }
+      return
+    }
+
     const finalObj = {
       ...resolvedAddr,
       formatted_address: resolvedAddr?.formatted_address || address?.formatted_address || "Custom Location",

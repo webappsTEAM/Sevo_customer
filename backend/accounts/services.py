@@ -138,8 +138,8 @@ def _hash_otp(identifier: str, otp_code: str) -> str:
 
 def _send_email_otp(email: str, otp_code: str):
     send_mail(
-        subject="Your CalServices login OTP",
-        message=f"Your CalServices login OTP is: {otp_code}. Valid for 5 minutes.",
+        subject="Your Sevo login OTP",
+        message=f"Your Sevo login OTP is: {otp_code}. Valid for 5 minutes.",
         from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
         recipient_list=[email],
         fail_silently=True,
@@ -224,7 +224,7 @@ def request_otp(identifier: str, channel: str = OTPChannel.PHONE) -> dict:
         _send_email_otp(clean_identifier, otp_code)
     else:
         provider = get_sms_provider()
-        provider.send_sms(clean_identifier, f"Your CalServices login OTP is: {otp_code}. Valid for 5 minutes.")
+        provider.send_sms(clean_identifier, f"Your Sevo login OTP is: {otp_code}. Valid for 5 minutes.")
 
     response_data = {
         "resend_after_seconds": 60,

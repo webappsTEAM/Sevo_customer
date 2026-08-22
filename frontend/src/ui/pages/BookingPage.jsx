@@ -31,8 +31,8 @@ import { FullHouseCleaningModal } from "./FullHouseCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
-import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
@@ -1102,10 +1102,13 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
 
 function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTimeChange, onNext, onBack, cart }) {
   const dateScrollRef = useRef()
-  const canContinue = selectedDate && selectedTime
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const taxFee = totalPrice === 0 ? 49 : (totalPrice === 49 || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))) ? 0 : 99
-  const grandTotal = totalPrice + taxFee
+  const isFreeCategory = category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))
+  const totalGst = isFreeCategory ? 0 : (cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity * ((c.gst_rate !== undefined ? Number(c.gst_rate) : 18) / 100)), 0) : 0)
+  const roundedGst = Math.round(totalGst)
+  const gstRate = cart && cart.length > 0 && cart[0].gst_rate !== undefined ? Number(cart[0].gst_rate) : 18
+  const platformFee = totalPrice === 0 || isFreeCategory ? 0 : (cart && cart.length > 0 ? Math.max(29, ...cart.map(c => c.platform_fee !== undefined ? Number(c.platform_fee) : 29)) : 29)
+  const grandTotal = totalPrice + roundedGst + platformFee
 
   // Urban time slots: Morning / Afternoon / Evening
   const UC_TIME_SLOTS = [
@@ -1238,8 +1241,11 @@ function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTi
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}>
               <span>Item total</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{totalPrice.toLocaleString()}</span>
             </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}>
+              <span>Taxes & GST ({gstRate}%)</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{roundedGst.toLocaleString()}</span>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}>
-              <span>Taxes & Fee (incl. GST)</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span>
+              <span>Platform Fee</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{platformFee.toLocaleString()}</span>
             </div>
           </div>
           <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1696,10 +1702,15 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
   const UC_TIME_FORMATS = (t) => { if (!t) return ''; const [h] = t.split(':').map(Number); const ampm = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:00 ${ampm}` }
   const displayTime = UC_TIME_FORMATS(time)
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (pkg?.price || 0)
-  const taxFee = totalPrice === 0 ? 49 : (totalPrice === 49 || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))) ? 0 : 99
+  const isFreeCategory = category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))
+  const itemsList = cart && cart.length > 0 ? cart : (pkg ? [pkg] : [])
+  const totalGst = isFreeCategory ? 0 : itemsList.reduce((a, c) => a + ((c.price || 0) * (c.quantity || 1) * ((c.gst_rate !== undefined ? Number(c.gst_rate) : 18) / 100)), 0)
+  const roundedGst = Math.round(totalGst)
+  const gstRate = itemsList.length > 0 && itemsList[0].gst_rate !== undefined ? Number(itemsList[0].gst_rate) : (pkg?.gst_rate !== undefined ? Number(pkg.gst_rate) : 18)
+  const platformFee = totalPrice === 0 || isFreeCategory ? 0 : ((itemsList.length > 0) ? Math.max(29, ...itemsList.map(c => c.platform_fee !== undefined ? Number(c.platform_fee) : 29)) : 29)
   const discount = couponApplied ? Math.floor(totalPrice * 0.1) : 0
   const tipAmount = tip === 'custom' ? (parseInt(customTip) || 0) : (tip || 0)
-  const grandTotal = totalPrice + taxFee - discount + tipAmount
+  const grandTotal = totalPrice + roundedGst + platformFee - discount + tipAmount
 
   // Gather service/package info
   const serviceItems = cart && cart.length > 0 ? cart : (pkg ? [pkg] : [])
@@ -1856,7 +1867,8 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
           {/* Price Breakdown */}
           <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}><span>Item total</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{totalPrice.toLocaleString()}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: discount > 0 ? 6 : 0 }}><span>Taxes & Fee (incl. GST)</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{taxFee}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}><span>Taxes & GST ({gstRate}%)</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{roundedGst.toLocaleString()}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}><span>Platform Fee</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{platformFee.toLocaleString()}</span></div>
             {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#10B981', marginBottom: tipAmount > 0 ? 6 : 0 }}><span>Coupon discount</span><span style={{ fontWeight: 700 }}>-₹{discount}</span></div>}
             {tipAmount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#64748b' }}><span>Tip</span><span style={{ fontWeight: 700, color: '#1e293b' }}>₹{tipAmount}</span></div>}
           </div>
@@ -2276,7 +2288,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
   }
 
-  // Combined data for complete service & booking view
   const displayCart = useMemo(() => {
     if (Array.isArray(liveData?.cart_data) && liveData.cart_data.length > 0) return liveData.cart_data
     if (Array.isArray(successData?.cart_data) && successData.cart_data.length > 0) return successData.cart_data
@@ -2284,7 +2295,37 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     return []
   }, [liveData?.cart_data, successData?.cart_data, cart])
 
-  const displayTotal = liveData?.total_amount || successData?.total_amount || (displayCart.length > 0 ? displayCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0) : (cart ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0))
+  const itemTotal = useMemo(() => {
+    return displayCart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0)
+  }, [displayCart])
+
+  const totalGst = useMemo(() => {
+    if (liveData?.gst_amount !== undefined && liveData?.gst_amount !== null) return Number(liveData.gst_amount)
+    if (successData?.gst_amount !== undefined && successData?.gst_amount !== null) return Number(successData.gst_amount)
+    return displayCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0)
+  }, [liveData?.gst_amount, successData?.gst_amount, displayCart])
+
+  const platformFee = useMemo(() => {
+    if (liveData?.platform_fee !== undefined && liveData?.platform_fee !== null) return Number(liveData.platform_fee)
+    if (successData?.platform_fee !== undefined && successData?.platform_fee !== null) return Number(successData.platform_fee)
+    if (itemTotal === 0) return 0
+    return displayCart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 29)
+  }, [liveData?.platform_fee, successData?.platform_fee, displayCart, itemTotal])
+
+  const discount = Number(liveData?.discount_amount || successData?.discount_amount || 0)
+  const tipAmount = Number(liveData?.tip_amount || successData?.tip_amount || 0)
+
+  const displayTotal = useMemo(() => {
+    const rawStored = Number(liveData?.total_amount || successData?.total_amount || 0)
+    const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount)
+    // If the stored total matches only the base itemTotal (or is less than computedGrand),
+    // always use computedGrand so GST and Platform Fee are accurately added into Total Amount!
+    if (computedGrand > 0 && (rawStored === 0 || rawStored === itemTotal || rawStored < computedGrand)) {
+      return computedGrand
+    }
+    return rawStored > 0 ? rawStored : computedGrand
+  }, [liveData?.total_amount, successData?.total_amount, itemTotal, totalGst, platformFee, discount, tipAmount])
+
   const displayAddress = liveData?.destination?.address || liveData?.service_location?.address || successData?.address || formData?.address || "Service Location Address"
   const customerName = liveData?.customer_name || successData?.customer_name || formData?.customer_name || "Valued Customer"
   const customerPhone = liveData?.phone || successData?.phone || formData?.phone || ""
@@ -2451,7 +2492,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#16a34a", textTransform: "uppercase" }}>Serviced By</div>
               <div style={{ fontSize: "0.98rem", fontWeight: 900, color: "#0f172a" }}>{techName}</div>
-              <div style={{ fontSize: "0.76rem", color: "#64748b" }}>Verified Professional • CalServices</div>
+              <div style={{ fontSize: "0.76rem", color: "#64748b" }}>Verified Professional • Sevo</div>
             </div>
             <span style={{
               fontSize: "0.72rem",
@@ -2818,7 +2859,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 </a>
                 <button
                   onClick={() => {
-                    const msg = encodeURIComponent(`Hi ${techName || 'Partner'}, following up on my CalServices booking #${rid}.`)
+                    const msg = encodeURIComponent(`Hi ${techName || 'Partner'}, following up on my Sevo booking #${rid}.`)
                     window.open(`https://wa.me/91${techPhone.replace(/\D/g, '')}?text=${msg}`, '_blank')
                   }}
                   style={{
@@ -3290,6 +3331,38 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 </div>
               ))}
             </div>
+
+            {/* Itemized Fare & Fee Breakdown */}
+            <div style={{ borderTop: '1px dashed #cbd5e1', marginTop: '0.6rem', paddingTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                <span>Item Total</span>
+                <span style={{ fontWeight: 700, color: '#334155' }}>₹{itemTotal.toLocaleString("en-IN")}</span>
+              </div>
+              {totalGst > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                  <span>Taxes &amp; GST</span>
+                  <span style={{ fontWeight: 700, color: '#4f46e5' }}>+₹{totalGst.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+              {platformFee > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                  <span>Platform Fee</span>
+                  <span style={{ fontWeight: 700, color: '#059669' }}>+₹{platformFee.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+              {discount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#059669', fontWeight: 700 }}>
+                  <span>Coupon Discount</span>
+                  <span>-₹{discount.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+              {tipAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                  <span>Tip for Professional</span>
+                  <span style={{ fontWeight: 700, color: '#0f172a' }}>+₹{tipAmount.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -3735,6 +3808,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
   const [profileEmail, setProfileEmail] = useState('')
+  const [profileCustomerId, setProfileCustomerId] = useState(user?.customer_id || user?.customerId || '')
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || user?.avatar || '')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState('')
@@ -3747,10 +3821,23 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
       setProfileName(uFullName)
       setProfilePhone(user?.phone || '')
       setProfileEmail(user?.email || '')
+      setProfileCustomerId(user?.customer_id || user?.customerId || '')
       if (user?.avatar_url || user?.avatar) {
         setAvatarPreview(user.avatar_url || user.avatar)
       }
     }
+
+    // Always fetch fresh customer profile on modal open to ensure customer_id is loaded
+    apiRequest('/auth/customer/profile/')
+      .then(res => {
+        const data = res?.data || res
+        if (data?.customer_id) {
+          setProfileCustomerId(data.customer_id)
+        }
+      })
+      .catch(() => {
+        if (typeof refreshMe === 'function') refreshMe()
+      })
   }, [user])
 
   const handleAvatarUpload = async (e) => {
@@ -4414,7 +4501,14 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                 )}
               </div>
               <div>
-                <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: 4 }}>{userFullName}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a' }}>{userFullName}</span>
+                  {(profileCustomerId || user?.customer_id || user?.customerId) && (
+                    <span style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 700, fontFamily: 'monospace' }}>
+                      {profileCustomerId || user?.customer_id || user?.customerId}
+                    </span>
+                  )}
+                </div>
                 <div style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: 12 }}>{userEmail || userPhone}</div>
                 <input
                   ref={avatarInputRef}
@@ -4437,6 +4531,20 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
             {profileSuccess && <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, marginBottom: 16 }}>{profileSuccess}</div>}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
+                  <span>Customer ID</span>
+                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
+                </label>
+                <input
+                  type="text"
+                  value={profileCustomerId || user?.customer_id || user?.customerId || "—"}
+                  disabled
+                  readOnly
+                  title="Customer ID (Non-editable)"
+                  style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
+                />
+              </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>Full Name</label>
                 <input
@@ -4461,7 +4569,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                   style={{ width: '100%', padding: '0.85rem', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.9rem', color: '#64748b', background: '#f8fafc', cursor: 'not-allowed' }}
                 />
               </div>
-              <div style={{ gridColumn: '1/-1' }}>
+              <div>
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', fontWeight: 700, marginBottom: 8 }}>
                   <span>Email Address</span>
                   <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Non-editable</span>
@@ -4695,9 +4803,29 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                             <div style={{ fontWeight: 700, color: '#0f172a' }}>
                               {b.payment_status_display || (b.payment_status === 'paid' ? 'Paid' : 'Pending')} · {b.payment_method_display || (b.payment_method === 'COD' ? 'Cash on Service' : 'Online Payment')}
                             </div>
-                            {b.total_amount && (
-                              <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#059669', marginTop: 2 }}>Total: ₹{parseFloat(b.total_amount).toLocaleString('en-IN')}</div>
-                            )}
+                            <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#059669', marginTop: 2 }}>
+                              Total: ₹{(() => {
+                                let parsedCart = [];
+                                if (typeof b.cart_data === 'string') {
+                                  try { parsedCart = JSON.parse(b.cart_data); } catch (e) { }
+                                } else if (Array.isArray(b.cart_data)) {
+                                  parsedCart = b.cart_data;
+                                }
+                                const itemTotal = parsedCart.reduce((acc, c) => acc + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+                                const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
+                                  ? Number(b.gst_amount)
+                                  : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
+                                const platformFee = b.platform_fee !== undefined && b.platform_fee !== null
+                                  ? Number(b.platform_fee)
+                                  : (itemTotal === 0 ? 0 : parsedCart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 29));
+                                const discount = Number(b.discount_amount || 0);
+                                const tipAmount = Number(b.tip_amount || 0);
+                                const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
+                                const rawStored = Number(b.total_amount || 0);
+                                const finalTot = (computedGrand > 0 && (rawStored === 0 || rawStored === itemTotal || rawStored < computedGrand)) ? computedGrand : (rawStored || computedGrand);
+                                return Number(finalTot).toLocaleString('en-IN');
+                              })()}
+                            </div>
                           </div>
 
                           <div>
@@ -4728,6 +4856,19 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
 
                             if (!parsedCart || parsedCart.length === 0) return null;
 
+                            const itemTotal = parsedCart.reduce((acc, c) => acc + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+                            const totalGst = b.gst_amount !== undefined && b.gst_amount !== null
+                              ? Number(b.gst_amount)
+                              : parsedCart.reduce((s, i) => s + Math.round((Number(i.price || 0) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
+                            const platformFee = b.platform_fee !== undefined && b.platform_fee !== null
+                              ? Number(b.platform_fee)
+                              : (itemTotal === 0 ? 0 : parsedCart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 29));
+                            const discount = Number(b.discount_amount || 0);
+                            const tipAmount = Number(b.tip_amount || 0);
+                            const computedGrand = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
+                            const rawStored = Number(b.total_amount || 0);
+                            const finalTot = (computedGrand > 0 && (rawStored === 0 || rawStored === itemTotal || rawStored < computedGrand)) ? computedGrand : (rawStored || computedGrand);
+
                             return (
                               <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
                                 <div style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: 8 }}>
@@ -4744,7 +4885,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                     </thead>
                                     <tbody>
                                       {parsedCart.map((item, idx) => (
-                                        <tr key={idx} style={{ borderBottom: idx < parsedCart.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                           <td style={{ padding: '10px 12px', color: '#0f172a', fontWeight: 600 }}>
                                             {item.name || item.title || item.service_name || item.tier || 'Service Item'}
                                             {item.categoryName && <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 400 }}>{item.categoryName}</div>}
@@ -4760,6 +4901,42 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                                       ))}
                                     </tbody>
                                   </table>
+
+                                  {/* Itemized Taxes, Fees & Total Breakdown */}
+                                  <div style={{ background: '#f8fafc', padding: '10px 14px', borderTop: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 5, fontSize: '0.78rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                                      <span>Item Total:</span>
+                                      <span style={{ fontWeight: 700, color: '#334155' }}>₹{itemTotal.toLocaleString('en-IN')}</span>
+                                    </div>
+                                    {totalGst > 0 && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                                        <span>Taxes &amp; GST:</span>
+                                        <span style={{ fontWeight: 700, color: '#4f46e5' }}>+₹{totalGst.toLocaleString('en-IN')}</span>
+                                      </div>
+                                    )}
+                                    {platformFee > 0 && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                                        <span>Platform Fee:</span>
+                                        <span style={{ fontWeight: 700, color: '#059669' }}>+₹{platformFee.toLocaleString('en-IN')}</span>
+                                      </div>
+                                    )}
+                                    {discount > 0 && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#059669', fontWeight: 700 }}>
+                                        <span>Coupon Discount:</span>
+                                        <span>-₹{discount.toLocaleString('en-IN')}</span>
+                                      </div>
+                                    )}
+                                    {tipAmount > 0 && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                                        <span>Tip for Pro:</span>
+                                        <span style={{ fontWeight: 700, color: '#0f172a' }}>+₹{tipAmount.toLocaleString('en-IN')}</span>
+                                      </div>
+                                    )}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: 6, marginTop: 2, fontSize: '0.86rem', fontWeight: 900 }}>
+                                      <span style={{ color: '#0f172a' }}>Total Amount:</span>
+                                      <span style={{ color: '#059669' }}>₹{Number(finalTot).toLocaleString('en-IN')}</span>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             )
@@ -6457,16 +6634,21 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
         {/* Sidebar */}
         <div style={{ width: 280, background: '#f8fafc', borderRight: '1px solid #e2e8f0', padding: '2.25rem 0', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '0 1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg,#ede9fe,#ddd6fe)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #c4b5fd', flexShrink: 0, overflow: 'hidden' }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #e2e8f0', flexShrink: 0, overflow: 'hidden' }}>
               {avatarPreview || user?.avatar_url || user?.avatar ? (
                 <img src={avatarPreview || user?.avatar_url || user?.avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <User size={22} color="#6366f1" />
+                <User size={22} color="#94a3b8" />
               )}
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userFullName}</div>
               <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail || userPhone}</div>
+              {(profileCustomerId || user?.customer_id || user?.customerId) && (
+                <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace' }}>
+                  🆔 {profileCustomerId || user?.customer_id || user?.customerId}
+                </div>
+              )}
             </div>
           </div>
 
@@ -7535,9 +7717,15 @@ function StepWorkflowCheckout({
         ? Math.min(itemTotal, appliedCoupon.discountValue)
         : Math.min(appliedCoupon.maxDiscount || itemTotal, Math.floor(itemTotal * (appliedCoupon.discountValue / 100)))))
     : (couponApplied ? Math.min(100, Math.floor(itemTotal * 0.1)) : 0)
-  const taxFee = itemTotal === 0 ? 49 : (itemTotal === 49 || (items && items.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))) ? 0 : 99
+  const totalGst = isFreeCategory ? 0 : items.reduce((sum, item) => {
+    const rate = item.gst_rate !== undefined ? Number(item.gst_rate) : 18
+    return sum + (item.price * item.quantity * (rate / 100))
+  }, 0)
+  const roundedGst = Math.round(totalGst)
+  const gstRate = items.length > 0 && items[0].gst_rate !== undefined ? Number(items[0].gst_rate) : 18
+  const platformFee = itemTotal === 0 || isFreeCategory ? 0 : Math.max(29, ...items.map(i => i.platform_fee !== undefined ? Number(i.platform_fee) : 29))
   const tipAmount = tip === "custom" ? (parseInt(customTip) || 0) : (tip || 0)
-  const grandTotal = Math.max(0, itemTotal + taxFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
+  const grandTotal = Math.max(0, itemTotal + roundedGst + platformFee - (itemTotal === 0 ? 0 : discount) + tipAmount)
 
   const relatedServicesCatalog = {
     ac: [
@@ -7692,7 +7880,7 @@ function StepWorkflowCheckout({
       if (existing) {
         return currentCart.map(i => i.id === extraItem.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [...currentCart, { id: extraItem.id, name: extraItem.name, price: extraItem.price, origPrice: extraItem.origPrice, quantity: 1, duration: extraItem.duration }];
+      return [...currentCart, { id: extraItem.id, name: extraItem.name, price: extraItem.price, origPrice: extraItem.origPrice, quantity: 1, duration: extraItem.duration, gst_rate: extraItem.gst_rate || 18, platform_fee: extraItem.platform_fee || 29 }];
     });
   };
 
@@ -8091,8 +8279,13 @@ function StepWorkflowCheckout({
               </div>
 
               <div className="flex justify-between text-slate-600">
-                <span>Taxes and Fee (incl. GST)</span>
-                <span className="font-bold text-slate-800">₹{taxFee}</span>
+                <span>Taxes & GST ({gstRate}%)</span>
+                <span className="font-bold text-slate-800">₹{roundedGst.toLocaleString("en-IN")}</span>
+              </div>
+
+              <div className="flex justify-between text-slate-600">
+                <span>Platform Fee</span>
+                <span className="font-bold text-slate-800">₹{platformFee.toLocaleString("en-IN")}</span>
               </div>
 
               {discount > 0 && (
@@ -8725,6 +8918,26 @@ export function BookingPage() {
         : shortName;
     }
 
+    const isFreeCategory = category?.id === "painting" || category?.id === "mason";
+    const itemTotal = cart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+    const totalGst = isFreeCategory ? 0 : cart.reduce((s, i) => s + Math.round((Number(i.price) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
+    const platformFee = (itemTotal === 0 || isFreeCategory) ? 0 : cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
+    
+    // Check coupon discount
+    let discount = 0;
+    if (couponCode && appliedCoupon) {
+      if (appliedCoupon.discount_type === "flat") {
+        discount = Number(appliedCoupon.discount_value) || 0;
+      } else {
+        discount = Math.round((itemTotal * (Number(appliedCoupon.discount_value) || 0)) / 100);
+      }
+      if (appliedCoupon.max_discount) {
+        discount = Math.min(discount, Number(appliedCoupon.max_discount));
+      }
+    }
+    const tipAmount = tip === "custom" ? (Number(customTip) || 0) : (Number(tip) || 0);
+    const calculatedGrandTotal = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
+
     console.log("========== REAL BOOKING SUBMISSION ==========");
     console.log("CONFIRM BOOKING CLICKED");
     console.log("API URL: /api/booking/");
@@ -8735,13 +8948,10 @@ export function BookingPage() {
     console.log("service_category:", category?.id || "general");
     console.log("issue_title:", finalIssueTitle);
     console.log("cart_data item count:", cart?.length || 0);
-    console.log("address:", formData.address);
-    console.log("latitude:", formData.latitude);
-    console.log("longitude:", formData.longitude);
-    console.log("preferred_date:", selDate);
-    console.log("preferred_time:", selTime);
-    console.log("payment_method:", backendPaymentMethod);
-    console.log("total_amount:", cart.reduce((a, c) => a + (c.price * c.quantity), 0));
+    console.log("item_total:", itemTotal);
+    console.log("gst_amount:", totalGst);
+    console.log("platform_fee:", platformFee);
+    console.log("total_amount (grandTotal):", calculatedGrandTotal);
     console.log("==============================================");
 
     data.append("issue_title", finalIssueTitle)
@@ -8764,10 +8974,21 @@ export function BookingPage() {
     }
     data.append("preferred_date", selDate)
     data.append("preferred_time", selTime)
-    data.append("total_amount", cart.reduce((a, c) => a + (c.price * c.quantity), 0))
-    // Serialize cart_data as JSON string
+    data.append("total_amount", calculatedGrandTotal)
+    data.append("item_total", itemTotal)
+    data.append("gst_amount", totalGst)
+    data.append("platform_fee", platformFee)
+    if (discount > 0) data.append("discount_amount", discount)
+    if (tipAmount > 0) data.append("tip_amount", tipAmount)
+
+    // Serialize cart_data with gst_rate and platform_fee as JSON string
     data.append("cart_data", JSON.stringify(cart.map(c => ({
-      id: c.id, name: c.name, price: c.price, quantity: c.quantity,
+      id: c.id, 
+      name: c.name, 
+      price: c.price, 
+      quantity: c.quantity || 1,
+      gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
+      platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
       categoryName: c.categoryName || category?.name || ""
     }))))
     data.append("payment_method", backendPaymentMethod)
@@ -8779,8 +9000,6 @@ export function BookingPage() {
       const res = await apiRequest("/booking/", { method: "POST", body: data })
       if (res?.success) {
         if (backendPaymentMethod === "ONLINE") {
-          // If online payment was chosen, the mock payment gateway was already shown and simulated success.
-          // Now we inform the backend that payment was collected successfully to confirm the booking.
           try {
             await apiRequest('/payment/verify/', {
               method: 'POST',
@@ -8790,7 +9009,25 @@ export function BookingPage() {
             console.error("Failed to verify online payment:", e)
           }
         }
-        const savedData = { ...res.data, paymentMethod: backendPaymentMethod }
+        const savedData = { 
+          ...res.data, 
+          paymentMethod: backendPaymentMethod,
+          total_amount: calculatedGrandTotal,
+          item_total: itemTotal,
+          gst_amount: totalGst,
+          platform_fee: platformFee,
+          discount_amount: discount,
+          tip_amount: tipAmount,
+          cart_data: cart.map(c => ({
+            id: c.id, 
+            name: c.name, 
+            price: c.price, 
+            quantity: c.quantity || 1,
+            gst_rate: c.gst_rate !== undefined ? Number(c.gst_rate) : 18,
+            platform_fee: c.platform_fee !== undefined ? Number(c.platform_fee) : 29,
+            categoryName: c.categoryName || category?.name || ""
+          }))
+        }
         setSuccessData(savedData)
         try {
           sessionStorage.setItem("calservice_last_booking", JSON.stringify(savedData))
@@ -8967,7 +9204,7 @@ export function BookingPage() {
               <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-600/20">
                 <Home className="w-5 h-5" strokeWidth={2.5} />
               </div>
-              <span className="text-lg font-black tracking-tight text-slate-900 hidden sm:inline">CalServices</span>
+              <span className="text-lg font-black tracking-tight text-slate-900 hidden sm:inline">Sevo</span>
             </div>
 
             <div className="h-6 w-px bg-slate-200 hidden sm:block" />
@@ -10344,8 +10581,8 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                   {/* CalServices vs Local Vendor Comparison Table */}
                   <div className="uc-paint-comparison-section" style={{ margin: "2rem 0", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.03)" }}>
                     <div style={{ padding: "1.25rem 1.5rem 0.75rem", borderBottom: "1px solid #f1f5f9" }}>
-                      <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", textAlign: "left" }}>Why choose CalServices Painting?</h3>
-                      <p style={{ margin: "4px 0 0", fontSize: "0.78rem", color: "#64748b", textAlign: "left" }}>See how CalServices compares to typical local vendor services.</p>
+                      <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", textAlign: "left" }}>Why choose Sevo Painting?</h3>
+                      <p style={{ margin: "4px 0 0", fontSize: "0.78rem", color: "#64748b", textAlign: "left" }}>See how Sevo compares to typical local vendor services.</p>
                     </div>
                     <div style={{ overflowX: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "500px" }}>
@@ -10357,7 +10594,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                               color: "#0d9488", background: "#f0fdf4", width: "30%", borderLeft: "2px solid #34d399", borderRight: "2px solid #34d399"
                             }}>
                               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
-                                <span style={{ color: "#0f172a", fontWeight: 900, letterSpacing: "0.02em" }}>CAL<span style={{ color: "#0d9488" }}>services</span></span>
+                                <span style={{ color: "#0f172a", fontWeight: 900, letterSpacing: "0.02em" }}>Sevo</span>
                               </div>
                             </th>
                             <th style={{ padding: "1rem", textAlign: "center", fontSize: "0.8rem", fontWeight: 800, color: "#64748b", width: "30%", borderLeft: "2px solid #34d399" }}>
@@ -14119,10 +14356,12 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     });
   };
 
-  const subtotal = cart.reduce((acc, c) => acc + (c.price * c.quantity), 0);
-  const couponDiscount = isCouponApplied ? Math.round(subtotal * 0.1) : 0;
-  const vipSavings = isVipJoined ? Math.round(subtotal * 0.15) : 0;
-  const totalAmount = Math.max(0, subtotal + (isVipJoined ? 299 : 0) - couponDiscount - vipSavings);
+  const itemTotal = cart.reduce((acc, c) => acc + (c.price * c.quantity), 0);
+  const totalGst = cart.reduce((acc, c) => acc + Math.round((c.price * (c.quantity || 1)) * ((Number(c.gst_rate) || 18) / 100)), 0);
+  const platformFee = cart.reduce((maxFee, c) => Math.max(maxFee, Number(c.platform_fee) || 29), 0);
+  const couponDiscount = isCouponApplied ? Math.round(itemTotal * 0.1) : 0;
+  const vipSavings = isVipJoined ? Math.round(itemTotal * 0.15) : 0;
+  const totalAmount = Math.max(0, itemTotal + totalGst + platformFee + (isVipJoined ? 299 : 0) - couponDiscount - vipSavings);
 
   const apartmentVillaPlans = [
     {
@@ -15675,9 +15914,17 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
               <div className="border-t border-slate-100 pt-2 space-y-1.5 text-[11px]">
                 {cart.length > 0 && (
                   <>
-                    <div className="flex justify-between text-slate-500">
-                      <span>Items Subtotal</span>
-                      <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                    <div className="flex justify-between text-slate-500 font-semibold">
+                      <span>Item Total</span>
+                      <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500 font-semibold">
+                      <span>Taxes & GST (18%)</span>
+                      <span className="text-indigo-600 font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500 font-semibold">
+                      <span>Platform Fee</span>
+                      <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
                     </div>
                     {isVipJoined && (
                       <div className="flex justify-between text-slate-500">
@@ -15701,7 +15948,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 )}
                 <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2.5">
                   <span>Total Amount</span>
-                  <span>₹{totalAmount.toLocaleString("en-IN")}</span>
+                  <span className="text-emerald-700">₹{totalAmount.toLocaleString("en-IN")}</span>
                 </div>
               </div>
             </div>
@@ -19924,7 +20171,7 @@ const APPLIANCE_SERVICES = [
         price: 399,
         rating: "4.85",
         reviews: "65K reviews",
-        image: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?w=200&q=80&fit=crop",
+        image: "/mockups/fridge_single_door.jpg",
         duration: "1 hr"
       },
       {
@@ -19933,7 +20180,7 @@ const APPLIANCE_SERVICES = [
         price: 549,
         rating: "4.83",
         reviews: "93K reviews",
-        image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?w=200&q=80&fit=crop",
+        image: "/mockups/fridge_double_door.jpg",
         duration: "1.5 hrs"
       },
       {
@@ -19942,7 +20189,7 @@ const APPLIANCE_SERVICES = [
         price: 799,
         rating: "4.80",
         reviews: "9K reviews",
-        image: "/mockups/appliance_cleaning_thumb.png",
+        image: "/mockups/fridge_triple_door.jpg",
         duration: "2 hrs"
       }
     ]
@@ -20013,7 +20260,7 @@ const APPLIANCE_SERVICES = [
         price: 99,
         rating: "4.81",
         reviews: "30K reviews",
-        image: "/mockups/gas_stove_clean.png",
+        image: "/mockups/stove_2b.jpg",
         duration: "30 mins"
       },
       {
@@ -20022,7 +20269,7 @@ const APPLIANCE_SERVICES = [
         price: 149,
         rating: "4.79",
         reviews: "15K reviews",
-        image: "/mockups/gas_stove_clean.png",
+        image: "/mockups/stove_3b.jpg",
         duration: "45 mins"
       },
       {
@@ -20031,7 +20278,7 @@ const APPLIANCE_SERVICES = [
         price: 199,
         rating: "4.78",
         reviews: "15K reviews",
-        image: "/mockups/gas_stove_clean.png",
+        image: "/mockups/stove_4b.jpg",
         duration: "1 hr"
       }
     ]
@@ -20662,108 +20909,14 @@ const SERVICE_DETAIL_DATA = {
       "Provide safe access to the fan"
     ],
     reviews: [
-      { name: "Ananya S.", rating: "5.0", text: '"The exhaust fan had a lot of dust and grease. It was cleaned very neatly."' },
-      { name: "Rahul K.", rating: "4.8", text: '"Quick service and the fan looks much cleaner now."' }
+      { name: "Ananya S.", rating: "5.0", text: '"The exhaust fan had a lot of dust and grease. It was cleaned very neatly."' }
     ],
     faqs: [
-      { q: "Will you clean the fan blades?", a: "Yes, the accessible fan blades will be cleaned properly." },
-      { q: "Will you clean the cover / grill?", a: "Yes, the fan cover and visible grill will also be cleaned." },
-      { q: "Will you remove grease from the fan?", a: "Yes, normal dust, grease and dirt buildup will be cleaned." },
-      { q: "Will you remove the exhaust fan from the wall?", a: "No, the fan will be cleaned while it remains installed." },
-      { q: "Do you repair exhaust fans?", a: "No, electrical, motor and wiring repairs are not included." }
+      { q: "Will you clean grease inside the fan?", a: "Yes, accessible fan blades and covers will be degreased." }
     ]
   },
-  "sink-vessel-mopping-clean": {
-    reviews: [
-      { name: "Ananya S.", rating: "5.0", text: '"Very useful service for a quick kitchen cleanup. The sink and slab were cleaned nicely."' },
-      { name: "Priya R.", rating: "4.8", text: '"The vessels, sink and kitchen floor were cleaned properly. Good service."' }
-    ],
-    faqs: [
-      { q: "Will you wash the vessels?", a: "Yes, the vessels provided for cleaning will be washed as part of the service." },
-      { q: "Will you clean under the sink?", a: "Yes, the accessible area under the sink will be cleaned." },
-      { q: "Will you clean the kitchen floor?", a: "Yes, the kitchen floor will be mopped." },
-      { q: "Will you remove heavy grease from the slab?", a: "Light grease and food stains are included. Heavy buildup may require deep cleaning." }
-    ]
-  },
-  "dining-table-quick": {
-    reviews: [
-      { name: "Rahul K.", rating: "5.0", text: '"The dining table was cleaned very neatly. Food stains were removed well."' }
-    ],
-    faqs: [
-      { q: "Will you clean the chairs too?", a: "No, chair cleaning is not included in this service." },
-      { q: "Will you remove food stains?", a: "Yes, normal food stains and dirt will be cleaned." },
-      { q: "Do I need to clear the table before cleaning?", a: "Yes, please remove food, utensils and personal items before the service." }
-    ]
-  },
-  "kitchen-window-quick": {
-    reviews: [
-      { name: "Priya R.", rating: "5.0", text: '"The kitchen window was dusty and greasy, and it looks much cleaner now."' },
-      { name: "Karthik M.", rating: "4.8", text: '"Good cleaning and the glass was left without visible marks."' }
-    ],
-    faqs: [
-      { q: "Will you clean the window glass?", a: "Yes, the accessible glass surface will be cleaned." },
-      { q: "Will you clean the window frame?", a: "Yes, the accessible frame and sill will also be cleaned." },
-      { q: "Will you clean the outside of the window?", a: "Only safely accessible exterior areas will be cleaned." },
-      { q: "Will you remove paint or cement stains?", a: "No. Heavy paint, cement or permanent stains may require specialized cleaning." }
-    ]
-  },
-  "quick-fan-clean": {
+  "dining-table-clean": {
     tools: [
-      "Microfiber cloths",
-      "All-purpose cleaning spray",
-      "Sturdy step ladder"
-    ],
-    ready: [
-      "Keep the space below the fan clear",
-      "Ensure the fan switch is turned off"
-    ],
-    reviews: [
-      { name: "Amit S.", rating: "4.9", text: '"The fan was covered in sticky kitchen grease, but they got it completely clean."' },
-      { name: "Neha P.", rating: "4.8", text: '"Fast and efficient fan cleaning service."' }
-    ],
-    faqs: [
-      { q: "Does this include repair?", a: "No, this is only a cleaning service. No repairs are done." },
-      { q: "Will my floor get dirty?", a: "Our professionals use dust-drop cloths to protect your floor." }
-    ]
-  },
-  "quick-utensils-removal": {
-    tools: [
-      "Clean baskets",
-      "Microfiber dusting cloths",
-      "Sanitizing cabinet spray"
-    ],
-    ready: [
-      "Ensure cabinets are unlocked and accessible"
-    ],
-    reviews: [
-      { name: "Suresh K.", rating: "5.0", text: '"Extremely helpful! Wiped my cabinets thoroughly and rearranged everything."' },
-      { name: "Deepa M.", rating: "4.8", text: '"Very polite worker. Sorted out my cluttered cabinet beautifully."' }
-    ],
-    faqs: [
-      { q: "Will you wash the utensils?", a: "Utensil washing is not included. We only remove, wipe, and reorganize." },
-      { q: "How do you rearrange?", a: "We rearrange them neatly in their original cabinet spaces." }
-    ]
-  },
-  "quick-sink-under-sink": {
-    tools: [
-      "Scrubbing brushes",
-      "Disinfectant sanitizers",
-      "Odour removal sprays"
-    ],
-    ready: [
-      "Clear any vessels from the sink before the professional arrives"
-    ],
-    reviews: [
-      { name: "Kunal T.", rating: "4.9", text: '"The sink shines like new, and the under-sink smell is totally gone."' },
-      { name: "Ritu G.", rating: "4.8", text: '"Great scrubbing work on the hard water stains in the sink."' }
-    ],
-    faqs: [
-      { q: "Do you clean the drain pipe?", a: "We clean the external sink drain area and visible parts. We do not do plumbing repairs or unclogging." }
-    ]
-  },
-  "quick-dining-table": {
-    tools: [
-      "Heavy duty degreasers / polishers",
       "Microfiber detailing cloths",
       "Soft detailing brushes"
     ],
@@ -20980,11 +21133,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
     };
   }, [selectedServiceDetails]);
 
-  const addItemToCart = (id, name, price, duration) => {
+  const addItemToCart = (id, name, price, duration, gst_rate, platform_fee) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === id);
       if (existing) return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { id, name, price, duration, quantity: 1 }];
+      return [...prev, { id, name, price, duration, gst_rate: Number(gst_rate || 18), platform_fee: Number(platform_fee || 29), quantity: 1 }];
     });
   };
 
@@ -20998,8 +21151,6 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
   };
 
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
-
-  const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
 
   const getActiveServices = () => {
     let list = [];
@@ -21015,53 +21166,81 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
           if (parentDbMatch) {
             item.name = parentDbMatch.name;
             item.price = Math.round(Number(parentDbMatch.base_price) || item.price);
+            item.gst_rate = parentDbMatch.gst_rate !== undefined && parentDbMatch.gst_rate !== null ? parseFloat(parentDbMatch.gst_rate) : 18;
+            item.platform_fee = parentDbMatch.platform_fee !== undefined && parentDbMatch.platform_fee !== null ? parseFloat(parentDbMatch.platform_fee) : 29;
             item.duration = parentDbMatch.duration || item.duration;
             item.description = parentDbMatch.description || item.description;
             item.includes = Array.isArray(parentDbMatch.includes) ? parentDbMatch.includes : item.includes;
             item.tag = parentDbMatch.tag || "";
             item.popular = parentDbMatch.popular || false;
+            if (parentDbMatch.image) {
+              item.image = parentDbMatch.image;
+            }
           }
 
           item.subOptions = item.subOptions.map(subOpt => {
             const dbMatch = dbPackages.find(p => p.slug === subOpt.id);
             if (dbMatch) {
+              const baseIncludes = Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes);
               return {
                 ...subOpt,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
+                gst_rate: dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18,
+                platform_fee: dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29,
                 duration: dbMatch.duration || subOpt.duration,
                 description: dbMatch.description || subOpt.description,
-                includes: Array.isArray(dbMatch.includes) ? dbMatch.includes : (subOpt.includes || item.includes),
+                image: dbMatch.image ? dbMatch.image : subOpt.image,
+                includes: baseIncludes.filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false)),
                 tag: dbMatch.tag || "",
                 popular: dbMatch.popular || false,
-                tools: Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0 ? dbMatch.tools : (subOpt.tools || []),
-                ready: Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0 ? dbMatch.ready : (subOpt.ready || []),
-                reviews: Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || []),
-                faqs: Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0 ? dbMatch.faqs : (subOpt.faqs || []),
+                tools: (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0 ? dbMatch.tools : (subOpt.tools || [])).filter(t => typeof t === "string" ? true : (t?.checked !== false && t?.enabled !== false)),
+                ready: (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0 ? dbMatch.ready : (subOpt.ready || [])).filter(r => typeof r === "string" ? true : (r?.checked !== false && r?.enabled !== false)),
+                reviews: (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || [])).filter(r => r?.enabled !== false),
+                reviews_list: (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0 ? dbMatch.reviews : (subOpt.reviews || [])).filter(r => r?.enabled !== false),
+                faqs: (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0 ? dbMatch.faqs : (subOpt.faqs || [])).filter(f => f?.checked !== false && f?.enabled !== false),
               };
             }
             return {
               ...subOpt,
-              includes: subOpt.includes || item.includes
+              gst_rate: subOpt.gst_rate || 18,
+              platform_fee: subOpt.platform_fee || 29,
+              includes: (subOpt.includes || item.includes || []).filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false))
             };
           });
           if (item.subOptions.length > 0) {
             item.price = item.subOptions[0].price;
+            item.gst_rate = item.subOptions[0].gst_rate || 18;
+            item.platform_fee = item.subOptions[0].platform_fee || 29;
           }
         } else {
           const dbMatch = dbPackages.find(p => p.slug === item.id);
           if (dbMatch) {
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
+            item.platform_fee = dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29;
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
-            item.includes = Array.isArray(dbMatch.includes) ? dbMatch.includes : item.includes;
+            item.includes = Array.isArray(dbMatch.includes) 
+              ? dbMatch.includes.filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false))
+              : item.includes;
             item.tag = dbMatch.tag || "";
             item.popular = dbMatch.popular || false;
+            // Overwrite the image if the database has a customized image path set
+            if (dbMatch.image) {
+              item.image = dbMatch.image;
+            }
             if (Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0) item.tools = dbMatch.tools;
             if (Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0) item.ready = dbMatch.ready;
-            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) item.reviews_list = dbMatch.reviews;
+            if (Array.isArray(dbMatch.reviews) && dbMatch.reviews.length > 0) {
+              item.reviews = dbMatch.reviews.filter(r => r.enabled !== false);
+              item.reviews_list = dbMatch.reviews.filter(r => r.enabled !== false);
+            }
             if (Array.isArray(dbMatch.faqs) && dbMatch.faqs.length > 0) item.faqs = dbMatch.faqs;
+          } else {
+            item.gst_rate = item.gst_rate || 18;
+            item.platform_fee = item.platform_fee || 29;
           }
         }
         return item;
@@ -21214,19 +21393,22 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                       {service.includes && service.includes.length > 0 && (
                         <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
                           {(() => {
+                            const activeIncludes = service.includes
+                              .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false && inc?.enabled !== false))
+                              .map(inc => typeof inc === "string" ? inc : inc.text);
+
                             const isBasic = service.id === "occ-basic";
                             const isDeep = service.id === "occ-deep";
-                            const isExpanded = isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true);
+                            const hasMoreThanThree = activeIncludes.length > 3;
+                            const isExpanded = (isBasic ? isBasicExpanded : (isDeep ? isDeepExpanded : true)) && hasMoreThanThree;
                             const displayIncludes = ((isBasic || isDeep) && !isExpanded
-                              ? service.includes.slice(0, 3)
-                              : service.includes)
-                              .filter(inc => typeof inc === "string" ? true : (inc?.checked !== false))
-                              .map(inc => typeof inc === "string" ? inc : inc.text);
+                              ? activeIncludes.slice(0, 3)
+                              : activeIncludes);
 
                             return (
                               <>
                                 {displayIncludes.map((item, i) => {
-                                  const isLastOfThree = (isBasic || isDeep) && !isExpanded && i === 2;
+                                  const isLastOfThree = (isBasic || isDeep) && !isExpanded && i === 2 && hasMoreThanThree;
                                   return (
                                     <li key={i} className="flex items-start gap-2">
                                       <span className="text-emerald-600 font-bold mt-0.5">✓</span>
@@ -21251,7 +21433,7 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                                     </li>
                                   );
                                 })}
-                                {(isBasic || isDeep) && isExpanded && (
+                                {(isBasic || isDeep) && isExpanded && hasMoreThanThree && (
                                   <div className="text-left mt-1 pl-3">
                                     <span
                                       onClick={(e) => {
@@ -21279,36 +21461,67 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                     </div>
 
                     {/* Image + add button */}
-                    <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
-                      <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
-                        <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
-                        {count > 0 ? (
-                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
-                            <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
-                            <span>{count}</span>
-                            <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration)} className="hover:text-emerald-900">+</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              if (service.subOptions) {
-                                setSelectedServiceDetails(service);
-                              } else {
-                                addItemToCart(service.id, service.name, service.price, service.duration);
-                              }
-                            }}
-                            className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
-                          >
-                            <ShoppingCart size={12} /> Add
-                          </button>
+                    {service.image && (
+                      <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
+                        <div className="w-28 h-24 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 flex items-center justify-center">
+                          <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
+                          {count > 0 ? (
+                            <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                              <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
+                              <span>{count}</span>
+                              <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration, service.gst_rate, service.platform_fee)} className="hover:text-emerald-900">+</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (service.subOptions) {
+                                  setSelectedServiceDetails(service);
+                                } else {
+                                  addItemToCart(service.id, service.name, service.price, service.duration, service.gst_rate, service.platform_fee);
+                                }
+                              }}
+                              className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
+                            >
+                              <ShoppingCart size={12} /> Add
+                            </button>
+                          )}
+                        </div>
+                        {service.options && (
+                          <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
                         )}
                       </div>
-                      {service.options && (
-                        <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
-                      )}
-                    </div>
+                    )}
+                    {!service.image && (
+                      <div className="relative shrink-0 w-28 pb-9 flex flex-col items-center">
+                        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-20 z-10">
+                          {count > 0 ? (
+                            <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                              <button onClick={() => removeItemFromCart(service.id)} className="hover:text-emerald-900">-</button>
+                              <span>{count}</span>
+                              <button onClick={() => addItemToCart(service.id, service.name, service.price, service.duration, service.gst_rate, service.platform_fee)} className="hover:text-emerald-900">+</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (service.subOptions) {
+                                  setSelectedServiceDetails(service);
+                                } else {
+                                  addItemToCart(service.id, service.name, service.price, service.duration, service.gst_rate, service.platform_fee);
+                                }
+                              }}
+                              className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[11px] py-1.5 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase"
+                            >
+                              <ShoppingCart size={12} /> Add
+                            </button>
+                          )}
+                        </div>
+                        {service.options && (
+                          <p className="absolute bottom-0 text-[10px] text-slate-400 text-center font-bold tracking-tight w-full">{service.options}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -21350,18 +21563,39 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                 </div>
               )}
 
-              <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
-                {cart.length > 0 && (
-                  <div className="flex justify-between text-slate-500">
-                    <span>Items Subtotal</span>
-                    <span>₹{subtotal.toLocaleString("en-IN")}</span>
+              {cart.length > 0 ? (() => {
+                const itemTotal = cart.reduce((s, i) => s + (i.price * (i.quantity || 1)), 0);
+                const totalGst = cart.reduce((s, i) => s + Math.round((i.price * (i.quantity || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
+                const platformFee = cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
+                const grandTotal = itemTotal + totalGst + platformFee;
+                return (
+                  <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-slate-500 font-semibold">
+                      <span>Item Total</span>
+                      <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500 font-semibold">
+                      <span>Taxes & GST (18%)</span>
+                      <span className="text-indigo-600 font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500 font-semibold">
+                      <span>Platform Fee</span>
+                      <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-slate-200 pt-2">
+                      <span>Total Amount</span>
+                      <span className="text-emerald-700">₹{grandTotal.toLocaleString("en-IN")}</span>
+                    </div>
                   </div>
-                )}
-                <div className="flex justify-between font-extrabold text-slate-900 text-sm border-t border-dashed border-slate-200 pt-2">
-                  <span>Total Amount</span>
-                  <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                );
+              })() : (
+                <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-xs">
+                  <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
+                    <span>Total Amount</span>
+                    <span>₹0</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -21507,11 +21741,11 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
                                 <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm w-full">
                                   <button onClick={() => removeItemFromCart(sub.id)} className="hover:text-emerald-900">-</button>
                                   <span>{subCount}</span>
-                                  <button onClick={() => addItemToCart(sub.id, sub.name, sub.price, sub.duration)} className="hover:text-emerald-900">+</button>
+                                  <button onClick={() => addItemToCart(sub.id, sub.name, sub.price, sub.duration, sub.gst_rate, sub.platform_fee)} className="hover:text-emerald-900">+</button>
                                 </div>
                               ) : (
                                 <button
-                                  onClick={() => addItemToCart(sub.id, sub.name, sub.price, sub.duration)}
+                                  onClick={() => addItemToCart(sub.id, sub.name, sub.price, sub.duration, sub.gst_rate, sub.platform_fee)}
                                   className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-[10px] py-1 rounded-lg hover:bg-slate-50 transition-all shadow-sm uppercase flex items-center justify-center gap-0.5"
                                 >
                                   Add
@@ -21641,30 +21875,43 @@ export function KitchenCleaningModal({ category, cart, setCart, onClose, onCheck
             {/* Sticky Footer with teal proceed button */}
             <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between shrink-0">
               {(() => {
-                if (selectedServiceDetails.subOptions) {
-                  const subTotalVal = selectedServiceDetails.subOptions.reduce((acc, sub) => {
-                    return acc + (sub.price * getCount(sub.id));
-                  }, 0);
-                  return subTotalVal > 0 ? (
-                    <div className="text-sm font-extrabold text-slate-900">₹{subTotalVal}</div>
-                  ) : (
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
+                const isSub = Boolean(selectedServiceDetails.subOptions);
+                const baseFare = isSub
+                  ? selectedServiceDetails.subOptions.reduce((acc, sub) => acc + (sub.price * getCount(sub.id)), 0)
+                  : (selectedServiceDetails.price || 0);
+                const gstPct = selectedServiceDetails.gst_rate !== undefined ? Number(selectedServiceDetails.gst_rate) : 18;
+                const gstAmt = Math.round(baseFare * (gstPct / 100));
+                const platFee = selectedServiceDetails.platform_fee !== undefined ? Number(selectedServiceDetails.platform_fee) : 29;
+                const total = baseFare > 0 ? (baseFare + gstAmt + platFee) : 0;
+
+                if (baseFare > 0) {
+                  return (
+                    <div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold flex-wrap">
+                        <span>Fare: ₹{baseFare.toLocaleString("en-IN")}</span>
+                        <span>•</span>
+                        <span className="text-indigo-600 font-bold">GST ({gstPct}%): ₹{gstAmt.toLocaleString("en-IN")}</span>
+                        <span>•</span>
+                        <span className="text-emerald-600 font-bold">Fee: ₹{platFee}</span>
+                      </div>
+                      <div className="text-base font-black text-slate-900 mt-0.5">Total Amount: ₹{total.toLocaleString("en-IN")}</div>
+                    </div>
                   );
                 }
                 return (
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
+                  <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">{selectedServiceDetails.name}</div>
                 );
               })()}
               <button
                 onClick={() => {
                   if (!selectedServiceDetails.subOptions) {
                     if (getCount(selectedServiceDetails.id) === 0) {
-                      addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration);
+                      addItemToCart(selectedServiceDetails.id, selectedServiceDetails.name, selectedServiceDetails.price, selectedServiceDetails.duration, selectedServiceDetails.gst_rate, selectedServiceDetails.platform_fee);
                     }
                   }
                   setSelectedServiceDetails(null);
                 }}
-                className="bg-[#54B6A6] hover:bg-[#43a192] text-white font-extrabold text-xs py-2.5 px-6 rounded-lg shadow-md transition-all uppercase tracking-wider"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all uppercase tracking-wider cursor-pointer border-none active:scale-95"
               >
                 Proceed
               </button>

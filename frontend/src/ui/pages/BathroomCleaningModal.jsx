@@ -8,8 +8,8 @@ const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const BATHROOM_SUB_TABS = [
   { id: "packages", name: "Full Clean", image: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=150&q=80&fit=crop" },
-  { id: "minis", name: "Quick Extra Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" },
-  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=150&q=80&fit=crop" }
+  { id: "subscription", name: "Weekly Bathroom Cleaning Subscription", image: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=150&q=80&fit=crop" },
+  { id: "minis", name: "Quick Extra Services", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" }
 ];
 
 const BATHROOM_SERVICES = {
@@ -426,15 +426,15 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
     };
   }, [selectedServiceDetails]);
 
-  const addItemToCart = (id, name, price, duration) => {
+  const addItemToCart = (id, name, price, duration, gst_rate, platform_fee) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === id);
       if (existing) return prev.map(i => i.id === id ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { id, name, price, duration, quantity: 1 }];
+      return [...prev, { id, name, price, duration, gst_rate: Number(gst_rate || 18), platform_fee: Number(platform_fee || 29), quantity: 1 }];
     });
   };
 
-  const addCustomizedItemToCart = (baseId, name, price, duration, detailsString) => {
+  const addCustomizedItemToCart = (baseId, name, price, duration, detailsString, gst_rate, platform_fee) => {
     const cartName = detailsString ? `${name} (${detailsString})` : name;
     setCart(prev => {
       const existingIdx = prev.findIndex(item => item.name === cartName && item.id.startsWith(baseId));
@@ -442,7 +442,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
         return prev.map((item, idx) => idx === existingIdx ? { ...item, quantity: item.quantity + 1 } : item);
       } else {
         const uniqueId = `${baseId}-${Date.now()}`;
-        return [...prev, { id: uniqueId, name: cartName, price, duration, quantity: 1 }];
+        return [...prev, { id: uniqueId, name: cartName, price, duration, gst_rate: Number(gst_rate || 18), platform_fee: Number(platform_fee || 29), quantity: 1 }];
       }
     });
   };
@@ -488,7 +488,7 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
       price = details.rates[0].price;
     }
 
-    addCustomizedItemToCart(service.id, service.name, price, service.duration, detailsString);
+    addCustomizedItemToCart(service.id, service.name, price, service.duration, detailsString, service.gst_rate, service.platform_fee);
   };
 
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
@@ -508,6 +508,8 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 ...dbMatch,
                 name: dbMatch.name,
                 price: Math.round(Number(dbMatch.base_price) || subOpt.price),
+                gst_rate: dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18,
+                platform_fee: dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29,
                 duration: dbMatch.duration || subOpt.duration,
                 includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes.filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false)).map(inc => typeof inc === "string" ? inc : (inc.text || "")) : subOpt.includes,
                 tools: dbMatch.tools,
@@ -517,16 +519,24 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 image: dbMatch.image || subOpt.image,
               };
             }
-            return subOpt;
+            return {
+              ...subOpt,
+              gst_rate: subOpt.gst_rate || 18,
+              platform_fee: subOpt.platform_fee || 29,
+            };
           });
           if (item.subOptions.length > 0) {
             item.price = item.subOptions[0].price;
+            item.gst_rate = item.subOptions[0].gst_rate || 18;
+            item.platform_fee = item.subOptions[0].platform_fee || 29;
           }
         } else {
           const dbMatch = dbPackages.find(p => p.slug === item.id || p.id === item.id);
           if (dbMatch) {
             item.name = dbMatch.name;
             item.price = Math.round(Number(dbMatch.base_price) || item.price);
+            item.gst_rate = dbMatch.gst_rate !== undefined && dbMatch.gst_rate !== null ? parseFloat(dbMatch.gst_rate) : 18;
+            item.platform_fee = dbMatch.platform_fee !== undefined && dbMatch.platform_fee !== null ? parseFloat(dbMatch.platform_fee) : 29;
             item.duration = dbMatch.duration || item.duration;
             item.description = dbMatch.description || item.description;
             item.includes = Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? dbMatch.includes.filter(inc => typeof inc === "string" ? true : (inc.checked !== false && inc.enabled !== false)).map(inc => typeof inc === "string" ? inc : (inc.text || "")) : item.includes;
@@ -536,6 +546,9 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
             item.faqs = dbMatch.faqs;
             item.image = dbMatch.image || item.image;
             item.badge = dbMatch.tag || item.badge;
+          } else {
+            item.gst_rate = item.gst_rate || 18;
+            item.platform_fee = item.platform_fee || 29;
           }
         }
         return item;
@@ -829,16 +842,39 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
               </div>
             )}
 
-            <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
-              <div className="flex justify-between text-slate-500 font-bold">
-                <span>Items Subtotal</span>
-                <span>₹{subtotal.toLocaleString("en-IN")}</span>
+            {cart.length > 0 ? (() => {
+              const itemTotal = cart.reduce((s, i) => s + (i.price * (i.quantity || 1)), 0);
+              const totalGst = cart.reduce((s, i) => s + Math.round((i.price * (i.quantity || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
+              const platformFee = cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
+              const grandTotal = itemTotal + totalGst + platformFee;
+              return (
+                <div className="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-500 font-semibold">
+                    <span>Item Total</span>
+                    <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500 font-semibold">
+                    <span>Taxes & GST (18%)</span>
+                    <span className="text-indigo-600 font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500 font-semibold">
+                    <span>Platform Fee</span>
+                    <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-2 border-t border-slate-100">
+                    <span>Total Amount</span>
+                    <span className="text-emerald-700">₹{grandTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+              );
+            })() : (
+              <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
+                <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
+                  <span>Total Amount</span>
+                  <span>₹0</span>
+                </div>
               </div>
-              <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1 border-t border-dashed border-slate-100 mt-1">
-                <span>Total Amount</span>
-                <span>₹{subtotal.toLocaleString("en-IN")}</span>
-              </div>
-            </div>
+            )}
 
             <div className="pt-2">
               <button
@@ -1055,8 +1091,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = getSelectedServiceDetailsObject();
                 const hasSavedTools = dbMatch && Array.isArray(dbMatch.tools) && dbMatch.tools.length > 0;
-                const tools = hasSavedTools ? dbMatch.tools.map(t => typeof t === "string" ? t : (t.text || "")) : (selectedServiceDetails.tools || details.tools || []);
-                const activeTools = tools.filter(t => typeof t === "string" ? true : (t?.checked !== false && t?.enabled !== false));
+                const rawTools = hasSavedTools ? dbMatch.tools : (selectedServiceDetails.tools || details.tools || []);
+                const activeTools = rawTools
+                  .filter(t => typeof t === "string" ? true : (t?.checked !== false && t?.enabled !== false))
+                  .map(t => typeof t === "string" ? t : (t.text || ""));
 
                 if (activeTools.length === 0) return null;
                 return (
@@ -1064,12 +1102,11 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Tools & Products We Use</h4>
                     <div className="space-y-2">
                       {activeTools.map((item, i) => {
-                        const labelText = typeof item === "string" ? item : (item?.text || "");
-                        if (!labelText) return null;
+                        if (!item) return null;
                         return (
                           <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
                             <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
-                            <span className="leading-relaxed">{labelText}</span>
+                            <span className="leading-relaxed">{item}</span>
                           </div>
                         );
                       })}
@@ -1084,8 +1121,10 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                 const dbMatch = dbPackages.find(p => p.slug === id || p.id === id);
                 const details = getSelectedServiceDetailsObject();
                 const hasSavedReady = dbMatch && Array.isArray(dbMatch.ready) && dbMatch.ready.length > 0;
-                const ready = hasSavedReady ? dbMatch.ready.map(r => typeof r === "string" ? r : (r.text || "")) : (selectedServiceDetails.ready || details.ready || []);
-                const activeReady = ready.filter(r => typeof r === "string" ? true : (r?.checked !== false && r?.enabled !== false));
+                const rawReady = hasSavedReady ? dbMatch.ready : (selectedServiceDetails.ready || details.ready || []);
+                const activeReady = rawReady
+                  .filter(r => typeof r === "string" ? true : (r?.checked !== false && r?.enabled !== false))
+                  .map(r => typeof r === "string" ? r : (r.text || ""));
 
                 if (activeReady.length === 0) return null;
                 return (
@@ -1185,11 +1224,22 @@ export function BathroomCleaningModal({ category, cart, setCart, onClose, onChec
                   if (details.bathroomRates && selectedRateIdx === null) {
                     return null;
                   }
+                  const baseFare = getModalPrice();
+                  const gstPct = selectedServiceDetails?.gst_rate !== undefined ? Number(selectedServiceDetails.gst_rate) : 18;
+                  const gstAmt = Math.round(baseFare * (gstPct / 100));
+                  const platFee = selectedServiceDetails?.platform_fee !== undefined ? Number(selectedServiceDetails.platform_fee) : 29;
+                  const total = baseFare + gstAmt + platFee;
                   return (
-                    <>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Price</div>
-                      <div className="text-base font-black text-slate-900">₹{getModalPrice()}</div>
-                    </>
+                    <div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-semibold flex-wrap">
+                        <span>Fare: ₹{baseFare}</span>
+                        <span>•</span>
+                        <span className="text-indigo-600 font-bold">GST ({gstPct}%): ₹{gstAmt}</span>
+                        <span>•</span>
+                        <span className="text-emerald-600 font-bold">Fee: ₹{platFee}</span>
+                      </div>
+                      <div className="text-base font-black text-slate-900 mt-0.5">Total Amount: ₹{total}</div>
+                    </div>
                   );
                 })()}
               </div>
