@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 
-import { isOffline } from "../../api/client.js"
+
 import { useAuth } from "../../state/auth/useAuth.js"
 import { routes } from "../routes.js"
 import { ThemeToggle } from "./ThemeToggle.jsx"
@@ -363,8 +363,16 @@ export function AppShell() {
   }
 
   useEffect(() => {
-    const t = setInterval(() => setOffline(isOffline()), 1500)
-    return () => clearInterval(t)
+    // Use native browser events instead of polling — fires instantly on network change,
+    // zero CPU overhead when network is stable
+    const handleOnline  = () => setOffline(false)
+    const handleOffline = () => setOffline(true)
+    window.addEventListener("online",  handleOnline)
+    window.addEventListener("offline", handleOffline)
+    return () => {
+      window.removeEventListener("online",  handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
   }, [])
 
   useEffect(() => {

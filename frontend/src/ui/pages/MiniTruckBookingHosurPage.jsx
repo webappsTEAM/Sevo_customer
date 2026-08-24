@@ -679,8 +679,11 @@ export function MiniTruckBookingHosurPage() {
 
     let pollInterval = null
     let isMounted = true
+    let isFetching = false
 
     const checkStatus = async () => {
+      if (isFetching) return          // skip cycle if previous request still in-flight
+      isFetching = true
       try {
         const res = await getBookingStatus(lastBookingId, lastTrackingToken || "")
         if (res?.data && isMounted) {
@@ -711,6 +714,8 @@ export function MiniTruckBookingHosurPage() {
         }
       } catch (e) {
         console.warn("Failed to poll booking status:", e)
+      } finally {
+        isFetching = false
       }
     }
 

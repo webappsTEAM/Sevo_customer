@@ -2226,20 +2226,33 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     }
   }
 
-  // Real-Time status polling
+  // Real-Time status polling — single authoritative poller
+  // In-flight guard: skips a cycle if previous request is still running
+  // Terminal guard: stops polling when booking reaches a final state
   useEffect(() => {
     if (!rid) return
     let pollTimer = null
     let isMounted = true
+    let isFetching = false
+    const TERMINAL = new Set(["completed", "closed", "cancelled", "feedback_pending", "feedback_received", "rejected"])
 
     const fetchStatus = async () => {
+      if (isFetching) return          // skip cycle if previous request still in-flight
+      isFetching = true
       try {
         const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
         const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
         if (res?.data && isMounted) {
           setLiveData(res.data)
+          // Stop polling once booking reaches a terminal state
+          if (res.data.status && TERMINAL.has(res.data.status.toLowerCase())) {
+            clearInterval(pollTimer)
+          }
         }
       } catch (e) { }
+      finally {
+        isFetching = false
+      }
     }
 
     fetchStatus()
@@ -2338,32 +2351,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const rawTime = selTime || liveData?.preferred_time || successData?.preferred_time || ""
   const displayTime = rawTime || ""
 
-  // Real-Time WebSocket Connection + Resilient 3s Polling Backup
-  useEffect(() => {
-    if (!rid) return
-
-    let pollTimer = null
-    let isMounted = true
-
-    const fetchStatus = async () => {
-      try {
-        const tokenQuery = successData?.tracking_token ? `?token=${encodeURIComponent(successData.tracking_token)}` : ""
-        const res = await apiRequest(`/booking/${encodeURIComponent(rid)}/live-location/${tokenQuery}`)
-        if (res?.data && isMounted) {
-          setLiveData(res.data)
-        }
-      } catch (e) { }
-    }
-
-    // Initial immediate fetch + 4-second polling
-    fetchStatus()
-    pollTimer = setInterval(fetchStatus, 4000)
-
-    return () => {
-      isMounted = false
-      if (pollTimer) clearInterval(pollTimer)
-    }
-  }, [rid, successData?.tracking_token])
+  // NOTE: Duplicate polling effect removed — the single poller above ("Real-Time status polling")
+  // handles all live-location polling for this booking. Removing this prevented ~15 extra requests/min.
 
   const isCompleted = Boolean(
     liveData?.status && ["completed", "closed", "reviewed", "feedback_received"].includes(liveData.status.toLowerCase())

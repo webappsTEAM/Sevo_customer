@@ -127,14 +127,20 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
   const bookingId = booking?.id
 
   // Real-Time WebSocket Connection + Resilient 4-second Polling Backup
+  // In-flight guard: skips a cycle if previous request is still running
+  // Terminal guard: stops REST polling after booking reaches a final state
   useEffect(() => {
     if (!bookingId) return
 
     let ws = null
     let pollTimer = null
     let isMounted = true
+    let isFetching = false
+    const TERMINAL = new Set(["completed", "closed", "cancelled", "feedback_pending", "feedback_received", "rejected"])
 
     const fetchLiveLocation = async () => {
+      if (isFetching) return           // skip cycle if previous request still in-flight
+      isFetching = true
       try {
         const res = await fetch(`${API_BASE_URL}/booking/${bookingId}/live-location/`, {
           credentials: "include"
@@ -144,11 +150,16 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
           if (json?.data && isMounted) {
             setLiveData(json.data)
             setLastRefreshed(new Date())
+            // Stop polling once booking reaches a terminal state
+            if (json.data.status && TERMINAL.has(json.data.status.toLowerCase())) {
+              clearInterval(pollTimer)
+            }
           }
         }
       } catch (err) {
         console.warn("Live location fetch failed:", err)
       } finally {
+        isFetching = false
         if (isMounted) setLoading(false)
       }
     }
@@ -184,6 +195,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
       if (pollTimer) clearInterval(pollTimer)
     }
   }, [bookingId, booking?.request_id])
+
 
   // Resolve Coordinates strictly from live backend data (No synthetic offsets)
   const destLat = liveData?.destination?.latitude != null ? parseFloat(liveData.destination.latitude) : (booking?.latitude ? parseFloat(booking.latitude) : null)

@@ -189,6 +189,7 @@ export function NotificationCenter() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const loadingRef = useRef(false) // in-flight guard: prevents overlapping load() calls
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [items, setItems] = useState([])
@@ -276,6 +277,8 @@ export function NotificationCenter() {
 
   const load = useCallback(async () => {
     if (!role || role === 'customer') return
+    if (loadingRef.current) return  // skip if a load is already in-flight
+    loadingRef.current = true
     setLoading(true)
     setError("")
     try {
@@ -344,6 +347,7 @@ export function NotificationCenter() {
       setError("Failed to load notifications.")
       setItems([])
     } finally {
+      loadingRef.current = false
       setLoading(false)
     }
   }, [role])
