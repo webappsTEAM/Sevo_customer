@@ -8765,16 +8765,20 @@ export function BookingPage() {
 
   // Synchronize step and successData when active tracking ID changes
   useEffect(() => {
-    if (trackParam) {
+    if (trackParam || routerLocation.state?.isTracking) {
       setStep(0);
-      const saved = sessionStorage.getItem("calservice_last_booking")
-      if (saved) {
-        try {
-          setSuccessData(JSON.parse(saved))
-        } catch (e) { }
+      if (routerLocation.state?.successData) {
+        setSuccessData(routerLocation.state.successData);
+      } else {
+        const saved = sessionStorage.getItem("calservice_last_booking");
+        if (saved) {
+          try {
+            setSuccessData(JSON.parse(saved));
+          } catch (e) { }
+        }
       }
     }
-  }, [trackParam]);
+  }, [trackParam, routerLocation.state]);
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")
@@ -9188,11 +9192,14 @@ export function BookingPage() {
     navigate(routes.landing, { replace: true })
   }
 
+  const isTrackingActive = Boolean(trackParam || routerLocation.state?.isTracking || step === 0)
+
   const isQuickCommerce =
-    category?.isQuickCommerce ||
-    incomingCategory?.isQuickCommerce ||
-    routerLocation.state?.isQuickCommerce ||
-    cart.some(i => i.serviceType === "vegetables_quick_delivery")
+    !isTrackingActive &&
+    (category?.isQuickCommerce ||
+      incomingCategory?.isQuickCommerce ||
+      routerLocation.state?.isQuickCommerce ||
+      cart.some(i => i.serviceType === "vegetables_quick_delivery"))
 
   if (isQuickCommerce && cart.length > 0) {
     return (

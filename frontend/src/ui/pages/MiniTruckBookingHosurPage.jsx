@@ -16,6 +16,13 @@ import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
 import { getAddress } from "../../api/geocoding.js"
+import {
+  HOSUR_LOCATIONS_DATABASE,
+  filterLocationSuggestions,
+  searchHosurPlacesOnline,
+  formatExactLocation,
+  isHosurRouteServed,
+} from "../../services/hosurLocations.js"
 
 const LOGISTICS_CITY = "hosur"
 
@@ -413,105 +420,6 @@ const TRUCK_DIAGRAM_BY_SLUG = {
   "pickup-8ft": <Pickup8ftDiagram />,
   "1-7-ton": <OnePointSevenTonDiagram />,
 }
-const HOSUR_LOCATIONS_DATABASE = [
-  { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
-  { name: "Hosur Railway Station", subtitle: "Station Road, Hosur", category: "Hosur Central" },
-  { name: "Hosur Flower Market", subtitle: "Bagalur Road, Hosur", category: "Hosur Central" },
-  { name: "Hosur Cattle Farm", subtitle: "Mathigiri, Hosur", category: "Hosur Central" },
-  { name: "Hosur IT Park (ELCOT)", subtitle: "Ring Road, Hosur", category: "Hosur Central" },
-  { name: "Hosur Taluk Office", subtitle: "NH44, Hosur", category: "Hosur Central" },
-  { name: "Hosur Ring Road", subtitle: "Outer Ring Road, Hosur", category: "Hosur Central" },
-  { name: "Harita (Hosur)", subtitle: "TVS Motor Corridor, Hosur", category: "Hosur Area" },
-  { name: "SIPCOT Phase 1", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
-  { name: "SIPCOT Phase 2", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
-  { name: "SIPCOT Phase 3", subtitle: "Zuzuvadi, Hosur", category: "SIPCOT Industrial" },
-  { name: "SIPCOT Phase 4", subtitle: "Moranapalli, Hosur", category: "SIPCOT Industrial" },
-  { name: "Mookandapalli", subtitle: "Industrial Belt, Hosur", category: "Hosur Area" },
-  { name: "Moranapalli", subtitle: "Industrial Hub, Hosur", category: "Hosur Area" },
-  { name: "Ashok Leyland Plant 1 & 2", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
-  { name: "TVS Motor Factory", subtitle: "Harita, Hosur", category: "Hosur Industrial" },
-  { name: "Titan Industries", subtitle: "SIPCOT Phase 1, Hosur", category: "Hosur Industrial" },
-  { name: "Exide Industries", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
-  { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Zuzuvadi", subtitle: "Hosur Border, Tamil Nadu", category: "Hosur Area" },
-  { name: "Avalapalli Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Denkanikottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Rayakottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Thally Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Kelamangalam Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Alasanatham", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Dinnur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Kamaraj Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Shanthi Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Nethaji Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Chennathur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Dharga", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Poonapalli", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Bagalur Town", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
-  { name: "Berigai", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
-  { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
-  { name: "Attibele Industrial Area", subtitle: "Anekal Taluk (~10 Kms)", category: "Near Hosur" },
-  { name: "Anekal Town", subtitle: "Karnataka (~18 Kms)", category: "Near Hosur" },
-  { name: "Chandapura Circle", subtitle: "Bengaluru Highway (~18 Kms)", category: "Bengaluru Hub" },
-  { name: "Bommasandra Industrial Area", subtitle: "Bengaluru (~22 Kms)", category: "Bengaluru Hub" },
-  { name: "Hebbagodi", subtitle: "Hosur Road, Bengaluru (~24 Kms)", category: "Bengaluru Hub" },
-  { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
-  { name: "Electronic City Phase 2", subtitle: "Bengaluru (~26 Kms)", category: "Bengaluru Hub" },
-  { name: "Jigani Industrial Area", subtitle: "Bengaluru (~25 Kms)", category: "Bengaluru Hub" },
-  { name: "Sarjapur Road", subtitle: "Bengaluru (~32 Kms)", category: "Bengaluru Hub" },
-  { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
-  { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
-]
-
-function filterLocationSuggestions(searchText) {
-  if (!searchText || !searchText.trim()) {
-    return [
-      { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
-      { name: "SIPCOT Phase 1", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
-      { name: "SIPCOT Phase 2", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
-      { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-      { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
-      { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
-      { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
-      { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
-    ]
-  }
-
-  const query = searchText.trim().toLowerCase()
-  const exactStarts = []
-  const wordStarts = []
-  const containsMatches = []
-
-  HOSUR_LOCATIONS_DATABASE.forEach((item) => {
-    const nameLow = item.name.toLowerCase()
-    const subLow = item.subtitle.toLowerCase()
-    const catLow = item.category.toLowerCase()
-
-    if (nameLow.startsWith(query)) {
-      exactStarts.push(item)
-    } else if (
-      nameLow.split(/[\s,/-]+/).some((w) => w.startsWith(query)) ||
-      subLow.split(/[\s,/-]+/).some((w) => w.startsWith(query))
-    ) {
-      wordStarts.push(item)
-    } else if (nameLow.includes(query) || subLow.includes(query) || catLow.includes(query)) {
-      containsMatches.push(item)
-    }
-  })
-
-  const combined = [...exactStarts, ...wordStarts, ...containsMatches]
-  const seen = new Set()
-  const result = []
-  for (const it of combined) {
-    if (!seen.has(it.name)) {
-      seen.add(it.name)
-      result.push(it)
-    }
-    if (result.length >= 9) break
-  }
-  return result
-}
 
 /* ── Slots & Dates Helper ── */
 const DELIVERY_SLOTS = {
@@ -783,15 +691,22 @@ export function MiniTruckBookingHosurPage() {
           )
           if (isAccepted) {
             setLookingForPartnerOpen(false)
+            const bookingPayload = {
+              id: lastBookingId,
+              request_id: lastBookingId,
+              tracking_token: lastTrackingToken,
+              ...(res?.data || {})
+            }
             try {
               sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
-              sessionStorage.setItem("calservice_last_booking", JSON.stringify({
-                id: lastBookingId,
-                request_id: lastBookingId,
-                tracking_token: lastTrackingToken
-              }))
+              sessionStorage.setItem("calservice_last_booking", JSON.stringify(bookingPayload))
             } catch (e) {}
-            navigate(routes.booking_checkout)
+            navigate(`${routes.booking_checkout}?track=${encodeURIComponent(lastBookingId)}`, {
+              state: {
+                isTracking: true,
+                successData: bookingPayload
+              }
+            })
           }
         }
       } catch (e) {
@@ -879,8 +794,54 @@ export function MiniTruckBookingHosurPage() {
     }
   }, [])
 
-  const pickupSuggestions = filterLocationSuggestions(pickup)
-  const dropSuggestions = filterLocationSuggestions(drop)
+  const [onlinePickupSuggestions, setOnlinePickupSuggestions] = useState([])
+  const [onlineDropSuggestions, setOnlineDropSuggestions] = useState([])
+  const [isSearchingOnlineDrop, setIsSearchingOnlineDrop] = useState(false)
+
+  // Debounced dynamic search for drop destination
+  useEffect(() => {
+    if (!drop || drop.trim().length < 2) {
+      setOnlineDropSuggestions([])
+      setIsSearchingOnlineDrop(false)
+      return
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingOnlineDrop(true)
+      const res = await searchHosurPlacesOnline(drop)
+      setOnlineDropSuggestions(res || [])
+      setIsSearchingOnlineDrop(false)
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [drop])
+
+  // Debounced dynamic search for pickup location
+  useEffect(() => {
+    if (!pickup || pickup.trim().length < 2) {
+      setOnlinePickupSuggestions([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      const res = await searchHosurPlacesOnline(pickup)
+      setOnlinePickupSuggestions(res || [])
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [pickup])
+
+  const localPickupMatches = filterLocationSuggestions(pickup)
+  const pickupSuggestions = [
+    ...localPickupMatches,
+    ...onlinePickupSuggestions.filter(
+      (on) => !localPickupMatches.some((loc) => loc.name.toLowerCase() === on.name.toLowerCase())
+    ),
+  ]
+
+  const localDropMatches = filterLocationSuggestions(drop)
+  const dropSuggestions = [
+    ...localDropMatches,
+    ...onlineDropSuggestions.filter(
+      (on) => !localDropMatches.some((loc) => loc.name.toLowerCase() === on.name.toLowerCase())
+    ),
+  ]
 
   // Live location fetch handler (can be fetched live or entered manually)
   const handleFetchLiveLocation = (e) => {
@@ -1085,22 +1046,8 @@ export function MiniTruckBookingHosurPage() {
     if (bar) bar.scrollIntoView({ behavior: "smooth", block: "center" })
   }
 
-  // HOSUR SERVICE AREA — routes we operate
-  const SERVED_AREAS = [
-    "hosur", "sipcot", "bagalur", "mathigiri", "zuzuvadi", "avalapalli",
-    "moranapalli", "mookandapalli", "denkanikottai", "rayakottai", "thally",
-    "alasanatham", "dinnur", "kelamangalam", "kamaraj", "shanthi",
-    "nethaji", "chennathur", "dharga", "poonapalli", "berigai",
-    "attibele", "anekal", "chandapura", "bommasandra", "hebbagodi",
-    "electronic city", "jigani", "sarjapur", "silk board", "koramangala",
-    "bengaluru", "bangalore", "whitefield", "kempegowda",
-    "krishnagiri", "dharmapuri", "salem", "vellore",
-    "tiruvannamalai", "chennai", "coimbatore", "erode", "tirupur", "madurai"
-  ]
-
   const isRouteServed = (pickupVal, dropVal) => {
-    const combined = (pickupVal + " " + dropVal).toLowerCase()
-    return SERVED_AREAS.some((area) => combined.includes(area))
+    return isHosurRouteServed(pickupVal, dropVal)
   }
 
   const handleGetEstimate = (e) => {
@@ -1274,15 +1221,21 @@ export function MiniTruckBookingHosurPage() {
                 onClick={() => {
                   setShowExitConfirm(false)
                   setLookingForPartnerOpen(false)
+                  const bookingPayload = {
+                    id: lastBookingId,
+                    request_id: lastBookingId,
+                    tracking_token: lastTrackingToken
+                  }
                   try {
                     sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
-                    sessionStorage.setItem("calservice_last_booking", JSON.stringify({
-                      id: lastBookingId,
-                      request_id: lastBookingId,
-                      tracking_token: lastTrackingToken
-                    }))
+                    sessionStorage.setItem("calservice_last_booking", JSON.stringify(bookingPayload))
                   } catch (e) {}
-                  navigate(routes.booking_checkout)
+                  navigate(`${routes.booking_checkout}?track=${encodeURIComponent(lastBookingId)}`, {
+                    state: {
+                      isTracking: true,
+                      successData: bookingPayload
+                    }
+                  })
                 }}
                 className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/10"
               >
@@ -1475,8 +1428,9 @@ export function MiniTruckBookingHosurPage() {
                           type="button"
                           onMouseDown={(e) => {
                             e.preventDefault()
-                            const cleanSub = loc.subtitle.split("(")[0].trim().replace(/,\s*$/, "")
-                            setPickup(`${loc.name}, ${cleanSub}`)
+                            const exact = formatExactLocation(loc)
+                            setPickup(exact)
+                            setNoServiceRoute(false)
                             setShowPickupSuggestions(false)
                           }}
                           className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 hover:text-emerald-950 transition-colors flex items-center justify-between gap-2.5 group cursor-pointer"
@@ -1506,6 +1460,9 @@ export function MiniTruckBookingHosurPage() {
                           type="button"
                           onMouseDown={(e) => {
                             e.preventDefault()
+                            const exact = formatExactLocation(pickup)
+                            setPickup(exact)
+                            setNoServiceRoute(false)
                             setShowPickupSuggestions(false)
                           }}
                           className="mt-1 text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
@@ -1564,7 +1521,10 @@ export function MiniTruckBookingHosurPage() {
                 <div className="absolute top-full left-0 sm:left-auto sm:right-0 lg:left-0 lg:right-auto mt-1.5 w-[320px] sm:w-[370px] max-w-[90vw] bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden max-h-72 overflow-y-auto">
                   <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     <span>{drop ? `Suggestions for "${drop}"` : "Suggested Delivery Destinations"}</span>
-                    <span className="text-[9px] text-emerald-700 font-semibold">{dropSuggestions.length} found</span>
+                    <span className="text-[9px] text-emerald-700 font-semibold flex items-center gap-1">
+                      {isSearchingOnlineDrop && <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-600" />}
+                      {isSearchingOnlineDrop ? "Searching live..." : `${dropSuggestions.length} found`}
+                    </span>
                   </div>
                   <div className="p-1 space-y-0.5">
                     {dropSuggestions.length > 0 ? (
@@ -1574,8 +1534,10 @@ export function MiniTruckBookingHosurPage() {
                           type="button"
                           onMouseDown={(e) => {
                             e.preventDefault()
-                            const cleanSub = loc.subtitle.split("(")[0].trim().replace(/,\s*$/, "")
-                            setDrop(`${loc.name}, ${cleanSub}`)
+                            const exact = formatExactLocation(loc)
+                            setDrop(exact)
+                            setDestinationError("")
+                            setNoServiceRoute(false)
                             setShowDropSuggestions(false)
                           }}
                           className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 hover:text-emerald-950 transition-colors flex items-center justify-between gap-2.5 group cursor-pointer"
@@ -1605,6 +1567,10 @@ export function MiniTruckBookingHosurPage() {
                           type="button"
                           onMouseDown={(e) => {
                             e.preventDefault()
+                            const exact = formatExactLocation(drop)
+                            setDrop(exact)
+                            setDestinationError("")
+                            setNoServiceRoute(false)
                             setShowDropSuggestions(false)
                           }}
                           className="mt-1 text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
