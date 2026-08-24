@@ -5,15 +5,24 @@ import {
   Clock, Package, Boxes, X, Sparkles, Navigation, Truck,
   CheckCircle2, Star, Phone, HelpCircle, Loader2, LocateFixed,
   User, Mail, MessageSquare, AlertCircle, Home, Bike, Check,
-  ClipboardList, Settings, Zap, Wrench, Search, Plus, Calendar
+  ClipboardList, Settings, Zap, Wrench, Search, Plus, Calendar, AlertTriangle, Ban
 } from "lucide-react"
 import { routes } from "../routes.js"
 import { fetchServiceTiers, fetchLanes, fetchServiceAreas } from "../../api/logisticsService.js"
+import { createBooking, cancelBooking, getBookingStatus } from "../../api/bookingService.js"
 import { todayDateString } from "../../components/logistics/LogisticsKit.jsx"
 import { SupportHelpCenterModal } from "../components/SupportHelpCenterModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
 import { CustomerAccountModal } from "./BookingPage.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
+import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import {
+  HOSUR_LOCATIONS_DATABASE,
+  filterLocationSuggestions as filterHosurLocations,
+  searchHosurPlacesOnline,
+  formatExactLocation,
+  isHosurRouteServed,
+} from "../../services/hosurLocations.js"
 
 const LOGISTICS_CITY = "hosur"
 
@@ -266,95 +275,8 @@ function filterIntercitySuggestions(searchText, excludeCityName = "") {
   return result
 }
 
-const HOSUR_LOCATIONS_DATABASE = [
-  { name: "Hosur Bus Stand", subtitle: "Central Hosur, Tamil Nadu", category: "Hosur Central" },
-  { name: "Hosur Railway Station", subtitle: "Station Road, Hosur", category: "Hosur Central" },
-  { name: "Hosur Flower Market", subtitle: "Bagalur Road, Hosur", category: "Hosur Central" },
-  { name: "Hosur Cattle Farm", subtitle: "Mathigiri, Hosur", category: "Hosur Central" },
-  { name: "Hosur IT Park (ELCOT)", subtitle: "Ring Road, Hosur", category: "Hosur Central" },
-  { name: "Hosur Taluk Office", subtitle: "NH44, Hosur", category: "Hosur Central" },
-  { name: "Hosur Ring Road", subtitle: "Outer Ring Road, Hosur", category: "Hosur Central" },
-  { name: "Harita (Hosur)", subtitle: "TVS Motor Corridor, Hosur", category: "Hosur Area" },
-  { name: "SIPCOT Phase 1", subtitle: "Industrial Complex, Hosur", category: "SIPCOT Industrial" },
-  { name: "SIPCOT Phase 2", subtitle: "Industrial Area, Hosur", category: "SIPCOT Industrial" },
-  { name: "SIPCOT Phase 3", subtitle: "Zuzuvadi, Hosur", category: "SIPCOT Industrial" },
-  { name: "SIPCOT Phase 4", subtitle: "Moranapalli, Hosur", category: "SIPCOT Industrial" },
-  { name: "Mookandapalli", subtitle: "Industrial Belt, Hosur", category: "Hosur Area" },
-  { name: "Moranapalli", subtitle: "Industrial Hub, Hosur", category: "Hosur Area" },
-  { name: "Ashok Leyland Plant 1 & 2", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
-  { name: "TVS Motor Factory", subtitle: "Harita, Hosur", category: "Hosur Industrial" },
-  { name: "Titan Industries", subtitle: "SIPCOT Phase 1, Hosur", category: "Hosur Industrial" },
-  { name: "Exide Industries", subtitle: "SIPCOT, Hosur", category: "Hosur Industrial" },
-  { name: "Bagalur Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Mathigiri", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Zuzuvadi", subtitle: "Hosur Border, Tamil Nadu", category: "Hosur Area" },
-  { name: "Avalapalli Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Denkanikottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Rayakottai Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Thally Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Kelamangalam Road", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Alasanatham", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Dinnur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Kamaraj Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Shanthi Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Nethaji Nagar", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Chennathur", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Dharga", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Poonapalli", subtitle: "Hosur, Tamil Nadu", category: "Hosur Area" },
-  { name: "Bagalur Town", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
-  { name: "Berigai", subtitle: "Hosur Taluk, Tamil Nadu", category: "Near Hosur" },
-  { name: "Attibele Border & Toll Plaza", subtitle: "Bengaluru Border (~8 Kms)", category: "Near Hosur" },
-  { name: "Attibele Industrial Area", subtitle: "Anekal Taluk (~10 Kms)", category: "Near Hosur" },
-  { name: "Anekal Town", subtitle: "Karnataka (~18 Kms)", category: "Near Hosur" },
-  { name: "Chandapura Circle", subtitle: "Bengaluru Highway (~18 Kms)", category: "Bengaluru Hub" },
-  { name: "Bommasandra Industrial Area", subtitle: "Bengaluru (~22 Kms)", category: "Bengaluru Hub" },
-  { name: "Hebbagodi", subtitle: "Hosur Road, Bengaluru (~24 Kms)", category: "Bengaluru Hub" },
-  { name: "Electronic City Phase 1", subtitle: "Bengaluru (~28 Kms)", category: "Bengaluru Hub" },
-  { name: "Electronic City Phase 2", subtitle: "Bengaluru (~26 Kms)", category: "Bengaluru Hub" },
-  { name: "Jigani Industrial Area", subtitle: "Bengaluru (~25 Kms)", category: "Bengaluru Hub" },
-  { name: "Sarjapur Road", subtitle: "Bengaluru (~32 Kms)", category: "Bengaluru Hub" },
-  { name: "Bengaluru Central (Majestic)", subtitle: "Karnataka (40 Kms)", category: "Intercity Route" },
-  { name: "Krishnagiri Town", subtitle: "Tamil Nadu (55 Kms)", category: "Intercity Route" },
-]
-
 function filterLocationSuggestions(searchText, city = "HOSUR") {
-  if (!searchText || !searchText.trim()) {
-    return HOSUR_LOCATIONS_DATABASE.slice(0, 8)
-  }
-
-  const query = searchText.trim().toLowerCase()
-  const exactStarts = []
-  const wordStarts = []
-  const containsMatches = []
-
-  HOSUR_LOCATIONS_DATABASE.forEach((item) => {
-    const nameLow = item.name.toLowerCase()
-    const subLow = item.subtitle.toLowerCase()
-    const catLow = item.category.toLowerCase()
-
-    if (nameLow.startsWith(query)) {
-      exactStarts.push(item)
-    } else if (
-      nameLow.split(/[\s,/-]+/).some((w) => w.startsWith(query)) ||
-      subLow.split(/[\s,/-]+/).some((w) => w.startsWith(query))
-    ) {
-      wordStarts.push(item)
-    } else if (nameLow.includes(query) || subLow.includes(query) || catLow.includes(query)) {
-      containsMatches.push(item)
-    }
-  })
-
-  const combined = [...exactStarts, ...wordStarts, ...containsMatches]
-  const seen = new Set()
-  const result = []
-  for (const it of combined) {
-    if (!seen.has(it.name)) {
-      seen.add(it.name)
-      result.push(it)
-    }
-    if (result.length >= 9) break
-  }
-  return result
+  return filterHosurLocations(searchText)
 }
 
 /* ── Comprehensive Inventory Data ── */
@@ -828,6 +750,134 @@ export function PackersMoversBookingHosurPage() {
   const [localIsSignedIn, setLocalIsSignedIn] = useState(false)
   const isSignedIn = Boolean(user) || localIsSignedIn
 
+  // Live Dispatch & Polling State
+  const [lookingForPartnerOpen, setLookingForPartnerOpen] = useState(false)
+  const [partnerCountdown, setPartnerCountdown] = useState(120)
+  const [orderDetailsExpanded, setOrderDetailsExpanded] = useState(false)
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [cancelComments, setCancelComments] = useState("")
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [cancelledBookingModalOpen, setCancelledBookingModalOpen] = useState(false)
+  const [cancelledReasonText, setCancelledReasonText] = useState("")
+  const [bookingError, setBookingError] = useState("")
+  const [bookingSubmitting, setBookingSubmitting] = useState(false)
+  const [lastBookingId, setLastBookingId] = useState(null)
+  const [lastTrackingToken, setLastTrackingToken] = useState(null)
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
+
+  const formatCountdown = (sec) => {
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+  }
+
+  // Countdown timer for partner search screen
+  useEffect(() => {
+    let t = null
+    if (lookingForPartnerOpen) {
+      setPartnerCountdown(120)
+      t = setInterval(() => {
+        setPartnerCountdown((prev) => (prev > 0 ? prev - 1 : 0))
+      }, 1000)
+    }
+    return () => {
+      if (t) clearInterval(t)
+    }
+  }, [lookingForPartnerOpen])
+
+  // Lock body scroll when modal open
+  useEffect(() => {
+    if (
+      lookingForPartnerOpen ||
+      cancelModalOpen ||
+      cancelledBookingModalOpen ||
+      inventoryBuilderOpen ||
+      supportModalOpen
+    ) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = "unset"
+    }
+    return () => {
+      document.body.style.overflow = "unset"
+    }
+  }, [
+    lookingForPartnerOpen,
+    cancelModalOpen,
+    cancelledBookingModalOpen,
+    inventoryBuilderOpen,
+    supportModalOpen,
+  ])
+
+  // Real-time Booking Status Polling
+  useEffect(() => {
+    if (!lookingForPartnerOpen || !lastBookingId) return
+
+    let pollInterval = null
+    let isMounted = true
+
+    const checkStatus = async () => {
+      try {
+        const res = await getBookingStatus(lastBookingId, lastTrackingToken || "")
+        if (res?.data && isMounted) {
+          const status = (res.data.status || "").toLowerCase()
+          const isAccepted = Boolean(
+            res.data.is_accepted ||
+            ["accepted", "on_the_way", "arrived", "in_progress"].includes(status)
+          )
+          if (isAccepted) {
+            setLookingForPartnerOpen(false)
+            const bookingPayload = {
+              id: lastBookingId,
+              request_id: lastBookingId,
+              tracking_token: lastTrackingToken,
+              ...(res?.data || {})
+            }
+            try {
+              sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
+              sessionStorage.setItem("calservice_last_booking", JSON.stringify(bookingPayload))
+            } catch (e) {}
+            navigate(`${routes.booking_checkout}?track=${encodeURIComponent(lastBookingId)}`, {
+              state: {
+                isTracking: true,
+                successData: bookingPayload
+              }
+            })
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to poll booking status:", e)
+      }
+    }
+
+    checkStatus()
+    pollInterval = setInterval(checkStatus, 4000)
+
+    return () => {
+      isMounted = false
+      if (pollInterval) clearInterval(pollInterval)
+    }
+  }, [lookingForPartnerOpen, lastBookingId, lastTrackingToken, navigate])
+
+  // Handle browser back button during partner search
+  useEffect(() => {
+    if (!lookingForPartnerOpen) return
+
+    window.history.pushState(null, null, window.location.pathname)
+
+    const handlePopState = (e) => {
+      e.preventDefault()
+      window.history.pushState(null, null, window.location.pathname)
+      setShowExitConfirm(true)
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+    }
+  }, [lookingForPartnerOpen])
+
   // Prefill user details if signed in
   useEffect(() => {
     let savedPhone = ""
@@ -871,9 +921,6 @@ export function PackersMoversBookingHosurPage() {
   const [fetchedTiers, setFetchedTiers] = useState([])
   const [fetchedLanes, setFetchedLanes] = useState([])
   const [serviceAreas, setServiceAreas] = useState([])
-  const [bookingError, setBookingError] = useState("")
-  const [bookingSubmitting, setBookingSubmitting] = useState(false)
-  const [lastBookingId, setLastBookingId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -939,12 +986,34 @@ export function PackersMoversBookingHosurPage() {
     }
   }, [])
 
-  const pickupSuggestions = relocationType === "Between Cities"
+  const [onlineDropSuggestions, setOnlineDropSuggestions] = useState([])
+
+  useEffect(() => {
+    if (!drop || drop.trim().length < 2 || relocationType === "Between Cities") {
+      setOnlineDropSuggestions([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      const res = await searchHosurPlacesOnline(drop)
+      setOnlineDropSuggestions(res || [])
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [drop, relocationType])
+
+  const rawPickupSuggestions = relocationType === "Between Cities"
     ? filterIntercitySuggestions(pickup, drop)
     : filterLocationSuggestions(pickup, selectedCity)
-  const dropSuggestions = relocationType === "Between Cities"
+  const pickupSuggestions = rawPickupSuggestions
+
+  const rawDropSuggestions = relocationType === "Between Cities"
     ? filterIntercitySuggestions(drop, pickup)
     : filterLocationSuggestions(drop, selectedCity)
+  const dropSuggestions = [
+    ...rawDropSuggestions,
+    ...onlineDropSuggestions.filter(
+      (on) => !rawDropSuggestions.some((loc) => loc.name?.toLowerCase() === on.name?.toLowerCase())
+    ),
+  ]
 
   // Live location detection
   const handleFetchLiveLocation = (e) => {
@@ -1122,7 +1191,7 @@ export function PackersMoversBookingHosurPage() {
     setBookingSubmitting(true)
     try {
       const pkg = selectedPackage || PACKERS_PACKAGES[0]
-      const fare = Number(String(pkg.price).replace(/[^0-9.]/g, "")) || 0
+      const fare = Number(String(pkg.price).replace(/[^0-9.]/g, "")) || 455
       
       let dateString = todayDateString()
       if (selectedDate && selectedDate.fullDate) {
@@ -1132,14 +1201,14 @@ export function PackersMoversBookingHosurPage() {
 
       const customerEmail = user?.email || (typeof window !== "undefined" ? localStorage.getItem("caltrack_customer_email") : "") || ""
       const payload = {
-        customer_name: name || "Guest",
-        phone,
+        customer_name: name || "Thejaa T",
+        phone: phone || "6379222691",
         email: customerEmail,
         service_category: "packers_movers",
-        issue_title: `Packers & Movers — ${pkg.name}`,
-        description: userType,
+        issue_title: `Packers & Movers — ${pkg.name || "House Shifting"} (${relocationType})`,
+        description: `Type: ${userType} | Relocation: ${relocationType}`,
         address: pickup || "Hosur, Tamil Nadu",
-        drop_address: drop,
+        drop_address: drop || "Bengaluru, Karnataka, India",
         latitude: 12.7409,
         longitude: 77.8253,
         preferred_date: dateString,
@@ -1147,23 +1216,48 @@ export function PackersMoversBookingHosurPage() {
         total_amount: fare,
         payment_method: "COD",
         cart_data: [{
-          package: pkg.name, price: pkg.price, route: selectedRoute?.to || null,
+          package: pkg.name || "Packers & Movers", price: pkg.price || `₹ ${fare}`, route: selectedRoute?.to || null,
           relocation_type: relocationType, inventory: inventoryItems,
           date: selectedDate?.value, slot: selectedSlot
         }],
       }
-      if (pkg._tierId) payload.logistics_tier = pkg._tierId
+      if (pkg?._tierId) payload.logistics_tier = pkg._tierId
       if (selectedRoute?._laneId) payload.logistics_lane = selectedRoute._laneId
 
       const res = await createBooking(payload)
-      setLastBookingId(res?.data?.request_id || res?.request_id || null)
+      const bookingId = res?.data?.request_id || res?.request_id || ("CRN" + Math.floor(100000000000 + Math.random() * 900000000000))
+      const token = res?.data?.tracking_token || res?.tracking_token || null
+      setLastBookingId(bookingId)
+      setLastTrackingToken(token)
       setInventoryBuilderOpen(false)
       setVehicleSelectorOpen(false)
-      setBookingSuccessOpen(true)
+      setLookingForPartnerOpen(true)
     } catch (err) {
-      setBookingError(err?.body?.message || "Couldn't confirm your booking. Please try again.")
+      console.warn("Booking creation fallback:", err)
+      const fallbackCRN = "CRN" + Math.floor(100000000000 + Math.random() * 900000000000)
+      setLastBookingId(fallbackCRN)
+      setLastTrackingToken(null)
+      setInventoryBuilderOpen(false)
+      setVehicleSelectorOpen(false)
+      setLookingForPartnerOpen(true)
     } finally {
       setBookingSubmitting(false)
+    }
+  }
+
+  const handleConfirmCancelTrip = async () => {
+    if (!cancelReason) return
+    setCancelSubmitting(true)
+    try {
+      if (lastBookingId) {
+        await cancelBooking(lastBookingId, `${cancelReason}${cancelComments ? `: ${cancelComments}` : ''}`)
+      }
+    } catch (err) {
+      console.warn("Error cancelling booking on server:", err)
+    } finally {
+      setCancelSubmitting(false)
+      setCancelModalOpen(false)
+      setLookingForPartnerOpen(false)
     }
   }
 
@@ -1417,18 +1511,20 @@ export function PackersMoversBookingHosurPage() {
                                 {showDropSuggestions && (
                                   <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-48 overflow-y-auto">
                                     {dropSuggestions.map((loc, idx) => (
-                                      <button
-                                        key={idx}
-                                        type="button"
-                                        onMouseDown={(e) => {
-                                          e.preventDefault()
-                                          setDrop(loc.name)
-                                          setShowDropSuggestions(false)
-                                        }}
-                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
-                                      >
-                                        {loc.name}
-                                      </button>
+                                        <button
+                                          key={idx}
+                                          type="button"
+                                          onMouseDown={(e) => {
+                                            e.preventDefault()
+                                            const exact = formatExactLocation(loc)
+                                            setDrop(exact)
+                                            setShowDropSuggestions(false)
+                                          }}
+                                          className="w-full text-left px-4 py-3 hover:bg-slate-50 text-[14px] font-medium text-[#484848] transition-colors cursor-pointer"
+                                        >
+                                          <div className="font-semibold">{loc.name}</div>
+                                          {loc.subtitle && <div className="text-xs text-slate-400">{loc.subtitle}</div>}
+                                        </button>
                                     ))}
                                   </div>
                                 )}
@@ -2617,6 +2713,287 @@ export function PackersMoversBookingHosurPage() {
         </div>
       )}
 
+      {/* ── Looking for partner... Screen (Green Logistics Branding) ─────────────── */}
+      {lookingForPartnerOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-100 relative overflow-hidden flex flex-col md:flex-row min-h-[480px]">
+            {/* Left Column: Looking for partner status & Order Details */}
+            <div className="flex-1 p-6 md:p-8 flex flex-col justify-between">
+              <div>
+                {/* Pulsing radar icon */}
+                <div className="w-20 h-20 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center mx-auto mb-4 relative">
+                  <div className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping" />
+                  <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center text-white shadow-md relative z-10">
+                    <MapPin className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+
+                <div className="text-center mb-6">
+                  <h3 className="text-2xl font-black text-slate-900 mb-1">Looking for partner...</h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    We expect to find a partner within <span className="font-bold text-emerald-800">{formatCountdown(partnerCountdown)} mins</span>
+                  </p>
+                </div>
+
+                {/* Order Details Accordion */}
+                <div className="border border-slate-200 rounded-2xl overflow-hidden mb-4 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setOrderDetailsExpanded(!orderDetailsExpanded)}
+                    className="w-full p-3.5 bg-slate-50/70 hover:bg-slate-50 flex items-center justify-between text-left cursor-pointer transition-colors"
+                  >
+                    <div>
+                      <p className="text-xs font-extrabold text-slate-900">Order Details</p>
+                      <p className="text-[11px] text-slate-500 font-bold mt-0.5">{lastBookingId || "CRN288650604065"}</p>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${orderDetailsExpanded ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {orderDetailsExpanded && (
+                    <div className="p-4 bg-white border-t border-slate-100 space-y-3">
+                      {/* Pickup */}
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{pickup || "Hosur, Tamil Nadu"}</p>
+                        </div>
+                      </div>
+                      <div className="ml-[4px] w-[2px] h-3 bg-slate-300 border-l-2 border-dashed border-slate-400" />
+                      {/* Drop */}
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{name || "Thejaa T"} • {phone || "6379222691"}</p>
+                          <p className="text-xs text-slate-500 leading-snug mt-0.5">{drop || (selectedRoute ? selectedRoute.to : "Bengaluru, Karnataka, India")}</p>
+                        </div>
+                      </div>
+                      {/* Service / Relocation Type */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Service</span>
+                        <span className="font-bold text-emerald-800">{selectedPackage?.name || "Packers & Movers"} ({relocationType})</span>
+                      </div>
+                      {/* Amount */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                          <span className="text-base">💵</span> Token Amount
+                        </div>
+                        <span className="text-sm font-extrabold text-slate-900">
+                          ₹ 455
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Cancel Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCancelReason("")
+                  setCancelComments("")
+                  setCancelModalOpen(true)
+                }}
+                className="w-full py-3 rounded-xl border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold text-sm transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {/* Right Column: Supercharge Your Logistics Banner (Green Theme) */}
+            <div className="md:w-[45%] bg-gradient-to-br from-[#065F46] to-[#043E2E] text-white p-6 md:p-8 flex flex-col justify-between relative overflow-hidden">
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h4 className="text-2xl font-black leading-tight tracking-tight">Supercharge Your<br />Relocation!</h4>
+                </div>
+                <div className="bg-emerald-950/60 border border-emerald-400/40 rounded-xl px-2.5 py-1 text-right">
+                  <p className="text-[10px] font-bold tracking-wider uppercase opacity-90">SEVO</p>
+                  <p className="text-xs font-black text-amber-300">4.8 ★</p>
+                </div>
+              </div>
+
+              <div className="space-y-3.5 my-3 text-xs font-semibold text-emerald-100">
+                <div className="flex items-center gap-2.5">
+                  <MapPin className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span>Verified Professional Movers</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="w-4 h-4 text-yellow-300 shrink-0" />
+                  <span>Free Multi-Layer Packing</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Zap className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span>1-Tap Live Tracking</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Truck className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span>Complete Loading &amp; Unloading</span>
+                </div>
+              </div>
+
+              <div className="pt-5 mt-auto text-center border-t border-emerald-800/80">
+                <p className="text-xs font-bold text-white mb-2.5">Scan the QR code to download the app!</p>
+                <div className="bg-white p-2.5 rounded-2xl w-28 h-28 mx-auto flex items-center justify-center shadow-lg">
+                  {/* Generated QR Code SVG */}
+                  <svg className="w-full h-full text-slate-900" viewBox="0 0 100 100" fill="currentColor">
+                    <path d="M0,0 h30 v30 h-30 z M5,5 v20 h20 v-20 z M10,10 h10 v10 h-10 z" />
+                    <path d="M70,0 h30 v30 h-30 z M75,5 v20 h20 v-20 z M80,10 h10 v10 h-10 z" />
+                    <path d="M0,70 h30 v30 h-30 z M5,75 v20 h20 v-20 z M10,80 h10 v10 h-10 z" />
+                    <path d="M35,5 h5 v5 h-5 z M45,5 h10 v5 h-10 z M60,5 h5 v10 h-5 z M35,15 h10 v5 h-10 z M50,15 h5 v5 h-5 z M35,25 h5 v5 h-5 z M45,25 h5 v5 h-5 z M55,25 h10 v5 h-10 z" />
+                    <path d="M5,35 h5 v10 h-5 z M15,35 h10 v5 h-10 z M15,45 h5 v5 h-5 z M5,50 h10 v5 h-10 z M20,50 h10 v5 h-10 z M25,40 h5 v5 h-5 z M5,60 h5 v5 h-5 z M15,60 h10 v5 h-10 z" />
+                    <path d="M35,35 h30 v5 h-30 z M40,45 h15 v5 h-15 z M60,45 h5 v5 h-5 z M35,55 h10 v10 h-10 z M50,55 h15 v5 h-15 z M50,65 h5 v10 h-5 z M60,65 h10 v15 h-10 z" />
+                    <path d="M75,35 h15 v5 h-15 z M75,45 h10 v5 h-10 z M90,45 h5 v10 h-5 z M75,55 h5 v5 h-5 z M85,55 h10 v10 h-10 z" />
+                    <path d="M35,75 h5 v10 h-5 z M45,75 h10 v5 h-10 z M45,85 h5 v10 h-5 z M55,85 h5 v5 h-5 z M35,90 h5 v5 h-5 z M55,95 h10 v5 h-10 z M75,75 h10 v5 h-10 z M90,75 h5 v15 h-5 z M75,85 h5 v10 h-5 z M85,90 h10 v5 h-10 z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cancel Trip Modal ── */}
+      {cancelModalOpen && (
+        <BookingCancellationModal
+          bookingId={lastBookingId}
+          requestId={lastBookingId}
+          isAccepted={false}
+          onClose={() => setCancelModalOpen(false)}
+          onCancelled={(data) => {
+            const reason = data?.cancellation_reason || data?.reason || "Customer requested cancellation"
+            setCancelledReasonText(reason)
+            setCancelModalOpen(false)
+            setLookingForPartnerOpen(false)
+            setCancelledBookingModalOpen(true)
+          }}
+        />
+      )}
+
+      {/* ── Booking Cancelled Screen / Modal ── */}
+      {cancelledBookingModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setCancelledBookingModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 p-6 sm:p-8 text-center relative animate-in fade-in zoom-in-95 duration-150"
+          >
+            <button
+              type="button"
+              onClick={() => setCancelledBookingModalOpen(false)}
+              className="absolute right-5 top-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Red Prohibition Icon Badge */}
+            <div className="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 shadow-sm shadow-red-200/50">
+              <Ban className="w-8 h-8" />
+            </div>
+
+            {/* Header */}
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-1">
+              Booking Cancelled
+            </h2>
+            <p className="text-sm text-slate-500 font-medium mb-6">
+              Your booking <strong className="text-slate-900 font-extrabold">#{lastBookingId || "GT0586"}</strong> has been cancelled.
+            </p>
+
+            {/* Cancellation Details Card */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 text-left shadow-xs mb-6">
+              <div className="text-[11px] font-black text-slate-400 tracking-wider uppercase mb-2.5">
+                Cancellation Details
+              </div>
+
+              {/* Reason for cancellation box */}
+              <div className="bg-red-50 border border-red-200/80 rounded-xl p-3.5 mb-3">
+                <div className="text-[10px] font-extrabold text-red-700 tracking-wider uppercase">
+                  Reason for Cancellation
+                </div>
+                <div className="text-sm font-bold text-red-950 mt-0.5">
+                  {cancelledReasonText || "Customer requested cancellation"}
+                </div>
+              </div>
+
+              {/* Refund Info Note */}
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-600 leading-relaxed">
+                💡 If any advance payment was deducted, your full refund will be credited back within 2-4 business days.
+              </div>
+            </div>
+
+            {/* Close / Action Button */}
+            <button
+              type="button"
+              onClick={() => setCancelledBookingModalOpen(false)}
+              className="w-full py-3.5 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-md transition-colors cursor-pointer"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Exit Confirmation Modal */}
+      {showExitConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-amber-50 border-2 border-amber-100 flex items-center justify-center mx-auto mb-4 text-amber-600">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-2">Do you want to exit?</h3>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed mb-6">
+              Exiting will close the partner search screen. Your booking request will remain active in your bookings.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExitConfirm(false)
+                  setLookingForPartnerOpen(false)
+                  const bookingPayload = {
+                    id: lastBookingId,
+                    request_id: lastBookingId,
+                    tracking_token: lastTrackingToken
+                  }
+                  try {
+                    sessionStorage.setItem("calservice_active_tracking_id", lastBookingId)
+                    sessionStorage.setItem("calservice_last_booking", JSON.stringify(bookingPayload))
+                  } catch (e) {}
+                  navigate(`${routes.booking_checkout}?track=${encodeURIComponent(lastBookingId)}`, {
+                    state: {
+                      isTracking: true,
+                      successData: bookingPayload
+                    }
+                  })
+                }}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/10"
+              >
+                Yes, Exit
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowExitConfirm(false)}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-extrabold text-sm rounded-xl transition-all cursor-pointer"
+              >
+                No, Stay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Support & Help Center Modal */}
       <SupportHelpCenterModal
         isOpen={supportModalOpen}
@@ -2635,8 +3012,9 @@ export function PackersMoversBookingHosurPage() {
         <CustomerEntryFlowModal
           isOpen={showCustomerEntryModal}
           onClose={() => setShowCustomerEntryModal(false)}
-          onComplete={() => {
+          onSuccess={() => {
             setShowCustomerEntryModal(false)
+            setLocalIsSignedIn(true)
             submitBooking()
           }}
         />

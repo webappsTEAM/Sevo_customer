@@ -771,11 +771,11 @@ const screenStyles = {
     gap: 6,
   },
   overlay: {
-    position: "fixed", inset: 0, zIndex: 10010,
+    position: "fixed", inset: 0, zIndex: 10200,
     display: "flex", alignItems: "center", justifyContent: "center",
     padding: "0.75rem",
-    background: "rgba(15, 23, 42, 0.65)",
-    backdropFilter: "blur(6px)",
+    background: "rgba(15, 23, 42, 0.45)",
+    backdropFilter: "blur(2px)",
     fontFamily: "inherit",
   },
   modalBox: {
