@@ -18,7 +18,7 @@ KITCHEN_PACKAGES_DATA = [
         "price": 1459,
         "duration": "2 hrs",
         "description": "Complete surface cleaning of tiles, slab, gas stove, and sink.",
-        "image": "/mockups/kitchen_basic_cleaning.png",
+        "image": "/mockups/kitchen_basic_cleaning_card.png",
         "includes": [
             "Kitchen tiles, floor & slab cleaning + Mopping",
             "Gas stove / hob cleaning",
