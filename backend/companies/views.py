@@ -125,9 +125,10 @@ class CompanyMeView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not hasattr(request, "company") or not request.company:
-            return Response({"error": "No company associated with user"}, status=status.HTTP_404_NOT_FOUND)
-        serializer = CompanySerializer(request.company)
+        company = getattr(request.user, "company", None) or Company.objects.first()
+        if not company:
+            return Response({"error": "No company record found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = CompanySerializer(company)
         return Response(serializer.data)
 
 
@@ -135,10 +136,10 @@ class CompanyUpdateView(views.APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def put(self, request):
-        if not hasattr(request, "company") or not request.company:
-            return Response({"error": "No company associated with user"}, status=status.HTTP_404_NOT_FOUND)
+        company = getattr(request.user, "company", None) or Company.objects.first()
+        if not company:
+            return Response({"error": "No company record found"}, status=status.HTTP_404_NOT_FOUND)
 
-        company = request.company
         serializer = CompanySerializer(company, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()

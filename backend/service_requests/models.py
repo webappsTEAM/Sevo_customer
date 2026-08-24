@@ -94,8 +94,11 @@ SERVICE_CATEGORIES = [
 ]
 
 
+from common.models import VisibilityQuerySet
+
 class ServiceRequest(models.Model):
     """Master record: created by public booking, driven through state machine."""
+    objects = VisibilityQuerySet.as_manager()
 
     class Status(models.TextChoices):
         DRAFT                 = "draft",                 "Draft"
@@ -288,6 +291,11 @@ class ServiceRequest(models.Model):
     # (open-access era) or no zones were active at the time.
     service_zone_id_snapshot   = models.IntegerField(null=True, blank=True, db_index=False)
     service_zone_name_snapshot = models.CharField(max_length=150, blank=True, default="")
+
+    # Quotation & Estimation Workflow compatibility
+    request_kind      = models.CharField(max_length=30, default="DIRECT", blank=True)
+    quote_number      = models.CharField(max_length=100, blank=True, null=True)
+    parent_request_id = models.IntegerField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

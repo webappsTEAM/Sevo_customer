@@ -37,6 +37,111 @@ import { BookingCancellationModal } from "../components/BookingCancellationModal
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
+import acServiceImg from "../../assets/ac service.png";
+import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png";
+import imgFoamWin from "../../assets/Foam & Power Jet AC Service — Window.png";
+import imgPowerSplit from "../../assets/Power Jet AC Service — Split.png";
+import imgPowerWin from "../../assets/Power Jet AC Service — Window.png";
+import imgAntiRust from "../../assets/Anti-Rust Deep Clean AC Service.png";
+import imgCombo2in1 from "../../assets/2-in-1 Combo AC Power Jet Service.png";
+import imgMega3in1 from "../../assets/3-in-1 Mega AC Power Jet Service.png";
+import imgAirflowSanitization from "../../assets/AC Airflow & Filter Deep Sanitization.png";
+import imgFoamSplitParen from "../../assets/Foam & Power Jet AC Service (Split).png";
+import imgAcRepairSplitWin from "../../assets/AC Repair — Split Window.png";
+import imgLessNoCooling from "../../assets/Less No Cooling.png";
+import imgPowerIssue from "../../assets/Power Issue.png";
+import imgWaterLeakage from "../../assets/Water Leakage.png";
+import imgUnwantedNoiseSmell from "../../assets/Unwanted Noise Smell.png";
+import imgAcFanMotor from "../../assets/AC Fan Motor Replacement  Repair.png";
+import imgAcLessNoCoolingDiag from "../../assets/AC Less  No Cooling Diagnostics.png";
+import imgAcNoiseVibrationDiag from "../../assets/AC Noise & Vibration Diagnostics.png";
+import imgAcOnOffSensor from "../../assets/AC On  Off & Remote Sensor Repair.png";
+import imgAcWaterLeakageDrain from "../../assets/AC Water Leakage & Drain Repair.png";
+import imgInverterAcErrorCode from "../../assets/Inverter AC Error Code Diagnostics.png";
+import imgGasLeakFixRefill from "../../assets/Gas Leak Fix & Refill.png";
+import imgGasCharging from "../../assets/Gas Charging.png";
+import imgServiceValveReplace from "../../assets/Service Valve Replacement.png";
+import imgCoolingCoilCondenserRepair from "../../assets/Cooling Coil  Condenser Coil Repair.png";
+import imgAcGasTopUp from "../../assets/AC Gas Top-Up & Pressure Balancing.png";
+import imgCompleteAcGasCharging from "../../assets/Complete AC Gas Charging (R32 R410A R22).png";
+import imgCopperCoilBrazing from "../../assets/Copper Coil Pinhole Brazing & Welding.png";
+import imgNitrogenLeakTest from "../../assets/High-Pressure Nitrogen Leak Test.png";
+import imgSplitAcInstall from "../../assets/Split AC Installation.png";
+import imgWindowAcInstall from "../../assets/Window AC Installation.png";
+import imgAcUninstall from "../../assets/AC Uninstallation.png";
+import imgIndoorUnitReinstall from "../../assets/Indoor Unit Reinstallation.png";
+import imgOutdoorUnitReinstall from "../../assets/Outdoor Unit Reinstallation.png";
+import imgHeavyDutyWallStand from "../../assets/Heavy-Duty Outdoor AC Wall Stand Fit.png";
+import imgSplitAcCompleteInstall from "../../assets/Split AC Complete Installation.png";
+import imgSplitAcDismountReinstallCombo from "../../assets/Split AC Dismount & Re-Installation Combo.png";
+import imgSplitAcSafeUninstall from "../../assets/Split AC Safe Uninstallation.png";
+import imgInverterPcbRepair from "../../assets/Inverter PCB Repair.png";
+import imgNonInverterPcbRepair from "../../assets/Non-Inverter PCB Repair.png";
+import imgMotorStartCapacitor from "../../assets/Motor Start Capacitor Replacement.png";
+import imgContactorReplacement from "../../assets/Contactor Replacement.png";
+import imgSensorReplacement from "../../assets/Sensor Replacement.png";
+import imgLvtReplacement from "../../assets/LVT Replacement.png";
+
+export const resolveAcServiceImage = (nameOrIdOrSlug) => {
+  if (!nameOrIdOrSlug) return null;
+  const str = String(nameOrIdOrSlug).toLowerCase().trim();
+  
+  // Cleaning & Jet Services
+  if (str.includes("2-in-1") || str.includes("2 in 1") || str.includes("combo")) return imgCombo2in1;
+  if (str.includes("3-in-1") || str.includes("3 in 1") || str.includes("mega")) return imgMega3in1;
+  if (str.includes("airflow") || str.includes("filter deep") || (str.includes("sanitization") && str.includes("air"))) return imgAirflowSanitization;
+  if (str.includes("anti-rust") || str.includes("anti rust") || str.includes("hvac-ar-3")) return imgAntiRust;
+  if (str.includes("foam") && (str.includes("split") || str.includes("hvac-fj-split"))) return str.includes("(") ? imgFoamSplitParen : imgFoamSplit;
+  if (str.includes("foam") && (str.includes("win") || str.includes("hvac-fj-win"))) return imgFoamWin;
+  if (str.includes("power") && str.includes("jet") && (str.includes("split") || str.includes("hvac-pj-split"))) return imgPowerSplit;
+  if (str.includes("power") && str.includes("jet") && (str.includes("win") || str.includes("hvac-pj-win"))) return imgPowerWin;
+
+  // Diagnostics & Specific Repairs
+  if (str.includes("fan motor") || (str.includes("motor") && str.includes("fan")) || str.includes("hvac-rep-fan")) return imgAcFanMotor;
+  if (str.includes("noise & vibration") || str.includes("noise and vibration") || str.includes("vibration diagnostics") || str.includes("hvac-rep-diag-noise")) return imgAcNoiseVibrationDiag;
+  if (str.includes("on / off") || str.includes("on off") || str.includes("remote sensor") || str.includes("sensor repair") || str.includes("hvac-rep-sensor")) return imgAcOnOffSensor;
+  if (str.includes("water leakage & drain") || str.includes("water leakage and drain") || (str.includes("drain") && str.includes("leakage")) || str.includes("hvac-rep-drain")) return imgAcWaterLeakageDrain;
+  if (str.includes("inverter ac error") || str.includes("error code diagnostics") || str.includes("error code") || str.includes("hvac-rep-inverter")) return imgInverterAcErrorCode;
+  if (str.includes("less / no cooling diagnostics") || str.includes("less no cooling diagnostics") || (str.includes("cooling") && str.includes("diagnostics")) || str.includes("hvac-rep-diag-cool")) return imgAcLessNoCoolingDiag;
+
+  // General Repair Categories
+  if ((str.includes("ac repair") || str.includes("hvac-rep-1")) && (str.includes("split") || str.includes("window"))) return imgAcRepairSplitWin;
+  if (str.includes("less/no cooling") || str.includes("less no cooling") || str.includes("no cooling") || str.includes("hvac-rep-2")) return imgLessNoCooling;
+  if (str.includes("power issue") || str.includes("power not turning on") || str.includes("power problem") || str.includes("hvac-rep-3")) return imgPowerIssue;
+  if (str.includes("water leakage") || str.includes("water dripping") || str.includes("drain pipe unclogging") || str.includes("hvac-rep-4")) return imgWaterLeakage;
+  if (str.includes("noise") || str.includes("smell") || str.includes("odor") || str.includes("hvac-rep-5")) return imgUnwantedNoiseSmell;
+
+  // Gas & Refrigerant Services
+  if (str.includes("gas leak fix") || (str.includes("gas") && str.includes("leak") && str.includes("refill")) || str.includes("hvac-gas-1")) return imgGasLeakFixRefill;
+  if (str.includes("complete ac gas charging") || str.includes("r32") || str.includes("r410a") || str.includes("r22") || str.includes("hvac-gas-complete")) return imgCompleteAcGasCharging;
+  if (str.includes("gas top-up") || str.includes("gas top up") || str.includes("pressure balancing") || str.includes("hvac-gas-topup")) return imgAcGasTopUp;
+  if (str.includes("gas charging") || str.includes("hvac-gas-2")) return imgGasCharging;
+  if (str.includes("service valve") || str.includes("valve replacement") || str.includes("hvac-gas-3")) return imgServiceValveReplace;
+  if (str.includes("cooling coil") || str.includes("condenser coil") || str.includes("coil repair") || str.includes("hvac-gas-4")) return imgCoolingCoilCondenserRepair;
+  if (str.includes("copper coil") || str.includes("pinhole brazing") || str.includes("brazing & welding") || str.includes("hvac-gas-copper")) return imgCopperCoilBrazing;
+  if (str.includes("nitrogen leak") || str.includes("nitrogen") || str.includes("hvac-gas-nitrogen")) return imgNitrogenLeakTest;
+
+  // Installation & Uninstallation Services
+  if (str.includes("dismount & re-installation") || str.includes("dismount and re-installation") || str.includes("dismount & reinstallation") || str.includes("re-installation combo") || str.includes("hvac-inst-combo")) return imgSplitAcDismountReinstallCombo;
+  if (str.includes("split ac complete") || str.includes("complete installation") || str.includes("hvac-inst-complete")) return imgSplitAcCompleteInstall;
+  if (str.includes("safe uninstallation") || str.includes("safe removal") || str.includes("hvac-inst-safe-uninst")) return imgSplitAcSafeUninstall;
+  if (str.includes("wall stand") || str.includes("heavy-duty outdoor") || str.includes("heavy duty outdoor") || str.includes("hvac-inst-wallstand")) return imgHeavyDutyWallStand;
+  if (str.includes("indoor unit reinstallation") || str.includes("indoor reinstallation") || str.includes("hvac-reinst-ind")) return imgIndoorUnitReinstall;
+  if (str.includes("outdoor unit reinstallation") || str.includes("outdoor reinstallation") || str.includes("hvac-reinst-out")) return imgOutdoorUnitReinstall;
+  if (str.includes("window ac installation") || str.includes("window installation") || str.includes("hvac-inst-win")) return imgWindowAcInstall;
+  if (str.includes("split ac installation") || str.includes("split installation") || str.includes("hvac-inst-split")) return imgSplitAcInstall;
+  if (str.includes("uninstallation") || str.includes("hvac-uninst-1")) return imgAcUninstall;
+
+  // PCB & Electrical Services
+  if (str.includes("inverter pcb") || str.includes("hvac-pcb-inv")) return imgInverterPcbRepair;
+  if (str.includes("non-inverter pcb") || str.includes("non inverter pcb") || str.includes("hvac-pcb-non")) return imgNonInverterPcbRepair;
+  if (str.includes("capacitor") || str.includes("motor start capacitor") || str.includes("hvac-cap-1")) return imgMotorStartCapacitor;
+  if (str.includes("contactor") || str.includes("hvac-cnt-1")) return imgContactorReplacement;
+  if (str.includes("sensor replacement") || (str.includes("sensor") && str.includes("replace")) || str.includes("hvac-sns-1")) return imgSensorReplacement;
+  if (str.includes("lvt") || str.includes("hvac-lvt-1")) return imgLvtReplacement;
+
+  return null;
+};
 
 let BOOKING_CURRENCY_SYMBOL = "₹";
 
@@ -102,9 +207,9 @@ const PACKAGES = {
     { id: "elec-care", name: "Home Electrical Care", price: 1999, priceStr: "₹1,999", duration: "3 hrs", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=500&q=80&fit=crop", includes: ["Complete Home Inspection", "Fan & Light Service", "Socket Testing"], excludes: [] },
   ],
   hvac: [
-    { id: "hvac-std", name: "Standard Package", price: 599, priceStr: "₹599", duration: "1-2 Hrs", popular: true, tag: "Most Booked", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=500&q=80&fit=crop", includes: ["General AC Service", "Filter Cleaning", "Cooling Performance Check", "Basic Inspection"], excludes: [] },
+    { id: "hvac-std", name: "Standard Package", price: 599, priceStr: "₹599", duration: "1-2 Hrs", popular: true, tag: "Most Booked", image: acServiceImg, includes: ["General AC Service", "Filter Cleaning", "Cooling Performance Check", "Basic Inspection"], excludes: [] },
     { id: "hvac-prem", name: "Premium Package", price: 1299, priceStr: "₹1,299", duration: "2-3 Hrs", popular: false, tag: "", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=500&q=80&fit=crop", includes: ["Deep Coil Cleaning", "Water Jet Cleaning", "Filter Cleaning", "Cooling Performance Check", "Gas Pressure Check", "Minor Adjustments", "30-Day Service Warranty"], excludes: [] },
-    { id: "hvac-amc", name: "Annual Maintenance Package (AMC)", price: 2999, priceStr: "₹2,999", duration: "Yearly", popular: false, tag: "Best Value", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=500&q=80&fit=crop", includes: ["4 AC Services per Year", "Priority Technician", "Discount on Spare Parts", "Free Basic Inspection", "Service Reminder"], excludes: [] },
+    { id: "hvac-amc", name: "Annual Maintenance Package (AMC)", price: 2999, priceStr: "₹2,999", duration: "Yearly", popular: false, tag: "Best Value", image: acServiceImg, includes: ["4 AC Services per Year", "Priority Technician", "Discount on Spare Parts", "Free Basic Inspection", "Service Reminder"], excludes: [] },
   ],
   appliance_repair: [
     { id: "app-std", name: "Standard", price: 399, priceStr: "₹399", duration: "1 hr", popular: false, tag: "", image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=500&q=80&fit=crop", includes: ["Appliance Diagnosis", "Basic Repair"], excludes: [] },
@@ -2331,18 +2436,19 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
     liveData?.status && ["completed", "closed", "reviewed", "feedback_received"].includes(liveData.status.toLowerCase())
   )
 
+  const empInfo = liveData?.technician || successData?.technician || liveData?.assigned_employee || null
+  const techName = empInfo?.name || empInfo?.full_name || liveData?.technician_name || successData?.technician_name || ""
+  const techPhone = empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || ""
+  const techPhoto = empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null
+  const techRating = empInfo?.rating != null ? empInfo.rating : (liveData?.technician_rating != null ? liveData.technician_rating : successData?.technician_rating ?? null)
+  const techJobs = empInfo?.jobs_completed != null ? empInfo.jobs_completed : (empInfo?.total_jobs != null ? empInfo.total_jobs : null)
+
   const isAccepted = Boolean(
     !isCompleted && (
-      liveData?.is_accepted ||
-      (["accepted", "in_progress", "on_the_way", "arrived"].includes(liveData?.status) && (liveData?.technician?.name || liveData?.technician_name))
+      (liveData?.is_accepted || ["accepted", "in_progress", "on_the_way", "arrived"].includes(liveData?.status)) &&
+      Boolean(techName)
     )
   )
-  const empInfo = isAccepted || isCompleted ? (liveData?.technician || successData?.technician || liveData?.assigned_employee) : null
-  const techName = isAccepted || isCompleted ? (empInfo?.name || liveData?.technician_name || successData?.technician_name || "") : ""
-  const techPhone = isAccepted || isCompleted ? (empInfo?.phone || liveData?.technician_phone || successData?.technician_phone || "") : ""
-  const techPhoto = isAccepted || isCompleted ? (empInfo?.photo || liveData?.technician_photo || successData?.technician_photo || null) : null
-  const techRating = isAccepted || isCompleted ? (empInfo?.rating || liveData?.technician_rating || successData?.technician_rating || null) : null
-  const techJobs = isAccepted || isCompleted ? (empInfo?.jobs_completed || empInfo?.total_jobs || null) : null
 
   const isCancelled = liveData?.status === "cancelled"
   const cancellationReason = liveData?.cancellation_reason || (liveData?.description && liveData.description.includes("[Cancellation Reason]:") ? liveData.description.split("[Cancellation Reason]:")[1].trim() : "")
@@ -2410,203 +2516,142 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
         }}>
           <CheckCircle2 size={44} color="white" />
         </div>
-
-        <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", margin: "0 0 0.35rem" }}>
-          Service Completed! 🎉
-        </h2>
-        <p style={{ color: "#64748b", fontSize: "0.9rem", margin: "0 0 1.25rem" }}>
-          Your service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been finished successfully.
-        </p>
-
-        {/* Serviced By Partner Card */}
-        {techName && (
-          <div style={{
-            background: "white",
-            borderRadius: 18,
-            padding: "1rem 1.25rem",
-            marginBottom: "1rem",
-            border: "1px solid #e2e8f0",
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            textAlign: "left",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-          }}>
-            <div style={{
-              width: 48,
-              height: 48,
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #dcfce7, #bbf7d0)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "1.2rem",
-              fontWeight: 800,
-              color: "#15803d",
-              border: "2px solid #22c55e",
-              flexShrink: 0,
-            }}>
-              {techPhoto ? (
-                <img src={techPhoto} alt={techName} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-              ) : (
-                (techName || "P").charAt(0).toUpperCase()
-              )}
+        <div style={{ background: "white", borderRadius: 24, padding: "2.5rem 1.5rem", boxShadow: "0 10px 40px rgba(0,0,0,0.06)", border: "1px solid #e2e8f0" }}>
+          <div style={{ width: 80, height: 80, borderRadius: "50%", background: "#ecfdf5", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem", boxShadow: "0 8px 24px rgba(16,185,129,0.2)" }}>
+            <CheckCircle2 size={44} />
+          </div>
+          <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", marginBottom: "0.4rem" }}>Service Completed!</h2>
+          <p style={{ color: "#64748b", fontSize: "0.95rem", marginBottom: "1.5rem" }}>
+            Your service request <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been finished successfully.
+          </p>
+          {techName && (
+            <div style={{ padding: "0.85rem", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0", display: "inline-flex", alignItems: "center", gap: 10, marginBottom: "1.5rem" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#475569" }}>
+                {techName.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ textAlign: "left" }}>
+                <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 800, textTransform: "uppercase" }}>Serviced By</div>
+                <div style={{ fontSize: "0.9rem", fontWeight: 900, color: "#0f172a" }}>{techName}</div>
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#16a34a", textTransform: "uppercase" }}>Serviced By</div>
-              <div style={{ fontSize: "0.98rem", fontWeight: 900, color: "#0f172a" }}>{techName}</div>
-              <div style={{ fontSize: "0.76rem", color: "#64748b" }}>Verified Professional • Sevo</div>
-            </div>
-            <span style={{
-              fontSize: "0.72rem",
-              fontWeight: 800,
-              background: "#ecfdf5",
-              color: "#059669",
-              padding: "4px 8px",
-              borderRadius: 8,
-              border: "1px solid #a7f3d0",
-            }}>
-              ✓ Finished
-            </span>
-          </div>
-        )}
-
-        {/* Real Bill / Order Details */}
-        <div style={{
-          background: "white",
-          borderRadius: 20,
-          padding: "1.25rem",
-          marginBottom: "1.5rem",
-          border: "1px solid #e2e8f0",
-          textAlign: "left",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, borderBottom: "1px solid #f1f5f9", paddingBottom: 8 }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Bill Summary</span>
-            <span style={{ fontSize: "0.76rem", fontWeight: 800, color: "#15803d", background: "#f0fdf4", padding: "2px 8px", borderRadius: 6 }}>Paid</span>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: "0.88rem" }}>
-            <span style={{ color: "#475569" }}>Total Amount:</span>
-            <span style={{ fontWeight: 900, color: "#0f172a" }}>₹{Number(displayTotal || 0).toLocaleString("en-IN")}</span>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: "0.82rem" }}>
-            <span style={{ color: "#64748b" }}>Payment Mode:</span>
-            <span style={{ fontWeight: 700, color: "#334155" }}>{paymentMethod === "ONLINE" ? "Online Payment" : "Cash on Delivery"}</span>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
-            <span style={{ color: "#64748b" }}>Delivered To:</span>
-            <span style={{ fontWeight: 600, color: "#334155", maxWidth: "60%", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {displayAddress}
-            </span>
+          )}
+          <div>
+            <button
+              onClick={() => window.location.href = "/"}
+              style={{ padding: "0.85rem 2rem", background: "linear-gradient(135deg, #10B981, #059669)", color: "white", fontWeight: 800, border: "none", borderRadius: 14, cursor: "pointer", boxShadow: "0 4px 14px rgba(16,185,129,0.3)" }}
+            >
+              Back to Home
+            </button>
           </div>
         </div>
-
-        {/* Action Button */}
-        <button
-          onClick={onBookAgain}
-          style={{
-            width: "100%",
-            padding: "0.95rem",
-            background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
-            color: "white",
-            fontWeight: 800,
-            fontSize: "0.95rem",
-            border: "none",
-            borderRadius: 14,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            boxShadow: "0 4px 14px rgba(124, 58, 237, 0.35)",
-          }}
-        >
-          <Home size={16} /> Book Another Service
-        </button>
       </motion.div>
     )
   }
 
-  /* ─────────────────── CASE 0: BOOKING CANCELLED STATE ─────────────────── */
   if (isCancelled) {
     return (
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 600, margin: "0 auto", padding: "1.5rem 1rem", textAlign: "center" }}>
-        <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem", boxShadow: "0 6px 20px rgba(220, 38, 38, 0.2)" }}>
-          <Ban size={38} color="#dc2626" />
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{ maxWidth: 620, margin: "0 auto", padding: "1.5rem 1rem", textAlign: "center" }}
+      >
+        <div style={{ background: "white", borderRadius: 24, padding: "2.5rem 1.5rem", boxShadow: "0 10px 40px rgba(0,0,0,0.06)", border: "1px solid #fee2e2" }}>
+          <div style={{ width: 80, height: 80, borderRadius: "50%", background: "#fef2f2", color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem", boxShadow: "0 8px 24px rgba(239,68,68,0.2)" }}>
+            <Ban size={44} />
+          </div>
+          <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#991b1b", marginBottom: "0.4rem" }}>Booking Cancelled</h2>
+          <p style={{ color: "#7f1d1d", fontSize: "0.95rem", marginBottom: "1rem" }}>
+            Booking <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been cancelled.
+          </p>
+          {cancellationReason && (
+            <div style={{ padding: "0.75rem 1rem", background: "#fef2f2", borderRadius: 12, border: "1px solid #fecaca", color: "#b91c1c", fontSize: "0.85rem", marginBottom: "1.5rem", textAlign: "left" }}>
+              <strong>Reason:</strong> {cancellationReason}
+            </div>
+          )}
+          <button
+            onClick={() => window.location.href = "/"}
+            style={{ padding: "0.85rem 2rem", background: "#0f172a", color: "white", fontWeight: 800, border: "none", borderRadius: 14, cursor: "pointer" }}
+          >
+            Explore Services
+          </button>
         </div>
-        <h2 style={{ fontSize: "1.6rem", fontWeight: 900, color: "#0f172a", margin: "0 0 0.4rem" }}>
-          Booking Cancelled
-        </h2>
-        <p style={{ color: "#64748b", fontSize: "0.9rem", margin: "0 0 1.25rem" }}>
-          Your booking <strong style={{ color: "#0f172a" }}>#{rid}</strong> has been cancelled.
-        </p>
-
-        <div style={{ background: "white", borderRadius: 20, padding: "1.25rem", marginBottom: "1.5rem", border: "1px solid #e2e8f0", textAlign: "left", boxShadow: "0 4px 16px rgba(0,0,0,0.05)" }}>
-          <div style={{ fontSize: "0.75rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-            Cancellation Details
-          </div>
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
-            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#991b1b", textTransform: "uppercase" }}>Reason for Cancellation</div>
-            <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#7f1d1d", marginTop: 2 }}>{cancellationReason || "Customer requested cancellation"}</div>
-          </div>
-          <div style={{ fontSize: "0.8rem", color: "#475569", lineHeight: 1.5, background: "#f8fafc", padding: "10px 12px", borderRadius: 10 }}>
-            💡 If any advance payment was deducted, your full refund will be credited back within 2-4 business days.
-          </div>
-        </div>
-
-        <button
-          onClick={onBookAgain}
-          style={{
-            width: "100%",
-            padding: "0.95rem",
-            background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
-            color: "white",
-            fontWeight: 800,
-            fontSize: "0.92rem",
-            border: "none",
-            borderRadius: 14,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            boxShadow: "0 4px 14px rgba(124, 58, 237, 0.35)",
-          }}
-        >
-          <Home size={16} /> Book Another Service
-        </button>
       </motion.div>
     )
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 620, margin: '0 auto', padding: '1.25rem 1rem' }}>
-
-      {/* ─────────────────── CASE A: WAITING FOR PARTNER (RAPIDO RADAR SEARCH) ─────────────────── */}
-      {!isAccepted ? (
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+      style={{ maxWidth: 620, margin: '0 auto', padding: '1.5rem 1rem' }}
+    >
+      {/* ─────────────────── HEADLINE STATUS BANNER ─────────────────── */}
+      {isAccepted ? (
+        <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 14 }}
+            style={{
+              width: 68,
+              height: 68,
+              borderRadius: '50%',
+              background: isArrived
+                ? 'linear-gradient(135deg, #10B981, #059669)'
+                : isInProgress
+                ? 'linear-gradient(135deg, #3B82F6, #1D4ED8)'
+                : 'linear-gradient(135deg, #7C3AED, #6D28D9)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 0.75rem',
+              boxShadow: isArrived ? '0 6px 20px rgba(16, 185, 129, 0.35)' : '0 6px 20px rgba(124, 58, 237, 0.35)',
+            }}
+          >
+            {isArrived ? (
+              <CheckCircle2 size={38} color="white" />
+            ) : isInProgress ? (
+              <Wrench size={34} color="white" />
+            ) : (
+              <CheckCircle2 size={38} color="white" />
+            )}
+          </motion.div>
+          <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
+            {isArrived
+              ? 'Partner Arrived at Location! 🏠'
+              : isInProgress
+              ? 'Service in Progress 🛠️'
+              : isOnTheWay
+              ? 'Partner On The Way! 🛵'
+              : 'Partner Accepted Your Booking! 🎉'}
+          </h2>
+          <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.88rem' }}>
+            {isArrived
+              ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> has arrived at your service address</>
+              : isInProgress
+              ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is servicing your request</>
+              : isOnTheWay
+              ? <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> is en route to your location</>
+              : <><strong style={{ color: '#0f172a' }}>{techName || 'Service Partner'}</strong> accepted your booking</>}
+          </p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px' }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
+            <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0f172a', fontFamily: 'monospace' }}>#{rid}</span>
+          </div>
+        </div>
+      ) : (
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-
-          {/* Animated Running Service Professional Radar */}
           <RunningServiceManRadar />
-
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f5f3ff', border: '1px solid rgba(124, 58, 237, 0.25)', borderRadius: 99, padding: '4px 14px', marginBottom: 10 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7C3AED' }} className="animate-ping" />
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Live Dispatch Active • Hosur
+              Live Dispatch Active
             </span>
           </div>
-
           <h2 style={{ margin: '0 0 0.35rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
             Finding your service professional...
           </h2>
-          <p style={{ margin: '0 0 1rem', color: '#64748b', fontSize: '0.88rem' }}>
-            Broadcasting request to nearby verified experts in Hosur
-          </p>
-
-          {/* Live search elapsed counter */}
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.6rem 1rem', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: '#475569', fontWeight: 700 }}>
             <Clock size={14} color="#7C3AED" />
             <span>Searching for: <strong style={{ color: '#0f172a', fontFamily: 'monospace', fontSize: '0.88rem' }}>{formatTimer(searchSeconds)}</strong></span>
@@ -2638,28 +2683,6 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 5 }}>
               ⚡ Free cancellation available anytime before partner accepts
             </div>
-          </div>
-        </div>
-      ) : (
-        /* ─────────────────── CASE B: PARTNER ACCEPTED (REAL DATABASE DATA) ─────────────────── */
-        <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 220, damping: 14 }}
-            style={{ width: 68, height: 68, borderRadius: '50%', background: 'linear-gradient(135deg, #10B981, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem', boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)' }}
-          >
-            <CheckCircle2 size={38} color="white" />
-          </motion.div>
-          <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>
-            Partner Confirmed &amp; On The Way! 🎉
-          </h2>
-          <p style={{ margin: '0 0 0.5rem', color: '#64748b', fontSize: '0.88rem' }}>
-            {techName} accepted your booking and is en route
-          </p>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #7C3AED30', borderRadius: 99, padding: '4px 14px' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED', textTransform: 'uppercase' }}>Booking Ref</span>
-            <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0f172a', fontFamily: 'monospace' }}>#{rid}</span>
           </div>
         </div>
       )}
@@ -2744,39 +2767,63 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               </div>
             </div>
 
-            {etaMinutes != null ? (
+            {isArrived ? (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>At Site</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ARRIVED</div>
+              </div>
+            ) : isInProgress ? (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 900 }}>In Progress</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ACTIVE</div>
+              </div>
+            ) : (hasValidTechnicianGPS && etaMinutes != null) ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #FC8019, #f97316)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
                 <div style={{ fontSize: '1.25rem', fontWeight: 900 }}>{etaMinutes}</div>
                 <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>MIN ETA</div>
               </div>
-            ) : distKm != null ? (
+            ) : (hasValidTechnicianGPS && distKm != null) ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #FC8019, #f97316)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
                 <div style={{ fontSize: '1.1rem', fontWeight: 900 }}>{distKm}</div>
                 <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>KM AWAY</div>
               </div>
-            ) : liveData?.technician_location?.latitude != null ? (
+            ) : hasValidTechnicianGPS ? (
               <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #10B981, #059669)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
                 <div style={{ fontSize: '0.88rem', fontWeight: 900 }}>Live GPS</div>
                 <div style={{ fontSize: '0.62rem', fontWeight: 800 }}>ACTIVE</div>
               </div>
             ) : (
-              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #64748b, #475569)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white' }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 900 }}>Assigned</div>
-                <div style={{ fontSize: '0.58rem', fontWeight: 800 }}>WAITING GPS</div>
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', borderRadius: 12, padding: '0.5rem 0.85rem', color: 'white', minWidth: 95 }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 900 }}>✓ Accepted</div>
+                <div style={{ fontSize: '0.58rem', fontWeight: 800, opacity: 0.9 }}>WAITING GPS</div>
               </div>
             )}
           </div>
 
+          {/* Notice when accepted but waiting for live GPS signal */}
+          {!hasValidTechnicianGPS && !isArrived && !isInProgress && (
+            <div style={{
+              marginTop: '0.85rem',
+              padding: '0.55rem 0.85rem',
+              background: '#f5f3ff',
+              border: '1px solid #ddd6fe',
+              borderRadius: 12,
+              fontSize: '0.78rem',
+              color: '#6d28d9',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7c3AED', display: 'inline-block' }} />
+              <span>Waiting for live location...</span>
+            </div>
+          )}
+
           {/* Action Buttons: Track on Map + Call + WhatsApp */}
           <div style={{ display: 'flex', gap: 8, marginTop: '1rem', flexWrap: 'wrap' }}>
             <button
-              onClick={() => {
-                if (trackingPageUrl) {
-                  window.open(trackingPageUrl, '_blank')
-                } else {
-                  setShowMapModal(true)
-                }
-              }}
+              onClick={() => setShowMapModal(true)}
               style={{
                 flex: 1.3,
                 padding: '0.75rem',
@@ -4433,7 +4480,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
                               boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                               whiteSpace: 'nowrap'
                             }}>
-                              {b.start_otp || '482915'}
+                              {b.start_otp || '------'}
                             </div>
                           </div>
                         )}
@@ -7797,7 +7844,7 @@ function StepWorkflowCheckout({
                     )}
 
                     <button
-                      onClick={() => onSubmit(payMethod, appliedCoupon?.code)}
+                      onClick={() => onSubmit(payMethod, appliedCoupon?.code, tipAmount, appliedCoupon)}
                       disabled={loading}
                       className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300"
                     >
@@ -8552,7 +8599,7 @@ export function BookingPage() {
     if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)) }
   }
 
-  const handleSubmit = async (paymentMethod = "cash", couponCode = null) => {
+  const handleSubmit = async (paymentMethod = "cash", couponCode = null, tipValue = 0, couponObj = null) => {
     if (!user) {
       setShowCustomerEntryModal(true)
       return
@@ -8588,17 +8635,18 @@ export function BookingPage() {
     
     // Check coupon discount
     let discount = 0;
+    const appliedCoupon = couponObj;
     if (couponCode && appliedCoupon) {
-      if (appliedCoupon.discount_type === "flat") {
-        discount = Number(appliedCoupon.discount_value) || 0;
+      if (appliedCoupon.discount_type === "flat" || appliedCoupon.discountType === "flat") {
+        discount = Number(appliedCoupon.discount_value || appliedCoupon.discountValue) || 0;
       } else {
-        discount = Math.round((itemTotal * (Number(appliedCoupon.discount_value) || 0)) / 100);
+        discount = Math.round((itemTotal * (Number(appliedCoupon.discount_value || appliedCoupon.discountValue) || 0)) / 100);
       }
-      if (appliedCoupon.max_discount) {
-        discount = Math.min(discount, Number(appliedCoupon.max_discount));
+      if (appliedCoupon.max_discount || appliedCoupon.maxDiscount) {
+        discount = Math.min(discount, Number(appliedCoupon.max_discount || appliedCoupon.maxDiscount));
       }
     }
-    const tipAmount = tip === "custom" ? (Number(customTip) || 0) : (Number(tip) || 0);
+    const tipAmount = Number(tipValue) || 0;
     const calculatedGrandTotal = Math.max(0, itemTotal + totalGst + platformFee - discount + tipAmount);
 
     console.log("========== REAL BOOKING SUBMISSION ==========");
@@ -8702,7 +8750,7 @@ export function BookingPage() {
       if (err?.body?.errors) {
         const msgs = Object.entries(err.body.errors).map(([f, m]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`).join(" · ")
         setError(msgs || err.body.message)
-      } else setError(err?.body?.message || err?.body?.detail || "Connection error. Try again.")
+      } else setError(err?.body?.message || err?.body?.detail || err?.message || "Connection error. Try again.")
     } finally { setLoading(false) }
   }
 
@@ -14176,66 +14224,94 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     },
     hvac: {
       "AC Service & Cleaning": [
-        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" }
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: imgFoamSplit },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: imgFoamWin },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: imgPowerSplit },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: imgPowerWin },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: imgAntiRust },
+        { id: "hvac-2in1", name: "2-in-1 Combo AC Power Jet Service", price: 899, duration: "1 hr", badge: "Combo Saver", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Complete foam & power jet service for 2 AC units with filter deep sanitization.", includes: ["2 AC units foam & jet wash", "Drain tray unclogging", "Refrigerant level check"], image: imgCombo2in1 },
+        { id: "hvac-3in1", name: "3-in-1 Mega AC Power Jet Service", price: 1299, duration: "1.5 hrs", badge: "Mega Saver", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "All-in-one power jet deep cleaning for 3 split or window AC units in one visit.", includes: ["3 AC units comprehensive wash", "Coil deodorizing & sanitization", "Comprehensive airflow check"], image: imgMega3in1 },
+        { id: "hvac-airflow", name: "AC Airflow & Filter Deep Sanitization", price: 349, duration: "30 mins", badge: "Air Care", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "High-grade anti-bacterial cleaning for blower wheel, mesh filters, and internal air channels.", includes: ["Anti-bacterial blower spray", "Mesh filter deep scrub", "Odor neutralizer"], image: imgAirflowSanitization }
       ],
       "AC Repair": [
-        { id: "hvac-rep-1", name: "AC Repair — Split/Window", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Comprehensive diagnostic and repair for electrical, mechanical, noise or cooling failure.", includes: ["Full system diagnostic", "Faulty component repair", "Safety voltage test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-rep-2", name: "Less/No Cooling", price: 499, duration: "45 mins", badge: "Cooling Restore", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnostic for AC running without cooling. Refrigerant level scan, compressor relay & fan motor check.", includes: ["Refrigerant PSI scan", "Compressor relay audit", "Filter airflow test"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
-        { id: "hvac-rep-3", name: "Power Issue", price: 499, duration: "45 mins", badge: "Power Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix AC not turning on, MCB tripping, display light dead, or remote receiver failure.", includes: ["Mains voltage test", "Display PCB power check", "Fuse replacement"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-rep-4", name: "Water Leakage", price: 399, duration: "45 mins", badge: "Leak Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix indoor unit water dripping from front or back tray, drain pipe unclogging & tray realignment.", includes: ["Drain pipe jet flush", "Indoor unit tray re-leveling", "Insulation check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "hvac-rep-5", name: "Unwanted Noise/Smell", price: 399, duration: "45 mins", badge: "Noise & Odor", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Eliminate squeaking fan noise, motor bearing grinding, or foul moldy odor from vents.", includes: ["Blower motor greasing", "Coil anti-bacterial spray", "Vibration dampening"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" }
+        { id: "hvac-rep-1", name: "AC Repair — Split/Window", price: 599, duration: "1 hr", badge: "Expert Fix", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Comprehensive diagnostic and repair for electrical, mechanical, noise or cooling failure.", includes: ["Full system diagnostic", "Faulty component repair", "Safety voltage test"], image: imgAcRepairSplitWin },
+        { id: "hvac-rep-2", name: "Less/No Cooling", price: 499, duration: "45 mins", badge: "Cooling Restore", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Diagnostic for AC running without cooling. Refrigerant level scan, compressor relay & fan motor check.", includes: ["Refrigerant PSI scan", "Compressor relay audit", "Filter airflow test"], image: imgLessNoCooling },
+        { id: "hvac-rep-3", name: "Power Issue", price: 499, duration: "45 mins", badge: "Power Audit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Fix AC not turning on, MCB tripping, display light dead, or remote receiver failure.", includes: ["Mains voltage test", "Display PCB power check", "Fuse replacement"], image: imgPowerIssue },
+        { id: "hvac-rep-4", name: "Water Leakage", price: 399, duration: "45 mins", badge: "Leak Fix", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "Fix indoor unit water dripping from front or back tray, drain pipe unclogging & tray realignment.", includes: ["Drain pipe jet flush", "Indoor unit tray re-leveling", "Insulation check"], image: imgWaterLeakage },
+        { id: "hvac-rep-5", name: "Unwanted Noise/Smell", price: 399, duration: "45 mins", badge: "Noise & Odor", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Eliminate squeaking fan noise, motor bearing grinding, or foul moldy odor from vents.", includes: ["Blower motor greasing", "Coil anti-bacterial spray", "Vibration dampening"], image: imgUnwantedNoiseSmell },
+        { id: "hvac-rep-fan", name: "AC Fan Motor Replacement / Repair", price: 699, duration: "1 hr", badge: "Motor Care", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Indoor blower motor or outdoor fan motor bearing repair, capacitor check & replacement.", includes: ["Fan motor RPM check", "Bearing greasing / swap", "Capacitor torque test"], image: imgAcFanMotor },
+        { id: "hvac-rep-diag-cool", name: "AC Less / No Cooling Diagnostics", price: 349, duration: "45 mins", badge: "Diagnostic", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "Dedicated diagnostic scan for cooling delta, thermostat sensor calibration & coil check.", includes: ["Delta temperature check", "Compressor relay audit", "Diagnostic report"], image: imgAcLessNoCoolingDiag },
+        { id: "hvac-rep-diag-noise", name: "AC Noise & Vibration Diagnostics", price: 349, duration: "45 mins", badge: "Acoustic Audit", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Vibration isolation check, loose bracket dampening & motor alignment inspection.", includes: ["Vibration dampener fit", "Loose bracket torque test", "Blower alignment test"], image: imgAcNoiseVibrationDiag },
+        { id: "hvac-rep-sensor", name: "AC On / Off & Remote Sensor Repair", price: 399, duration: "30 mins", badge: "Sensor Fix", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Repair display receiver PCB, on/off power relay switch, or room ambient sensor.", includes: ["Sensor probe test", "IR receiver check", "Mainboard relay repair"], image: imgAcOnOffSensor },
+        { id: "hvac-rep-drain", name: "AC Water Leakage & Drain Repair", price: 449, duration: "45 mins", badge: "Drain Master", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "High-pressure drain clearout, pan realignment, and anti-clog drain tray flush.", includes: ["High-pressure drain flush", "Pan leveling adjustment", "Anti-fungal tray rinse"], image: imgAcWaterLeakageDrain },
+        { id: "hvac-rep-inverter", name: "Inverter AC Error Code Diagnostics", price: 499, duration: "1 hr", badge: "PCB Scan", badgeColor: "bg-violet-50 text-violet-700 border-violet-100", description: "Multi-meter diagnostic for IPM inverter module, DC fan motor error codes & communication line faults.", includes: ["Communication line test", "IPM module scan", "Error code clearout"], image: imgInverterAcErrorCode }
       ],
       "AC Gas & Refrigerant": [
-        { id: "hvac-gas-1", name: "Gas Leak Fix & Refill", price: 1799, duration: "2 hrs", badge: "Full Gas Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Nitrogen pressure leak detection, copper brazing solder fix, vacuuming & 100% gas refill.", includes: ["Nitrogen pressure test", "Copper brazing solder fix", "100% Freon / R32 gas refill", "60-day gas warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
-        { id: "hvac-gas-2", name: "Gas Charging", price: 1499, duration: "1.5 hrs", badge: "Top-Up Fill", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Standard R32 / R410a / R22 eco refrigerant gas charging with vacuum evacuation.", includes: ["System vacuum evacuation", "Precise PSI gas charging", "Cooling performance test"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" },
-        { id: "hvac-gas-3", name: "Service Valve Replacement", price: 399, duration: "45 mins", badge: "Valve Swap", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Replacing brass outdoor unit service valve flare nut and sealing pin.", includes: ["Brass valve replace", "Copper flare fitting", "Pressure leak test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-gas-4", name: "Cooling Coil / Condenser Coil Repair", price: 899, duration: "1.5 hrs", badge: "Coil Repair", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Aluminum to copper coil braze repair or u-bend pinhole leak soldering.", includes: ["Coil leak pressure scan", "Copper silver brazing", "Anti-corrosion coat"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "hvac-gas-1", name: "Gas Leak Fix & Refill", price: 1799, duration: "2 hrs", badge: "Full Gas Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Nitrogen pressure leak detection, copper brazing solder fix, vacuuming & 100% gas refill.", includes: ["Nitrogen pressure test", "Copper brazing solder fix", "100% Freon / R32 gas refill", "60-day gas warranty"], image: imgGasLeakFixRefill },
+        { id: "hvac-gas-2", name: "Gas Charging", price: 1499, duration: "1.5 hrs", badge: "Top-Up Fill", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Standard R32 / R410a / R22 eco refrigerant gas charging with vacuum evacuation.", includes: ["System vacuum evacuation", "Precise PSI gas charging", "Cooling performance test"], image: imgGasCharging },
+        { id: "hvac-gas-3", name: "Service Valve Replacement", price: 399, duration: "45 mins", badge: "Valve Swap", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Replacing brass outdoor unit service valve flare nut and sealing pin.", includes: ["Brass valve replace", "Copper flare fitting", "Pressure leak test"], image: imgServiceValveReplace },
+        { id: "hvac-gas-4", name: "Cooling Coil / Condenser Coil Repair", price: 899, duration: "1.5 hrs", badge: "Coil Repair", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Aluminum to copper coil braze repair or u-bend pinhole leak soldering.", includes: ["Coil leak pressure scan", "Copper silver brazing", "Anti-corrosion coat"], image: imgCoolingCoilCondenserRepair },
+        { id: "hvac-gas-topup", name: "AC Gas Top-Up & Pressure Balancing", price: 999, duration: "1 hr", badge: "Top-Up", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "Refrigerant pressure calibration and partial gas top-up to optimal PSI specifications.", includes: ["Pressure gauge measurement", "R32/R410A gas top-up", "Cooling delta verification"], image: imgAcGasTopUp },
+        { id: "hvac-gas-complete", name: "Complete AC Gas Charging (R32 / R410A / R22)", price: 1899, duration: "2 hrs", badge: "Complete Fill", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Complete system vacuum evacuation, moisture removal, and full refrigerant weight-based charging.", includes: ["Full vacuum evacuation", "Weighed refrigerant fill", "Compressor amp load test"], image: imgCompleteAcGasCharging },
+        { id: "hvac-gas-copper", name: "Copper Coil Pinhole Brazing & Welding", price: 799, duration: "1.5 hrs", badge: "Brazing Fix", badgeColor: "bg-orange-50 text-orange-700 border-orange-100", description: "Silver braze welding of indoor/outdoor coil pinholes, u-bend leaks and copper joint reinforcement.", includes: ["Soap bubble & dye test", "High-temp silver brazing", "Pressure hold test"], image: imgCopperCoilBrazing },
+        { id: "hvac-gas-nitrogen", name: "High-Pressure Nitrogen Leak Test", price: 499, duration: "45 mins", badge: "Leak Scan", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "High-pressure nitrogen charging up to 350 PSI to detect micro pinhole leaks across joints and coils.", includes: ["350 PSI nitrogen hold", "Electronic sniffer scan", "Leak identification report"], image: imgNitrogenLeakTest }
       ],
       "AC Installation & Uninstallation": [
-        { id: "hvac-inst-split", name: "Split AC Installation", price: 1299, duration: "2 hrs", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional indoor unit plate mounting, core wall drilling, outdoor bracket setup, and copper pipe connection.", includes: ["Indoor & outdoor mounting", "Core wall hole drilling", "Vacuuming & leak test"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-        { id: "hvac-inst-win", name: "Window AC Installation", price: 799, duration: "1.5 hrs", badge: "Window Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Window frame alignment, wooden/iron bracket mounting, and side foam insulation sealing.", includes: ["Window frame alignment", "Rubber vibration pad fit", "Foam gap seal"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-        { id: "hvac-uninst-1", name: "AC Uninstallation", price: 699, duration: "1 hr", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe gas pump-down into compressor, dismounting indoor/outdoor units, and copper pipe sealing.", includes: ["Gas pump down", "Units dismounting", "Copper pipe packaging"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-reinst-ind", name: "Indoor Unit Reinstallation", price: 599, duration: "1 hr", badge: "Indoor Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Remounting split AC indoor unit on backplate, drain hose routing & flare jointing.", includes: ["Backplate mounting", "Flare joint tightening", "Drain test"], image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=300&q=80&fit=crop" },
-        { id: "hvac-reinst-out", name: "Outdoor Unit Reinstallation", price: 699, duration: "1 hr", badge: "Outdoor Fit", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Remounting heavy outdoor compressor unit on wall stand with anti-vibration rubber pads.", includes: ["Wall stand anchor fit", "Rubber pad placement", "Service valve jointing"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" }
+        { id: "hvac-inst-split", name: "Split AC Installation", price: 1299, duration: "2 hrs", badge: "Popular", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Professional indoor unit plate mounting, core wall drilling, outdoor bracket setup, and copper pipe connection.", includes: ["Indoor & outdoor mounting", "Core wall hole drilling", "Vacuuming & leak test"], image: imgSplitAcInstall },
+        { id: "hvac-inst-win", name: "Window AC Installation", price: 799, duration: "1.5 hrs", badge: "Window Fit", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Window frame alignment, wooden/iron bracket mounting, and side foam insulation sealing.", includes: ["Window frame alignment", "Rubber vibration pad fit", "Foam gap seal"], image: imgWindowAcInstall },
+        { id: "hvac-uninst-1", name: "AC Uninstallation", price: 699, duration: "1 hr", badge: "Safe Removal", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Safe gas pump-down into compressor, dismounting indoor/outdoor units, and copper pipe sealing.", includes: ["Gas pump down", "Units dismounting", "Copper pipe packaging"], image: imgAcUninstall },
+        { id: "hvac-reinst-ind", name: "Indoor Unit Reinstallation", price: 599, duration: "1 hr", badge: "Indoor Fit", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Remounting split AC indoor unit on backplate, drain hose routing & flare jointing.", includes: ["Backplate mounting", "Flare joint tightening", "Drain test"], image: imgIndoorUnitReinstall },
+        { id: "hvac-reinst-out", name: "Outdoor Unit Reinstallation", price: 699, duration: "1 hr", badge: "Outdoor Fit", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Remounting heavy outdoor compressor unit on wall stand with anti-vibration rubber pads.", includes: ["Wall stand anchor fit", "Rubber pad placement", "Service valve jointing"], image: imgOutdoorUnitReinstall },
+        { id: "hvac-inst-wallstand", name: "Heavy-Duty Outdoor AC Wall Stand Fit", price: 499, duration: "45 mins", badge: "Heavy Stand", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Heavy-duty powder coated metal bracket fitting with high-torque wall anchor bolts and anti-vibration dampers.", includes: ["Anchor bolt hammer drill", "Spirit level alignment", "Vibration damper fit"], image: imgHeavyDutyWallStand },
+        { id: "hvac-inst-complete", name: "Split AC Complete Installation", price: 1499, duration: "2.5 hrs", badge: "All-Inclusive", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "End-to-end split AC mounting, core cutting, copper pipe flaring, vacuuming, and live temperature delta demo.", includes: ["Indoor & outdoor mounting", "Wall hole core drilling", "Deep vacuum & gas check", "Performance demo"], image: imgSplitAcCompleteInstall },
+        { id: "hvac-inst-combo", name: "Split AC Dismount & Re-Installation Combo", price: 1799, duration: "3 hrs", badge: "Relocation Combo", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Complete gas pump down, safe dismounting from old location, and full re-installation at new site.", includes: ["Gas lock pump down", "Careful dismounting", "New site remounting", "Copper line re-flare"], image: imgSplitAcDismountReinstallCombo },
+        { id: "hvac-inst-safe-uninst", name: "Split AC Safe Uninstallation", price: 699, duration: "1 hr", badge: "Zero Gas Loss", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Zero refrigerant loss pump down, high-grade flare nut capping, and protective copper pipe taping.", includes: ["Zero gas loss pump down", "Copper pipe cap sealing", "Wall bracket removal"], image: imgSplitAcSafeUninstall }
       ],
       "AC PCB & Electrical": [
-        { id: "hvac-pcb-inv", name: "Inverter PCB Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Electronic inverter mainboard micro-controller solder repair, IPM module & relay swap.", includes: ["PCB diagnostic test", "IPM module replacement", "60-day PCB warranty"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-pcb-non", name: "Non-Inverter PCB Repair", price: 699, duration: "1 hr", badge: "Standard PCB", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Non-inverter AC mainboard circuit repair, transformer swap, or sensor relay fix.", includes: ["Relay & transformer test", "Component resolder", "30-day warranty"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-cap-1", name: "Capacitor Replacement", price: 299, duration: "30 mins", badge: "Quick Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing weak dual dual-run compressor/fan capacitor with heavy duty metalized capacitor.", includes: ["Microfarad torque test", "Heavy duty capacitor swap", "Compressor start test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-cnt-1", name: "Contactor Replacement", price: 399, duration: "30 mins", badge: "Heavy Switch", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Outdoor unit heavy duty electromagnetic contactor switch replacement.", includes: ["Old contactor dismount", "25A contactor fit", "Coil voltage check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-sns-1", name: "Sensor Replacement", price: 299, duration: "30 mins", badge: "Temp Sensor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Room ambient NTC thermistor or copper coil NTC sensor replacement.", includes: ["NTC resistance measurement", "Sensor probe swap", "Temp calibration"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
-        { id: "hvac-lvt-1", name: "LVT Replacement", price: 349, duration: "30 mins", badge: "Transformer", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Low voltage step-down transformer replacement for AC indoor control unit.", includes: ["Step-down voltage test", "Transformer swap", "PCB signal test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
+        { id: "hvac-pcb-inv", name: "Inverter PCB Repair", price: 999, duration: "1.5 hrs", badge: "Logic Board", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Electronic inverter mainboard micro-controller solder repair, IPM module & relay swap.", includes: ["PCB diagnostic test", "IPM module replacement", "60-day PCB warranty"], image: imgInverterPcbRepair },
+        { id: "hvac-pcb-non", name: "Non-Inverter PCB Repair", price: 699, duration: "1 hr", badge: "Standard PCB", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Non-inverter AC mainboard circuit repair, transformer swap, or sensor relay fix.", includes: ["Relay & transformer test", "Component resolder", "30-day warranty"], image: imgNonInverterPcbRepair },
+        { id: "hvac-cap-1", name: "Motor Start Capacitor Replacement", price: 299, duration: "30 mins", badge: "Quick Swap", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Replacing weak dual dual-run compressor/fan capacitor with heavy duty metalized capacitor.", includes: ["Microfarad torque test", "Heavy duty capacitor swap", "Compressor start test"], image: imgMotorStartCapacitor },
+        { id: "hvac-cnt-1", name: "Contactor Replacement", price: 399, duration: "30 mins", badge: "Heavy Switch", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Outdoor unit heavy duty electromagnetic contactor switch replacement.", includes: ["Old contactor dismount", "25A contactor fit", "Coil voltage check"], image: imgContactorReplacement },
+        { id: "hvac-sns-1", name: "Sensor Replacement", price: 299, duration: "30 mins", badge: "Temp Sensor", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Room ambient NTC thermistor or copper coil NTC sensor replacement.", includes: ["NTC resistance measurement", "Sensor probe swap", "Temp calibration"], image: imgSensorReplacement },
+        { id: "hvac-lvt-1", name: "LVT Replacement", price: 349, duration: "30 mins", badge: "Transformer", badgeColor: "bg-rose-50 text-rose-700 border-rose-100", description: "Low voltage step-down transformer replacement for AC indoor control unit.", includes: ["Step-down voltage test", "Transformer swap", "PCB signal test"], image: imgLvtReplacement }
       ],
       "AC Parts & Accessories": [
         { id: "hvac-prt-cop", name: "Copper Pipe Installation", price: 299, duration: "30 mins", badge: "Per Meter", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "High grade insulated copper pipe installation (per meter) with nitrile foam sleeve.", includes: ["Copper flare jointing", "Nitrile insulation wrap", "Pressure test"], image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=300&q=80&fit=crop" },
         { id: "hvac-prt-drn", name: "Drain Pipe Installation", price: 199, duration: "20 mins", badge: "Drainage", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "Corrugated UV-resistant drain pipe extension & wall clamping.", includes: ["Corrugated pipe extension", "Wall clamp fit", "Water flow check"], image: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=300&q=80&fit=crop" },
-        { id: "hvac-prt-wst", name: "Split AC Wall Stand", price: 499, duration: "30 mins", badge: "Heavy Stand", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Powder coated heavy gauge metal wall stand bracket installation for outdoor unit.", includes: ["Anchor bolt drilling", "Stand leveling", "Vibration pad fit"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-prt-fst", name: "Floor Stand", price: 399, duration: "30 mins", badge: "Floor Mount", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Heavy duty floor stand for rooftop or balcony outdoor unit positioning.", includes: ["Floor stand assembly", "Vibration dampening", "Rubber foot fit"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
+        { id: "hvac-prt-wst", name: "Split AC Wall Stand", price: 499, duration: "30 mins", badge: "Heavy Stand", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Powder coated heavy gauge metal wall stand bracket installation for outdoor unit.", includes: ["Anchor bolt drilling", "Stand leveling", "Vibration pad fit"], image: acServiceImg },
+        { id: "hvac-prt-fst", name: "Floor Stand", price: 399, duration: "30 mins", badge: "Floor Mount", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Heavy duty floor stand for rooftop or balcony outdoor unit positioning.", includes: ["Floor stand assembly", "Vibration dampening", "Rubber foot fit"], image: acServiceImg },
         { id: "hvac-prt-bpl", name: "Universal Back Plate", price: 199, duration: "20 mins", badge: "Mounting Plate", badgeColor: "bg-slate-50 text-slate-700 border-slate-100", description: "Galvanized steel indoor unit mounting backplate installation.", includes: ["Wall alignment", "Rawl plug drilling", "Spirit level check"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
         { id: "hvac-prt-fast", name: "Fastener Set", price: 99, duration: "15 mins", badge: "Hardware", badgeColor: "bg-gray-50 text-gray-700 border-gray-100", description: "Heavy anchor dash fasteners and stainless steel mounting bolts set.", includes: ["4x anchor bolts", "Rawl plug anchors", "Tightening test"], image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" }
       ],
       "AC Repair & Service": [
-        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" }
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: imgFoamSplit },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: imgFoamWin },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: imgPowerSplit },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: imgPowerWin },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: imgAntiRust },
+        { id: "hvac-2in1", name: "2-in-1 Combo AC Power Jet Service", price: 899, duration: "1 hr", badge: "Combo Saver", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Complete foam & power jet service for 2 AC units with filter deep sanitization.", includes: ["2 AC units foam & jet wash", "Drain tray unclogging", "Refrigerant level check"], image: imgCombo2in1 },
+        { id: "hvac-3in1", name: "3-in-1 Mega AC Power Jet Service", price: 1299, duration: "1.5 hrs", badge: "Mega Saver", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "All-in-one power jet deep cleaning for 3 split or window AC units in one visit.", includes: ["3 AC units comprehensive wash", "Coil deodorizing & sanitization", "Comprehensive airflow check"], image: imgMega3in1 },
+        { id: "hvac-airflow", name: "AC Airflow & Filter Deep Sanitization", price: 349, duration: "30 mins", badge: "Air Care", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "High-grade anti-bacterial cleaning for blower wheel, mesh filters, and internal air channels.", includes: ["Anti-bacterial blower spray", "Mesh filter deep scrub", "Odor neutralizer"], image: imgAirflowSanitization }
       ],
       "AC Service & Repair": [
-        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" },
-        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=300&q=80&fit=crop" }
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: imgFoamSplit },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: imgFoamWin },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: imgPowerSplit },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: imgPowerWin },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: imgAntiRust },
+        { id: "hvac-2in1", name: "2-in-1 Combo AC Power Jet Service", price: 899, duration: "1 hr", badge: "Combo Saver", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Complete foam & power jet service for 2 AC units with filter deep sanitization.", includes: ["2 AC units foam & jet wash", "Drain tray unclogging", "Refrigerant level check"], image: imgCombo2in1 },
+        { id: "hvac-3in1", name: "3-in-1 Mega AC Power Jet Service", price: 1299, duration: "1.5 hrs", badge: "Mega Saver", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "All-in-one power jet deep cleaning for 3 split or window AC units in one visit.", includes: ["3 AC units comprehensive wash", "Coil deodorizing & sanitization", "Comprehensive airflow check"], image: imgMega3in1 },
+        { id: "hvac-airflow", name: "AC Airflow & Filter Deep Sanitization", price: 349, duration: "30 mins", badge: "Air Care", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "High-grade anti-bacterial cleaning for blower wheel, mesh filters, and internal air channels.", includes: ["Anti-bacterial blower spray", "Mesh filter deep scrub", "Odor neutralizer"], image: imgAirflowSanitization }
       ],
       "Air Conditioner": [
-        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=300&q=80&fit=crop" },
-        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop" }
+        { id: "hvac-fj-split", name: "Foam & Power Jet AC Service — Split", price: 599, duration: "45 mins", badge: "Best Seller", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100", description: "Deep foam jet cleaning of indoor cooling coils & outdoor unit for maximum cooling efficiency.", includes: ["2x cooling foam wash", "Indoor & outdoor jet spray", "Gas & cooling delta check"], image: imgFoamSplit },
+        { id: "hvac-fj-win", name: "Foam & Power Jet AC Service — Window", price: 499, duration: "45 mins", badge: "Window Care", badgeColor: "bg-blue-50 text-blue-700 border-blue-100", description: "High-pressure foam jet cleaning for window AC coils, front grill & blower fan.", includes: ["Foam jet coil wash", "Front grill sanitization", "Drain tray clearout"], image: imgFoamWin },
+        { id: "hvac-pj-split", name: "Power Jet AC Service — Split", price: 499, duration: "45 mins", badge: "High Pressure", badgeColor: "bg-teal-50 text-teal-700 border-teal-100", description: "High-pressure power jet water wash to flush stubborn coil dust, dirt & drain blockages.", includes: ["High pressure jet wash", "Blower wheel cleaning", "Drain tray flush"], image: imgPowerSplit },
+        { id: "hvac-pj-win", name: "Power Jet AC Service — Window", price: 399, duration: "45 mins", badge: "Express Clean", badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-100", description: "Water jet spray cleaning for window AC condenser fins and mesh filters.", includes: ["Condenser fins wash", "Mesh filter descaling", "Airflow test"], image: imgPowerWin },
+        { id: "hvac-ar-3", name: "Anti-Rust Deep Clean AC Service", price: 799, duration: "1 hr", badge: "Ultimate Care", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "Power jet deep cleaning combined with anti-rust protective spray application on U-bends & coils.", includes: ["Power jet foam wash", "Anti-rust protective coat", "30-day warranty"], image: imgAntiRust },
+        { id: "hvac-2in1", name: "2-in-1 Combo AC Power Jet Service", price: 899, duration: "1 hr", badge: "Combo Saver", badgeColor: "bg-amber-50 text-amber-700 border-amber-100", description: "Complete foam & power jet service for 2 AC units with filter deep sanitization.", includes: ["2 AC units foam & jet wash", "Drain tray unclogging", "Refrigerant level check"], image: imgCombo2in1 },
+        { id: "hvac-3in1", name: "3-in-1 Mega AC Power Jet Service", price: 1299, duration: "1.5 hrs", badge: "Mega Saver", badgeColor: "bg-purple-50 text-purple-700 border-purple-100", description: "All-in-one power jet deep cleaning for 3 split or window AC units in one visit.", includes: ["3 AC units comprehensive wash", "Coil deodorizing & sanitization", "Comprehensive airflow check"], image: imgMega3in1 },
+        { id: "hvac-airflow", name: "AC Airflow & Filter Deep Sanitization", price: 349, duration: "30 mins", badge: "Air Care", badgeColor: "bg-cyan-50 text-cyan-700 border-cyan-100", description: "High-grade anti-bacterial cleaning for blower wheel, mesh filters, and internal air channels.", includes: ["Anti-bacterial blower spray", "Mesh filter deep scrub", "Odor neutralizer"], image: imgAirflowSanitization }
       ]
     },
     refrigerator: {
@@ -14822,6 +14898,8 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       if (!dbMatch) return plan;
       seenIds.add(String(dbMatch.id));
       if (dbMatch.slug) seenIds.add(dbMatch.slug);
+      const acImageMatch = resolveAcServiceImage(dbMatch.name || dbMatch.slug || plan.name || plan.id);
+      const isDarkUnsplash = typeof dbMatch.image === "string" && dbMatch.image.includes("1621905252507");
       return {
         ...plan,
         ...dbMatch,
@@ -14831,7 +14909,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         duration: dbMatch.duration || plan.duration,
         description: dbMatch.description || plan.description,
         includes: Array.isArray(dbMatch.includes) && dbMatch.includes.length > 0 ? extractTextList(dbMatch.includes) : plan.includes,
-        image: dbMatch.image || plan.image,
+        image: acImageMatch || ((!isDarkUnsplash && dbMatch.image) ? dbMatch.image : plan.image),
         badge: dbMatch.tag || plan.badge,
         tools: dbMatch.tools,
         ready: dbMatch.ready,
@@ -14853,21 +14931,24 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
       const matchesService = sSlug === eff || sName.includes(eff) || eff.includes(sSlug);
       const matchesTab = sName.includes(tab) || tab.includes(sName) || pName.includes(tab) || tab.includes(pName);
       return matchesService || matchesTab;
-    }).map(p => ({
-      id: p.slug || p.id,
-      name: p.name,
-      price: Math.round(Number(p.base_price) || 0),
-      duration: p.duration || "30 mins",
-      description: p.description || "",
-      includes: Array.isArray(p.includes) ? extractTextList(p.includes) : [],
-      image: p.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
-      badge: p.tag || "Standard",
-      badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
-      tools: p.tools,
-      ready: p.ready,
-      reviews: p.reviews,
-      faqs: p.faqs,
-    }));
+    }).map(p => {
+      const acExtraImage = resolveAcServiceImage(p.name || p.slug || p.id);
+      return {
+        id: p.slug || p.id,
+        name: p.name,
+        price: Math.round(Number(p.base_price) || 0),
+        duration: p.duration || "30 mins",
+        description: p.description || "",
+        includes: Array.isArray(p.includes) ? extractTextList(p.includes) : [],
+        image: acExtraImage || ((p.image && !p.image.includes("1621905252507")) ? p.image : (targetDbCategory === "ac_appliance" || normalizedKey === "hvac" ? acServiceImg : "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop")),
+        badge: p.tag || "Standard",
+        badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100",
+        tools: p.tools,
+        ready: p.ready,
+        reviews: p.reviews,
+        faqs: p.faqs,
+      };
+    });
 
     // Deduplicate to guarantee unique keys and prevent duplicate products rendering in the list
     const finalPlans = [];
@@ -15255,9 +15336,9 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                       className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col hover:shadow-md transition-shadow relative"
                     >
                       {isFirst && (
-                        <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/60">
+                        <div className="w-full aspect-[10/3] bg-slate-100 rounded-2xl overflow-hidden mb-5 border border-slate-100/60 shadow-xs">
                           <img
-                            src={p.image}
+                            src={normalizedKey === "hvac" ? acServiceImg : p.image}
                             alt={p.name}
                             className="w-full h-full object-cover object-center"
                             onError={(e) => {
@@ -15397,7 +15478,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
 
                         {/* Right side image & floating ADD button */}
                         <div className="w-full md:w-32 flex flex-col items-center justify-center shrink-0">
-                          <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50">
+                          <div className="relative w-28 h-24 md:w-32 md:h-28 rounded-2xl overflow-hidden border border-slate-100 shadow-xs bg-slate-50 flex items-center justify-center p-1">
                             <img
                               src={p.image}
                               alt={p.name}
@@ -15405,7 +15486,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                                 e.target.onerror = null;
                                 e.target.src = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop";
                               }}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-cover object-center rounded-xl transition-transform duration-300 hover:scale-105"
                             />
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[85%] bg-white/95 backdrop-blur border border-slate-200/50 rounded-xl py-1 shadow-sm flex items-center justify-center">
                               {(() => {

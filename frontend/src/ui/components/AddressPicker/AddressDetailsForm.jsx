@@ -237,7 +237,7 @@ export function AddressDetailsForm({ addressData, onBack, onSubmit, onClose }) {
       pincode:          state.pincode.trim(),
       label:            state.label,
       receiver_name:    state.receiver_name.trim(),
-      receiver_phone:   state.receiver_phone.replace(/\s/g, ""),
+      receiver_phone:   state.receiver_phone.replace(/[^\d+]/g, "").replace(/^(\+91|91|0)(?=[6-9]\d{9}$)/, "").replace(/\D/g, ""),
     }
 
     // Require Customer Login before saving address

@@ -25,6 +25,9 @@ import { apiRequest } from "../../api/client.js"
 import { getAddress } from "../../api/geocoding.js"
 import { motion, AnimatePresence } from "framer-motion"
 import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
+import acServiceImg from "../../assets/ac service.png"
+import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png"
+import imgAntiRust from "../../assets/Anti-Rust Deep Clean AC Service.png"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -2320,9 +2323,9 @@ export function LandingPage() {
     { id: "kc-3", name: "Empty Kitchen Deep Cleaning", price: 1799, categoryName: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=400&q=80&fit=crop", catId: "kitchen_cleaning" },
     { id: "sc-1", name: "Sofa Deep Cleaning & Shampooing", price: 799, categoryName: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&q=80&fit=crop", catId: "sofa_cleaning" },
     { id: "bc-1", name: "Bathroom Deep Cleaning & Sanitization", price: 499, categoryName: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "bathroom_cleaning" },
-    { id: "ac-1", name: "Power Jet AC Foam Service", price: 599, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=400&q=80&fit=crop", catId: "hvac" },
-    { id: "ac-2", name: "Anti-Rust Protective Coating", price: 249, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=400&q=80&fit=crop", catId: "hvac" },
-    { id: "ac-3", name: "AC Gas Leak Audit & Refill", price: 899, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=400&q=80&fit=crop", catId: "hvac" },
+    { id: "ac-1", name: "Power Jet AC Foam Service", price: 599, categoryName: "AC & Heating", image: imgFoamSplit, catId: "hvac" },
+    { id: "ac-2", name: "Anti-Rust Protective Coating", price: 249, categoryName: "AC & Heating", image: imgAntiRust, catId: "hvac" },
+    { id: "ac-3", name: "AC Gas Leak Audit & Refill", price: 899, categoryName: "AC & Heating", image: acServiceImg, catId: "hvac" },
     { id: "el-1", name: "Fan Repair & Installation", price: 149, categoryName: "Electrical", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=400&q=80&fit=crop", catId: "electrical" },
     { id: "pl-1", name: "Tap & Basin Leak Repair", price: 199, categoryName: "Plumbing", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "plumbing" },
     { id: "cp-1", name: "Furniture Repair & Assembly", price: 299, categoryName: "Carpentry", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=400&q=80&fit=crop", catId: "carpentry" },

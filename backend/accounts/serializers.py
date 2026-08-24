@@ -10,6 +10,9 @@ class UserSerializer(serializers.ModelSerializer):
     company_name = serializers.SerializerMethodField()
     company_domain = serializers.SerializerMethodField()
     company_schema = serializers.SerializerMethodField()
+    is_superuser = serializers.BooleanField(read_only=True)
+    is_super_admin = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField()
     company_permissions = serializers.SerializerMethodField()
     employee_country = serializers.SerializerMethodField()
@@ -27,11 +30,31 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             "id", "customer_id", "username", "email", "first_name", "last_name", "role",
+            "is_staff", "is_superuser", "is_super_admin", "permissions",
             "company", "company_name", "company_domain", "company_schema", "bio", "phone", "timezone", "language",
             "avatar_url", "two_fa_enabled", "company_permissions", "employee_country", "company_country", "company_region",
             "companyCountry", "primaryCountry", "employee_roles", "company_currency", "company_currency_symbol",
             "is_care_agent", "care_role"
         )
+
+    def get_is_super_admin(self, obj):
+        from accounts.permissions import is_super_admin
+        return is_super_admin(obj)
+
+    def get_permissions(self, obj):
+        from accounts.permissions import is_super_admin, get_global_rbac_permissions, GLOBAL_MODULES
+        if is_super_admin(obj):
+            all_actions = ["view", "create", "edit", "delete", "export", "approve", "assign", "reassign", "reschedule", "cancel", "refund", "override", "suspend", "reactivate", "vip", "flag", "blacklist", "merge", "unmerge", "add_note", "manage_addresses", "book_on_behalf", "publish", "modify_price", "reply", "escalate", "resolve", "adjust", "manage_invoices", "record_offline_payment", "adjust_stock", "transfer", "export_financials", "export_operational", "schedule", "edit_banners", "edit_sections", "publish_live", "send_broadcast", "configure_templates", "force_logout", "revoke_tokens", "configure_mfa", "export_logs", "edit_rbac", "modify", "toggle_flags"]
+            return {mod: all_actions for mod in GLOBAL_MODULES}
+
+        matrix = get_global_rbac_permissions()
+        role = str(getattr(obj, "role", "customer")).lower()
+        user_perms = {}
+        for mod, role_dict in matrix.items():
+            actions = role_dict.get(role, [])
+            if actions:
+                user_perms[mod] = actions
+        return user_perms
 
     def get_is_care_agent(self, obj):
         try:

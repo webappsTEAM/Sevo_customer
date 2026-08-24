@@ -155,23 +155,13 @@ export function LoginPage() {
   const [username, setUsername] = useState(() => localStorage.getItem("caltrack_remember_username") || "")
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem("caltrack_remember_username"))
   const [password, setPassword] = useState("")
-  const [fullName, setFullName] = useState("")
-  const [email, setEmail] = useState("")
-  const [orgName, setOrgName] = useState("")
-  const [numEmployees, setNumEmployees] = useState("1 - 10 employees")
-  const [regStep, setRegStep] = useState(1)
   const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(null)
-  const [agreedUpdates, setAgreedUpdates] = useState(false)
-  const [agreedTerms, setAgreedTerms] = useState(false)
   const [show2FA, setShow2FA] = useState(false)
   const [totpCode, setTotpCode] = useState("")
   const [totpError, setTotpError] = useState("")
-
-  // Trial Step
-  const [startTrial, setStartTrial] = useState(true)
 
   // ──────────────────────────────────────────────────────────
   const [employeeStatus, setEmployeeStatus] = useState(null)
@@ -356,49 +346,34 @@ export function LoginPage() {
     if (e) e.preventDefault()
     if (loading) return
     setError("")
-    if (mode === "signin") {
-      const ve = validateLoginForm({ identifier: username, password })
-      if (ve) return setError(ve)
-      setLoading(true)
+    const ve = validateLoginForm({ identifier: username, password })
+    if (ve) return setError(ve)
+    setLoading(true)
 
-      try { 
-        const result = await login(username.trim(), password)
-        // 2FA required — show TOTP entry screen
-        if (result?.requires2FA) {
-          setShow2FA(true)
-          setLoading(false)
-          return
-        }
-        const u = result
-        if (!u) {
-          setError("Invalid username or password.")
-          return
-        }
-        if (rememberMe) {
-          localStorage.setItem("caltrack_remember_username", username.trim())
-        } else {
-          localStorage.removeItem("caltrack_remember_username")
-        }
-        navigate(postLoginRoute(u), { replace: true }) 
+    try { 
+      const result = await login(username.trim(), password)
+      // 2FA required — show TOTP entry screen
+      if (result?.requires2FA) {
+        setShow2FA(true)
+        setLoading(false)
+        return
       }
-      catch (err) { 
+      const u = result
+      if (!u) {
         setError("Invalid username or password.")
+        return
       }
-      finally { setLoading(false) }
-    } else {
-      setLoading(true)
-      try {
-        const [first, ...rest] = fullName.trim().split(" ")
-        const u = await register({ 
-          username: username.trim(), password, email: email.trim(), 
-          first_name: first || "", last_name: rest.join(" ") || "", 
-          organization_name: orgName.trim(),
-          start_trial: startTrial
-        })
-        navigate(postLoginRoute(u), { replace: true })
-      } catch (err) { setError(extractAuthError(err, "Registration failed.")) }
-      finally { setLoading(false) }
+      if (rememberMe) {
+        localStorage.setItem("caltrack_remember_username", username.trim())
+      } else {
+        localStorage.removeItem("caltrack_remember_username")
+      }
+      navigate(postLoginRoute(u), { replace: true }) 
     }
+    catch (err) { 
+      setError("Invalid username or password.")
+    }
+    finally { setLoading(false) }
   }
 
   async function onSubmit2FA(e, forcedCode = null) {
@@ -947,28 +922,17 @@ export function LoginPage() {
             </div>
           ) : (
             <>
-              {/* Toggle Sign In / Create Account */}
-              <div className="flex bg-slate-100 p-1 rounded-2xl mb-8 border border-slate-200 max-w-[320px] mx-auto">
-                <button
-                  onClick={() => { setMode("signin"); setError(""); setRegStep(1) }}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${mode === "signin" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10" : "text-slate-600 hover:text-slate-900"}`}
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => { setMode("register"); setError(""); setRegStep(1) }}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${mode === "register" ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10" : "text-slate-600 hover:text-slate-900"}`}
-                >
-                  Create Account
-                </button>
-              </div>
-
               <div className="text-center mb-8">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 border border-indigo-100/80 rounded-full text-indigo-700 text-[11px] font-bold uppercase tracking-wider mb-3">
+                  <ShieldCheck size={14} className="text-indigo-600" /> Admin Portal
+                </div>
                 <h1 className="text-3xl font-display font-black text-slate-900 leading-tight tracking-tight text-center">
-                  {mode === "signin" ? "Welcome Back" : "Create Account"}
+                  Sign In
                 </h1>
+                <p className="text-sm text-slate-500 mt-2 font-medium">
+                  Enter your credentials to access the CalServices management dashboard.
+                </p>
               </div>
-
 
               {/* Connect With Buttons */}
               <div className="mb-6">
@@ -990,171 +954,47 @@ export function LoginPage() {
                 <div className="flex-grow border-t border-slate-200" />
               </div>
 
-              {mode === "register" && (
-                <div className="mb-10 flex items-center justify-between relative px-2">
-                  <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-200 -translate-y-1/2 z-0 mx-8" />
-                  <div
-                    className="absolute top-1/2 left-0 h-0.5 bg-indigo-600 -translate-y-1/2 z-0 transition-all duration-500 mx-8"
-                    style={{ width: `calc(${(regStep - 1) / 4 * 100}%)` }}
-                  />
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <div key={s} className="relative z-10 flex flex-col items-center">
-                      <div
-                        className={`w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-black transition-all duration-300 border-2 ${
-                          regStep > s ? "bg-emerald-500 border-emerald-450 text-white" :
-                          regStep === s ? "bg-indigo-600 border-indigo-450 text-white" :
-                          "bg-slate-50 border-slate-200 text-slate-400"
-                        }`}
-                      >
-                        {regStep > s ? <Check size={16} strokeWidth={3} /> : s}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
               <form onSubmit={onSubmit} className="space-y-5">
-                {mode === "signin" ? (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="relative group">
-                        <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors duration-300" size={18} />
-                        <input
-                          className="w-full pl-14 pr-5 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all duration-300 placeholder:text-slate-400"
-                          placeholder="Username"
-                          value={username}
-                          onChange={e => setUsername(e.target.value)}
-                        />
-                      </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="relative group">
+                      <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors duration-300" size={18} />
+                      <input
+                        className="w-full pl-14 pr-5 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all duration-300 placeholder:text-slate-400"
+                        placeholder="Username or Email"
+                        value={username}
+                        onChange={e => setUsername(e.target.value)}
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <div className="relative group">
-                        <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors duration-300" size={18} />
-                        <input
-                          className="w-full pl-14 pr-14 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all duration-300 placeholder:text-slate-400"
-                          type={showPass ? "text" : "password"}
-                          placeholder="Password"
-                          value={password}
-                          onChange={e => setPassword(e.target.value)}
-                        />
-                        <button type="button" className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowPass(p => !p)}>
-                          {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center mt-2 pr-1">
-                      <label className="flex items-center gap-2.5 cursor-pointer group select-none">
-                        <div className={`w-4 h-4 rounded flex items-center justify-center transition-all border ${rememberMe ? "bg-indigo-600 border-indigo-500 text-white" : "border-slate-200 bg-slate-50 group-hover:border-indigo-400"}`}>
-                          {rememberMe && <Check size={10} strokeWidth={4} />}
-                        </div>
-                        <input type="checkbox" className="hidden" checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} />
-                        <span className="text-[11px] font-bold text-slate-600 hover:text-indigo-600 transition-colors duration-300">Remember me</span>
-                      </label>
-                      <button type="button" onClick={() => setMode("forgot_password")} className="text-[11px] font-bold text-slate-600 hover:text-indigo-600 transition-colors duration-300">
-                        Forgot Password?
+                  </div>
+                  <div className="space-y-2">
+                    <div className="relative group">
+                      <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors duration-300" size={18} />
+                      <input
+                        className="w-full pl-14 pr-14 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all duration-300 placeholder:text-slate-400"
+                        type={showPass ? "text" : "password"}
+                        placeholder="Password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                      />
+                      <button type="button" className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowPass(p => !p)}>
+                        {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
                   </div>
-                ) : (
-                  <div className="min-h-[220px]">
-                    {regStep === 1 && (
-                      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                        <h2 className="text-lg font-display font-black text-slate-900 mb-4">Personal Details</h2>
-                        <div className="relative">
-                          <input className="w-full px-6 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white outline-none transition-all duration-300 placeholder:text-slate-400" placeholder="Full Name" value={fullName} onChange={e => setFullName(e.target.value)} />
-                        </div>
-                        <div className="relative">
-                          <input className="w-full px-6 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white outline-none transition-all duration-300 placeholder:text-slate-400" placeholder="Work Email" value={email} onChange={e => setEmail(e.target.value)} />
-                        </div>
-                      </motion.div>
-                    )}
-                    {regStep === 2 && (
-                      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                        <h2 className="text-lg font-display font-black text-slate-900 mb-4">Organization Info</h2>
-                        <input className="w-full px-6 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white outline-none transition-all duration-300 placeholder:text-slate-400" placeholder="Organization Name" value={orgName} onChange={e => setOrgName(e.target.value)} />
-                        <select className="w-full px-6 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-700 focus:bg-white outline-none transition-all duration-300 appearance-none cursor-pointer" value={numEmployees} onChange={e => setNumEmployees(e.target.value)}>
-                          <option>1 - 10 employees</option>
-                          <option>11 - 50 employees</option>
-                          <option>51 - 200 employees</option>
-                          <option>201+ employees</option>
-                        </select>
-                      </motion.div>
-                    )}
-                    {regStep === 3 && (
-                      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                        <h2 className="text-lg font-display font-black text-slate-900 mb-4">Platform Credentials</h2>
-                        <input className="w-full px-6 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white outline-none transition-all duration-300 placeholder:text-slate-400" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} />
-                        <input className="w-full px-6 py-4 bg-slate-50 border border-slate-200 focus:border-indigo-500/50 rounded-2xl text-[14px] font-medium text-slate-800 focus:bg-white outline-none transition-all duration-300 placeholder:text-slate-400" type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
-                      </motion.div>
-                    )}
-                    {regStep === 4 && (
-                      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[9px] uppercase tracking-widest mb-1">
-                          <Sparkles size={14} /> PREMIUM FEATURES
-                        </div>
-                        <h2 className="text-lg font-display font-black text-slate-900 mb-2">Get Started with a Free 14-Day Trial</h2>
-                        <p className="text-xs text-slate-600 mb-4">Enjoy full access to premium features for 14 days at no cost.</p>
-                        
-                        <div className="space-y-3">
-                          <div
-                            onClick={() => setStartTrial(true)}
-                            className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${startTrial ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200 bg-slate-50 hover:border-indigo-300"}`}
-                          >
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${startTrial ? "bg-indigo-600 border-indigo-600" : "border-slate-300"}`}>
-                              {startTrial && <Check size={12} color="#fff" strokeWidth={3} />}
-                            </div>
-                            <div>
-                              <div className="text-sm font-bold text-slate-800">Start Free Trial</div>
-                              <div className="text-[11px] text-slate-500">Access all premium modules instantly.</div>
-                            </div>
-                          </div>
-                          <div
-                            onClick={() => setStartTrial(false)}
-                            className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${!startTrial ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200 bg-slate-50 hover:border-indigo-300"}`}
-                          >
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${!startTrial ? "bg-indigo-600 border-indigo-600" : "border-slate-300"}`}>
-                              {!startTrial && <Check size={12} color="#fff" strokeWidth={3} />}
-                            </div>
-                            <div>
-                              <div className="text-sm font-bold text-slate-800">Skip for Now</div>
-                              <div className="text-[11px] text-slate-500">Continue with basic features.</div>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                    {regStep === 5 && (
-                      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
-                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[9px] uppercase tracking-widest mb-1">
-                          <ShieldCheck size={14} /> Finalize Security
-                        </div>
-                        <h2 className="text-[24px] font-display font-black text-slate-900 leading-tight">Almost there!</h2>
-
-                        <div className="space-y-4 pt-1">
-                          <label className="flex items-start gap-3 cursor-pointer group">
-                            <div className={`mt-0.5 w-4.5 h-4.5 rounded-md flex items-center justify-center transition-all border ${agreedUpdates ? "bg-indigo-600 border-indigo-500 text-white" : "border-slate-200 bg-slate-50 group-hover:border-indigo-400"}`}>
-                              {agreedUpdates && <Check size={12} strokeWidth={4} />}
-                            </div>
-                            <input type="checkbox" className="hidden" checked={agreedUpdates} onChange={() => setAgreedUpdates(!agreedUpdates)} />
-                            <span className="text-[12px] font-medium text-slate-600 leading-tight">Receive updates and tips from Caltrack.</span>
-                          </label>
-                          <label className="flex items-start gap-3 cursor-pointer group">
-                            <div className={`mt-0.5 w-4.5 h-4.5 rounded-md flex items-center justify-center transition-all border ${agreedTerms ? "bg-indigo-600 border-indigo-500 text-white" : "border-slate-200 bg-slate-50 group-hover:border-indigo-400"}`}>
-                              {agreedTerms && <Check size={12} strokeWidth={4} />}
-                            </div>
-                            <input type="checkbox" className="hidden" checked={agreedTerms} onChange={() => setAgreedTerms(!agreedTerms)} />
-                            <span className="text-[12px] font-medium text-slate-600 leading-tight">Agree to <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold" onClick={(e) => e.stopPropagation()}>Terms</a> &amp; <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>.</span>
-                          </label>
-                        </div>
-
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-600">I'm not a robot</span>
-                          <div className="w-5 h-5 border-2 border-slate-200 rounded-md" />
-                        </div>
-                      </motion.div>
-                    )}
+                  <div className="flex justify-between items-center mt-2 pr-1">
+                    <label className="flex items-center gap-2.5 cursor-pointer group select-none">
+                      <div className={`w-4 h-4 rounded flex items-center justify-center transition-all border ${rememberMe ? "bg-indigo-600 border-indigo-500 text-white" : "border-slate-200 bg-slate-50 group-hover:border-indigo-400"}`}>
+                        {rememberMe && <Check size={10} strokeWidth={4} />}
+                      </div>
+                      <input type="checkbox" className="hidden" checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} />
+                      <span className="text-[11px] font-bold text-slate-600 hover:text-indigo-600 transition-colors duration-300">Remember me</span>
+                    </label>
+                    <button type="button" onClick={() => setMode("forgot_password")} className="text-[11px] font-bold text-slate-600 hover:text-indigo-600 transition-colors duration-300">
+                      Forgot Password?
+                    </button>
                   </div>
-                )}
+                </div>
 
                 {error && (
                   <div className="p-4 bg-rose-500/10 text-rose-500 text-xs font-semibold rounded-2xl border border-rose-500/20 flex items-center gap-3">
@@ -1162,35 +1002,19 @@ export function LoginPage() {
                   </div>
                 )}
 
-                <div className="flex gap-3">
-                  {mode === "register" && regStep > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setRegStep(p => p - 1)}
-                      className="flex-1 py-4 bg-slate-100 text-slate-600 text-[12px] font-bold uppercase tracking-widest rounded-2xl border border-slate-250 hover:bg-slate-200 hover:text-slate-800 transition-all cursor-pointer"
-                    >
-                      Back
-                    </button>
-                  )}
-                  <button
-                    type={mode === "register" && regStep < 5 ? "button" : "submit"}
-                    disabled={loading || (mode === "register" && regStep === 5 && !agreedTerms)}
-                    onClick={() => {
-                      if (mode === "register" && regStep < 5) setRegStep(p => p + 1)
-                    }}
-                    className={`flex-[2] py-4 bg-indigo-600 text-white text-[12px] font-bold uppercase tracking-widest rounded-2xl shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-40 disabled:shadow-none cursor-pointer`}
-                  >
-                    {loading ? <RefreshCcw className="animate-spin" size={18} /> :
-                      mode === "signin" ? "Sign In" :
-                      regStep === 5 ? (agreedTerms ? "Continue" : <RefreshCcw size={18} />) : "Continue"}
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-4 bg-indigo-600 text-white text-[12px] font-bold uppercase tracking-widest rounded-2xl shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-40 disabled:shadow-none cursor-pointer"
+                >
+                  {loading ? <RefreshCcw className="animate-spin" size={18} /> : "Sign In"}
+                </button>
               </form>
 
               <div className="mt-8 text-center space-y-4">
-                <button className="text-[10px] font-mono uppercase tracking-widest text-slate-600 hover:text-indigo-600 transition-colors">
-                  Need Help? <span className="text-slate-400">Contact Support</span>
-                </button>
+                <Link to={routes.landing} className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors">
+                  ← Back to Customer Website
+                </Link>
               </div>
             </>
           )}

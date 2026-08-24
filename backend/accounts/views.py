@@ -566,16 +566,6 @@ class MeView(APIView):
                 user.is_superuser = True
                 user.save(update_fields=["role", "is_staff", "is_superuser"])
 
-            if not getattr(user, "company", None):
-                try:
-                    from companies.models import Company
-                    company = Company.objects.filter(slug="demo-v2").first() or Company.objects.filter(slug="demo").first() or Company.objects.first()
-                    if company:
-                        user.company = company
-                        user.save(update_fields=["company"])
-                except Exception as e:
-                    print(f"[MeView] Error self-healing user company: {e}")
-
             return Response(UserSerializer(user, context={"request": request}).data)
         except Exception as err:
             traceback.print_exc()
@@ -1683,19 +1673,21 @@ class CustomerAddressListCreateView(APIView):
         if not address_line1 and not flat_house_no:
             return _ce("'flat_house_no' or 'address_line1' is required.", 400)
 
-        required = ["city", "state", "pincode"]
-        for field in required:
-            if not request.data.get(field):
-                return _ce(f"'{field}' is required.", 400)
+        city = str(request.data.get("city", "")).strip() or str(request.data.get("locality", "")).strip() or "Hosur"
+        state = str(request.data.get("state", "")).strip() or "Tamil Nadu"
 
         import re
         pincode = str(request.data.get("pincode", "")).strip()
-        if not re.match(r"^\d{6}$", pincode):
-            return _ce("Pincode must be a 6-digit number.", 400)
+        clean_pincode = re.sub(r"\D", "", pincode)
+        if len(clean_pincode) == 6:
+            pincode = clean_pincode
+        elif not pincode or not re.match(r"^\d{6}$", pincode):
+            pincode = "635109"
 
         receiver_phone = str(request.data.get("receiver_phone", "")).strip() or str(request.data.get("phone_number", "")).strip()
         if receiver_phone:
-            clean_phone = re.sub(r"\s+", "", receiver_phone)
+            clean_phone = re.sub(r"[\s\-\(\)]+", "", receiver_phone)
+            clean_phone = re.sub(r"^(\+91|91|0)", "", clean_phone)
             if not re.match(r"^[6-9]\d{9}$", clean_phone):
                 return _ce("Receiver phone must be a valid 10-digit mobile number.", 400)
             receiver_phone = clean_phone

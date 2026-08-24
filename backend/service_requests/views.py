@@ -298,9 +298,18 @@ class BookingCreateView(APIView):
         User = get_user_model()
 
         customer_user = None
+        is_admin_booking_on_behalf = False
+
         if request.user and request.user.is_authenticated:
-            customer_user = request.user
-        else:
+            if request.user.role == getattr(User.Role, "CUSTOMER", "customer"):
+                customer_user = request.user
+            else:
+                is_admin_booking_on_behalf = True
+                target_cust_id = request.data.get("customer_id")
+                if target_cust_id:
+                    customer_user = User.objects.filter(id=target_cust_id).first()
+
+        if not customer_user:
             phone_clean = str(request.data.get("phone") or "").strip()
             email_clean = str(request.data.get("email") or "").strip().lower()
             if phone_clean:
@@ -399,6 +408,27 @@ class BookingCreateView(APIView):
         # Dispatch booking notification to workforce management system
         WorkforceIntegrationService.dispatch_job(sr.id)
 
+        if is_admin_booking_on_behalf:
+            try:
+                from accounts.audit_service import record_platform_audit
+                record_platform_audit(
+                    actor=request.user,
+                    action="BOOKING_CREATED_ON_BEHALF",
+                    module="bookings",
+                    object_type="ServiceRequest",
+                    object_id=str(sr.id),
+                    after_state={
+                        "request_id": sr.request_id,
+                        "customer_id": sr.customer_id,
+                        "total_amount": float(sr.total_amount or 0)
+                    },
+                    reason=f"Booking created on behalf of customer #{sr.customer_id} by {request.user.username}",
+                    request=request,
+                    severity="INFO"
+                )
+            except Exception:
+                pass
+
         return _success(
             data={
                 "request_id": sr.request_id,
@@ -487,6 +517,30 @@ class CustomerBookingCancelView(APIView):
                 sr = ServiceRequest.objects.get(request_id=sr_id)
         except ServiceRequest.DoesNotExist:
             return _error("Booking not found.", 404)
+        # Authorization & Ownership Validation
+        provided_token = request.data.get("token") or request.query_params.get("token") or request.data.get("tracking_token")
+        token_matches = bool(
+            provided_token and
+            sr.tracking_token and
+            str(sr.tracking_token).lower() == str(provided_token).strip().lower()
+        )
+        if request.user and request.user.is_authenticated:
+            from accounts.permissions import is_super_admin, can
+            is_super = is_super_admin(request.user)
+            has_perm = can(request.user, "bookings", "cancel")
+            is_owner = bool(
+                (sr.customer_id and sr.customer_id == request.user.id) or
+                (request.user.email and sr.email and request.user.email.strip().lower() == sr.email.strip().lower()) or
+                (request.user.phone and sr.phone and request.user.phone.strip()[-10:] == sr.phone.strip()[-10:])
+            )
+            if not (is_super or has_perm or is_owner or token_matches):
+                return _error("You are not authorized to cancel this booking.", 403)
+        else:
+            provided_phone = (request.data.get("phone") or "").strip()
+            phone_matches = bool(provided_phone and sr.phone and provided_phone[-10:] == sr.phone.strip()[-10:])
+            if not (token_matches or phone_matches):
+                return _error("Valid tracking token, phone verification, or authentication required to cancel.", 401)
+
         reason = request.data.get("reason", "Customer requested cancellation")
         previous_status = sr.status
         
@@ -650,6 +704,14 @@ def _build_tracking_payload(sr, has_full_access):
             tech_jobs = getattr(sr, "technician_jobs_completed", None) or tech_jobs
             tech_job_id = sr.workforce_job_id or sr.external_assignment_id or tech_job_id
 
+        if not tech_name and getattr(sr, "assigned_employee", None):
+            emp = sr.assigned_employee
+            tech_name = getattr(emp, "full_name", None) or (emp.user.get_full_name() if getattr(emp, "user", None) else "") or None
+            tech_phone = getattr(emp, "phone", None) or tech_phone
+            tech_photo = getattr(emp, "photo", None) or tech_photo
+            tech_rating = float(getattr(emp, "rating", None)) if getattr(emp, "rating", None) is not None else tech_rating
+            tech_jobs = getattr(emp, "total_jobs", None) or tech_jobs
+
         # 2. Real live GPS coordinates strictly from database or workforce telemetry — NO fake coordinates
         loc = tracking.get("location") if (tracking and isinstance(tracking, dict)) else {}
         if is_terminal:
@@ -781,6 +843,10 @@ def _build_tracking_payload(sr, has_full_access):
             "longitude": dest_lng,
         },
         "technician": technician_data,
+        "technician_name": tech_name if is_accepted else "",
+        "technician_phone": tech_phone if (is_accepted and has_full_access) else "",
+        "technician_photo": tech_photo if is_accepted else "",
+        "technician_rating": tech_rating if is_accepted else None,
         "technician_location": technician_loc_data,
         "freshness": freshness,
         "distance_m": distance_m,
@@ -948,7 +1014,7 @@ class AdminSRListView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def get(self, request):
-        qs = _sr_qs(request).order_by("-created_at")
+        qs = _sr_qs(request).select_related("customer").order_by("-created_at")
         status_param = request.query_params.get("status")
         category_param = request.query_params.get("service_category")
         search_param = request.query_params.get("search")
@@ -965,6 +1031,16 @@ class AdminSRListView(APIView):
                 Q(phone__icontains=search_param) |
                 Q(issue_title__icontains=search_param)
             )
+
+        limit_param = request.query_params.get("limit")
+        if limit_param:
+            try:
+                limit = max(1, min(int(limit_param), 500))
+                qs = qs[:limit]
+            except (ValueError, TypeError):
+                qs = qs[:100]
+        elif not search_param and not status_param and not category_param:
+            qs = qs[:150]
 
         serializer = ServiceRequestListSerializer(qs, many=True, context={"request": request})
         return _success(data=serializer.data)
