@@ -2195,6 +2195,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
   const [declineReasonCode, setDeclineReasonCode] = useState("")
   const [declineReasonNotes, setDeclineReasonNotes] = useState("")
   const [quoteExpanded, setQuoteExpanded] = useState(false)
+  const [expandedPrevQuotes, setExpandedPrevQuotes] = useState({})
 
   const handleQuoteDecision = async (decision, reasonCode = "", reasonNotes = "") => {
     try {
@@ -2979,7 +2980,7 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
       )}
 
       {/* ─────────────────── ACTIVE QUOTE DECISION CARD (PHASE 3) ─────────────────── */}
-      {liveData?.quote && liveData.quote.status === "SENT_TO_CUSTOMER" && (
+      {liveData?.quote && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -2989,7 +2990,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             padding: '1.5rem',
             marginBottom: '1rem',
             boxShadow: '0 8px 30px rgba(79, 70, 229, 0.15)',
-            border: '2px solid #4F46E5',
+            border: `2px solid ${
+              liveData.quote.status === "SENT_TO_CUSTOMER" ? "#4F46E5" :
+              liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#10B981" :
+              liveData.quote.status === "CHANGES_REQUESTED" ? "#F59E0B" : "#EF4444"
+            }`,
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -3001,14 +3006,58 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                 Total Estimate: ₹{liveData.quote.total_amount}
               </h3>
             </div>
-            <span style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 8, fontWeight: 800, background: '#EFF6FF', color: '#1E40AF' }}>
-              Pending Approval
+            <span style={{
+              fontSize: '0.72rem',
+              padding: '4px 10px',
+              borderRadius: 8,
+              fontWeight: 800,
+              background: 
+                liveData.quote.status === "SENT_TO_CUSTOMER" ? "#EFF6FF" :
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#ECFDF5" :
+                liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
+              color: 
+                liveData.quote.status === "SENT_TO_CUSTOMER" ? "#1E40AF" :
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#065F46" :
+                liveData.quote.status === "CHANGES_REQUESTED" ? "#92400E" : "#991B1B"
+            }}>
+              {liveData.quote.status === "SENT_TO_CUSTOMER" ? "Pending Approval" :
+               liveData.quote.status === "CUSTOMER_ACCEPTED" ? "Accepted" :
+               liveData.quote.status === "CONVERTED" ? "Converted to Work" :
+               liveData.quote.status === "CHANGES_REQUESTED" ? "Changes Requested" :
+               liveData.quote.status.replace(/_/g, " ")}
             </span>
           </div>
 
           <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 12 }}>
             Valid till: {new Date(liveData.quote.valid_until).toLocaleDateString()}
           </div>
+
+          {/* Status-specific alert message */}
+          {liveData.quote.status !== "SENT_TO_CUSTOMER" && (
+            <div style={{
+              padding: '10px 14px',
+              borderRadius: 12,
+              marginBottom: 16,
+              textAlign: 'left',
+              background: 
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#F0FDF4" :
+                liveData.quote.status === "CHANGES_REQUESTED" ? "#FFFBEB" : "#FEF2F2",
+              border: `1px solid ${
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#DCFCE7" :
+                liveData.quote.status === "CHANGES_REQUESTED" ? "#FEF3C7" : "#FEE2E2"
+              }`,
+              color: 
+                liveData.quote.status === "CUSTOMER_ACCEPTED" || liveData.quote.status === "CONVERTED" ? "#15803D" :
+                liveData.quote.status === "CHANGES_REQUESTED" ? "#B45309" : "#C2410C",
+              fontSize: '0.82rem',
+              fontWeight: 700
+            }}>
+              {liveData.quote.status === "CUSTOMER_ACCEPTED" && "✓ You have accepted this quotation. Creating your service booking..."}
+              {liveData.quote.status === "CONVERTED" && "✓ Booking confirmed! Your service request has been scheduled."}
+              {liveData.quote.status === "CHANGES_REQUESTED" && `⚠ Changes requested: "${liveData.quote.customer_notes || 'Please adjust the items'}"`}
+              {liveData.quote.status === "DECLINED" && `✗ You declined this quotation: "${liveData.quote.customer_decline_reason || 'Other reason'}"`}
+            </div>
+          )}
 
           {/* Expandable items section */}
           <div style={{ border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
@@ -3040,11 +3089,11 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
                         {item.name} {item.warranty_months ? `(Warranty: ${item.warranty_months} mo)` : "(No Warranty)"}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                        Source: {item.source_type === "CUSTOMER" ? "Customer Supplied" : "CalTrack Supplied"}
+                        Source: {item.source_type === "CUSTOMER" || item.item_type === "CUSTOMER" ? "Customer Supplied" : "CalTrack Supplied"}
                       </div>
                     </div>
                     <div style={{ fontWeight: 900, color: '#0f172a' }}>
-                      ₹{item.source_type === "CUSTOMER" ? "0" : item.price * item.quantity}
+                      ₹{item.source_type === "CUSTOMER" || item.item_type === "CUSTOMER" ? "0" : (item.total_amount ?? ((item.unit_price ?? item.price ?? 0) * (item.quantity ?? 1)))}
                     </div>
                   </div>
                 ))}
@@ -3058,66 +3107,135 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               href={`http://localhost:8001/customer/quote-token/${liveData.quote.decision_token}/pdf/`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              style={{ fontSize: '0.8rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
             >
               📄 Download PDF Quotation
             </a>
           </div>
 
+          {/* Quote Version History */}
+          {liveData.quote.history && liveData.quote.history.length > 0 && (
+            <div style={{ marginTop: 20, borderTop: '1px dashed #e2e8f0', paddingTop: 16, marginBottom: 16 }}>
+              <h4 style={{ fontSize: '0.78rem', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.5px' }}>
+                Previous Quotations ({liveData.quote.history.length})
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {liveData.quote.history.map((prevQuote) => {
+                  const isExpanded = expandedPrevQuotes[prevQuote.id];
+                  return (
+                    <div key={prevQuote.id} style={{ background: '#f8fafc', borderRadius: 10, padding: 12, border: '1px solid #f1f5f9' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>
+                            {prevQuote.quote_number} (v{prevQuote.quote_version})
+                          </span>
+                          <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b', fontWeight: 700 }}>
+                            {prevQuote.status.replace(/_/g, " ")}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <button
+                            onClick={() => setExpandedPrevQuotes(prev => ({ ...prev, [prevQuote.id]: !prev[prevQuote.id] }))}
+                            style={{ background: 'none', border: 'none', color: '#4F46E5', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}
+                          >
+                            {isExpanded ? "Hide Details" : "View Details"}
+                          </button>
+                          <a
+                            href={`http://localhost:8001/customer/quote-token/${prevQuote.decision_token}/pdf/`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4F46E5', textDecoration: 'underline', cursor: 'pointer' }}
+                          >
+                            📄 PDF
+                          </a>
+                        </div>
+                      </div>
+                      
+                      {isExpanded && (
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', fontSize: '0.78rem', textAlign: 'left' }}>
+                          <p style={{ margin: '0 0 8px 0', color: '#475569' }}>
+                            <strong>Description:</strong> {prevQuote.description || "No description"}
+                          </p>
+                          <p style={{ margin: '0 0 10px 0', color: '#475569' }}>
+                            <strong>Total Estimate:</strong> ₹{prevQuote.total_amount}
+                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'white', padding: 8, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                            {prevQuote.items && prevQuote.items.map((item, idx) => (
+                              <div key={item.id || idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                                <span>
+                                  {item.name} (x{item.quantity})
+                                </span>
+                                <span style={{ fontWeight: 700 }}>
+                                  ₹{item.total_amount}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Accept / Decline / Request changes buttons */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => handleQuoteDecision("CUSTOMER_ACCEPTED")}
-              style={{
-                flex: 1.2,
-                padding: '10px 14px',
-                background: 'linear-gradient(135deg, #10B981, #059669)',
-                color: 'white',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: 'none',
-                borderRadius: 10,
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
-              }}
-            >
-              Accept Quote
-            </button>
-            <button
-              onClick={() => {
-                handleQuoteDecision("CHANGE_REQUESTED");
-              }}
-              style={{
-                flex: 1,
-                padding: '10px 14px',
-                background: '#f1f5f9',
-                color: '#0f172a',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: 'none',
-                borderRadius: 10,
-                cursor: 'pointer'
-              }}
-            >
-              Request Changes
-            </button>
-            <button
-              onClick={() => setShowDeclineReasonModal(true)}
-              style={{
-                flex: 1,
-                padding: '10px 14px',
-                background: '#fef2f2',
-                color: '#dc2626',
-                fontWeight: 800,
-                fontSize: '0.82rem',
-                border: 'none',
-                borderRadius: 10,
-                cursor: 'pointer'
-              }}
-            >
-              Decline
-            </button>
-          </div>
+          {liveData.quote.status === "SENT_TO_CUSTOMER" && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => handleQuoteDecision("CUSTOMER_ACCEPTED")}
+                style={{
+                  flex: 1.2,
+                  padding: '10px 14px',
+                  background: 'linear-gradient(135deg, #10B981, #059669)',
+                  color: 'white',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)'
+                }}
+              >
+                Accept Quote
+              </button>
+              <button
+                onClick={() => {
+                  handleQuoteDecision("CHANGE_REQUESTED");
+                }}
+                style={{
+                  flex: 1,
+                  padding: '10px 14px',
+                  background: '#f1f5f9',
+                  color: '#0f172a',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: 'pointer'
+                }}
+              >
+                Request Changes
+              </button>
+              <button
+                onClick={() => setShowDeclineReasonModal(true)}
+                style={{
+                  flex: 1,
+                  padding: '10px 14px',
+                  background: '#fef2f2',
+                  color: '#dc2626',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: 'pointer'
+                }}
+              >
+                Decline
+              </button>
+            </div>
+          )}
         </motion.div>
       )}
 
@@ -7606,7 +7724,9 @@ function StepWorkflowCheckout({
   onSubmit,
   loading,
   error,
-  onBack
+  onBack,
+  setFormData,
+  setLocation
 }) {
   const [showSlotPicker, setShowSlotPicker] = useState(!selectedDate || !selectedTime)
   const isSlotSelected = Boolean(selectedDate && selectedTime)
@@ -8116,7 +8236,7 @@ function StepWorkflowCheckout({
                     )}
 
                     <button
-                      onClick={() => onSubmit(payMethod, appliedCoupon?.code)}
+                      onClick={() => onSubmit(payMethod, appliedCoupon?.code, appliedCoupon, tip, customTip)}
                       disabled={loading}
                       className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:bg-slate-300"
                     >
@@ -8891,7 +9011,7 @@ export function BookingPage() {
     if (f) { setPhotoFile(f); setPhotoPreview(URL.createObjectURL(f)) }
   }
 
-  const handleSubmit = async (paymentMethod = "cash", couponCode = null) => {
+  const handleSubmit = async (paymentMethod = "cash", couponCode = null, appliedCoupon = null, tip = 0, customTip = "") => {
     if (!user) {
       setShowCustomerEntryModal(true)
       return
@@ -9318,6 +9438,8 @@ export function BookingPage() {
                   const catId = activeCat?.id || activeCat?.slug || "cleaning";
                   navigate(`/?category=${encodeURIComponent(catId)}`);
                 }}
+                setFormData={setFormData}
+                setLocation={setLocation}
               />
             </motion.div>
           )}
@@ -9456,6 +9578,8 @@ export function BookingPage() {
                   onGetEstimate={() => {
                     setShowLocPicker(true);
                   }}
+                  setLocation={setLocation}
+                  setFormData={setFormData}
                 />
               );
             } else if (isMason) {
@@ -9473,6 +9597,8 @@ export function BookingPage() {
                   onGetEstimate={() => {
                     setShowLocPicker(true);
                   }}
+                  setLocation={setLocation}
+                  setFormData={setFormData}
                 />
               );
             } else {
@@ -9834,7 +9960,7 @@ const PAINTING_DETAILS_EXTRA = {
   }
 };
 
-export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, packagesData }) {
+export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, packagesData, setLocation, setFormData }) {
   const [showPriceList, setShowPriceList] = React.useState(false);
   const [selectedPaintType, setSelectedPaintType] = React.useState('premium-emulsion');
   const [searchQuery, setSearchQuery] = useState("")
@@ -10374,6 +10500,19 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                 if (addrStr) {
                   setPaintLocation(addrStr);
                   localStorage.setItem("calservice_user_location", addrStr);
+                  if (typeof setLocation === "function") {
+                    setLocation(addrStr);
+                  }
+                  if (typeof setFormData === "function") {
+                    setFormData(prev => ({
+                      ...prev,
+                      address: addrStr,
+                      latitude: loc.latitude ? String(loc.latitude) : prev.latitude,
+                      longitude: loc.longitude ? String(loc.longitude) : prev.longitude,
+                      flat_house_no: loc.flat_house_no || "",
+                      landmark: loc.landmark || ""
+                    }));
+                  }
                 }
               }
             }}
@@ -11966,7 +12105,7 @@ const MASON_DETAILS_EXTRA = {
   }
 };
 
-export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, setPhotoFile, setPhotoPreview, packagesData }) {
+export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, setPhotoFile, setPhotoPreview, packagesData, setLocation, setFormData }) {
   const [activeTab, setActiveTab] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [expanded, setExpanded] = useState({});
@@ -12549,7 +12688,28 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
             onClose={() => setShowLocSearchModal(false)}
             onSelectLocation={(loc) => {
               setShowLocSearchModal(false);
-              if (loc) { setMasonLocation(loc); localStorage.setItem("calservice_user_location", loc); }
+              if (loc) {
+                const addrStr = typeof loc === "string"
+                  ? loc
+                  : (loc.formatted_address || loc.display || loc.address || [loc.address_line1, loc.locality, loc.city, loc.state, loc.pincode].filter(Boolean).join(", ") || "");
+                if (addrStr) {
+                  setMasonLocation(addrStr);
+                  localStorage.setItem("calservice_user_location", addrStr);
+                  if (typeof setLocation === "function") {
+                    setLocation(addrStr);
+                  }
+                  if (typeof setFormData === "function") {
+                    setFormData(prev => ({
+                      ...prev,
+                      address: addrStr,
+                      latitude: loc.latitude ? String(loc.latitude) : prev.latitude,
+                      longitude: loc.longitude ? String(loc.longitude) : prev.longitude,
+                      flat_house_no: loc.flat_house_no || "",
+                      landmark: loc.landmark || ""
+                    }));
+                  }
+                }
+              }
             }}
             onUseCurrentLocation={() => {
               setShowLocSearchModal(false);
