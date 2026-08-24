@@ -87,7 +87,12 @@ class CustomerIdentity(models.Model):
         blank=True,
         related_name="merged_identities"
     )
+    account_status   = models.CharField(max_length=20, default="active", choices=[("active", "Active"), ("suspended", "Suspended"), ("blocked", "Blocked")])
+    customer_tier    = models.CharField(max_length=20, default="standard", choices=[("standard", "Standard"), ("vip", "VIP")])
+    risk_status      = models.CharField(max_length=20, default="normal", choices=[("normal", "Normal"), ("flagged", "Flagged"), ("restricted", "Restricted"), ("blacklisted", "Blacklisted")])
+    internal_notes   = models.TextField(blank=True)
     merge_note       = models.TextField(blank=True)
+    tags             = models.JSONField(default=list, blank=True)
 
     class Meta:
         verbose_name_plural = "Customer Identities"
@@ -133,6 +138,37 @@ class CustomerLoginEvent(models.Model):
 
     def __str__(self):
         return f"Login for {self.customer.username} via {self.method} [{self.status}]"
+
+
+class PlatformAuditEvent(models.Model):
+    """
+    Unified platform-wide audit log for all privileged and sensitive administrative operations.
+    """
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="platform_audit_events")
+    actor_role = models.CharField(max_length=50, blank=True)
+    action = models.CharField(max_length=100, db_index=True)
+    module = models.CharField(max_length=50, db_index=True)
+    object_type = models.CharField(max_length=50, blank=True)
+    object_id = models.CharField(max_length=100, blank=True)
+    before_state = models.JSONField(null=True, blank=True)
+    after_state = models.JSONField(null=True, blank=True)
+    reason = models.TextField(blank=True)
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    request_id = models.CharField(max_length=64, blank=True)
+    severity = models.CharField(max_length=20, default="INFO")
+
+    class Meta:
+        ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=["module", "timestamp"]),
+            models.Index(fields=["action", "timestamp"]),
+            models.Index(fields=["actor", "timestamp"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.severity}] {self.action} by {self.actor.username if self.actor else 'system'} at {self.timestamp}"
 
 
 class AuditLog(models.Model):

@@ -200,18 +200,42 @@ class WorkforceWebhookView(APIView):
 
                     assignment.status = BookingAssignment.Status.ACCEPTED
                     assignment.accepted_at = timezone.now()
-                    if tech_dict.get("name") or payload.get("technician_name"):
-                        assignment.technician_name = tech_dict.get("name") or payload.get("technician_name")
-                        assignment.technician_phone = tech_dict.get("phone") or payload.get("technician_phone") or ""
-                        assignment.technician_photo = tech_dict.get("photo") or payload.get("technician_photo") or ""
-                        assignment.technician_rating = tech_dict.get("rating") or payload.get("technician_rating")
+
+                    t_name = (
+                        tech_dict.get("name") or tech_dict.get("full_name") or tech_dict.get("employee_name") or
+                        payload.get("technician_name") or payload.get("employee_name") or payload.get("tech_name") or ""
+                    )
+                    t_phone = (
+                        tech_dict.get("phone") or tech_dict.get("mobile") or tech_dict.get("contact") or
+                        payload.get("technician_phone") or payload.get("employee_phone") or ""
+                    )
+                    t_photo = (
+                        tech_dict.get("photo") or tech_dict.get("avatar") or tech_dict.get("image") or
+                        payload.get("technician_photo") or payload.get("employee_photo") or ""
+                    )
+                    t_rating = (
+                        tech_dict.get("rating") or payload.get("technician_rating") or payload.get("rating")
+                    )
+
+                    if t_name:
+                        assignment.technician_name = t_name
+                    if t_phone:
+                        assignment.technician_phone = t_phone
+                    if t_photo:
+                        assignment.technician_photo = t_photo
+                    if t_rating:
+                        assignment.technician_rating = t_rating
                     assignment.save()
 
                     # Now populated onto authoritative customer snapshot
-                    sr.technician_name = assignment.technician_name
-                    sr.technician_phone = assignment.technician_phone
-                    sr.technician_photo = assignment.technician_photo
-                    sr.technician_rating = assignment.technician_rating
+                    if assignment.technician_name:
+                        sr.technician_name = assignment.technician_name
+                    if assignment.technician_phone:
+                        sr.technician_phone = assignment.technician_phone
+                    if assignment.technician_photo:
+                        sr.technician_photo = assignment.technician_photo
+                    if assignment.technician_rating:
+                        sr.technician_rating = assignment.technician_rating
                     if wf_job_id:
                         sr.workforce_job_id = wf_job_id
                     if assign_id:

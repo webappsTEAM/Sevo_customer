@@ -19,8 +19,7 @@ from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsAdminRole
-from common.permissions import HasCompany
+from accounts.permissions import IsAdminRole, RequireModuleAccess
 from service_requests.models import (
     ServiceRequest, ServiceFeedback, RefundRequest, Complaint, CouponUsage, CatalogCategory
 )

@@ -85,8 +85,12 @@ class InvoiceListView(APIView):
                         "pdf_url": f"/api/booking/{sr.id}/invoice/",
                     })
 
-            # Also check existing Invoice model records if company filtered
-            company_invoices = Invoice.objects.filter(company=request.user.company)
+            # Also check existing Invoice model records
+            if getattr(request.user, "company", None):
+                company_invoices = Invoice.objects.filter(company=request.user.company)
+            else:
+                company_invoices = Invoice.objects.all()
+
             for inv in company_invoices:
                 if inv.invoice_number not in [x["invoice_number"] for x in invoice_list]:
                     invoice_list.append(InvoiceSerializer(inv).data)
@@ -168,7 +172,10 @@ class APIKeyListCreateView(APIView):
     def get(self, request):
         if not _is_admin(request.user):
             return Response({"success": False, "message": "Admins only."}, status=403)
-        keys = APIKey.objects.filter(company=request.user.company, revoked=False)
+        if getattr(request.user, "company", None):
+            keys = APIKey.objects.filter(company=request.user.company, revoked=False)
+        else:
+            keys = APIKey.objects.filter(revoked=False)
         return Response({"success": True, "data": APIKeySerializer(keys, many=True).data})
 
     def post(self, request):
@@ -182,8 +189,9 @@ class APIKeyListCreateView(APIView):
         if serializer.validated_data.get("expires_in_days"):
             expires_at = timezone.now() + timezone.timedelta(days=serializer.validated_data["expires_in_days"])
 
+        company_obj = getattr(request.user, "company", None)
         api_key_obj, raw_key = APIKey.generate(
-            company=request.user.company,
+            company=company_obj,
             created_by=request.user,
             name=serializer.validated_data["name"],
             scopes=serializer.validated_data.get("scopes", ["read"]),
@@ -203,7 +211,10 @@ class APIKeyRevokeView(APIView):
     def delete(self, request, pk):
         if not _is_admin(request.user):
             return Response({"success": False, "message": "Admins only."}, status=403)
-        key = APIKey.objects.filter(pk=pk, company=request.user.company, revoked=False).first()
+        if getattr(request.user, "company", None):
+            key = APIKey.objects.filter(pk=pk, company=request.user.company, revoked=False).first()
+        else:
+            key = APIKey.objects.filter(pk=pk, revoked=False).first()
         if not key:
             return Response({"success": False, "message": "API key not found."}, status=404)
         key.revoked = True
@@ -219,7 +230,10 @@ class WebhookListCreateView(APIView):
     def get(self, request):
         if not _is_admin(request.user):
             return Response({"success": False, "message": "Admins only."}, status=403)
-        webhooks = Webhook.objects.filter(company=request.user.company)
+        if getattr(request.user, "company", None):
+            webhooks = Webhook.objects.filter(company=request.user.company)
+        else:
+            webhooks = Webhook.objects.all()
         return Response({"success": True, "data": WebhookSerializer(webhooks, many=True).data})
 
     def post(self, request):
@@ -228,7 +242,8 @@ class WebhookListCreateView(APIView):
         serializer = WebhookSerializer(data=request.data)
         if not serializer.is_valid():
             return Response({"success": False, "message": serializer.errors}, status=400)
-        webhook = serializer.save(company=request.user.company, created_by=request.user)
+        company_obj = getattr(request.user, "company", None)
+        webhook = serializer.save(company=company_obj, created_by=request.user)
         return Response({"success": True, "data": WebhookSerializer(webhook).data}, status=201)
 
 
@@ -268,23 +283,27 @@ class TeamMembersView(APIView):
     def get(self, request):
         from django.contrib.auth import get_user_model
         from django.db.models import Q
+        from accounts.permissions import is_super_admin
         User = get_user_model()
-        # Team members are strictly Admin and Manager accounts with administrative access control.
-        # Customers, employees, and technicians are strictly excluded.
+        
+        members_qs = User.objects.filter(is_active=True).exclude(role__in=["customer", "employee", "technician"])
+        if not is_super_admin(request.user) and request.user.company:
+            members_qs = members_qs.filter(company=request.user.company)
+
         members = (
-            User.objects.filter(company=request.user.company, is_active=True)
-            .filter(Q(role__in=["admin", "manager"]) | Q(is_superuser=True))
-            .exclude(role__in=["customer", "employee", "technician"])
+            members_qs
+            .filter(Q(role__in=["admin", "manager", "support", "super_admin", "catalog", "finance"]) | Q(is_superuser=True))
             .order_by("first_name", "username")
         )
         data = [
             {
                 "id": str(m.pk),
                 "username": m.username,
-                "email": m.email,
+                "email": m.email or "",
                 "name": m.get_full_name() or m.username,
-                "role": m.role if m.role in ["admin", "manager"] else "admin",
-                "date_joined": m.date_joined.isoformat(),
+                "role": m.role if m.role in ["admin", "manager", "support", "super_admin", "catalog", "finance"] else "admin",
+                "is_super_admin": is_super_admin(m),
+                "date_joined": m.date_joined.isoformat() if m.date_joined else "",
                 "is_current_user": m.pk == request.user.pk,
             }
             for m in members
@@ -299,32 +318,83 @@ class TeamMemberDetailView(APIView):
         if not _is_admin(request.user):
             return Response({"success": False, "message": "Admins only."}, status=403)
         from django.contrib.auth import get_user_model
+        from accounts.permissions import is_super_admin
+        from accounts.audit_service import record_platform_audit
         User = get_user_model()
-        member = User.objects.filter(pk=pk, company=request.user.company).first()
+        
+        member_qs = User.objects.filter(pk=pk)
+        if not is_super_admin(request.user) and request.user.company:
+            member_qs = member_qs.filter(company=request.user.company)
+        member = member_qs.first()
+
         if not member:
             return Response({"success": False, "message": "Member not found."}, status=404)
         if member.pk == request.user.pk:
             return Response({"success": False, "message": "Cannot change your own role."}, status=400)
+        
         new_role = request.data.get("role")
-        allowed = ["admin", "manager", "support"]
+        if new_role in ["super_admin", "superadmin"] and not is_super_admin(request.user):
+            return Response({"success": False, "message": "Only Super Admins can grant Super Admin privileges."}, status=403)
+        if is_super_admin(member) and not is_super_admin(request.user):
+            return Response({"success": False, "message": "Only Super Admins can modify Super Admin accounts."}, status=403)
+
+        allowed = ["admin", "manager", "support", "catalog", "finance", "super_admin"]
         if new_role not in allowed:
             return Response({"success": False, "message": f"Role must be one of {allowed}."}, status=400)
+        
+        before_role = member.role
         member.role = new_role
-        member.save(update_fields=["role"])
+        if new_role == "super_admin":
+            member.is_staff = True
+        member.save(update_fields=["role", "is_staff"] if new_role == "super_admin" else ["role"])
+        
+        record_platform_audit(
+            actor=request.user,
+            action="USER_ROLE_CHANGED",
+            module="settings",
+            object_type="User",
+            object_id=str(member.id),
+            before_state={"role": before_role},
+            after_state={"role": new_role},
+            reason=f"Role updated from {before_role} to {new_role} in settings hub",
+            request=request,
+            severity="WARN"
+        )
         return Response({"success": True, "message": "Role updated."})
 
     def delete(self, request, pk):
         if not _is_admin(request.user):
             return Response({"success": False, "message": "Admins only."}, status=403)
         from django.contrib.auth import get_user_model
+        from accounts.permissions import is_super_admin
+        from accounts.audit_service import record_platform_audit
         User = get_user_model()
-        member = User.objects.filter(pk=pk, company=request.user.company).first()
+        
+        member_qs = User.objects.filter(pk=pk)
+        if not is_super_admin(request.user) and request.user.company:
+            member_qs = member_qs.filter(company=request.user.company)
+        member = member_qs.first()
+
         if not member:
             return Response({"success": False, "message": "Member not found."}, status=404)
         if member.pk == request.user.pk:
             return Response({"success": False, "message": "Cannot remove yourself."}, status=400)
+        if is_super_admin(member) and not is_super_admin(request.user):
+            return Response({"success": False, "message": "Only Super Admins can deactivate another Super Admin."}, status=403)
+
         member.is_active = False
         member.save(update_fields=["is_active"])
+        
+        record_platform_audit(
+            actor=request.user,
+            action="USER_SUSPENDED",
+            module="settings",
+            object_type="User",
+            object_id=str(member.id),
+            reason="User deactivated via settings hub",
+            request=request,
+            severity="WARN"
+        )
         return Response({"success": True, "message": "Member removed."})
 
 

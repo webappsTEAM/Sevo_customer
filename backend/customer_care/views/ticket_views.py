@@ -119,13 +119,9 @@ class CustomerCareTicketViewSet(StandardResponseMixin, CompanyScopedViewSet):
 
     def create(self, request, *args, **kwargs):
         try:
-            company = request.company
             created_by = request.user
-            # Always resolve a company so no ticket is ever orphaned with company=None
-            company = getattr(request, "company", None)
-            if not company:
-                from companies.models import Company
-                company = Company.objects.first()
+            from companies.models import Company
+            company = getattr(request.user, "company", None) or Company.objects.first()
 
             customer_id = request.data.get("customer")
             customer = None
@@ -551,9 +547,8 @@ class CareAnalyticsView(StandardResponseMixin, APIView):
     permission_classes = [permissions.IsAuthenticated, IsCareAgent]
 
     def get(self, request):
-        company = request.company
-        if not company:
-            return self.error_response("No company context found.")
+        from companies.models import Company
+        company = getattr(request.user, "company", None) or Company.objects.first()
         try:
             analytics = analytics_service.get_care_analytics(company)
             return self.success_response(analytics)

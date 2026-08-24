@@ -18,6 +18,7 @@ import { addSosAlert, addGeofenceBreach } from "../../store/liveLocationSlice.js
 import { fetchTrialStatus, fetchTrialNotifications } from "../../store/trialSlice.js"
 import { TrialBanner } from "../components/TrialBanner.jsx"
 import { TrialExpiredModal } from "../components/TrialExpiredModal.jsx"
+import { isSuperAdmin, hasModule } from "../../auth/authorization.js"
 
 import {
   Home, Clock, CheckSquare, CalendarDays, Banknote, CalendarRange,
@@ -27,6 +28,23 @@ import {
   Wrench, MessageSquare, UserCheck, Activity, ArrowUpRight, Repeat2, User,
   Shield, Palette, CreditCard, Building2, ShieldCheck, Ticket, Gift
 } from "lucide-react"
+
+const SUPER_ADMIN_NAV_ITEMS = [
+  {
+    label: "Platform Command",
+    to: "/platform/dashboard",
+    icon: <ShieldCheck size={20} />,
+    color: "#6366F1",
+    children: [
+      { label: "Dashboard", to: "/platform/dashboard", icon: <Home size={16} />, color: "#6366F1" },
+      { label: "Staff & Access", to: "/platform/users", icon: <Users size={16} />, color: "#4F46E5" },
+      { label: "RBAC Matrix", to: "/platform/rbac", icon: <Shield size={16} />, color: "#8B5CF6" },
+      { label: "Customer 360", to: "/platform/customers", icon: <UserCheck size={16} />, color: "#0EA5E9" },
+      { label: "Security & MFA", to: "/platform/security", icon: <ShieldAlert size={16} />, color: "#10B981" },
+      { label: "Platform Audit", to: "/platform/audit", icon: <Activity size={16} />, color: "#F59E0B" },
+    ]
+  },
+]
 
 const ADMIN_NAV_ITEMS = [
   { label: "Get Started", to: routes.get_started, icon: <Rocket size={20} />, color: "#0EA5E9" },
@@ -144,14 +162,10 @@ function displayName(username) {
 }
 
 function hasModuleAccess(user, item) {
+  if (!user) return false
+  if (isSuperAdmin(user)) return true
   if (!item.module) return true
-  const perms = user?.companyPermissions
-  if (!perms) return true
-  const modulePerms = perms[item.module]
-  if (!modulePerms) return false
-  const checkRole = user.role === "manager" ? "admin" : user.role
-  const actions = modulePerms[checkRole] || []
-  return actions.includes("view")
+  return hasModule(user, item.module)
 }
 
 function playCriticalAlert() {
@@ -276,10 +290,19 @@ export function AppShell() {
 
   const isAdmin = user?.role === "admin" || user?.role === "manager"
 
+  const isSuper = isSuperAdmin(user)
+
   const items = useMemo(() => {
     if (!user) return []
-    const isAdminUser = user.role === "admin" || user.role === "manager"
+    const isAdminUser = user.role === "admin" || user.role === "manager" || isSuper
     
+    if (isSuper) {
+      return [
+        ...SUPER_ADMIN_NAV_ITEMS,
+        ...ADMIN_NAV_ITEMS.filter((item) => item.label !== "Get Started")
+      ]
+    }
+
     if (user.isCareAgent && !isAdminUser) {
       return [
         {
@@ -299,7 +322,7 @@ export function AppShell() {
     }
 
     return ADMIN_NAV_ITEMS.filter(item => hasModuleAccess(user, item))
-  }, [user])
+  }, [user, isSuper])
 
   useEffect(() => {
     localStorage.setItem("caltrack.sidebarCollapsed", sidebarCollapsed)

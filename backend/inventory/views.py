@@ -2,9 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from accounts.permissions import IsAdminRole
-from common.drf import CompanyScopedQuerysetMixin
-from common.permissions import HasCompany, IsCompanyMember
+from accounts.permissions import IsAdminRole, RequireModuleAccess
+from common.drf import VisibilityQuerysetMixin
 from inventory.models import InventoryItem, InventoryAlert, InventoryTransfer
 from inventory.serializers import (
     InventoryItemSerializer, InventoryAlertSerializer, InventoryTransferSerializer
@@ -26,8 +25,8 @@ class StandardResponseMixin:
         }, status=status_code)
 
 
-class InventoryItemViewSet(CompanyScopedQuerysetMixin, StandardResponseMixin, viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, HasCompany, IsAdminRole, IsCompanyMember]
+class InventoryItemViewSet(VisibilityQuerysetMixin, StandardResponseMixin, viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, IsAdminRole]
     serializer_class = InventoryItemSerializer
     queryset = InventoryItem.objects.all()
     company_field = "org"
@@ -59,8 +58,8 @@ class InventoryItemViewSet(CompanyScopedQuerysetMixin, StandardResponseMixin, vi
         return self.success_response(message="Item deleted successfully")
 
 
-class InventoryAlertViewSet(CompanyScopedQuerysetMixin, StandardResponseMixin, viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, HasCompany, IsAdminRole, IsCompanyMember]
+class InventoryAlertViewSet(VisibilityQuerysetMixin, StandardResponseMixin, viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, IsAdminRole]
     serializer_class = InventoryAlertSerializer
     queryset = InventoryAlert.objects.all()
     company_field = "org"
@@ -81,8 +80,8 @@ class InventoryAlertViewSet(CompanyScopedQuerysetMixin, StandardResponseMixin, v
         return self.success_response(message="Alert resolved successfully")
 
 
-class InventoryTransferViewSet(CompanyScopedQuerysetMixin, StandardResponseMixin, viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, HasCompany, IsAdminRole, IsCompanyMember]
+class InventoryTransferViewSet(VisibilityQuerysetMixin, StandardResponseMixin, viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, IsAdminRole]
     serializer_class = InventoryTransferSerializer
     queryset = InventoryTransfer.objects.all()
     company_field = "org"

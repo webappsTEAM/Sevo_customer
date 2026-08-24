@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "reports",
     "workforce_integration",
     "customer_analytics",
+    "platform_control",
 ]
 
 ASGI_APPLICATION = "quicktims.asgi.application"
@@ -71,7 +72,6 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "companies.middleware.CompanyMiddleware",
     "common.middleware.RequestLatencyLoggingMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

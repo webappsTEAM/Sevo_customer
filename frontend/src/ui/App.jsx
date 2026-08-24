@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react"
 import { Navigate, Outlet, Route, Routes } from "react-router-dom"
 import { useAuth } from "../state/auth/useAuth.js"
 import { useRole } from "../state/auth/useRole.js"
+import { isSuperAdmin } from "../auth/authorization.js"
 import { routes } from "./routes.js"
 import { AppShell } from "./shell/AppShell.jsx"
 import { SessionToast } from "./components/SessionToast.jsx"
@@ -146,27 +147,46 @@ const HelpSupportPage = lazy(() =>
   import("./pages/legal/HelpSupportPage.jsx").then(m => ({ default: m.HelpSupportPage || m.default }))
 )
 
+// Platform Super Admin Control Center Pages
+const PlatformDashboardPage = lazy(() => import("./pages/platform/PlatformDashboardPage.jsx"))
+const PlatformUsersPage = lazy(() => import("./pages/platform/PlatformUsersPage.jsx"))
+const PlatformCustomersPage = lazy(() => import("./pages/platform/PlatformCustomersPage.jsx"))
+const PlatformRBACPage = lazy(() => import("./pages/platform/PlatformRBACPage.jsx"))
+const PlatformSecurityPage = lazy(() => import("./pages/platform/PlatformSecurityPage.jsx"))
+const PlatformAuditPage = lazy(() => import("./pages/platform/PlatformAuditPage.jsx"))
+
+function RequireSuperAdmin() {
+  const { user } = useAuth()
+  const isSuper = Boolean(user?.is_superuser || user?.is_super_admin || user?.role === "super_admin" || user?.role === "superadmin" || user?.isSuperAdmin)
+  if (!user) return <Navigate to={routes.login} replace />
+  if (!isSuper) return <Navigate to={routes.dashboard} replace />
+  return <Outlet />
+}
+
 function RequireAdmin() {
   const { user } = useAuth()
   const { isAdmin } = useRole()
+  const isSuper = Boolean(user?.is_superuser || user?.is_super_admin || user?.role === "super_admin" || user?.isSuperAdmin)
   if (!user) return <Navigate to={routes.login} replace />
-  if (!isAdmin) return <Navigate to={routes.dashboard} replace />
+  if (!isAdmin && !isSuper) return <Navigate to={routes.dashboard} replace />
   return <Outlet />
 }
 
 function RequireAdminSettings() {
   const { user } = useAuth()
   const { isAdmin } = useRole()
+  const isSuper = Boolean(user?.is_superuser || user?.is_super_admin || user?.role === "super_admin" || user?.isSuperAdmin)
   if (!user) return <Navigate to={routes.login} replace />
-  if (!isAdmin) return <Navigate to={routes.settings_profile} replace />
+  if (!isAdmin && !isSuper) return <Navigate to={routes.settings_profile} replace />
   return <Outlet />
 }
 
 function RequireCareAgentOrAdmin() {
   const { user } = useAuth()
   const { isAdmin } = useRole()
+  const isSuper = Boolean(user?.is_superuser || user?.is_super_admin || user?.role === "super_admin" || user?.isSuperAdmin)
   if (!user) return <Navigate to={routes.login} replace />
-  if (!isAdmin && !user.isCareAgent) {
+  if (!isAdmin && !user.isCareAgent && !isSuper) {
     return <Navigate to={routes.dashboard} replace />
   }
   return <Outlet />
@@ -186,11 +206,13 @@ export function App() {
   const getAuthenticatedDefaultRoute = (u) => {
     if (!u) return routes.login
     if (u.role === "customer") return routes.landing
-    if (u.role === "support" || u.isCareAgent) return "/support/tickets"
-    if (u.role === "admin" || u.role === "manager") {
-      return u.companyId ? adminDefaultRoute() : routes.onboarding
+    if (u.isSuperAdmin || u.is_super_admin || u.role === "super_admin" || u.role === "superadmin") {
+      return "/platform/dashboard"
     }
-    return u.companyId ? routes.dashboard : routes.onboarding
+    if (u.role === "support" || u.isCareAgent) return "/support/tickets"
+    if (u.role === "catalog") return routes.catalog
+    if (u.role === "finance") return "/customers/payments"
+    return routes.dashboard
   }
 
   const PageLoader = () => (
@@ -236,28 +258,12 @@ export function App() {
 
           <Route
             path={routes.organization_signup}
-            element={
-              user ? (
-                <Navigate to={getAuthenticatedDefaultRoute(user)} replace />
-              ) : (
-                <OrganizationSignupPage />
-              )
-            }
+            element={<Navigate to={routes.login} replace />}
           />
 
           <Route
             path={routes.onboarding}
-            element={
-              !user ? (
-                <Navigate to={routes.login} replace />
-              ) : user.role === "customer" ? (
-                <Navigate to={routes.landing} replace />
-              ) : user.companyId ? (
-                <Navigate to={getAuthenticatedDefaultRoute(user)} replace />
-              ) : (
-                <OnboardingPage />
-              )
-            }
+            element={<Navigate to={getAuthenticatedDefaultRoute(user)} replace />}
           />
 
           <Route
@@ -282,7 +288,7 @@ export function App() {
           <Route
             path="/"
             element={
-              user && user.role !== "customer" && user.companyId ? (
+              user && user.role !== "customer" ? (
                 <Navigate to={getAuthenticatedDefaultRoute(user)} replace />
               ) : (
                 <LandingPage />
@@ -350,18 +356,28 @@ export function App() {
                 <Navigate to={routes.login} replace />
               ) : user.role === "customer" ? (
                 <Navigate to={routes.landing} replace />
-              ) : !user.companyId ? (
-                <Navigate to={routes.onboarding} replace />
               ) : (
                 <AppShell />
               )
             }
           >
+            {/* ── Super Admin Control Center ── */}
+            <Route element={<RequireSuperAdmin />}>
+              <Route path="/platform/dashboard" element={<PlatformDashboardPage />} />
+              <Route path="/platform/users" element={<PlatformUsersPage />} />
+              <Route path="/platform/customers" element={<PlatformCustomersPage />} />
+              <Route path="/platform/rbac" element={<PlatformRBACPage />} />
+              <Route path="/platform/security" element={<PlatformSecurityPage />} />
+              <Route path="/platform/audit" element={<PlatformAuditPage />} />
+            </Route>
+
             <Route
               path={routes.dashboard}
               element={
                 user?.role === "customer" ? (
                   <Navigate to={routes.landing} replace />
+                ) : isSuperAdmin(user) ? (
+                  <Navigate to="/platform/dashboard" replace />
                 ) : user?.role === "support" || (user?.isCareAgent && user?.role !== "admin" && user?.role !== "manager") ? (
                   <Navigate to="/support/tickets" replace />
                 ) : (

@@ -90,18 +90,27 @@ class CustomerDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated, RequireModuleAccess("customers", "view")]
 
     def get(self, request, pk):
-        company = getattr(request, "company", None)
-        try:
-            # Check primary identity
-            identity = CustomerIdentity.objects.get(pk=pk, merged_into__isnull=True)
-            if company and identity.company != company:
-                return Response({"success": False, "message": "Access Denied"}, status=403)
-        except CustomerIdentity.DoesNotExist:
-            return Response({"success": False, "message": "Customer not found"}, status=404)
+        identity = (
+            CustomerIdentity.objects.filter(pk=pk, merged_into__isnull=True).first() or
+            CustomerIdentity.objects.filter(user_id=pk, merged_into__isnull=True).first() or
+            CustomerIdentity.objects.filter(user__customer_id=pk, merged_into__isnull=True).first()
+        )
+        if not identity:
+            user = User.objects.filter(Q(id=pk) | Q(customer_id=pk)).first()
+            if user:
+                identity, _ = CustomerIdentity.objects.get_or_create(
+                    user=user,
+                    defaults={
+                        "phone_normalized": user.phone or "",
+                        "email_normalized": user.email or "",
+                    }
+                )
+            else:
+                return Response({"success": False, "message": "Customer not found"}, status=404)
 
         user = identity.user
 
-        # Profile Overview
+        # Profile Overview with orthogonal status
         profile = {
             "id": identity.id,
             "user_id": user.id,
@@ -110,7 +119,12 @@ class CustomerDetailView(APIView):
             "name": user.get_full_name() or user.username,
             "email": identity.email_normalized or user.email or "",
             "phone": identity.phone_normalized or user.phone or "",
-            "joined_at": user.date_joined.isoformat(),
+            "account_status": identity.account_status,
+            "customer_tier": identity.customer_tier,
+            "risk_status": identity.risk_status,
+            "internal_notes": identity.internal_notes,
+            "tags": identity.tags or [],
+            "joined_at": user.date_joined.isoformat() if user.date_joined else "",
             "last_login": user.last_login.isoformat() if user.last_login else None,
         }
 
@@ -128,12 +142,8 @@ class CustomerDetailView(APIView):
                 "phone_number": addr.phone_number,
             })
 
-        # Bookings & Value Rollup Calculations (scope by company if present)
-        booking_filter = Q(customer=user)
-        if company:
-            booking_filter &= Q(company=company)
-
-        bookings_qs = ServiceRequest.objects.filter(booking_filter)
+        # Bookings & Value Rollup Calculations
+        bookings_qs = ServiceRequest.objects.filter(customer=user)
         total_bookings = bookings_qs.count()
         completed_bookings = bookings_qs.filter(status__in=["completed", "closed", "verified"]).count()
         cancelled_bookings = bookings_qs.filter(status="cancelled").count()
@@ -245,15 +255,17 @@ class CustomerTimelineView(APIView):
     permission_classes = [permissions.IsAuthenticated, RequireModuleAccess("customers", "view")]
 
     def get(self, request, pk):
-        company = getattr(request, "company", None)
-        try:
-            identity = CustomerIdentity.objects.get(pk=pk, merged_into__isnull=True)
-            if company and identity.company != company:
-                return Response({"success": False, "message": "Access Denied"}, status=403)
-        except CustomerIdentity.DoesNotExist:
-            return Response({"success": False, "message": "Customer not found"}, status=404)
-
-        user = identity.user
+        identity = (
+            CustomerIdentity.objects.filter(pk=pk, merged_into__isnull=True).first() or
+            CustomerIdentity.objects.filter(user_id=pk, merged_into__isnull=True).first() or
+            CustomerIdentity.objects.filter(user__customer_id=pk, merged_into__isnull=True).first()
+        )
+        if not identity:
+            user = User.objects.filter(Q(id=pk) | Q(customer_id=pk)).first()
+            if not user:
+                return Response({"success": False, "message": "Customer not found"}, status=404)
+        else:
+            user = identity.user
 
         # Fetch chronological items (logins, bookings, status events, tickets)
         timeline = []
