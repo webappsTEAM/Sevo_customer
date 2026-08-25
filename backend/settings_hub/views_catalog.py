@@ -50,18 +50,25 @@ class ImageUploadView(APIView):
             target_folder = ALLOWED_ASSET_TYPES[asset_type]
             profile_name = asset_type
 
-        # 1. Optimize, sanitize metadata, downscale and convert to WebP
+        # 1. Optimize, sanitize metadata, downscale and convert to WebP <= 500KB
         try:
             optimized = ImageOptimizer.optimize(file_obj, profile_name=profile_name)
         except ImageOptimizationError as opt_err:
+            resp_data = {
+                "success": False,
+                "message": opt_err.message,
+                "error": opt_err.message,
+            }
+            if getattr(opt_err, "error_code", None):
+                resp_data["error_code"] = opt_err.error_code
             return Response(
-                {"success": False, "error": opt_err.message},
+                resp_data,
                 status=opt_err.status_code,
             )
         except Exception as e:
             logger.error(f"Unexpected image processing error: {e}", exc_info=True)
             return Response(
-                {"success": False, "error": f"Failed to process image: {str(e)}"},
+                {"success": False, "message": f"Failed to process image: {str(e)}", "error": f"Failed to process image: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -81,9 +88,18 @@ class ImageUploadView(APIView):
         if not success:
             logger.error(f"Image upload to storage failed for {storage_path}: {error_msg}")
             return Response(
-                {"success": False, "error": error_msg or "Failed to upload image to storage."},
+                {"success": False, "message": error_msg or "Failed to upload image to storage.", "error": error_msg or "Failed to upload image to storage."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+
+        # 4. If replacing an existing image directly
+        old_image_path = (request.data.get("old_image_path") or request.data.get("old_path") or "").strip()
+        old_deleted = False
+        if old_image_path:
+            try:
+                old_deleted = SupabaseStorageService.delete_file(old_image_path)
+            except Exception as del_err:
+                logger.warning(f"Failed to delete old asset '{old_image_path}': {del_err}")
 
         return Response(
             {
@@ -94,9 +110,14 @@ class ImageUploadView(APIView):
                 "width": optimized["width"],
                 "height": optimized["height"],
                 "dimensions": optimized["dimensions"],
+                "original_dimensions": optimized.get("original_dimensions"),
+                "output_dimensions": optimized.get("output_dimensions"),
+                "quality_used": optimized.get("quality_used"),
+                "has_alpha": optimized.get("has_alpha", False),
                 "original_size": optimized["original_size"],
                 "file_size": optimized["optimized_size"],
                 "compression_ratio": optimized["compression_ratio"],
+                "old_deleted": old_deleted,
             },
             status=status.HTTP_201_CREATED,
         )

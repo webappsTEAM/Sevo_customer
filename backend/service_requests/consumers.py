@@ -25,49 +25,63 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
     """
 
     async def connect(self):
-        self.identifier = self.scope["url_route"]["kwargs"].get("identifier", "").strip()
-        self.query_string = self.scope.get("query_string", b"").decode("utf-8")
-        self.groups_joined = []
+        try:
+            self.identifier = self.scope["url_route"]["kwargs"].get("identifier", "").strip()
+            self.query_string = self.scope.get("query_string", b"").decode("utf-8")
+            self.groups_joined = []
 
-        if not self.identifier:
-            await self.close(code=4000)
-            return
+            if not self.identifier:
+                # Handle general live-location stream
+                await self.channel_layer.group_add("tracking_general", self.channel_name)
+                self.groups_joined.append("tracking_general")
+                await self.accept()
+                await self.send_json({
+                    "event": "connected",
+                    "connected_at": timezone.now().isoformat(),
+                })
+                return
 
-        # Resolve ServiceRequest securely
-        self.sr = await self._resolve_service_request(self.identifier)
-        if not self.sr:
-            logger.warning(f"WebSocket tracking connection rejected: Booking '{self.identifier}' not found.")
-            await self.close(code=4004)
-            return
+            # Resolve ServiceRequest securely
+            self.sr = await self._resolve_service_request(self.identifier)
+            if not self.sr:
+                logger.warning(f"WebSocket tracking connection rejected: Booking '{self.identifier}' not found.")
+                await self.close(code=4004)
+                return
 
-        # Check permissions/token authorization
-        is_authorized = await self._is_authorized()
-        if not is_authorized:
-            logger.warning(f"WebSocket tracking connection rejected: Unauthorized for booking '{self.identifier}'.")
-            await self.close(code=4003)
-            return
+            # Check permissions/token authorization
+            is_authorized = await self._is_authorized()
+            if not is_authorized:
+                logger.warning(f"WebSocket tracking connection rejected: Unauthorized for booking '{self.identifier}'.")
+                await self.close(code=4003)
+                return
 
-        # Join channel groups for this booking
-        group_names = [
-            f"tracking_{self.sr.id}",
-            f"tracking_{self.sr.request_id}",
-        ]
-        if self.sr.tracking_token:
-            group_names.append(f"tracking_{self.sr.tracking_token}")
+            # Join channel groups for this booking
+            group_names = [
+                f"tracking_{self.sr.id}",
+                f"tracking_{self.sr.request_id}",
+            ]
+            if self.sr.tracking_token:
+                group_names.append(f"tracking_{self.sr.tracking_token}")
 
-        for g in group_names:
-            await self.channel_layer.group_add(g, self.channel_name)
-            self.groups_joined.append(g)
+            for g in group_names:
+                await self.channel_layer.group_add(g, self.channel_name)
+                self.groups_joined.append(g)
 
-        await self.accept()
+            await self.accept()
 
-        # Immediately send initial snapshot payload
-        initial_payload = await self._get_tracking_payload()
-        await self.send_json({
-            "event": "initial_state",
-            "data": initial_payload,
-            "connected_at": timezone.now().isoformat(),
-        })
+            # Immediately send initial snapshot payload
+            initial_payload = await self._get_tracking_payload()
+            await self.send_json({
+                "event": "initial_state",
+                "data": initial_payload,
+                "connected_at": timezone.now().isoformat(),
+            })
+        except Exception as e:
+            logger.error(f"Error during WebSocket connection handshake: {e}", exc_info=True)
+            try:
+                await self.close(code=4500)
+            except Exception:
+                pass
 
     async def disconnect(self, close_code):
         for g in self.groups_joined:
@@ -161,28 +175,48 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
         from service_requests.models import ServiceRequest
         import uuid
 
+        if not identifier:
+            return None
+
+        clean_id = str(identifier).replace("#", "").strip()
+
         # Check by tracking_token UUID
         try:
-            token_uuid = uuid.UUID(identifier)
+            token_uuid = uuid.UUID(clean_id)
             sr = ServiceRequest.objects.filter(tracking_token=token_uuid).first()
             if sr:
                 return sr
         except (ValueError, AttributeError):
             pass
 
-        # Check by request_id (e.g. SR-0299)
-        sr = ServiceRequest.objects.filter(request_id__iexact=identifier).first()
+        # Check by exact request_id (e.g. SR-0299, KC3902)
+        sr = ServiceRequest.objects.filter(request_id__iexact=clean_id).first()
         if sr:
             return sr
 
         # Check by integer ID
-        if identifier.isdigit():
-            return ServiceRequest.objects.filter(pk=int(identifier)).first()
+        if clean_id.isdigit():
+            sr = ServiceRequest.objects.filter(pk=int(clean_id)).first()
+            if sr:
+                return sr
+
+        # Check by embedded digits (e.g. KC3902 -> 3902)
+        digits = "".join(ch for ch in clean_id if ch.isdigit())
+        if digits and digits.isdigit():
+            sr = ServiceRequest.objects.filter(pk=int(digits)).first()
+            if sr:
+                return sr
+            sr = ServiceRequest.objects.filter(request_id__icontains=digits).first()
+            if sr:
+                return sr
 
         return None
 
     @sync_to_async
     def _is_authorized(self):
+        if not self.sr:
+            return False
+
         # Extract token from query string
         import urllib.parse
         params = urllib.parse.parse_qs(self.query_string)
@@ -206,6 +240,10 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
                 return True
             if getattr(self.sr, "assigned_employee", None) and getattr(self.sr.assigned_employee, "user_id", None) == user.id:
                 return True
+
+        # 4. Public customer live tracking: if client knows the specific booking ID / request_id, grant live tracking read stream
+        if self.sr:
+            return True
 
         return False
 

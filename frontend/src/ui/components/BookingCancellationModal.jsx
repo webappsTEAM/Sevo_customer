@@ -72,6 +72,11 @@ export function BookingCancellationModal({
         }),
       })
 
+      try {
+        sessionStorage.removeItem("calservice_active_tracking_id")
+        sessionStorage.removeItem("calservice_last_booking")
+      } catch (e) { }
+
       if (res?.success || res?.status === "cancelled" || res?.data?.status === "cancelled") {
         if (onCancelled) {
           onCancelled(res.data || { status: "cancelled", cancellation_reason: finalReason })
@@ -86,6 +91,10 @@ export function BookingCancellationModal({
       }
     } catch (err) {
       console.warn("Cancellation API fallback:", err)
+      try {
+        sessionStorage.removeItem("calservice_active_tracking_id")
+        sessionStorage.removeItem("calservice_last_booking")
+      } catch (e) { }
       if (onCancelled) {
         onCancelled({ status: "cancelled", cancellation_reason: finalReason })
       }

@@ -1,49 +1,107 @@
 import React, { useState, useRef } from "react"
-import { UploadCloud, CheckCircle2, AlertCircle, X, Loader2, Sparkles, Image as ImageIcon } from "lucide-react"
+import { UploadCloud, CheckCircle2, AlertCircle, X, Loader2, Sparkles, Image as ImageIcon, Check } from "lucide-react"
 import { resolveImageUrl, uploadImageFile } from "../../utils/imageUrl.js"
 
+/**
+ * ImageUploader.jsx
+ * Unified production image uploader component for Admin Catalog, Banners & Media.
+ * 
+ * Supported States:
+ * - idle
+ * - selecting
+ * - validating
+ * - uploading
+ * - processing
+ * - saving
+ * - replacing
+ * - success
+ * - cleanup_pending
+ * - error
+ */
 export default function ImageUploader({
   value = "",
   onChange,
   assetType = "packages",
   label = "Package Image",
-  description = "Upload a custom image or paste an image URL. Automatically compressed to WebP.",
+  description = "Upload a custom image or paste an image URL. Automatically optimized to WebP <= 500 KB.",
   fallbackSrc = "/mockups/ants_control.jpg",
   aspectRatio = "aspect-[16/9]",
   compact = false,
 }) {
-  const [isUploading, setIsUploading] = useState(false)
+  const [uploadState, setUploadState] = useState("idle") // idle, validating, uploading, processing, success, cleanup_pending, error
   const [uploadProgress, setUploadProgress] = useState(0)
   const [errorMsg, setErrorMsg] = useState("")
+  const [notificationMsg, setNotificationMsg] = useState("")
   const [compressionInfo, setCompressionInfo] = useState(null)
   const fileInputRef = useRef(null)
+
+  const isBusy = ["validating", "uploading", "processing", "saving", "replacing"].includes(uploadState)
 
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     setErrorMsg("")
-    setUploadProgress(0)
+    setNotificationMsg("")
     setCompressionInfo(null)
-    setIsUploading(true)
+
+    // 1. Client-side Validation
+    setUploadState("validating")
+    if (file.size > 15 * 1024 * 1024) {
+      setErrorMsg("Image file size exceeds the 15 MB maximum limit.")
+      setUploadState("error")
+      return
+    }
+
+    const validMimes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp", "image/tiff"]
+    if (file.type && !validMimes.includes(file.type.toLowerCase())) {
+      setErrorMsg("Unsupported file format. Please upload JPEG, PNG, WebP, or GIF.")
+      setUploadState("error")
+      return
+    }
+
+    // 2. Uploading & Processing
+    const isReplacing = Boolean(value)
+    setUploadState(isReplacing ? "replacing" : "uploading")
+    setUploadProgress(10)
 
     try {
       const result = await uploadImageFile(file, {
         assetType,
-        onProgress: (percent) => setUploadProgress(percent),
+        oldImagePath: value,
+        onProgress: (percent) => {
+          setUploadProgress(percent)
+          if (percent >= 90) {
+            setUploadState("processing")
+          }
+        },
       })
 
       if (result.url) {
         onChange?.(result.url)
+
         if (result.compression_ratio !== undefined && result.file_size !== undefined) {
           const kb = Math.round(result.file_size / 1024)
           setCompressionInfo(`WebP · ${result.compression_ratio}% compressed (${kb} KB)`)
         }
+
+        if (isReplacing) {
+          if (result.old_deleted) {
+            setUploadState("success")
+            setNotificationMsg("Image replaced successfully. Previous image removed.")
+          } else {
+            setUploadState("cleanup_pending")
+            setNotificationMsg("Image updated successfully. Previous image cleanup is pending.")
+          }
+        } else {
+          setUploadState("success")
+          setNotificationMsg("Image uploaded successfully.")
+        }
       }
     } catch (err) {
-      setErrorMsg(err.message || "Failed to upload image")
+      setUploadState("error")
+      setErrorMsg(err.message || "Image upload failed. Existing image remains unchanged.")
     } finally {
-      setIsUploading(false)
       if (fileInputRef.current) {
         fileInputRef.current.value = ""
       }
@@ -54,6 +112,8 @@ export default function ImageUploader({
     onChange?.("")
     setCompressionInfo(null)
     setErrorMsg("")
+    setNotificationMsg("")
+    setUploadState("idle")
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -78,7 +138,8 @@ export default function ImageUploader({
               <button
                 type="button"
                 onClick={handleClear}
-                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+                disabled={isBusy}
+                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity disabled:opacity-0"
                 title="Remove"
               >
                 <X className="w-3.5 h-3.5" />
@@ -95,25 +156,26 @@ export default function ImageUploader({
               <input
                 type="file"
                 ref={fileInputRef}
-                accept="image/jpeg,image/png,image/webp,image/gif"
+                accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff"
                 onChange={handleFileSelect}
+                disabled={isBusy}
                 className="hidden"
               />
               <button
                 type="button"
-                disabled={isUploading}
+                disabled={isBusy}
                 onClick={() => fileInputRef.current?.click()}
                 className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                {isUploading ? (
+                {isBusy ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                    <span>Uploading {uploadProgress}%</span>
+                    <span>{uploadState === "processing" ? "Optimizing WebP..." : `Uploading ${uploadProgress}%`}</span>
                   </>
                 ) : (
                   <>
                     <UploadCloud className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Upload Image</span>
+                    <span>{value ? "Replace Image" : "Upload Image"}</span>
                   </>
                 )}
               </button>
@@ -130,10 +192,18 @@ export default function ImageUploader({
               placeholder="Or paste image URL (e.g. https://...)"
               value={value || ""}
               onChange={(e) => onChange?.(e.target.value)}
+              disabled={isBusy}
               className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-mono text-slate-700 focus:border-indigo-400 outline-none"
             />
           </div>
         </div>
+
+        {notificationMsg && (
+          <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+            <span>{notificationMsg}</span>
+          </div>
+        )}
 
         {errorMsg && (
           <div className="flex items-center gap-1.5 text-xs text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100">
@@ -175,7 +245,8 @@ export default function ImageUploader({
             <button
               type="button"
               onClick={handleClear}
-              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
+              disabled={isBusy}
+              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity disabled:opacity-0"
               title="Remove image"
             >
               Remove
@@ -192,27 +263,28 @@ export default function ImageUploader({
           <input
             type="file"
             ref={fileInputRef}
-            accept="image/jpeg,image/png,image/webp,image/gif"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff"
             onChange={handleFileSelect}
+            disabled={isBusy}
             className="hidden"
           />
 
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={isUploading}
+              disabled={isBusy}
               onClick={() => fileInputRef.current?.click()}
               className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
             >
-              {isUploading ? (
+              {isBusy ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Uploading to Supabase ({uploadProgress}%)...</span>
+                  <span>{uploadState === "processing" ? "Optimizing WebP..." : `Uploading to Supabase (${uploadProgress}%)...`}</span>
                 </>
               ) : (
                 <>
                   <UploadCloud className="w-3.5 h-3.5" />
-                  <span>Choose Image File</span>
+                  <span>{value ? "Replace Image File" : "Choose Image File"}</span>
                 </>
               )}
             </button>
@@ -221,7 +293,8 @@ export default function ImageUploader({
               <button
                 type="button"
                 onClick={handleClear}
-                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer"
+                disabled={isBusy}
+                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer disabled:opacity-50"
               >
                 Clear
               </button>
@@ -235,11 +308,19 @@ export default function ImageUploader({
               placeholder="https://images.unsplash.com/... or storage path"
               value={value || ""}
               onChange={(e) => onChange?.(e.target.value)}
+              disabled={isBusy}
               className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 outline-none"
             />
           </div>
         </div>
       </div>
+
+      {notificationMsg && (
+        <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+          <span>{notificationMsg}</span>
+        </div>
+      )}
 
       {errorMsg && (
         <div className="flex items-center gap-2 text-xs text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200">

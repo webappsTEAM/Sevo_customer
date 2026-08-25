@@ -25,19 +25,32 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 def _extract_image_paths(config_data):
     """
-    Recursively scans config_data to collect all string values that match an image_path format.
+    Recursively scans config data to collect all Supabase Storage paths (homepage/...)
+    stored as relative paths or full canonical Supabase URLs.
     """
+    supabase_url, _, bucket, _ = SupabaseStorageService._get_config()
+    prefix = f"{supabase_url}/storage/v1/object/public/{bucket}/" if supabase_url else ""
     paths = set()
+
+    def _extract_val(v):
+        if not isinstance(v, str):
+            return
+        trimmed = v.strip()
+        if prefix and trimmed.startswith(prefix):
+            paths.add(trimmed[len(prefix):])
+        elif trimmed.startswith("homepage/"):
+            paths.add(trimmed)
+
     if isinstance(config_data, dict):
         for k, v in config_data.items():
-            if k in ("image_path", "image", "avatar", "photo", "icon") and isinstance(v, str) and v.startswith("homepage/"):
-                paths.add(v)
+            if k in ("image_path", "image", "avatar", "photo", "icon", "cover") and isinstance(v, str):
+                _extract_val(v)
             elif isinstance(v, (dict, list)):
                 paths.update(_extract_image_paths(v))
     elif isinstance(config_data, list):
         for item in config_data:
-            if isinstance(item, str) and item.startswith("homepage/"):
-                paths.add(item)
+            if isinstance(item, str):
+                _extract_val(item)
             elif isinstance(item, (dict, list)):
                 paths.update(_extract_image_paths(item))
     return paths
@@ -290,16 +303,23 @@ class HomePageImageUploadAPIView(APIView):
         if section not in ALLOWED_SECTIONS:
             return Response({"error": f"Invalid section '{section}'. Allowed: {list(ALLOWED_SECTIONS)}"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 1. Optimize and WebP compress
+        # 1. Optimize and WebP compress <= 500KB with under-100KB preservation
         try:
             from utils.image_optimizer import ImageOptimizer, ImageOptimizationError
             profile = "homepage" if section in ("hero", "categories", "general") else "catalog"
             optimized = ImageOptimizer.optimize(file_obj, profile_name=profile)
         except ImageOptimizationError as opt_err:
-            return Response({"error": opt_err.message}, status=opt_err.status_code)
+            resp_data = {
+                "success": False,
+                "error": opt_err.message,
+                "message": opt_err.message,
+            }
+            if getattr(opt_err, "error_code", None):
+                resp_data["error_code"] = opt_err.error_code
+            return Response(resp_data, status=opt_err.status_code)
         except Exception as e:
             logger.error(f"Image processing error: {e}")
-            return Response({"error": "Invalid or corrupted image file"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"success": False, "error": "Invalid or corrupted image file", "message": "Invalid or corrupted image file"}, status=status.HTTP_400_BAD_REQUEST)
 
         # 2. Generate collision-safe storage path
         storage_path = SupabaseStorageService.generate_storage_path(
@@ -314,9 +334,18 @@ class HomePageImageUploadAPIView(APIView):
             content_type="image/webp",
         )
         if not upload_success:
-            return Response({"error": error_msg or "Failed to upload image to Supabase Storage"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"success": False, "error": error_msg or "Failed to upload image to Supabase Storage", "message": error_msg or "Failed to upload image to Supabase Storage"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # 4. Database Record Creation with transaction rollback safety
+        # 4. If replacing an existing image
+        old_image_path = (request.data.get("old_image_path") or request.data.get("old_path") or "").strip()
+        old_deleted = False
+        if old_image_path:
+            try:
+                old_deleted = SupabaseStorageService.delete_file(old_image_path)
+            except Exception as del_err:
+                logger.warning(f"Failed to delete old homepage media '{old_image_path}': {del_err}")
+
+        # 5. Database Record Creation with transaction rollback safety
         try:
             with transaction.atomic():
                 media = HomePageMedia.objects.create(
@@ -333,19 +362,27 @@ class HomePageImageUploadAPIView(APIView):
 
             return Response({
                 "success": True,
+                "url": public_url,
+                "path": storage_path,
                 "media_id": str(media.id),
                 "image_path": storage_path,
                 "image_url": public_url,
                 "original_name": file_obj.name,
                 "dimensions": optimized["dimensions"],
+                "original_dimensions": optimized.get("original_dimensions"),
+                "output_dimensions": optimized.get("output_dimensions"),
                 "file_size": optimized["optimized_size"],
+                "original_size": optimized["original_size"],
                 "compression_ratio": optimized["compression_ratio"],
+                "quality_used": optimized.get("quality_used"),
+                "has_alpha": optimized.get("has_alpha", False),
+                "old_deleted": old_deleted,
             }, status=status.HTTP_201_CREATED)
 
         except Exception as db_err:
             logger.error(f"Database creation failed after Storage upload: {db_err}. Cleaning up Storage file.")
             SupabaseStorageService.delete_file(storage_path)
-            return Response({"error": "Database record creation failed. Storage upload rolled back."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"success": False, "error": "Database record creation failed. Storage upload rolled back."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 

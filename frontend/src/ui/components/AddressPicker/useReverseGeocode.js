@@ -39,7 +39,10 @@ export function useReverseGeocode(coords) {
     try {
       let resolvedData = null
 
-      const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+      const googleApiKey =
+        import.meta.env.VITE_GOOGLE_MAPS_KEY ||
+        import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
+        "AIzaSyC-7JjgSXDrqNF1BMMnlvKtgRPS6_98uP8"
 
       // 1. Direct Google Maps Geocoding API (highest accuracy when API key is provided)
       if (googleApiKey && !signal.aborted) {
@@ -117,8 +120,8 @@ export function useReverseGeocode(coords) {
               const a = nomData.address
               const sublocality = a.suburb || a.neighbourhood || a.residential || a.subdistrict || a.quarter || ""
               const road = a.road || a.pedestrian || a.street || ""
-              const city = a.city || a.town || a.village || a.county || "Hosur"
-              const state = a.state || "Tamil Nadu"
+              const city = a.city || a.town || a.village || a.county || a.state_district || ""
+              const state = a.state || ""
               const pincode = a.postcode || ""
               const cleanLoc = [road, sublocality].filter(Boolean).join(", ") || sublocality || road || "Current Location"
 
@@ -145,8 +148,8 @@ export function useReverseGeocode(coords) {
         setAddress({
           formatted_address: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
           locality: `Current GPS Location`,
-          city: "Hosur",
-          state: "Tamil Nadu",
+          city: "",
+          state: "",
           pincode: "",
           latitude: lat,
           longitude: lng,
@@ -157,8 +160,8 @@ export function useReverseGeocode(coords) {
       setAddress({
         formatted_address: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
         locality: "Current GPS Location",
-        city: "Hosur",
-        state: "Tamil Nadu",
+        city: "",
+        state: "",
         pincode: "",
         latitude: lat,
         longitude: lng,

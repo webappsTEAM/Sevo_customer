@@ -56,12 +56,19 @@ def _apply_updates(instance, data, entity_type, actor, reason=None, version_fiel
     CatalogChangeLog UPDATE row per changed field. Returns the saved instance."""
     changed_fields = []
     bump_version = False
+    old_image_to_cleanup = None
+
     for field_name, new_value in data.items():
         if not hasattr(instance, field_name):
             continue
         old_value = getattr(instance, field_name)
         if old_value == new_value:
             continue
+        
+        # Track previous image for safe cleanup after DB persistence
+        if field_name == "image" and old_value and new_value:
+            old_image_to_cleanup = str(old_value)
+
         setattr(instance, field_name, new_value)
         changed_fields.append(field_name)
         _log(entity_type, instance.pk, str(instance), CatalogChangeLog.Action.UPDATE, actor,
@@ -75,6 +82,15 @@ def _apply_updates(instance, data, entity_type, actor, reason=None, version_fiel
 
     if changed_fields:
         instance.save()
+        
+        # Safely delete previous image from Supabase only after DB update succeeds
+        if old_image_to_cleanup:
+            try:
+                from utils.supabase_storage import SupabaseStorageService
+                SupabaseStorageService.delete_file(old_image_to_cleanup)
+            except Exception:
+                pass
+
         try:
             from django.core.cache import cache
             cache.clear()

@@ -29,12 +29,14 @@ export default function ImageUploadField({
     try {
       const res = await uploadImageFile(file, {
         assetType: section || "homepage",
+        oldImagePath: value,
         onProgress: (percent) => setUploadProgress(percent),
         endpoint: "/api/settings/homepage/upload-image/",
       })
 
       if (res.url || res.path) {
-        onChange?.(res.url || res.path)
+        const canonicalUrl = res.url || resolveImageUrl(res.path)
+        onChange?.(canonicalUrl)
         if (res.compression_ratio !== undefined && res.file_size !== undefined) {
           const kb = Math.round(res.file_size / 1024)
           setCompressionInfo(`WebP · ${res.compression_ratio}% compressed (${kb} KB)`)

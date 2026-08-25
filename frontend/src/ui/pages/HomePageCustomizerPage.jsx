@@ -389,60 +389,66 @@ export default function HomePageCustomizerPage() {
                     <span className="text-[11px] text-slate-400 font-mono">Real-time Layout</span>
                   </div>
 
-                  <div className="relative h-[270px] sm:h-[330px] w-full max-w-xl mx-auto overflow-hidden rounded-3xl bg-slate-900 p-2.5 border border-slate-800/80">
-                    {/* Card 1: Top-Left */}
-                    <div className="absolute top-2.5 left-2.5 w-[59%] h-[59%] rounded-2xl overflow-hidden border-2 border-white/90 shadow-lg group z-10 bg-white">
-                      <img
-                        src={resolveDisplayImageUrl(config.hero.collageImages[0], "/mockups/service_hvac.png")}
-                        onError={(e) => { e.currentTarget.src = "/mockups/service_hvac.png" }}
-                        alt="Hero Card 1"
-                        className="w-full h-full object-cover object-left-top"
-                        style={{ imageRendering: "-webkit-optimize-contrast" }}
-                      />
-                      <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
-                        Card 1 (Top-Left)
+                  <div className="grid grid-cols-2 gap-3 h-[290px] sm:h-[340px] w-full max-w-xl mx-auto overflow-hidden rounded-3xl bg-slate-800/60 p-3 border border-slate-700/60 backdrop-blur-xs">
+                    {/* Left Column */}
+                    <div className="flex flex-col gap-3 h-full">
+                      {/* Card 1: Top-Left (58% height) */}
+                      <div className="relative h-[58%] rounded-2xl overflow-hidden border-[2.5px] border-white shadow-lg group bg-slate-100">
+                        <img
+                          src={resolveDisplayImageUrl(config.hero.collageImages[0], "/mockups/service_hvac.png")}
+                          onError={(e) => { e.currentTarget.src = "/mockups/service_hvac.png" }}
+                          alt="Hero Card 1"
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                          style={{ imageRendering: "-webkit-optimize-contrast" }}
+                        />
+                        <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20">
+                          Card 1 (Top-Left)
+                        </div>
+                      </div>
+
+                      {/* Card 2: Bottom-Left (42% height) */}
+                      <div className="relative h-[42%] rounded-2xl overflow-hidden border-[2.5px] border-white shadow-lg group bg-slate-100">
+                        <img
+                          src={resolveDisplayImageUrl(config.hero.collageImages[1], "/mockups/service_electrical.png")}
+                          onError={(e) => { e.currentTarget.src = "/mockups/service_electrical.png" }}
+                          alt="Hero Card 2"
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                          style={{ imageRendering: "-webkit-optimize-contrast" }}
+                        />
+                        <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20">
+                          Card 2 (Bottom-Left)
+                        </div>
                       </div>
                     </div>
 
-                    {/* Card 3: Top-Right */}
-                    <div className="absolute top-3.5 right-2.5 w-[46%] h-[48%] rounded-2xl overflow-hidden border-2 border-white/90 shadow-lg group z-10 bg-white">
-                      <img
-                        src={resolveDisplayImageUrl(config.hero.collageImages[2], "/mockups/service_cleaning.png")}
-                        onError={(e) => { e.currentTarget.src = "/mockups/service_cleaning.png" }}
-                        alt="Hero Card 3"
-                        className="w-full h-full object-cover object-center"
-                        style={{ imageRendering: "-webkit-optimize-contrast" }}
-                      />
-                      <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
-                        Card 3 (Top-Right)
+                    {/* Right Column (Staggered offset) */}
+                    <div className="flex flex-col gap-3 h-full pt-3 sm:pt-4">
+                      {/* Card 3: Top-Right (42% height) */}
+                      <div className="relative h-[42%] rounded-2xl overflow-hidden border-[2.5px] border-white shadow-lg group bg-slate-100">
+                        <img
+                          src={resolveDisplayImageUrl(config.hero.collageImages[2], "/mockups/service_cleaning.png")}
+                          onError={(e) => { e.currentTarget.src = "/mockups/service_cleaning.png" }}
+                          alt="Hero Card 3"
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                          style={{ imageRendering: "-webkit-optimize-contrast" }}
+                        />
+                        <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20">
+                          Card 3 (Top-Right)
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Card 2: Bottom-Left */}
-                    <div className="absolute bottom-2.5 left-[8%] w-[50%] h-[45%] rounded-2xl overflow-hidden border-2 border-white/90 shadow-lg group z-20 bg-white">
-                      <img
-                        src={resolveDisplayImageUrl(config.hero.collageImages[1], "/mockups/service_electrical.png")}
-                        onError={(e) => { e.currentTarget.src = "/mockups/service_electrical.png" }}
-                        alt="Hero Card 2"
-                        className="w-full h-full object-cover object-center"
-                        style={{ imageRendering: "-webkit-optimize-contrast" }}
-                      />
-                      <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
-                        Card 2 (Bottom-Left)
-                      </div>
-                    </div>
-
-                    {/* Card 4: Bottom-Right */}
-                    <div className="absolute bottom-2.5 right-3 w-[44%] h-[44%] rounded-2xl overflow-hidden border-2 border-white/90 shadow-lg group z-20 bg-white">
-                      <img
-                        src={resolveDisplayImageUrl(config.hero.collageImages[3], "/mockups/service_plumbing.png")}
-                        onError={(e) => { e.currentTarget.src = "/mockups/service_plumbing.png" }}
-                        alt="Hero Card 4"
-                        className="w-full h-full object-cover object-center"
-                        style={{ imageRendering: "-webkit-optimize-contrast" }}
-                      />
-                      <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md border border-white/20">
-                        Card 4 (Bottom-Right)
+                      {/* Card 4: Bottom-Right (58% height) */}
+                      <div className="relative h-[58%] rounded-2xl overflow-hidden border-[2.5px] border-white shadow-lg group bg-slate-100">
+                        <img
+                          src={resolveDisplayImageUrl(config.hero.collageImages[3], "/mockups/service_plumbing.png")}
+                          onError={(e) => { e.currentTarget.src = "/mockups/service_plumbing.png" }}
+                          alt="Hero Card 4"
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                          style={{ imageRendering: "-webkit-optimize-contrast" }}
+                        />
+                        <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20">
+                          Card 4 (Bottom-Right)
+                        </div>
                       </div>
                     </div>
                   </div>

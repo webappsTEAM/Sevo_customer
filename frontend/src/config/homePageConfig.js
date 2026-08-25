@@ -16,10 +16,10 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       { id: "b-4", text: "30 Day Guarantee", icon: "Clock" }
     ],
     collageImages: [
-      "/mockups/service_hvac.png",
-      "/mockups/service_electrical.png",
-      "/mockups/service_cleaning.png",
-      "/mockups/service_plumbing.png"
+      "/mockups/hero_plumber_thumbsup.jpg",
+      "/mockups/hero_cleaning_office.jpg",
+      "/mockups/hero_ac_technician_female.jpg",
+      "/mockups/hero_electrician_male.jpg"
     ]
   },
   categories: [
@@ -29,7 +29,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       subtitle: "Curated services & recommendations",
       badge: "For You",
       badgeColor: "emerald",
-      image: "/mockups/category_for_you.png",
+      image: "/mockups/category_for_you_3d.jpg",
       link: "/booking?category=for_you",
       enabled: true
     },
@@ -39,7 +39,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       subtitle: "Groceries & farm-fresh vegetables",
       badge: "Groceries & Veggies",
       badgeColor: "amber",
-      image: "/mockups/category_food_health.png",
+      image: "/mockups/category_food_health_3d.jpg",
       link: "/booking?category=groceries",
       enabled: true
     },
@@ -49,7 +49,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       subtitle: "Cleaning, repairs, painting & masonry",
       badge: "5 Services",
       badgeColor: "blue",
-      image: "/mockups/category_home_transport.png",
+      image: "/mockups/category_home_repair_3d.jpg",
       link: "/booking?category=home_repairs",
       enabled: true
     },
@@ -59,7 +59,7 @@ export const DEFAULT_HOME_PAGE_CONFIG = {
       subtitle: "Mini trucks, 2-wheelers & logistics",
       badge: "Transport",
       badgeColor: "teal",
-      image: "/mockups/service_transport.jpg",
+      image: "/mockups/category_goods_transport_3d.jpg",
       link: "/logistics",
       enabled: true
     }
