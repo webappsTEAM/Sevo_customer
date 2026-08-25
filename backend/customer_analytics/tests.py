@@ -81,7 +81,8 @@ class CustomerAnalyticsTests(APITestCase):
         # Check that BookingStatusEvent was logged
         events = BookingStatusEvent.objects.filter(service_request=booking)
         self.assertTrue(events.exists())
-        event = events.first()
+        event = events.filter(to_status="confirmed").first()
+        self.assertIsNotNone(event)
         self.assertEqual(event.from_status, "new_request")
         self.assertEqual(event.to_status, "confirmed")
 

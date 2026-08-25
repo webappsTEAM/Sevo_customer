@@ -10,19 +10,4 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='servicerequest',
-            name='parent_request_id',
-            field=models.IntegerField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name='servicerequest',
-            name='quote_number',
-            field=models.CharField(blank=True, max_length=100, null=True),
-        ),
-        migrations.AddField(
-            model_name='servicerequest',
-            name='request_kind',
-            field=models.CharField(blank=True, default='DIRECT', max_length=30),
-        ),
     ]

@@ -1,7 +1,6 @@
 import React, { useState, useRef } from "react"
 import { UploadCloud, CheckCircle2, AlertCircle, X, Sparkles, Image as ImageIcon, Loader2 } from "lucide-react"
-
-const SUPABASE_CDN_BASE = "https://zqghatybqkztzgjmmlpl.supabase.co/storage/v1/object/public/admin-media/"
+import { resolveImageUrl, uploadImageFile } from "../../utils/imageUrl.js"
 
 export default function ImageUploadField({
   value = "",
@@ -15,118 +14,66 @@ export default function ImageUploadField({
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [errorMsg, setErrorMsg] = useState("")
+  const [compressionInfo, setCompressionInfo] = useState(null)
   const fileInputRef = useRef(null)
 
-  // Resolve display URL
-  const resolveDisplayUrl = (path) => {
-    if (!path) return fallbackSrc
-    if (
-      path.startsWith("http://") ||
-      path.startsWith("https://") ||
-      path.startsWith("data:") ||
-      path.startsWith("/mockups/") ||
-      path.startsWith("mockups/") ||
-      path.startsWith("/assets/") ||
-      path.startsWith("assets/") ||
-      path.startsWith("/media/") ||
-      path.startsWith("media/")
-    ) {
-      return path.startsWith("/") || path.startsWith("http") || path.startsWith("data:") ? path : `/${path}`
-    }
-    if (path.startsWith("homepage/")) {
-      return `/media/${path}`
-    }
-    return `${SUPABASE_CDN_BASE}${path.replace(/^\//, "")}`
-  }
-
-  const handleFileSelect = (e) => {
+  const handleFileSelect = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    uploadFile(file)
-  }
 
-  const uploadFile = (file) => {
     setErrorMsg("")
     setUploadProgress(0)
-
-    // Client-side validation
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"]
-    if (!allowedTypes.includes(file.type)) {
-      setErrorMsg("Please select a JPEG, PNG, or WebP image.")
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMsg("File size must be under 5 MB.")
-      return
-    }
-
+    setCompressionInfo(null)
     setIsUploading(true)
 
-    const formData = new FormData()
-    formData.append("file", file)
-    formData.append("section", section)
+    try {
+      const res = await uploadImageFile(file, {
+        assetType: section || "homepage",
+        onProgress: (percent) => setUploadProgress(percent),
+        endpoint: "/api/settings/homepage/upload-image/",
+      })
 
-    const xhr = new XMLHttpRequest()
-    xhr.open("POST", "/api/settings/homepage/upload-image/")
-
-    const token = localStorage.getItem("token") || localStorage.getItem("accessToken")
-    if (token) {
-      xhr.setRequestHeader("Authorization", `Bearer ${token}`)
-    }
-
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const percent = Math.round((event.loaded / event.total) * 100)
-        setUploadProgress(percent)
-      }
-    }
-
-    xhr.onload = () => {
-      setIsUploading(false)
-      if (xhr.status === 200 || xhr.status === 201) {
-        try {
-          const res = JSON.parse(xhr.responseText)
-          if (res.success && (res.image_path || res.image_url)) {
-            onChange?.(res.image_path || res.image_url)
-          } else {
-            setErrorMsg(res.error || "Upload failed")
-          }
-        } catch (err) {
-          setErrorMsg("Server returned invalid response.")
-        }
-      } else {
-        try {
-          const res = JSON.parse(xhr.responseText)
-          setErrorMsg(res.error || `Server error (${xhr.status})`)
-        } catch (err) {
-          setErrorMsg(`Upload failed with status ${xhr.status}`)
+      if (res.url || res.path) {
+        onChange?.(res.url || res.path)
+        if (res.compression_ratio !== undefined && res.file_size !== undefined) {
+          const kb = Math.round(res.file_size / 1024)
+          setCompressionInfo(`WebP · ${res.compression_ratio}% compressed (${kb} KB)`)
         }
       }
-    }
-
-    xhr.onerror = () => {
+    } catch (err) {
+      setErrorMsg(err.message || "Upload failed")
+    } finally {
       setIsUploading(false)
-      setErrorMsg("Network error occurred during image upload.")
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
     }
-
-    xhr.send(formData)
   }
 
   const handleClear = () => {
     onChange?.("")
+    setCompressionInfo(null)
+    setErrorMsg("")
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
-  const displayUrl = resolveDisplayUrl(value)
+  const displayUrl = resolveImageUrl(value, fallbackSrc)
 
   return (
     <div className="space-y-2">
-      {label && (
-        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
-          {label}
-        </label>
-      )}
+      <div className="flex items-center justify-between">
+        {label && (
+          <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+            {label}
+          </label>
+        )}
+        {compressionInfo && (
+          <span className="text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-teal-600" />
+            {compressionInfo}
+          </span>
+        )}
+      </div>
 
       {/* Image Preview Box */}
       <div className={`relative ${aspectRatio} w-full rounded-xl overflow-hidden bg-slate-100 border border-slate-200 group shadow-xs`}>
@@ -135,6 +82,7 @@ export default function ImageUploadField({
           onError={(e) => { e.currentTarget.src = fallbackSrc }}
           alt="Preview"
           className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+          loading="lazy"
         />
 
         {/* Upload Overlay Button */}
@@ -142,7 +90,7 @@ export default function ImageUploadField({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-1.5 bg-white text-slate-900 font-bold text-xs rounded-lg shadow hover:bg-slate-50 transition flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-white text-slate-900 font-bold text-xs rounded-lg shadow hover:bg-slate-50 transition flex items-center gap-1.5 cursor-pointer"
           >
             <UploadCloud className="w-4 h-4 text-teal-600" /> Upload Image
           </button>
@@ -150,7 +98,7 @@ export default function ImageUploadField({
             <button
               type="button"
               onClick={handleClear}
-              className="p-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              className="p-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition cursor-pointer"
               title="Clear Image"
             >
               <X className="w-4 h-4" />
@@ -162,7 +110,7 @@ export default function ImageUploadField({
         {isUploading && (
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xs flex flex-col items-center justify-center text-white p-4 space-y-2">
             <Loader2 className="w-6 h-6 animate-spin text-teal-400" />
-            <div className="text-xs font-bold">Uploading to Supabase Storage...</div>
+            <div className="text-xs font-bold">Uploading &amp; Compressing to WebP...</div>
             <div className="w-full max-w-[160px] bg-slate-700 rounded-full h-2 overflow-hidden">
               <div
                 className="bg-teal-400 h-full transition-all duration-200"
@@ -179,7 +127,7 @@ export default function ImageUploadField({
         type="file"
         ref={fileInputRef}
         onChange={handleFileSelect}
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/jpeg,image/png,image/webp,image/gif"
         className="hidden"
       />
 

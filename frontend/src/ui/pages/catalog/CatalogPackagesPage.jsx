@@ -9,6 +9,8 @@ import {
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
+import ImageUploader from "../../components/ImageUploader.jsx"
+import { resolveImageUrl } from "../../../utils/imageUrl.js"
 import { useToast, ToastBanner } from "./useToast.jsx"
 import { SOFA_DETAIL_DATA } from "./sofaDetailData.js"
 import { HOUSE_DETAILS_CONTENT } from "../FullHouseCleaningModal.jsx"
@@ -3685,64 +3687,14 @@ export function CatalogPackagesPage() {
                     />
 
                     {/* Service Image Customizer Section */}
-                    <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
-                      <div>
-                        <span className="text-xs font-bold text-slate-800">Service Banner Image</span>
-                        <p className="text-[11px] text-slate-500 mt-0.5">Upload a custom service banner image or paste an image URL.</p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-center gap-4">
-                        {serviceCustomizing.image ? (
-                          <div className="relative w-24 h-16 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
-                            <img src={serviceCustomizing.image} alt="Preview" className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => setServiceCustomizing((prev) => ({ ...prev, image: "" }))}
-                              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="w-24 h-16 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
-                            No Image
-                          </div>
-                        )}
-                        <div className="flex-1 w-full space-y-2">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0]
-                              if (file) {
-                                const formData = new FormData()
-                                formData.append("image", file)
-                                try {
-                                  const res = await apiRequest("/settings/catalog/upload-image/", {
-                                    method: "POST",
-                                    body: formData,
-                                  })
-                                  if (res.success && res.url) {
-                                    setServiceCustomizing((prev) => ({ ...prev, image: res.url }))
-                                    showToast("Image uploaded successfully!")
-                                  } else {
-                                    showToast(res.message || "Upload failed", "error")
-                                  }
-                                } catch (err) {
-                                  showToast("Upload failed", "error")
-                                }
-                              }
-                            }}
-                            className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                          />
-                          <Input
-                            label="Or Image URL"
-                            placeholder="https://images.unsplash.com/..."
-                            value={serviceCustomizing.image || ""}
-                            onChange={(e) => setServiceCustomizing({ ...serviceCustomizing, image: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                    </div>
+                    <ImageUploader
+                      label="Service Banner Image"
+                      description="Upload a custom service banner image or paste an image URL. Automatically compressed to WebP."
+                      value={serviceCustomizing.image || ""}
+                      assetType="banners"
+                      aspectRatio="aspect-[16/9]"
+                      onChange={(url) => setServiceCustomizing({ ...serviceCustomizing, image: url })}
+                    />
                   </>
                 )}
 
@@ -3753,7 +3705,7 @@ export function CatalogPackagesPage() {
                       <span className="text-xs font-bold text-slate-800">Sub-tab Banner Images</span>
                       <p className="text-[11px] text-slate-500 mt-0.5">Customize the top banner image for each sub-tab in this service category.</p>
                     </div>
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {((serviceCustomizing.slug === "kitchen-cleaning" && [
                         { id: "packages", label: "Full Kitchen Packages" },
                         { id: "appliance", label: "Single Appliance Cleaning" },
@@ -3774,84 +3726,27 @@ export function CatalogPackagesPage() {
                         { id: "unoccupied_bungalow", label: "Unoccupied Bungalow/duplex" },
                         { id: "partial_home", label: "Quick Extra Services / Partial Home" },
                       ]) || []).map((subtab) => {
-                        const currentVal = serviceCustomizing.customization.subtab_banners?.[subtab.id] || "";
+                        const currentVal = serviceCustomizing.customization?.subtab_banners?.[subtab.id] || "";
                         return (
-                          <div key={subtab.id} className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-white rounded-xl border border-slate-100 shadow-2xs">
-                            <div className="w-24 text-xs font-bold text-slate-700 sm:text-right shrink-0">{subtab.label}</div>
-                            {currentVal ? (
-                              <div className="relative w-24 h-14 rounded-lg border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
-                                <img src={currentVal} alt="Preview" className="w-full h-full object-cover" />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updatedBanners = { ...serviceCustomizing.customization.subtab_banners };
-                                    delete updatedBanners[subtab.id];
-                                    setServiceCustomizing({
-                                      ...serviceCustomizing,
-                                      customization: { ...serviceCustomizing.customization, subtab_banners: updatedBanners }
-                                    });
-                                  }}
-                                  className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold transition-opacity"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="w-24 h-14 rounded-lg border border-dashed border-slate-200 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[9px] font-bold">
-                                Default Banner
-                              </div>
-                            )}
-                            <div className="flex-1 w-full space-y-2">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={async (e) => {
-                                  const file = e.target.files?.[0]
-                                  if (file) {
-                                    const formData = new FormData()
-                                    formData.append("image", file)
-                                    try {
-                                      const res = await apiRequest("/settings/catalog/upload-image/", {
-                                        method: "POST",
-                                        body: formData,
-                                      })
-                                      if (res.success && res.url) {
-                                        const updatedBanners = {
-                                          ...serviceCustomizing.customization.subtab_banners,
-                                          [subtab.id]: res.url
-                                        };
-                                        setServiceCustomizing({
-                                          ...serviceCustomizing,
-                                          customization: { ...serviceCustomizing.customization, subtab_banners: updatedBanners }
-                                        });
-                                        showToast("Image uploaded successfully!")
-                                      } else {
-                                        showToast(res.message || "Upload failed", "error")
-                                      }
-                                    } catch (err) {
-                                      showToast("Upload failed", "error")
-                                    }
-                                  }
-                                }}
-                                className="block w-full text-[10px] text-slate-500 file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[9px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                              />
-                              <input
-                                type="text"
-                                placeholder="Or Paste Banner Image URL"
-                                value={currentVal}
-                                onChange={(e) => {
-                                  const updatedBanners = {
-                                    ...serviceCustomizing.customization.subtab_banners,
-                                    [subtab.id]: e.target.value
-                                  };
-                                  setServiceCustomizing({
-                                    ...serviceCustomizing,
-                                    customization: { ...serviceCustomizing.customization, subtab_banners: updatedBanners }
-                                  });
-                                }}
-                                className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:border-indigo-500 focus:outline-none"
-                              />
-                            </div>
+                          <div key={subtab.id} className="p-3 bg-white rounded-xl border border-slate-100 shadow-2xs">
+                            <ImageUploader
+                              compact={true}
+                              label={subtab.label}
+                              assetType="banners"
+                              value={currentVal}
+                              onChange={(url) => {
+                                const updatedBanners = { ...(serviceCustomizing.customization?.subtab_banners || {}) };
+                                if (url) {
+                                  updatedBanners[subtab.id] = url;
+                                } else {
+                                  delete updatedBanners[subtab.id];
+                                }
+                                setServiceCustomizing({
+                                  ...serviceCustomizing,
+                                  customization: { ...(serviceCustomizing.customization || {}), subtab_banners: updatedBanners }
+                                });
+                              }}
+                            />
                           </div>
                         );
                       })}
@@ -5569,70 +5464,14 @@ export function CatalogPackagesPage() {
             </div>
 
             {/* ── Image Customization Section ── */}
-            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <span className="text-xs font-bold text-slate-800">
-                    Package Image
-                  </span>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                {quickPriceEditing.image ? (
-                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
-                    <img src={quickPriceEditing.image} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setQuickPriceEditing((prev) => ({ ...prev, image: "" }))}
-                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
-                    No Image
-                  </div>
-                )}
-                <div className="flex-1 w-full space-y-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        const formData = new FormData()
-                        formData.append("image", file)
-                        try {
-                          const res = await apiRequest("/settings/catalog/upload-image/", {
-                            method: "POST",
-                            body: formData,
-                          })
-                          if (res.success && res.url) {
-                            setQuickPriceEditing((prev) => ({ ...prev, image: res.url }))
-                            showToast("Image uploaded successfully!")
-                          } else {
-                            showToast(res.message || "Upload failed", "error")
-                          }
-                        } catch (err) {
-                          showToast("Upload failed", "error")
-                        }
-                      }
-                    }}
-                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                  />
-                  <Input
-                    label="Or Image URL"
-                    placeholder="https://images.unsplash.com/..."
-                    value={quickPriceEditing.image || ""}
-                    onChange={(e) => setQuickPriceEditing({ ...quickPriceEditing, image: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
+            <ImageUploader
+              label="Package Image"
+              description="Upload a custom package image or paste an image URL. Fits automatically to size and ratio."
+              value={quickPriceEditing.image || ""}
+              assetType="packages"
+              aspectRatio="aspect-square"
+              onChange={(url) => setQuickPriceEditing({ ...quickPriceEditing, image: url })}
+            />
 
             {/* ── View Details Content Section (only for home/technician services — excluded for fresh vegetables, groceries, and transport) ── */}
             {activeCategoryKey !== "goods_transports" &&
@@ -5909,70 +5748,14 @@ export function CatalogPackagesPage() {
             />
 
             {/* ── Image Customization Section ── */}
-            <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/90 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <span className="text-xs font-bold text-slate-800">
-                    Package Image
-                  </span>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Upload a custom package image or paste an image URL. Fits automatically to size and ratio.
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                {editing.image ? (
-                  <div className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex-shrink-0 group">
-                    <img src={editing.image} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setEditing((prev) => ({ ...prev, image: "" }))}
-                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 flex items-center justify-center bg-slate-50 flex-shrink-0 text-slate-400 text-[10px] font-bold">
-                    No Image
-                  </div>
-                )}
-                <div className="flex-1 w-full space-y-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        const formData = new FormData()
-                        formData.append("image", file)
-                        try {
-                          const res = await apiRequest("/settings/catalog/upload-image/", {
-                            method: "POST",
-                            body: formData,
-                          })
-                          if (res.success && res.url) {
-                            setEditing((prev) => ({ ...prev, image: res.url }))
-                            showToast("Image uploaded successfully!")
-                          } else {
-                            showToast(res.message || "Upload failed", "error")
-                          }
-                        } catch (err) {
-                          showToast("Upload failed", "error")
-                        }
-                      }
-                    }}
-                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                  />
-                  <Input
-                    label="Or Image URL"
-                    placeholder="https://images.unsplash.com/..."
-                    value={editing.image || ""}
-                    onChange={(e) => setEditing({ ...editing, image: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
+            <ImageUploader
+              label="Package Image"
+              description="Upload a custom package image or paste an image URL. Fits automatically to size and ratio."
+              value={editing.image || ""}
+              assetType="packages"
+              aspectRatio="aspect-square"
+              onChange={(url) => setEditing({ ...editing, image: url })}
+            />
 
             <div className="flex items-center justify-between pt-1">
               <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
