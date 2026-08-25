@@ -270,11 +270,11 @@ class ServiceRequest(models.Model):
     parent_request = models.ForeignKey("self", on_delete=models.SET_NULL,
                                        null=True, blank=True,
                                        related_name="child_requests")
-    request_kind   = models.CharField(max_length=20, default="standard", db_index=True,
+    request_kind   = models.CharField(max_length=30, default="standard", db_index=True,
                                       choices=[("standard", "Standard"),
                                                ("inspection", "Inspection"),
                                                ("quoted_work", "Quoted Work")])
-    quote_number   = models.CharField(max_length=64, blank=True, null=True, unique=True, db_index=True)
+    quote_number   = models.CharField(max_length=100, blank=True, null=True, unique=True, db_index=True)
 
     # Coupon snapshot fields
     coupon               = models.ForeignKey("Coupon", on_delete=models.SET_NULL, null=True, blank=True, related_name="service_requests")
@@ -299,10 +299,6 @@ class ServiceRequest(models.Model):
     service_zone_id_snapshot   = models.IntegerField(null=True, blank=True, db_index=False)
     service_zone_name_snapshot = models.CharField(max_length=150, blank=True, default="")
 
-    # Quotation & Estimation Workflow compatibility
-    request_kind      = models.CharField(max_length=30, default="DIRECT", blank=True)
-    quote_number      = models.CharField(max_length=100, blank=True, null=True)
-    parent_request_id = models.IntegerField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

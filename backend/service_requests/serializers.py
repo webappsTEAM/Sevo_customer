@@ -283,8 +283,11 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         )
 
     def get_child_requests(self, obj):
-        children = obj.child_requests.all().order_by("created_at")
-        if children.exists():
+        if hasattr(obj, "_prefetched_objects_cache") and "child_requests" in obj._prefetched_objects_cache:
+            children = list(obj.child_requests.all())
+        else:
+            children = list(obj.child_requests.all().order_by("created_at"))
+        if children:
             return ServiceRequestListSerializer(children, many=True, context=self.context).data
         return []
 
@@ -378,10 +381,14 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return get_customer_available_actions(obj)
 
     def get_latest_reschedule(self, obj):
-        rr = getattr(obj, "reschedule_requests", None)
-        if not rr:
-            return None
-        last_rr = rr.order_by("-id").first()
+        if hasattr(obj, "_prefetched_objects_cache") and "reschedule_requests" in obj._prefetched_objects_cache:
+            rrs = list(obj.reschedule_requests.all())
+            last_rr = rrs[0] if rrs else None
+        else:
+            rr = getattr(obj, "reschedule_requests", None)
+            if not rr:
+                return None
+            last_rr = rr.order_by("-id").first()
         if not last_rr:
             return None
         return {
@@ -412,7 +419,10 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
 
     def get_extension_amount(self, obj):
         try:
-            exts = [e for e in getattr(obj, "work_extensions", []).all()] if hasattr(obj, "work_extensions") else []
+            if hasattr(obj, "_prefetched_objects_cache") and "work_extensions" in obj._prefetched_objects_cache:
+                exts = list(obj.work_extensions.all())
+            else:
+                exts = [e for e in getattr(obj, "work_extensions", []).all()] if hasattr(obj, "work_extensions") else []
             if exts:
                 ext = exts[0]
                 amt = float(ext.admin_approved_amount or ext.technician_estimate or 0)
@@ -442,10 +452,16 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
 
     def get_active_extension(self, obj):
         try:
-            exts = [
-                e for e in getattr(obj, "work_extensions", []).all()
-                if e.status not in [WorkExtension.Status.CUSTOMER_ACCEPTED, WorkExtension.Status.CUSTOMER_DECLINED, WorkExtension.Status.RESOLVED]
-            ] if hasattr(obj, "work_extensions") else []
+            if hasattr(obj, "_prefetched_objects_cache") and "work_extensions" in obj._prefetched_objects_cache:
+                exts = [
+                    e for e in obj.work_extensions.all()
+                    if e.status not in [WorkExtension.Status.CUSTOMER_ACCEPTED, WorkExtension.Status.CUSTOMER_DECLINED, WorkExtension.Status.RESOLVED]
+                ]
+            else:
+                exts = [
+                    e for e in getattr(obj, "work_extensions", []).all()
+                    if e.status not in [WorkExtension.Status.CUSTOMER_ACCEPTED, WorkExtension.Status.CUSTOMER_DECLINED, WorkExtension.Status.RESOLVED]
+                ] if hasattr(obj, "work_extensions") else []
             ext = exts[0] if exts else None
             if ext:
                 return {

@@ -10,6 +10,7 @@ import logging
 import os
 import uuid
 import requests
+import threading
 from django.conf import settings
 from django.utils import timezone
 
@@ -21,6 +22,16 @@ WORKFORCE_API_KEY = os.getenv("WORKFORCE_API_KEY", "wf_integration_key_default")
 
 class WorkforceIntegrationService:
     """Client for delegating workforce tasks to the external Workforce system."""
+
+    _locks_lock = threading.Lock()
+    _active_locks = {}
+
+    @classmethod
+    def _get_lock(cls, key: str):
+        with cls._locks_lock:
+            if key not in cls._active_locks:
+                cls._active_locks[key] = threading.Lock()
+            return cls._active_locks[key]
 
     @classmethod
     def _headers(cls):
@@ -186,24 +197,41 @@ class WorkforceIntegrationService:
         """
         Fetches the current live tracking coordinates and ETA for a technician assigned by the Workforce system.
         """
-        candidate_urls = [
-            f"{WORKFORCE_API_BASE_URL}/jobs/{booking_id}/live-tracking/",
-            f"{WORKFORCE_API_BASE_URL}/customer/jobs/{booking_id}/tracking/",
-            f"{WORKFORCE_API_BASE_URL}/tracking/{booking_id}/",
-        ]
-        for url in candidate_urls:
-            try:
-                response = requests.get(url, headers=cls._headers(), timeout=1.0)
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, dict):
-                        payload = data.get("data") if ("data" in data and isinstance(data.get("data"), dict)) else data
-                        if payload.get("technician") or payload.get("employee") or payload.get("technician_name"):
-                            return payload
-            except Exception as e:
-                logger.debug(f"Workforce tracking query fallback for {url}: {e}")
+        from django.core.cache import cache
+        cache_key = f"wf_tracking_{booking_id}"
 
-        return None
+        # Fast path read
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        # Deduplication Lock
+        lock = cls._get_lock(cache_key)
+        with lock:
+            # Double-check cache
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+            candidate_urls = [
+                f"{WORKFORCE_API_BASE_URL}/jobs/{booking_id}/live-tracking/",
+                f"{WORKFORCE_API_BASE_URL}/customer/jobs/{booking_id}/tracking/",
+                f"{WORKFORCE_API_BASE_URL}/tracking/{booking_id}/",
+            ]
+            for url in candidate_urls:
+                try:
+                    response = requests.get(url, headers=cls._headers(), timeout=1.0)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if isinstance(data, dict):
+                            payload = data.get("data") if ("data" in data and isinstance(data.get("data"), dict)) else data
+                            if payload.get("technician") or payload.get("employee") or payload.get("technician_name"):
+                                cache.set(cache_key, payload, timeout=2)
+                                return payload
+                except Exception as e:
+                    logger.debug(f"Workforce tracking query fallback for {url}: {e}")
+
+            return None
 
     @classmethod
     def notify_extension_decision(cls, service_request, extension_id: int, decision: str, notes: str = "") -> dict:
@@ -283,13 +311,31 @@ class WorkforceIntegrationService:
         """
         Calls the vendor's endpoint to retrieve quote details associated with a booking/request ID.
         """
-        try:
-            url = f"{WORKFORCE_API_BASE_URL}/customer/bookings/{booking_id}/quote/"
-            response = requests.get(url, headers=cls._headers(), timeout=5)
-            if response.status_code == 200:
-                return {"success": True, "quote": response.json()}
-            return {"success": False, "message": "No quote found"}
-        except Exception as e:
-            logger.info(f"Workforce API get_quote_by_booking_id failed: {e}")
-            return {"success": False, "message": "Workforce service unreachable"}
+        from django.core.cache import cache
+        cache_key = f"wf_quote_{booking_id}"
+
+        # Fast path read
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        # Deduplication Lock
+        lock = cls._get_lock(cache_key)
+        with lock:
+            # Double-check cache
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+            try:
+                url = f"{WORKFORCE_API_BASE_URL}/customer/bookings/{booking_id}/quote/"
+                response = requests.get(url, headers=cls._headers(), timeout=5)
+                if response.status_code == 200:
+                    result = {"success": True, "quote": response.json()}
+                    cache.set(cache_key, result, timeout=60)
+                    return result
+                return {"success": False, "message": "No quote found"}
+            except Exception as e:
+                logger.info(f"Workforce API get_quote_by_booking_id failed: {e}")
+                return {"success": False, "message": "Workforce service unreachable"}
 
