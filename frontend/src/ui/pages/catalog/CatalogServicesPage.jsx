@@ -7,6 +7,8 @@ import {
 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 import { Input, TextArea, Select, Modal } from "../../components/kit.jsx"
+import ImageUploader from "../../components/ImageUploader.jsx"
+import { resolveImageUrl } from "../../../utils/imageUrl.js"
 import { useToast, ToastBanner } from "./useToast.jsx"
 
 const EMPTY_SERVICE = {
@@ -685,18 +687,12 @@ export function CatalogServicesPage() {
               onChange={(e) => setEditing({ ...editing, description: e.target.value })}
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <Input
                 label="Icon Name"
                 placeholder="e.g. Truck, Wrench, Wind"
                 value={editing.icon || ""}
                 onChange={(e) => setEditing({ ...editing, icon: e.target.value })}
-              />
-              <Input
-                label="Image URL"
-                placeholder="e.g. /mockups/service_carpenter.png"
-                value={editing.image || ""}
-                onChange={(e) => setEditing({ ...editing, image: e.target.value })}
               />
               <Input
                 label="Display Sort Order"
@@ -705,6 +701,16 @@ export function CatalogServicesPage() {
                 onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) })}
               />
             </div>
+
+            {/* Service Image Section */}
+            <ImageUploader
+              label="Service Image"
+              description="Upload a custom service image or paste an image URL. Automatically compressed to WebP."
+              value={editing.image || ""}
+              assetType="services"
+              aspectRatio="aspect-[16/9]"
+              onChange={(url) => setEditing({ ...editing, image: url })}
+            />
 
             <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer pt-1">
               <input

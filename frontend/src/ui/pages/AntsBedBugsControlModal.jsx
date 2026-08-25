@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, Search, ShoppingCart, Star, Check, X, ShieldAlert, ChevronDown, ChevronUp } from "lucide-react";
 import { apiRequest } from "../../api/client.js";
+import { resolveImageUrl } from "../../utils/imageUrl.js";
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 
 const BOOKING_CURRENCY_SYMBOL = "₹";
@@ -461,7 +462,13 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
                       <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
                         <div className="w-full h-32 rounded-xl overflow-hidden bg-slate-100 shadow-sm border border-slate-100 mb-[-15px] z-0">
-                          <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                          <img
+                            src={resolveImageUrl(service.image, "/mockups/bedbugs_control.jpg")}
+                            alt={service.name}
+                            onError={(e) => { e.currentTarget.src = "/mockups/bedbugs_control.jpg" }}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
                         </div>
                         <div className="w-24 z-10">
                           <button
@@ -542,7 +549,13 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
                           <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
                             <div className="w-full h-32 rounded-xl overflow-hidden bg-slate-100 shadow-sm border border-slate-100 mb-[-15px] z-0">
-                              <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                              <img
+                                src={resolveImageUrl(service.image, "/mockups/ants_control.jpg")}
+                                alt={service.name}
+                                onError={(e) => { e.currentTarget.src = "/mockups/ants_control.jpg" }}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                              />
                             </div>
                             <div className="w-24 z-10">
                               <button
@@ -613,7 +626,13 @@ export function AntsBedBugsControlModal({ category, cart, setCart, onClose, onCh
 
                           <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
                             <div className="w-full h-32 rounded-xl overflow-hidden bg-slate-100 shadow-sm border border-slate-100 mb-[-15px] z-0">
-                              <img src={service.image} alt={service.name} className="w-full h-full object-cover" />
+                              <img
+                                src={resolveImageUrl(service.image, "/mockups/ants_control.jpg")}
+                                alt={service.name}
+                                onError={(e) => { e.currentTarget.src = "/mockups/ants_control.jpg" }}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                              />
                             </div>
                             <div className="w-24 z-10">
                               <button

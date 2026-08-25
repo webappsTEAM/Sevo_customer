@@ -3,6 +3,7 @@ import { Plus, Edit2, Trash2 } from "lucide-react"
 import { apiRequest } from "../../../api/client.js"
 import { Card, Button, Input, TextArea, Select, Modal, Pill } from "../../components/kit.jsx"
 import { Table } from "../../components/Table.jsx"
+import ImageUploader from "../../components/ImageUploader.jsx"
 import { useToast, ToastBanner } from "./useToast.jsx"
 
 const EMPTY_ADDON = { package: "", name: "", description: "", price: "", image: "", is_active: true, sort_order: 0 }
@@ -122,7 +123,14 @@ export function CatalogAddOnsPage() {
             <Input label="Name" required value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />
             <TextArea label="Description" value={editing.description || ""} onChange={e => setEditing({ ...editing, description: e.target.value })} />
             <Input label="Price (₹)" type="number" required value={editing.price} onChange={e => setEditing({ ...editing, price: e.target.value })} />
-            <Input label="Image URL" value={editing.image || ""} onChange={e => setEditing({ ...editing, image: e.target.value })} />
+            <ImageUploader
+              label="Add-on Image"
+              description="Upload an add-on image or enter an image URL."
+              value={editing.image || ""}
+              assetType="addons"
+              aspectRatio="aspect-square"
+              onChange={(url) => setEditing({ ...editing, image: url })}
+            />
             <label className="flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-300">
               <input type="checkbox" checked={!!editing.is_active} onChange={e => setEditing({ ...editing, is_active: e.target.checked })} />
               Active
