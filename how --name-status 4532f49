@@ -1,0 +1,26 @@
+[33mcommit 4532f49d43ca2201ea6a7a13ff408369175c6d1a[m
+Author: suryaselvakumar07 <surya.selvakumar@caldimengg.in>
+Date:   Tue Aug 25 11:25:38 2026 +0530
+
+    images store in db
+
+ backend/accounts/permissions.py                    |   2 [32m+[m[31m-[m
+ backend/customer_analytics/tests.py                |   3 [32m+[m[31m-[m
+ ...51_servicerequest_parent_request_id_and_more.py |  15 [31m-[m
+ .../migrations/0052_merge_20260825_0956.py         |  14 [32m+[m
+ backend/service_requests/models.py                 |   4 [31m-[m
+ backend/settings_hub/tests/test_image_pipeline.py  | 296 [32m++++++++++++++++++++[m
+ backend/settings_hub/views_catalog.py              | 121 [32m++++++[m[31m--[m
+ backend/settings_hub/views_homepage.py             |  80 [32m++[m[31m----[m
+ backend/utils/image_optimizer.py                   | 229 [32m+++++++++++++++[m
+ backend/utils/supabase_storage.py                  | 296 [32m++++++++++++++++[m[31m----[m
+ frontend/src/config/homePageConfig.js              |  23 [32m+[m[31m-[m
+ frontend/src/ui/components/ImageUploadField.jsx    | 138 [32m+++[m[31m------[m
+ frontend/src/ui/components/ImageUploader.jsx       | 252 [32m+++++++++++++++++[m
+ frontend/src/ui/pages/AntsBedBugsControlModal.jsx  |  25 [32m+[m[31m-[m
+ frontend/src/ui/pages/CockroachControlModal.jsx    |  36 [32m++[m[31m-[m
+ .../src/ui/pages/catalog/CatalogAddOnsPage.jsx     |  10 [32m+[m[31m-[m
+ .../src/ui/pages/catalog/CatalogPackagesPage.jsx   | 311 [32m++++[m[31m-----------------[m
+ .../src/ui/pages/catalog/CatalogServicesPage.jsx   |  20 [32m+[m[31m-[m
+ frontend/src/utils/imageUrl.js                     | 148 [32m++++++++++[m
+ 19 files changed, 1467 insertions(+), 556 deletions(-)

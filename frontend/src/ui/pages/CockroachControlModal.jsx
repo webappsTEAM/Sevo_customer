@@ -338,6 +338,12 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
   const getCount = (id) => cart.find(i => i.id === id)?.quantity || 0;
 
+  const getServiceCount = (serviceId) => {
+    return cart
+      .filter(item => item.id === serviceId || item.id.startsWith(`${serviceId}-`))
+      .reduce((sum, item) => sum + (item.quantity || 0), 0);
+  };
+
   const getDynamicPestServices = () => {
     let services = JSON.parse(JSON.stringify(PEST_SERVICES));
     if (dbPackages.length > 0) {
@@ -547,12 +553,40 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                               />
                             </div>
                             <div className="w-24 z-10">
-                              <button
-                                onClick={() => handleOpenDetails(service)}
-                                className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
-                              >
-                                <ShoppingCart size={14} /> Add
-                              </button>
+                              {getServiceCount(service.id) > 0 ? (
+                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                                  <button
+                                    onClick={() => {
+                                      const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
+                                      if (matchingItem) removeItemFromCart(matchingItem.id);
+                                    }}
+                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                  >
+                                    -
+                                  </button>
+                                  <span>{getServiceCount(service.id)}</span>
+                                  <button
+                                    onClick={() => {
+                                      const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
+                                      if (matchingItem) {
+                                        addItemToCart(matchingItem.id, matchingItem.name, matchingItem.price, matchingItem.duration, matchingItem.gst_rate, matchingItem.platform_fee);
+                                      } else {
+                                        handleOpenDetails(service);
+                                      }
+                                    }}
+                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleOpenDetails(service)}
+                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                                >
+                                  <ShoppingCart size={14} /> Add
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -620,12 +654,40 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                               />
                             </div>
                             <div className="w-24 z-10">
-                              <button
-                                onClick={() => handleOpenDetails(service)}
-                                className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
-                              >
-                                <ShoppingCart size={14} /> Add
-                              </button>
+                              {getServiceCount(service.id) > 0 ? (
+                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                                  <button
+                                    onClick={() => {
+                                      const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
+                                      if (matchingItem) removeItemFromCart(matchingItem.id);
+                                    }}
+                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                  >
+                                    -
+                                  </button>
+                                  <span>{getServiceCount(service.id)}</span>
+                                  <button
+                                    onClick={() => {
+                                      const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
+                                      if (matchingItem) {
+                                        addItemToCart(matchingItem.id, matchingItem.name, matchingItem.price, matchingItem.duration, matchingItem.gst_rate, matchingItem.platform_fee);
+                                      } else {
+                                        handleOpenDetails(service);
+                                      }
+                                    }}
+                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleOpenDetails(service)}
+                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                                >
+                                  <ShoppingCart size={14} /> Add
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -704,12 +766,40 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                               />
                             </div>
                             <div className="w-24 z-10">
-                              <button
-                                onClick={() => handleOpenDetails(service)}
-                                className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
-                              >
-                                <ShoppingCart size={14} /> Add
-                              </button>
+                              {getServiceCount(service.id) > 0 ? (
+                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                                  <button
+                                    onClick={() => {
+                                      const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
+                                      if (matchingItem) removeItemFromCart(matchingItem.id);
+                                    }}
+                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                  >
+                                    -
+                                  </button>
+                                  <span>{getServiceCount(service.id)}</span>
+                                  <button
+                                    onClick={() => {
+                                      const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
+                                      if (matchingItem) {
+                                        addItemToCart(matchingItem.id, matchingItem.name, matchingItem.price, matchingItem.duration, matchingItem.gst_rate, matchingItem.platform_fee);
+                                      } else {
+                                        handleOpenDetails(service);
+                                      }
+                                    }}
+                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleOpenDetails(service)}
+                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                                >
+                                  <ShoppingCart size={14} /> Add
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -777,12 +867,40 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                               />
                             </div>
                             <div className="w-24 z-10">
-                              <button
-                                onClick={() => handleOpenDetails(service)}
-                                className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
-                              >
-                                <ShoppingCart size={14} /> Add
-                              </button>
+                              {getServiceCount(service.id) > 0 ? (
+                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                                  <button
+                                    onClick={() => {
+                                      const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
+                                      if (matchingItem) removeItemFromCart(matchingItem.id);
+                                    }}
+                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                  >
+                                    -
+                                  </button>
+                                  <span>{getServiceCount(service.id)}</span>
+                                  <button
+                                    onClick={() => {
+                                      const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
+                                      if (matchingItem) {
+                                        addItemToCart(matchingItem.id, matchingItem.name, matchingItem.price, matchingItem.duration, matchingItem.gst_rate, matchingItem.platform_fee);
+                                      } else {
+                                        handleOpenDetails(service);
+                                      }
+                                    }}
+                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleOpenDetails(service)}
+                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                                >
+                                  <ShoppingCart size={14} /> Add
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -820,7 +938,11 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                     </div>
                     <div className="text-right flex items-center gap-2">
                       <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
-                      <button onClick={() => removeItemFromCart(item.id)} className="text-red-500 hover:text-red-700 font-bold ml-1 border-none bg-transparent cursor-pointer">×</button>
+                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
+                        <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600 border-none bg-transparent cursor-pointer">-</button>
+                        <span>{item.quantity}</span>
+                        <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration, item.gst_rate, item.platform_fee)} className="hover:text-emerald-600 border-none bg-transparent cursor-pointer">+</button>
+                      </div>
                     </div>
                   </div>
                 ))}
