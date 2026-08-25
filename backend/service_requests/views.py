@@ -453,7 +453,15 @@ class CustomerMyBookingsView(APIView):
                 | Q(phone=f"+91{clean_phone}")
             )
 
-        qs = ServiceRequest.objects.filter(query).order_by("-created_at").distinct()
+        from django.db.models import Prefetch
+        qs = ServiceRequest.objects.filter(query).select_related("customer", "feedback").prefetch_related(
+            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
+            "child_requests__reschedule_requests",
+            "child_requests__work_extensions",
+            Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
+            Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
+            Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
+        ).order_by("-created_at").distinct()
         serializer = ServiceRequestListSerializer(qs, many=True, context={"request": request})
         return _success(data=serializer.data)
 
@@ -963,7 +971,18 @@ class AdminSRListView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
     def get(self, request):
-        qs = _sr_qs(request).order_by("-created_at")
+        from django.db.models import Prefetch
+        from rest_framework.pagination import PageNumberPagination
+
+        qs = _sr_qs(request).select_related("customer", "feedback").prefetch_related(
+            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
+            "child_requests__reschedule_requests",
+            "child_requests__work_extensions",
+            Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
+            Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
+            Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
+        ).order_by("-created_at")
+
         status_param = request.query_params.get("status")
         category_param = request.query_params.get("service_category")
         search_param = request.query_params.get("search")
@@ -981,8 +1000,16 @@ class AdminSRListView(APIView):
                 Q(issue_title__icontains=search_param)
             )
 
-        serializer = ServiceRequestListSerializer(qs, many=True, context={"request": request})
-        return _success(data=serializer.data)
+        paginator = PageNumberPagination()
+        paginator.page_size = 20
+        paginated_qs = paginator.paginate_queryset(qs, request, view=self)
+        serializer = ServiceRequestListSerializer(paginated_qs, many=True, context={"request": request})
+        return _success(data={
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "results": serializer.data
+        })
 
 
 class AdminSRDetailView(APIView):
@@ -1513,7 +1540,15 @@ class CustomerActiveBookingsListView(APIView):
             )
 
         allowed_statuses = ["new_request", "waiting_for_payment", "confirmed", "reviewed", "assigned", "accepted", "on_the_way", "arrived", "in_progress", "proof_submitted", "unassigned"]
-        qs = ServiceRequest.objects.filter(query, status__in=allowed_statuses).order_by("-id").distinct()
+        from django.db.models import Prefetch
+        qs = ServiceRequest.objects.filter(query, status__in=allowed_statuses).select_related("customer", "feedback").prefetch_related(
+            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
+            "child_requests__reschedule_requests",
+            "child_requests__work_extensions",
+            Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
+            Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
+            Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
+        ).order_by("-id").distinct()
         return _standard_response(success=True, data=ServiceRequestListSerializer(qs, many=True, context={"request": request}).data)
 
 
@@ -1619,9 +1654,17 @@ class CustomerEligibleBookingsListView(APIView):
                 | Q(phone=f"+91{clean_phone}")
             )
 
+        from django.db.models import Prefetch
         bookings = ServiceRequest.objects.filter(
             query,
             status__in=[ServiceRequest.Status.COMPLETED, ServiceRequest.Status.CLOSED, ServiceRequest.Status.VERIFIED]
+        ).select_related("customer", "feedback").prefetch_related(
+            Prefetch("child_requests", queryset=ServiceRequest.objects.select_related("customer").order_by("created_at")),
+            "child_requests__reschedule_requests",
+            "child_requests__work_extensions",
+            Prefetch("reschedule_requests", queryset=RescheduleRequest.objects.all().order_by("-id")),
+            Prefetch("work_extensions", queryset=WorkExtension.objects.all().order_by("-created_at")),
+            Prefetch("refund_requests", queryset=RefundRequest.objects.all()),
         ).exclude(refund_requests__isnull=False).order_by("-created_at").distinct()
         return _standard_response(success=True, data=ServiceRequestListSerializer(bookings, many=True, context={"request": request}).data)
 

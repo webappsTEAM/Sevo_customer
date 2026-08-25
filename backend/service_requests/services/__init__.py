@@ -127,7 +127,10 @@ def get_customer_available_actions(booking):
 
     if status in ["completed", "verified", "closed"]:
         actions["can_give_feedback"] = not hasattr(booking, "feedback") or not booking.feedback.is_submitted
-        actions["can_request_refund"] = not booking.refund_requests.exists()
+        if hasattr(booking, "_prefetched_objects_cache") and "refund_requests" in booking._prefetched_objects_cache:
+            actions["can_request_refund"] = not bool(booking.refund_requests.all())
+        else:
+            actions["can_request_refund"] = not booking.refund_requests.exists()
 
     return actions
 
