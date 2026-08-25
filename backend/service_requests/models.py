@@ -299,10 +299,6 @@ class ServiceRequest(models.Model):
     service_zone_id_snapshot   = models.IntegerField(null=True, blank=True, db_index=False)
     service_zone_name_snapshot = models.CharField(max_length=150, blank=True, default="")
 
-    # Quotation & Estimation Workflow compatibility
-    request_kind      = models.CharField(max_length=30, default="DIRECT", blank=True)
-    quote_number      = models.CharField(max_length=100, blank=True, null=True)
-    parent_request_id = models.IntegerField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -273,7 +273,7 @@ class HomePageConfigAPIView(APIView):
 
 class HomePageImageUploadAPIView(APIView):
     """
-    POST: Uploads image file to Supabase Storage, validates via Pillow, converts to WebP,
+    POST: Uploads image file to Supabase Storage, validates via ImageOptimizer, converts to WebP,
           and saves HomePageMedia record in PostgreSQL.
     """
     permission_classes = [permissions.AllowAny]
@@ -281,7 +281,7 @@ class HomePageImageUploadAPIView(APIView):
     def post(self, request):
         user = request.user if request.user and request.user.is_authenticated else None
 
-        file_obj = request.FILES.get("file")
+        file_obj = request.FILES.get("file") or request.FILES.get("image")
         section = request.data.get("section", "general").strip().lower()
 
         if not file_obj:
@@ -290,81 +290,63 @@ class HomePageImageUploadAPIView(APIView):
         if section not in ALLOWED_SECTIONS:
             return Response({"error": f"Invalid section '{section}'. Allowed: {list(ALLOWED_SECTIONS)}"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if file_obj.size > MAX_FILE_SIZE:
-            return Response({"error": "File size exceeds 5MB limit"}, status=status.HTTP_400_BAD_REQUEST)
-
-        content_type = getattr(file_obj, "content_type", "").lower()
-        if content_type and content_type not in ALLOWED_MIME_TYPES:
-            return Response({"error": f"Unsupported MIME type '{content_type}'. Allowed: JPEG, PNG, WebP"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Pillow image validation & WebP conversion
+        # 1. Optimize and WebP compress
         try:
-            img = Image.open(file_obj)
-            img.verify()
-            file_obj.seek(0)
-            img = Image.open(file_obj)
-
-            dimensions = f"{img.width}x{img.height}"
-
-            # Strip EXIF metadata and convert to RGB/RGBA
-            if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
-                img_converted = img.convert("RGBA")
-            else:
-                img_converted = img.convert("RGB")
-
-            # Max dimension check / auto-resize for homepage performance (max width/height 2400px)
-            if img_converted.width > 2400 or img_converted.height > 2400:
-                img_converted.thumbnail((2400, 2400), Image.Resampling.LANCZOS)
-                dimensions = f"{img_converted.width}x{img_converted.height}"
-
-            out_buffer = io.BytesIO()
-            img_converted.save(out_buffer, format="WEBP", quality=96, method=6)
-            webp_bytes = out_buffer.getvalue()
-
+            from utils.image_optimizer import ImageOptimizer, ImageOptimizationError
+            profile = "homepage" if section in ("hero", "categories", "general") else "catalog"
+            optimized = ImageOptimizer.optimize(file_obj, profile_name=profile)
+        except ImageOptimizationError as opt_err:
+            return Response({"error": opt_err.message}, status=opt_err.status_code)
         except Exception as e:
             logger.error(f"Image processing error: {e}")
             return Response({"error": "Invalid or corrupted image file"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Generate unique storage path
-        file_uuid = uuid.uuid4().hex
-        image_path = f"homepage/{section}/{file_uuid}.webp"
+        # 2. Generate collision-safe storage path
+        storage_path = SupabaseStorageService.generate_storage_path(
+            folder=f"homepage/{section}",
+            extension="webp",
+        )
 
-        # 1. Upload file to Supabase Storage
-        upload_success = SupabaseStorageService.upload_file(webp_bytes, image_path, content_type="image/webp")
+        # 3. Upload file to Supabase Storage
+        upload_success, public_url, error_msg = SupabaseStorageService.upload_file(
+            file_bytes=optimized["webp_bytes"],
+            path=storage_path,
+            content_type="image/webp",
+        )
         if not upload_success:
-            return Response({"error": "Failed to upload image to Supabase Storage"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": error_msg or "Failed to upload image to Supabase Storage"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # 2. Database Record Creation with transaction rollback safety
+        # 4. Database Record Creation with transaction rollback safety
         try:
             with transaction.atomic():
                 media = HomePageMedia.objects.create(
                     section=section,
                     original_name=file_obj.name,
-                    image_path=image_path,
+                    image_path=storage_path,
                     mime_type="image/webp",
-                    file_size=len(webp_bytes),
-                    dimensions=dimensions,
+                    file_size=optimized["optimized_size"],
+                    dimensions=optimized["dimensions"],
                     uploaded_by=user,
                     is_active=False,
                     cleanup_status="UNREFERENCED"
                 )
 
-            public_url = SupabaseStorageService.get_public_url(image_path)
-
             return Response({
                 "success": True,
                 "media_id": str(media.id),
-                "image_path": image_path,
+                "image_path": storage_path,
                 "image_url": public_url,
                 "original_name": file_obj.name,
-                "dimensions": dimensions,
-                "file_size": len(webp_bytes)
+                "dimensions": optimized["dimensions"],
+                "file_size": optimized["optimized_size"],
+                "compression_ratio": optimized["compression_ratio"],
             }, status=status.HTTP_201_CREATED)
 
         except Exception as db_err:
             logger.error(f"Database creation failed after Storage upload: {db_err}. Cleaning up Storage file.")
-            SupabaseStorageService.delete_file(image_path)
+            SupabaseStorageService.delete_file(storage_path)
             return Response({"error": "Database record creation failed. Storage upload rolled back."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class HomePageImageDeleteAPIView(APIView):

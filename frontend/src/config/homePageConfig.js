@@ -312,27 +312,10 @@ export function getHomePageConfig() {
   return DEFAULT_HOME_PAGE_CONFIG
 }
 
+import { resolveImageUrl } from "../utils/imageUrl.js"
+
 export function resolveDisplayImageUrl(path, fallback = "") {
-  if (!path || typeof path !== "string") return fallback
-  const trimmed = path.trim()
-  if (!trimmed) return fallback
-  if (
-    trimmed.startsWith("http://") ||
-    trimmed.startsWith("https://") ||
-    trimmed.startsWith("data:") ||
-    trimmed.startsWith("/mockups/") ||
-    trimmed.startsWith("mockups/") ||
-    trimmed.startsWith("/assets/") ||
-    trimmed.startsWith("assets/") ||
-    trimmed.startsWith("/media/") ||
-    trimmed.startsWith("media/")
-  ) {
-    return trimmed.startsWith("/") || trimmed.startsWith("http") || trimmed.startsWith("data:") ? trimmed : `/${trimmed}`
-  }
-  if (trimmed.startsWith("homepage/")) {
-    return `/media/${trimmed}`
-  }
-  return `https://zqghatybqkztzgjmmlpl.supabase.co/storage/v1/object/public/admin-media/${trimmed.replace(/^\//, "")}`
+  return resolveImageUrl(path, fallback)
 }
 
 function mergeWithDefaultConfig(parsed) {
