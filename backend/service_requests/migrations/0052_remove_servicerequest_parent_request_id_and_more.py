@@ -7,19 +7,10 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('service_requests', '0051_servicerequest_parent_request_id_and_more'),
+        ('service_requests', '0052_merge_20260825_0956'),
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name='servicerequest',
-            name='parent_request_id',
-        ),
-        migrations.AddField(
-            model_name='servicerequest',
-            name='parent_request',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='child_requests', to='service_requests.servicerequest'),
-        ),
         migrations.AlterField(
             model_name='servicerequest',
             name='quote_number',
