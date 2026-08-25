@@ -306,6 +306,14 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
             (getattr(request.user, "is_staff", False) or getattr(request.user, "role", "") in ["admin", "staff", "manager", "employee", "vendor"])
         )
 
+    def _get_cached_assignment(self, obj):
+        if hasattr(obj, "_prefetched_objects_cache") and "assignments" in obj._prefetched_objects_cache:
+            assignments = list(obj.assignments.all())
+            return assignments[0] if assignments else None
+        if hasattr(obj, "assignments"):
+            return obj.assignments.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id").first()
+        return None
+
     def get_technician_name(self, obj):
         if not self._is_staff() and obj.status in ["confirmed", "new_request", "assigned"]:
             return ""
@@ -314,10 +322,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         assigned_emp = getattr(obj, "assigned_employee", None)
         if assigned_emp:
             return getattr(assigned_emp, "full_name", None) or (assigned_emp.user.get_full_name() if getattr(assigned_emp, "user", None) else None) or ""
-        if hasattr(obj, "assignments"):
-            assignment = obj.assignments.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id").first()
-            if assignment:
-                return assignment.technician_name or ""
+        assignment = self._get_cached_assignment(obj)
+        if assignment:
+            return assignment.technician_name or ""
         return ""
 
     def get_technician_phone(self, obj):
@@ -328,10 +335,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         assigned_emp = getattr(obj, "assigned_employee", None)
         if assigned_emp and getattr(assigned_emp, "phone", None):
             return assigned_emp.phone
-        if hasattr(obj, "assignments"):
-            assignment = obj.assignments.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id").first()
-            if assignment:
-                return assignment.technician_phone or ""
+        assignment = self._get_cached_assignment(obj)
+        if assignment:
+            return assignment.technician_phone or ""
         return ""
 
     def get_technician_photo(self, obj):
@@ -342,10 +348,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         assigned_emp = getattr(obj, "assigned_employee", None)
         if assigned_emp and getattr(assigned_emp, "photo", None):
             return assigned_emp.photo
-        if hasattr(obj, "assignments"):
-            assignment = obj.assignments.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id").first()
-            if assignment:
-                return assignment.technician_photo or ""
+        assignment = self._get_cached_assignment(obj)
+        if assignment:
+            return assignment.technician_photo or ""
         return ""
 
     def get_technician_rating(self, obj):
@@ -356,6 +361,9 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         assigned_emp = getattr(obj, "assigned_employee", None)
         if assigned_emp and getattr(assigned_emp, "rating", None):
             return float(assigned_emp.rating)
+        assignment = self._get_cached_assignment(obj)
+        if assignment and assignment.technician_rating is not None:
+            return float(assignment.technician_rating)
         return None
 
     def get_technician(self, obj):
