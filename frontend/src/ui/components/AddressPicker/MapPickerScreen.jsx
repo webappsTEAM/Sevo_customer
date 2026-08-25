@@ -291,13 +291,14 @@ export function MapPickerScreen({
           setZoneStatus({
             inZone: res.in_zone !== false,
             serviceAllowed: res.service_allowed !== false && res.in_zone !== false,
-            zoneName: res.zone?.name || null,
+            zoneId: res.zone?.id || res.zone_id || null,
+            zoneName: res.zone?.name || res.zone_name || null,
             message: res.message || "",
             errorCode: res.error_code || "",
           })
         }
       } catch {
-        if (active) setZoneStatus({ inZone: true, serviceAllowed: true, zoneName: null, message: "" })
+        if (active) setZoneStatus({ inZone: true, serviceAllowed: true, zoneId: null, zoneName: null, message: "" })
       }
     }, 300)
 
@@ -338,17 +339,45 @@ export function MapPickerScreen({
     }
   }, [initialCoords])
 
-  // ── Select Search Suggestion ───────────────────────────────────
+  // ── Select Search Suggestion & Fly Map ─────────────────────────
   const handleSelectSearchResult = (result) => {
-    if (result.lat && result.lng) {
-      setCurrentCenter({ lat: result.lat, lng: result.lng })
-      if (mapRef.current) {
-        mapRef.current.flyTo([result.lat, result.lng], 17, { animate: true, duration: 1 })
+    if (result && result.lat && result.lng) {
+      const lat = parseFloat(result.lat)
+      const lng = parseFloat(result.lng)
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setCurrentCenter({ lat, lng })
+        if (mapRef.current) {
+          mapRef.current.flyTo([lat, lng], 16, { animate: true, duration: 1.2 })
+        }
+        if (typeof onCenterChange === "function") {
+          onCenterChange(lat, lng)
+        }
       }
     }
     setSearchResults([])
     setSearchQuery("")
     setShowSearchBox(false)
+  }
+
+  // ── Execute Direct Search on Enter or Go Button ────────────────
+  const handleSearchSubmit = async (queryText) => {
+    const q = (queryText !== undefined ? queryText : searchQuery).trim()
+    if (!q) return
+    if (searchResults.length > 0) {
+      handleSelectSearchResult(searchResults[0])
+      return
+    }
+    setIsSearching(true)
+    try {
+      const places = await searchPlaces(q)
+      if (places && places.length > 0) {
+        handleSelectSearchResult(places[0])
+      }
+    } catch (err) {
+      console.warn("Search submit error:", err)
+    } finally {
+      setIsSearching(false)
+    }
   }
 
   // ── Select Saved Address ───────────────────────────────────────
@@ -418,8 +447,8 @@ export function MapPickerScreen({
         address_line1: resolvedAddr.address_line1 || resolvedAddr.flat_house_no || "",
         latitude: Number(resolvedAddr.latitude || resolvedAddr.lat || currentCenter.lat),
         longitude: Number(resolvedAddr.longitude || resolvedAddr.lng || currentCenter.lng),
-        zone_id: zoneStatus.zoneName ? 2 : null,
-        zone_name: zoneStatus.zoneName || null,
+        zone_id: zoneStatus.zoneId || resolvedAddr.zone_id || null,
+        zone_name: zoneStatus.zoneName || resolvedAddr.zone_name || null,
       }
 
       if (typeof onConfirm === "function") {
@@ -444,8 +473,8 @@ export function MapPickerScreen({
       pincode: resolvedAddr?.pincode || address?.pincode || "",
       latitude: currentCenter.lat,
       longitude: currentCenter.lng,
-      zone_id: zoneStatus.zoneName ? 2 : null,
-      zone_name: zoneStatus.zoneName || null,
+      zone_id: zoneStatus.zoneId || resolvedAddr?.zone_id || null,
+      zone_name: zoneStatus.zoneName || resolvedAddr?.zone_name || null,
       flat_house_no: selectedAddressData?.flat_house_no || initialFlat,
       landmark: selectedAddressData?.landmark || initialLandmark,
     }
@@ -477,8 +506,8 @@ export function MapPickerScreen({
                 address_line1: [finalPayload.flat_house_no, finalPayload.landmark].filter(Boolean).join(", "),
                 latitude: currentCenter.lat,
                 longitude: currentCenter.lng,
-                zone_id: zoneStatus.zoneName ? 2 : null,
-                zone_name: zoneStatus.zoneName || null,
+                zone_id: zoneStatus.zoneId || finalPayload.zone_id || null,
+                zone_name: zoneStatus.zoneName || finalPayload.zone_name || null,
               }
               if (typeof onConfirm === "function") {
                 onConfirm(confirmedData)
@@ -521,20 +550,38 @@ export function MapPickerScreen({
           <div style={screenStyles.searchBarRow}>
             {showSearchBox ? (
               <div style={screenStyles.searchInputContainer}>
-                <Search size={16} color="#64748b" />
+                {isSearching ? (
+                  <Loader2 size={16} style={{ color: "#4f46e5", animation: "spin 1s linear infinite", flexShrink: 0 }} />
+                ) : (
+                  <Search size={16} color="#64748b" onClick={() => handleSearchSubmit()} style={{ cursor: "pointer", flexShrink: 0 }} />
+                )}
                 <input
                   type="text"
-                  placeholder="Search apartment, street, area, pincode..."
+                  placeholder="Search city, area, street, pincode..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      handleSearchSubmit()
+                    }
+                  }}
                   style={screenStyles.searchInput}
                   autoFocus
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery("")} style={screenStyles.clearBtn}>
+                  <button onClick={() => { setSearchQuery(""); setSearchResults([]) }} style={screenStyles.clearBtn} title="Clear">
                     <X size={14} color="#64748b" />
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => handleSearchSubmit()}
+                  style={screenStyles.goSearchBtn}
+                  title="Search location"
+                >
+                  Search
+                </button>
               </div>
             ) : (
               <div
@@ -558,13 +605,24 @@ export function MapPickerScreen({
 
           {/* Auto-suggest Search Results Dropdown */}
           <AnimatePresence>
-            {searchResults.length > 0 && (
+            {showSearchBox && (searchResults.length > 0 || isSearching || searchQuery.trim().length >= 2) && (
               <motion.div
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 style={screenStyles.searchResultsDropdown}
               >
+                {isSearching && searchResults.length === 0 && (
+                  <div style={screenStyles.searchingPlaceholder}>
+                    <Loader2 size={15} style={{ animation: "spin 1s linear infinite", color: "#4f46e5", flexShrink: 0 }} />
+                    <span>Searching for "{searchQuery}"...</span>
+                  </div>
+                )}
+                {!isSearching && searchResults.length === 0 && searchQuery.trim().length >= 2 && (
+                  <div style={screenStyles.noResultsPlaceholder}>
+                    <span>Press Enter or Search to find "{searchQuery}"</span>
+                  </div>
+                )}
                 {searchResults.map((item, idx) => (
                   <div
                     key={idx}
@@ -831,28 +889,48 @@ const screenStyles = {
     background: "none", border: "none", cursor: "pointer",
     padding: 2, display: "flex", alignItems: "center",
   },
+  goSearchBtn: {
+    padding: "4px 10px",
+    background: "#4f46e5",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: 8,
+    fontSize: "0.76rem",
+    fontWeight: 700,
+    cursor: "pointer",
+    flexShrink: 0,
+    boxShadow: "0 2px 6px rgba(79, 70, 229, 0.3)",
+  },
   searchResultsDropdown: {
     position: "absolute", top: "100%", left: 0, right: 0,
-    background: "#fff", borderBottom: "1px solid #e2e8f0",
-    boxShadow: "0 12px 28px rgba(0,0,0,0.14)",
-    maxHeight: 220, overflowY: "auto",
-    zIndex: 999,
+    background: "#ffffff", borderBottom: "1px solid #e2e8f0",
+    boxShadow: "0 16px 36px rgba(0,0,0,0.22)",
+    maxHeight: 280, overflowY: "auto",
+    zIndex: 11000,
+  },
+  searchingPlaceholder: {
+    display: "flex", alignItems: "center", gap: 10,
+    padding: "14px 18px", color: "#64748b", fontSize: "0.82rem", fontWeight: 600,
+  },
+  noResultsPlaceholder: {
+    padding: "14px 18px", color: "#64748b", fontSize: "0.82rem", fontWeight: 500,
   },
   searchResultItem: {
     display: "flex", alignItems: "center", gap: 10,
-    padding: "10px 18px", borderBottom: "1px solid #f8fafc",
+    padding: "12px 18px", borderBottom: "1px solid #f1f5f9",
     cursor: "pointer",
+    transition: "background 0.12s ease",
   },
   resultIconBadge: {
-    width: 30, height: 30, borderRadius: "50%",
+    width: 32, height: 32, borderRadius: "50%",
     background: "#fff7ed", display: "flex",
     alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
   resultName: {
-    fontSize: "0.82rem", fontWeight: 800, color: "#0f172a",
+    fontSize: "0.84rem", fontWeight: 800, color: "#0f172a",
   },
   resultSub: {
-    fontSize: "0.72rem", color: "#64748b", marginTop: 2,
+    fontSize: "0.74rem", color: "#64748b", marginTop: 2,
     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
   },
   searchPill: {

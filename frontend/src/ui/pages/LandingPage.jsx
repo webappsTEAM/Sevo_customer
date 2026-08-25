@@ -9,8 +9,10 @@ import {
   Smartphone, Phone, Mail, X, ArrowRight,
   ClipboardList, CalendarDays, UserCheck, DoorOpen, Wallet, User, SlidersHorizontal, ShoppingCart,
   Sparkles, Apple, ShoppingBag, Carrot, HeartPulse, CheckCircle2, Plus, Minus, Check, Repeat2, AlertCircle,
+  Users, Wrench, Droplet, Zap, ThumbsUp, Bell, IndianRupee
 } from "lucide-react"
 import { routes } from "../routes.js"
+import { HeroServiceVisualization } from "../components/HeroServiceVisualization.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
@@ -30,8 +32,7 @@ import acServiceImg from "../../assets/ac service.png"
 import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png"
 import imgAntiRust from "../../assets/Anti-Rust Deep Clean AC Service.png"
 
-// lucide-react dropped brand/social icons — small inline marks instead of
-// pulling in a whole extra icon package for four footer glyphs.
+// Social media SVG icons
 function FacebookMark(props) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
@@ -45,6 +46,13 @@ function InstagramMark(props) {
       <rect x="3" y="3" width="18" height="18" rx="5" />
       <circle cx="12" cy="12" r="4" />
       <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+function WhatsAppMark(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-5.46-4.45-9.92-9.91-9.92zM17.84 16.3c-.24.67-1.2 1.24-1.74 1.28-.48.04-1.1.06-3.56-.95-3.14-1.29-5.17-4.48-5.32-4.69-.16-.21-1.27-1.69-1.27-3.23 0-1.54.8-2.3 1.09-2.61.28-.31.62-.39.83-.39.21 0 .42 0 .6.01.19.01.44-.07.69.53.25.62.86 2.1.94 2.25.08.16.14.34.03.55-.1.21-.16.34-.31.52-.16.18-.33.4-.47.54-.16.16-.33.33-.14.65.19.32.84 1.38 1.8 2.23 1.24 1.1 2.28 1.44 2.6 1.6.32.16.51.14.7-.08.19-.22.81-.94 1.02-1.27.21-.32.43-.27.72-.16.29.11 1.84.87 2.16 1.03.32.16.53.24.61.37.08.14.08.79-.16 1.46z" />
     </svg>
   )
 }
@@ -62,6 +70,35 @@ function TwitterMark(props) {
     </svg>
   )
 }
+
+function GooglePlayBtn() {
+  return (
+    <div className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-950 hover:bg-slate-900 text-white rounded-xl border border-slate-800 transition-all shadow-sm cursor-pointer hover:scale-[1.02]">
+      <svg className="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M3.609 1.814L13.793 12 3.61 22.186a2.37 2.37 0 0 1-.61-.83V2.643c.174-.325.385-.61.61-.829zm11.233 11.233l2.298 2.298-11.75 6.643 9.452-8.941zm0-2.094L5.39 2.012l11.75 6.643-2.298 2.298zm1.093 1.047l3.693 2.088c.848.48.848 1.258 0 1.737l-3.693 2.088-2.148-2.148 2.148-2.148z" />
+      </svg>
+      <div className="text-left">
+        <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold leading-none">Get it on</div>
+        <div className="text-xs font-black leading-tight mt-0.5">Google Play</div>
+      </div>
+    </div>
+  )
+}
+
+function AppStoreBtn() {
+  return (
+    <div className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-950 hover:bg-slate-900 text-white rounded-xl border border-slate-800 transition-all shadow-sm cursor-pointer hover:scale-[1.02]">
+      <svg className="w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.67-1.09 1.74-.95 2.77.99.08 2.03-.52 2.68-1.27z" />
+      </svg>
+      <div className="text-left">
+        <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold leading-none">Download on the</div>
+        <div className="text-xs font-black leading-tight mt-0.5">App Store</div>
+      </div>
+    </div>
+  )
+}
+
 
 /* ── Custom High-Fidelity Transport Illustrations ── */
 function TruckGraphic({ className = "w-16 h-16" }) {
@@ -2608,34 +2645,55 @@ export function LandingPage() {
 
   return (
     <>
-      <div className="min-h-screen bg-[#F7FAF9] text-slate-800" style={{ animation: "fadeUp 0.4s ease both" }}>
+      <div className="min-h-screen bg-[#F8FAFC] text-slate-800 antialiased font-sans" style={{ animation: "fadeUp 0.4s ease both" }}>
         {/* ── Header ─────────────────────────────────────────── */}
-        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
-          <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-6">
-            <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => navigate(routes.landing)}>
-              <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white">
-                <Home className="w-5 h-5" strokeWidth={2.5} />
-              </div>
-              <span className="text-lg font-extrabold tracking-tight text-slate-900">Sevo</span>
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-xs">
+          <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between gap-6">
+            {/* Left: Official SEVO Brand Logo with Proportional Alignment */}
+            <div className="flex items-center gap-2 select-none cursor-pointer shrink-0 group" onClick={() => navigate(routes.landing)}>
+              <img
+                src="/assets/sevo_emblem_transparent.png"
+                alt="SEVO Emblem"
+                className="h-9 w-auto shrink-0 object-contain group-hover:scale-105 transition-transform"
+                style={{ height: '36px', width: 'auto' }}
+              />
+              <img
+                src="/assets/sevo_text_logo.png"
+                alt="SEVO"
+                className="shrink-0 object-contain"
+                style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
+              />
             </div>
 
-            <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600">
-              <a href="#home" className="text-teal-600 font-semibold">Home</a>
-              <a href="#categories" className="hover:text-slate-900 transition-colors">Services</a>
-              <a href="#how-it-works" className="hover:text-slate-900 transition-colors">How It Works</a>
-              <a href="#professionals" className="hover:text-slate-900 transition-colors">Professionals</a>
-              <a href="#about" className="hover:text-slate-900 transition-colors">About Us</a>
+            {/* Center: Horizontal Navigation Links */}
+            <nav className="hidden lg:flex items-center gap-8 text-sm font-semibold text-slate-600">
+              <a href="#home" className="text-[#0057D9] font-bold relative py-1 after:absolute after:-bottom-2.5 after:left-0 after:right-0 after:h-0.5 after:bg-[#0057D9] after:rounded-full">
+                Home
+              </a>
+              <a href="#categories" className="hover:text-slate-900 transition-colors py-1">
+                Services
+              </a>
+              <a href="#why-choose-us" className="hover:text-slate-900 transition-colors py-1">
+                How It Works
+              </a>
+              <a href="#professionals" className="hover:text-slate-900 transition-colors py-1">
+                Professionals
+              </a>
+              <a href="#about-us" className="hover:text-slate-900 transition-colors py-1">
+                About Us
+              </a>
             </nav>
 
-            <div className="flex items-center gap-8">
+            {/* Right: Location Pill, Notifications & User Profile */}
+            <div className="flex items-center gap-3.5 sm:gap-4">
               {/* Location Selector Pill */}
               <button
                 type="button"
                 onClick={() => setShowLocationPickerModal(true)}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-white text-slate-800 text-xs font-bold transition-all cursor-pointer shadow-2xs max-w-[200px] sm:max-w-[280px] truncate"
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-200 hover:border-blue-300 bg-slate-50/90 hover:bg-blue-50/50 text-slate-800 text-xs font-bold transition-all cursor-pointer shadow-2xs max-w-[180px] sm:max-w-[240px] truncate"
                 title="Select Location"
               >
-                <MapPin className="w-4 h-4 shrink-0 text-indigo-600" />
+                <MapPin className="w-3.5 h-3.5 shrink-0 text-[#0057D9]" />
                 <span className="truncate">
                   {(() => {
                     if (activeLocationLabel) return activeLocationLabel
@@ -2645,75 +2703,68 @@ export function LandingPage() {
                       if (locObj.label) return locObj.label
                     }
                     if (user?.address) return user.address
-                    return "Select Location"
+                    return "Coimbatore, Tamil Nadu"
                   })()}
                 </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-auto" />
+                <ChevronDown className="w-3 h-3 text-slate-400 shrink-0 ml-auto" />
               </button>
 
-              {/* Cart Icon with Numeric Badge (UC Style) */}
+              {/* Notification Bell with red 1 badge */}
+              <button
+                type="button"
+                className="relative p-2 rounded-full hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                title="Notifications"
+                onClick={() => {
+                  if (user) {
+                    setActiveAccountTab("My Bookings")
+                    setShowAccountPortal(true)
+                  } else {
+                    goToLogin()
+                  }
+                }}
+              >
+                <Bell className="w-4.5 h-4.5 text-slate-700" />
+                <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                  1
+                </span>
+              </button>
+
+              {/* Cart Icon with Numeric Badge if active */}
               {modalCart && modalCart.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setShowCartDrawer(true)}
-                  className="relative p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 text-slate-700 hover:text-emerald-700 transition-all cursor-pointer shrink-0"
+                  className="relative p-2 rounded-full border border-blue-200 bg-blue-50 text-[#0057D9] hover:bg-blue-100 transition-all cursor-pointer shrink-0"
                   title="View Cart"
                 >
-                  <ShoppingCart size={18} />
-                  <span className="absolute -top-1.5 -right-1.5 bg-emerald-600 text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                  <ShoppingCart size={17} />
+                  <span className="absolute -top-1 -right-1 bg-[#16A34A] text-white font-black text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
                     {modalCart.reduce((sum, i) => sum + i.quantity, 0)}
                   </span>
                 </button>
               )}
 
-              {/* User Profile / Login (Urban Company Style) */}
-              {user ? (
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveAccountTab("My Profile")
-                      setShowAccountPortal(true)
-                    }}
-                    className="flex items-center gap-2.5 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
-                  >
-                    <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
-                      <User className="w-4 h-4 stroke-[1.75]" />
-                    </div>
-                    <span className="font-semibold text-slate-800">
-                      Hi, {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"} 👋
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={goToLogin}
-                    className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
-                  >
-                    <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
-                      <User className="w-4 h-4 stroke-[1.75]" />
-                    </div>
-                    <span className="font-semibold text-slate-800">Login / Sign Up</span>
-                    <ChevronDown className="w-4 h-4 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
-                  </button>
-                </div>
-              )}
-
-              {/* Vendor Platform Link */}
-              <a
-                href={import.meta.env.VITE_VENDOR_PLATFORM_URL || "http://localhost:5176/"}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+              {/* User Profile Avatar with Name */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (user) {
+                    setActiveAccountTab("My Profile")
+                    setShowAccountPortal(true)
+                  } else {
+                    goToLogin()
+                  }
+                }}
+                className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full hover:bg-slate-100 text-slate-800 transition-colors cursor-pointer group"
               >
-                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
-                  <Building2 className="w-4 h-4 stroke-[1.75]" />
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs overflow-hidden border border-slate-200">
+                  {(user?.full_name || user?.fullName || user?.first_name || "K").charAt(0).toUpperCase()}
                 </div>
-                <span className="font-semibold text-slate-800">Vendor Platform</span>
-              </a>
+                <span className="font-bold text-xs text-slate-800 max-w-[100px] truncate hidden sm:inline-block">
+                  {user?.full_name || user?.fullName || user?.first_name || "Karthik S"}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-colors shrink-0" />
+              </button>
             </div>
           </div>
         </header>
@@ -2747,25 +2798,33 @@ export function LandingPage() {
         )}
 
         {/* ── Hero ───────────────────────────────────────────── */}
-        <section id="home" className="max-w-7xl mx-auto px-6 pt-14 pb-16 grid lg:grid-cols-2 gap-12 items-center">
-          <div>
-            <p className="text-sm font-medium text-teal-600 mb-4">
-              {homeConfig.hero?.badge || "Reliable. Affordable. Right at Your Doorstep."}
-            </p>
-            <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight text-slate-900 mb-5">
-              {homeConfig.hero?.mainHeadingFirst || "Professional"}<br />
-              <span className="text-teal-600">{homeConfig.hero?.mainHeadingHighlight || "Services"}</span><br />
-              {homeConfig.hero?.mainHeadingLast || "Made Simple"}
+        <section id="home" className="max-w-7xl mx-auto px-6 pt-10 sm:pt-14 pb-12 sm:pb-16 grid lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+          {/* Left Column: Headline, Search & Trust Badges */}
+          <div className="lg:col-span-6 xl:col-span-6 space-y-6">
+            {/* Small Trust Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-xs font-bold shadow-2xs">
+              <ShieldCheck className="w-4 h-4 text-[#16A34A]" />
+              <span>Trusted Professionals</span>
+            </div>
+
+            {/* Main Headline */}
+            <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-black leading-[1.12] tracking-tight text-[#0F172A]">
+              Reliable Home<br />
+              <span className="text-[#0057D9]">Services,</span><br />
+              <span className="text-[#16A34A]">Right on Time</span>
             </h1>
-            <p className="text-slate-500 text-base mb-8 max-w-md">
-              {homeConfig.hero?.subtitle || "Quick booking. Quality work. Guaranteed satisfaction."}
+
+            {/* Supporting Subtitle */}
+            <p className="text-slate-500 text-sm sm:text-base leading-relaxed max-w-lg">
+              Book trusted experts for AC, Plumbing, Electrical, Cleaning and more — all in one place.
             </p>
 
-            <div ref={searchContainerRef} className="relative w-full max-w-xl mb-6 z-30">
+            {/* Search / Booking Control Bar */}
+            <div ref={searchContainerRef} className="relative w-full max-w-xl z-30">
               <form
                 onSubmit={(e) => { e.preventDefault(); goToBooking() }}
-                className={`flex items-center bg-white rounded-2xl border transition-all duration-200 p-1.5 shadow-sm ${
-                  isSearchOpen ? "border-teal-500 ring-4 ring-teal-500/10 shadow-md" : "border-slate-200 hover:border-slate-300"
+                className={`flex items-center bg-white rounded-2xl border transition-all duration-200 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.06)] ${
+                  isSearchOpen ? "border-[#0057D9] ring-4 ring-blue-500/10" : "border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <div className="pl-3 pr-1 text-slate-400">
@@ -2792,8 +2851,8 @@ export function LandingPage() {
                   </button>
                 )}
                 <LocationDropdown
-                  className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3"
-                  activeCity={activeLocationLabel ? (activeLocationLabel.includes("Hosur") ? "Hosur" : activeLocationLabel.split(",")[0]) : "Hosur"}
+                  className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3 text-xs font-bold text-slate-700"
+                  activeCity={activeLocationLabel ? (activeLocationLabel.includes("Hosur") ? "Hosur" : activeLocationLabel.split(",")[0]) : "Coimbatore"}
                   onCityChange={(newCity) => {
                     setActiveLocationLabel(newCity)
                     localStorage.setItem("calservice_user_location", newCity)
@@ -2802,7 +2861,7 @@ export function LandingPage() {
                 <button
                   type="submit"
                   aria-label="Search services"
-                  className="ml-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl w-11 h-11 flex items-center justify-center shrink-0 transition-colors cursor-pointer shadow-sm hover:shadow active:scale-95"
+                  className="ml-1 bg-[#0057D9] hover:bg-blue-700 text-white rounded-xl w-11 h-11 flex items-center justify-center shrink-0 transition-colors cursor-pointer shadow-md hover:shadow-lg active:scale-95"
                 >
                   <Search className="w-4.5 h-4.5" />
                 </button>
@@ -2820,7 +2879,7 @@ export function LandingPage() {
                   >
                     <div className="p-2.5 bg-slate-50/80 flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
                       <span>{query.trim() ? `Matching Services (${filteredSearchResults.length})` : "Popular & Trending Services"}</span>
-                      <span className="text-[10px] text-teal-600 font-semibold lowercase">Instant Booking</span>
+                      <span className="text-[10px] text-[#0057D9] font-semibold lowercase">Instant Booking</span>
                     </div>
 
                     {filteredSearchResults.length > 0 ? (
@@ -2830,10 +2889,10 @@ export function LandingPage() {
                             key={item.id}
                             type="button"
                             onClick={() => handleExecuteSearch(item)}
-                            className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-teal-50/60 transition-colors text-left group cursor-pointer"
+                            className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50/60 transition-colors text-left group cursor-pointer"
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-teal-100 flex items-center justify-center text-slate-600 group-hover:text-teal-700 shrink-0 transition-colors">
+                              <div className="w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center text-slate-600 group-hover:text-[#0057D9] shrink-0 transition-colors">
                                 {item.category === "Home Cleaning" && <Home className="w-4 h-4" />}
                                 {item.category === "Pest Control" && <SprayCan className="w-4 h-4" />}
                                 {item.category === "AC & Appliances" && <AirVent className="w-4 h-4" />}
@@ -2844,7 +2903,7 @@ export function LandingPage() {
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-slate-800 group-hover:text-teal-900 truncate">
+                                  <span className="text-sm font-bold text-slate-800 group-hover:text-[#0057D9] truncate">
                                     {item.title}
                                   </span>
                                   {item.badge && (
@@ -2858,7 +2917,7 @@ export function LandingPage() {
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center text-teal-600 font-bold text-xs shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-2">
+                            <div className="flex items-center text-[#0057D9] font-bold text-xs shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity pl-2">
                               <span>Book</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </div>
@@ -2875,7 +2934,7 @@ export function LandingPage() {
                             setIsSearchOpen(false)
                             setIsHomeServicesCombinedModalOpen(true)
                           }}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0057D9] hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
                         >
                           <span>Explore All Services</span>
                           <ArrowRight className="w-3.5 h-3.5" />
@@ -2887,270 +2946,522 @@ export function LandingPage() {
               </AnimatePresence>
             </div>
 
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs font-medium text-slate-500">
-              {(homeConfig.hero?.quickBadges || []).map((badge, idx) => (
-                <span key={badge.id || idx} className="inline-flex items-center gap-1.5">
-                  {idx === 0 && <ShieldCheck className="w-4 h-4 text-teal-600" />}
-                  {idx === 1 && <Star className="w-4 h-4 text-amber-500" />}
-                  {idx === 2 && <Award className="w-4 h-4 text-rose-500" />}
-                  {idx === 3 && <Clock className="w-4 h-4 text-violet-500" />}
-                  {badge.text}
-                </span>
-              ))}
+            {/* 4 Trust & Guarantee Badges with Outlined Icons */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div className="flex flex-col items-start gap-1">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4.5 h-4.5 text-[#0057D9]" strokeWidth={2} />
+                  <span className="text-xs font-black text-slate-900">Verified Pros</span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-medium">Background Checked</span>
+              </div>
+              <div className="flex flex-col items-start gap-1">
+                <div className="flex items-center gap-1.5">
+                  <Star className="w-4.5 h-4.5 text-amber-500" strokeWidth={2} />
+                  <span className="text-xs font-black text-slate-900">4.8+ Rated</span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-medium">Top Rated Experts</span>
+              </div>
+              <div className="flex flex-col items-start gap-1">
+                <div className="flex items-center gap-1.5">
+                  <UserCheck className="w-4.5 h-4.5 text-[#16A34A]" strokeWidth={2} />
+                  <span className="text-xs font-black text-slate-900">10K+ Happy Homes</span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-medium">Happy Customers</span>
+              </div>
+              <div className="flex flex-col items-start gap-1">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-4.5 h-4.5 text-[#0057D9]" strokeWidth={2} />
+                  <span className="text-xs font-black text-slate-900">30 Day Guarantee</span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-medium">Service Assurance</span>
+              </div>
             </div>
           </div>
 
-          {/* Real photo collage - 4K Crisp Organic Layered Layout */}
-          <div className="relative h-[430px] hidden sm:block">
-            {/* Card 1: Top-Left (Hero Showcase) */}
-            <div className="absolute top-0 left-0 w-[60%] h-[61%] rounded-3xl overflow-hidden shadow-[0_10px_25px_rgba(15,23,42,0.12)] border-[3.5px] border-white ring-1 ring-slate-900/10 bg-white z-10 hover:z-30 hover:scale-[1.02] transition-all duration-300">
-              <img
-                src={resolveDisplayImageUrl(homeConfig.hero?.collageImages_url?.[0] || homeConfig.hero?.collageImages?.[0], "/mockups/service_hvac.png")}
-                onError={(e) => { e.currentTarget.src = "/mockups/service_hvac.png" }}
-                alt="Service photo 1"
-                className="w-full h-full object-cover object-left-top"
-                style={{ imageRendering: "-webkit-optimize-contrast" }}
-              />
-            </div>
-
-            {/* Card 3: Top-Right (Transport & Logistics) */}
-            <div className="absolute top-[4%] right-0 w-[47%] h-[49%] rounded-3xl overflow-hidden shadow-[0_10px_25px_rgba(15,23,42,0.12)] border-[3.5px] border-white ring-1 ring-slate-900/10 bg-white z-10 hover:z-30 hover:scale-[1.02] transition-all duration-300">
-              <img
-                src={resolveDisplayImageUrl(homeConfig.hero?.collageImages_url?.[2] || homeConfig.hero?.collageImages?.[2], "/mockups/service_cleaning.png")}
-                onError={(e) => { e.currentTarget.src = "/mockups/service_cleaning.png" }}
-                alt="Service photo 3"
-                className="w-full h-full object-cover object-center"
-                style={{ imageRendering: "-webkit-optimize-contrast" }}
-              />
-            </div>
-
-            {/* Card 2: Bottom-Left (Home Appliance Repair) */}
-            <div className="absolute bottom-0 left-[5%] w-[51%] h-[46%] rounded-3xl overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.16)] border-[3.5px] border-white ring-1 ring-slate-900/10 bg-white z-20 hover:z-30 hover:scale-[1.02] transition-all duration-300">
-              <img
-                src={resolveDisplayImageUrl(homeConfig.hero?.collageImages_url?.[1] || homeConfig.hero?.collageImages?.[1], "/mockups/service_electrical.png")}
-                onError={(e) => { e.currentTarget.src = "/mockups/service_electrical.png" }}
-                alt="Service photo 2"
-                className="w-full h-full object-cover object-center"
-                style={{ imageRendering: "-webkit-optimize-contrast" }}
-              />
-            </div>
-
-            {/* Card 4: Bottom-Right (Plumbing & Electrical) */}
-            <div className="absolute bottom-[2%] right-[1%] w-[45%] h-[45%] rounded-3xl overflow-hidden shadow-[0_12px_28px_rgba(15,23,42,0.16)] border-[3.5px] border-white ring-1 ring-slate-900/10 bg-white z-20 hover:z-30 hover:scale-[1.02] transition-all duration-300">
-              <img
-                src={resolveDisplayImageUrl(homeConfig.hero?.collageImages_url?.[3] || homeConfig.hero?.collageImages?.[3], "/mockups/service_plumbing.png")}
-                onError={(e) => { e.currentTarget.src = "/mockups/service_plumbing.png" }}
-                alt="Service photo 4"
-                className="w-full h-full object-cover object-center"
-                style={{ imageRendering: "-webkit-optimize-contrast" }}
-              />
-            </div>
+          {/* Right Column: HeroServiceVisualization (Real DOM / React Components) */}
+          <div className="lg:col-span-6 xl:col-span-6 flex items-center justify-center">
+            <HeroServiceVisualization
+              onSelectService={(serviceId, action) => {
+                if (action === "ac_modal") {
+                  setIsAcModalOpen(true)
+                } else if (action === "plumbing_flow") {
+                  navigate("?category=electrical&subtab=Plumbing")
+                } else if (action === "electrical_flow") {
+                  navigate("?category=electrical&subtab=Electrical")
+                } else if (action === "cleaning_flow") {
+                  navigate("?category=cleaning")
+                } else if (action === "scroll") {
+                  const el = document.getElementById("why-choose-us")
+                  if (el) el.scrollIntoView({ behavior: "smooth" })
+                }
+              }}
+            />
           </div>
         </section>
 
         {/* ── Browse by Category ─────────────────────────────── */}
-        <section id="categories" className="max-w-7xl mx-auto px-6 py-10">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-900">Browse by Category</h2>
+        <section id="categories" className="max-w-7xl mx-auto px-6 py-10 space-y-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-black tracking-tight text-[#0F172A]">Browse by Category</h2>
+            <button
+              type="button"
+              onClick={() => setIsHomeServicesCombinedModalOpen(true)}
+              className="text-sm font-bold text-[#0057D9] hover:text-blue-800 flex items-center gap-1.5 transition-colors cursor-pointer group"
+            >
+              <span>View All Categories</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </button>
           </div>
 
-          {/* Dynamic Category Cards - One Single Line on Desktop */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5 w-full">
-            {(homeConfig.categories || []).filter(c => c.enabled !== false && c.is_enabled !== false).map((cat, idx) => {
-              const defaultCatImgs = [
-                "/mockups/category_for_you.png",
-                "/mockups/category_food_health.png",
-                "/mockups/category_home_transport.png",
-                "/mockups/service_transport.jpg"
-              ]
-              const fallbackCatImg = defaultCatImgs[idx % defaultCatImgs.length]
-              const displayImg = resolveDisplayImageUrl(cat.image_url || cat.image, fallbackCatImg)
-              return (
-                <button
-                  key={cat.id || idx}
-                  type="button"
-                  onClick={() => {
-                    const titleLower = (cat.title || "").toLowerCase()
-                    if (cat.id === "cat-1" || titleLower.includes("for you") || idx === 0) {
-                      setIsForYouModalOpen(true)
-                    } else if (cat.id === "cat-2" || titleLower.includes("food") || titleLower.includes("health") || titleLower.includes("grocer") || idx === 1) {
-                      setSelectedFoodSubModuleId(null)
-                      setIsFoodHealthModalOpen(true)
-                    } else if (cat.id === "cat-4" || titleLower.includes("transport") || titleLower.includes("truck") || titleLower.includes("goods") || titleLower.includes("mover") || idx === 3) {
-                      setIsGoodsModalOpen(true)
-                    } else {
-                      setIsHomeServicesCombinedModalOpen(true)
-                    }
-                  }}
-                  className="group flex flex-col bg-white rounded-2xl border border-slate-200 hover:border-emerald-500 overflow-hidden text-center hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer shadow-xs"
-                >
-                  <div className="h-32 sm:h-36 w-full overflow-hidden bg-slate-100 relative flex items-center justify-center">
-                    <img
-                      src={displayImg}
-                      onError={(e) => { e.currentTarget.src = fallbackCatImg }}
-                      alt={cat.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    {cat.badge && (
-                      <span className="absolute top-2.5 left-2.5 bg-emerald-600/95 backdrop-blur-xs text-white text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-xs">
-                        {cat.badge}
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-3.5 sm:p-4 flex flex-col justify-center flex-1">
-                    <span className="text-sm sm:text-base font-bold text-slate-800 group-hover:text-emerald-700 transition-colors block truncate">
-                      {cat.title}
-                    </span>
-                    <span className="text-xs text-slate-500 font-medium mt-1 block truncate">
-                      {cat.subtitle}
-                    </span>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* ── Vendor Hire Banner ─────────────────────────────── */}
-        {homeConfig.vendorBanner?.enabled !== false && (() => {
-          const vb = homeConfig.vendorBanner || {}
-          const features = vb.features && vb.features.length > 0
-            ? vb.features
-            : [
-                { id: "vf-1", icon: "📅", label: "Flexible Timings" },
-                { id: "vf-2", icon: "💼", label: "Stable Work" },
-                { id: "vf-3", icon: "🤝", label: "Team Support" },
-              ]
-          const benefits = vb.benefits && vb.benefits.length > 0
-            ? vb.benefits
-            : [
-                { id: "vb-1", icon: "✅", text: "Verified & trusted customers" },
-                { id: "vb-2", icon: "🕐", text: "On-time service & support" },
-                { id: "vb-3", icon: "📍", text: "Work close to your area" },
-                { id: "vb-4", icon: "🌟", text: "Recognition for quality work" },
-              ]
-          return (
-            <section className="max-w-7xl mx-auto px-6 py-8">
+          {/* Row 1: 4 Large Discovery Category Cards with Exact 3D Models */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 w-full">
+            {[
+              {
+                id: "for_you",
+                title: "For You",
+                subtitle: "Curated services &\nrecommendations",
+                image: "/mockups/category_for_you_3d.jpg",
+                onClick: () => setIsForYouModalOpen(true)
+              },
+              {
+                id: "food_health",
+                title: "Food & Health",
+                subtitle: "Groceries &\nfresh vegetables",
+                image: "/mockups/category_food_health_3d.jpg",
+                onClick: () => {
+                  setSelectedFoodSubModuleId(null)
+                  setIsFoodHealthModalOpen(true)
+                }
+              },
+              {
+                id: "home_services",
+                title: "Home & Repair Services",
+                subtitle: "Cleaning, repairs,\npainting & masonry",
+                image: "/mockups/category_home_repair_3d.jpg",
+                onClick: () => setIsHomeServicesCombinedModalOpen(true)
+              },
+              {
+                id: "goods_transport",
+                title: "Goods & Transport",
+                subtitle: "Mini trucks, 2-wheelers\n& logistics",
+                image: "/mockups/category_goods_transport_3d.jpg",
+                onClick: () => setIsGoodsModalOpen(true)
+              }
+            ].map((cat) => (
               <div
-                style={{
-                  background: "linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #134e4a 100%)",
-                  borderRadius: "24px",
-                  overflow: "hidden",
-                  position: "relative",
-                  boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
-                }}
+                key={cat.id}
+                onClick={cat.onClick}
+                className="group relative flex flex-col bg-[#F0F4F8] rounded-[24px] overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
               >
-                {/* Decorative blobs */}
-                <div style={{ position: "absolute", top: "-60px", right: "-60px", width: "260px", height: "260px", borderRadius: "50%", background: "rgba(20,184,166,0.10)", pointerEvents: "none" }} />
-                <div style={{ position: "absolute", bottom: "-40px", left: "30%", width: "180px", height: "180px", borderRadius: "50%", background: "rgba(16,185,129,0.07)", pointerEvents: "none" }} />
-
-                <div style={{ display: "flex", flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", minHeight: "260px", position: "relative", zIndex: 1 }}>
-                  {/* Left Content */}
-                  <div style={{ flex: "1 1 320px", padding: "36px 32px 32px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    {/* Badge */}
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: "7px", background: "rgba(20,184,166,0.15)", border: "1px solid rgba(20,184,166,0.30)", borderRadius: "999px", padding: "5px 14px", marginBottom: "16px", width: "fit-content" }}>
-                      <span style={{ fontSize: "0.9rem" }}>{vb.badgeIcon || "🤝"}</span>
-                      <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#5eead4", letterSpacing: "0.03em" }}>
-                        {vb.badgeText || "We're Looking for Professionals"}
-                      </span>
-                    </div>
-
-                    {/* Title */}
-                    <h2 style={{ fontSize: "clamp(1.45rem, 4vw, 2.1rem)", fontWeight: 900, color: "#f8fafc", lineHeight: 1.18, margin: "0 0 12px" }}>
-                      {vb.titlePrefix || "We Hire"}{" "}
-                      <span style={{ color: "#2dd4bf" }}>{vb.titleHighlight || "Technicians, Employees"}</span>
-                      {vb.titleSuffix ? ` ${vb.titleSuffix}` : " & Vendors"}
-                    </h2>
-
-                    {/* Subtitle */}
-                    <p style={{ fontSize: "0.88rem", color: "#94a3b8", lineHeight: 1.6, marginBottom: "24px", maxWidth: "400px" }}>
-                      {vb.subtitle || "Join our team of skilled professionals and be part of a growing service community that works with trust and quality."}
+                <div className="h-44 w-full overflow-hidden bg-slate-100 relative">
+                  <img
+                    src={cat.image}
+                    onError={(e) => { e.currentTarget.src = "/mockups/occupied_apartment_diamond.png" }}
+                    alt={cat.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                </div>
+                <div className="p-4 sm:p-5 flex items-center justify-between gap-3 bg-[#F0F4F8]">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-black text-[#0F172A] group-hover:text-[#0057D9] transition-colors truncate">
+                      {cat.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5 whitespace-pre-line leading-tight">
+                      {cat.subtitle}
                     </p>
-
-                    {/* Feature highlights */}
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "28px" }}>
-                      {features.map((f, i) => (
-                        <div key={f.id || i} style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "10px", padding: "6px 13px" }}>
-                          <span style={{ fontSize: "0.95rem" }}>{f.icon}</span>
-                          <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#e2e8f0" }}>{f.label}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* CTA Buttons */}
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
-                      <a
-                        href={vb.ctaUrl || "https://calservices-vendor.vercel.app"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: "8px",
-                          background: "linear-gradient(135deg, #14b8a6, #0d9488)",
-                          color: "#fff", fontWeight: 800, fontSize: "0.88rem",
-                          padding: "12px 24px", borderRadius: "14px",
-                          boxShadow: "0 4px 20px rgba(20,184,166,0.35)",
-                          textDecoration: "none", transition: "transform 0.15s, box-shadow 0.15s",
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(20,184,166,0.45)" }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 4px 20px rgba(20,184,166,0.35)" }}
-                      >
-                        {vb.ctaText || "Join as a Professional"} →
-                      </a>
-                      {(vb.learnMoreText || vb.learnMoreUrl) && (
-                        <a
-                          href={vb.learnMoreUrl || "#"}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ fontSize: "0.83rem", fontWeight: 700, color: "#94a3b8", textDecoration: "underline", textUnderlineOffset: "3px" }}
-                        >
-                          {vb.learnMoreText || "Learn more"}
-                        </a>
-                      )}
-                    </div>
                   </div>
-
-                  {/* Right Content — Image + Benefits */}
-                  <div style={{ flex: "0 1 420px", display: "flex", flexDirection: "row", alignItems: "stretch", overflow: "hidden" }}>
-                    {/* Technician image — clearly visible, not cropped */}
-                    {vb.image && (
-                      <div style={{ flex: "0 0 220px", position: "relative", overflow: "hidden", alignSelf: "stretch" }}>
-                        <img
-                          src={vb.image}
-                          alt="Service Professional"
-                          style={{
-                            position: "absolute",
-                            bottom: 0,
-                            left: "50%",
-                            transform: "translateX(-50%)",
-                            height: "100%",
-                            width: "auto",
-                            maxWidth: "none",
-                            objectFit: "contain",
-                            objectPosition: "bottom center",
-                            opacity: 1,
-                            pointerEvents: "none",
-                            display: "block",
-                          }}
-                        />
-                        {/* Subtle left-edge fade to blend into banner */}
-                        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, #1e293b 0%, transparent 30%)", pointerEvents: "none" }} />
-                      </div>
-                    )}
-                    {/* Benefits list — always fully visible */}
-                    <div style={{ flex: 1, padding: "28px 24px 28px 16px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "12px", minWidth: "155px" }}>
-                      {benefits.map((b, i) => (
-                        <div key={b.id || i} style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
-                          <span style={{ fontSize: "1rem", lineHeight: 1.4, flexShrink: 0 }}>{b.icon}</span>
-                          <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#e2e8f0", lineHeight: 1.4 }}>{b.text}</span>
-                        </div>
-                      ))}
-                    </div>
+                  <div className="w-8 h-8 rounded-full bg-white shadow-xs group-hover:bg-[#0057D9] text-slate-700 group-hover:text-white flex items-center justify-center shrink-0 border border-slate-200/50 group-hover:border-[#0057D9] transition-colors">
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 </div>
               </div>
-            </section>
-          )
-        })()}
+            ))}
+          </div>
+
+          {/* Row 2: 6 Compact Quick-Action 3D Icon Cards Matching Screenshot */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4 pt-2">
+            {[
+              {
+                name: "AC Service",
+                desc: "Installation,\nRepair &\nMaintenance",
+                image: "/mockups/icon_3d_ac.jpg",
+                onClick: () => setIsAcModalOpen(true)
+              },
+              {
+                name: "Plumbing",
+                desc: "Leakage, Repair\n& Installation",
+                image: "/mockups/icon_3d_tap.jpg",
+                onClick: () => navigate("?category=electrical&subtab=Plumbing")
+              },
+              {
+                name: "Electrical",
+                desc: "Wiring, Repair\n& Installation",
+                image: "/mockups/icon_3d_lightning.jpg",
+                onClick: () => navigate("?category=electrical&subtab=Electrical")
+              },
+              {
+                name: "Cleaning",
+                desc: "Home, Office\n& Deep Cleaning",
+                image: "/mockups/icon_3d_vacuum.jpg",
+                onClick: () => navigate("?category=cleaning")
+              },
+              {
+                name: "Appliances",
+                desc: "Washing Machine,\nFridge & More",
+                image: "/mockups/icon_3d_washing_machine.jpg",
+                onClick: () => navigate("?category=hvac&subtab=Appliance%20Repair")
+              },
+              {
+                name: "More Services",
+                desc: "Explore 100+\nServices",
+                image: "/mockups/icon_3d_more_grid.jpg",
+                onClick: () => setIsHomeServicesCombinedModalOpen(true)
+              }
+            ].map((srv, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={srv.onClick}
+                className="group flex flex-col items-center text-center p-4 rounded-2xl bg-white border border-slate-100 hover:border-blue-400 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+              >
+                <div className="w-16 h-16 mb-2 group-hover:scale-105 transition-transform flex items-center justify-center">
+                  <img
+                    src={srv.image}
+                    onError={(e) => { e.currentTarget.src = "/mockups/occupied_apartment_diamond.png" }}
+                    alt={srv.name}
+                    className="w-full h-full object-contain"
+                    loading="lazy"
+                  />
+                </div>
+                <span className="text-sm font-black text-[#0F172A] group-hover:text-[#0057D9] transition-colors leading-tight">
+                  {srv.name}
+                </span>
+                <span className="text-[11px] text-slate-400 font-medium mt-1 leading-snug whitespace-pre-line text-center">
+                  {srv.desc}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Personalized for You ─────────────────────────────── */}
+
+        {/* ── Why Choose Sevo? ───────────────────────────────── */}
+        <section id="why-choose-us" className="max-w-7xl mx-auto px-6 py-8 space-y-4">
+          <h2 className="text-2xl font-black tracking-tight text-[#0F172A]">Why Choose Sevo?</h2>
+
+          <div className="bg-white rounded-3xl border border-slate-100/90 shadow-[0_4px_25px_rgba(0,0,0,0.03)] p-6 sm:p-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 sm:gap-8">
+              {[
+                {
+                  icon: ShieldCheck,
+                  title: "Background Verified",
+                  desc: "Every professional is background verified",
+                },
+                {
+                  icon: IndianRupee,
+                  title: "Transparent Pricing",
+                  desc: "No hidden charges, pay what you see",
+                },
+                {
+                  icon: Clock,
+                  title: "On-time Service",
+                  desc: "We value your time and punctuality",
+                },
+                {
+                  icon: Award,
+                  title: "Quality Assured",
+                  desc: "High quality service you can trust",
+                },
+                {
+                  icon: Headphones,
+                  title: "24/7 Support",
+                  desc: "Our support team is always ready",
+                },
+                {
+                  icon: ThumbsUp,
+                  title: "100% Satisfaction",
+                  desc: "We ensure your complete satisfaction",
+                }
+              ].map((feat, idx) => (
+                <div
+                  key={idx}
+                  className="flex flex-col items-center text-center group"
+                >
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2.5 text-[#0057D9] group-hover:scale-110 transition-transform">
+                    <feat.icon className="w-8 h-8 stroke-[1.75]" />
+                  </div>
+                  <h4 className="text-xs sm:text-sm font-extrabold text-[#0F172A] leading-tight">
+                    {feat.title}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug max-w-[140px]">
+                    {feat.desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Book Services on the Go! & Trust Statistics ──────── */}
+        <section className="max-w-7xl mx-auto px-6 py-6">
+          <div className="bg-[#F3F7FD] rounded-3xl p-6 sm:p-10 border border-blue-100/70 shadow-xs grid lg:grid-cols-12 gap-8 items-center">
+            {/* Left Column: App Promo */}
+            <div className="lg:col-span-5 space-y-4">
+              <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-[#0057D9]">
+                Book Services on the Go!
+              </h3>
+              <p className="text-slate-600 text-sm leading-relaxed max-w-sm font-medium">
+                Download SEVO App and get the best service experience.
+              </p>
+              <div className="flex flex-wrap gap-3 pt-2">
+                <GooglePlayBtn />
+                <AppStoreBtn />
+              </div>
+            </div>
+
+            {/* Center Column: Phone Mockup matching screenshot */}
+            <div className="lg:col-span-3 flex justify-center">
+              <div className="w-[210px] h-[360px] rounded-[36px] bg-slate-900 p-2.5 shadow-2xl border-4 border-slate-800 ring-1 ring-slate-700/50 relative overflow-hidden">
+                {/* Notch / Dynamic Island */}
+                <div className="absolute top-3.5 left-1/2 -translate-x-1/2 w-14 h-2.5 bg-slate-900 rounded-full z-20"></div>
+
+                {/* Phone screen inner */}
+                <div className="w-full h-full bg-white rounded-[26px] overflow-hidden p-2.5 flex flex-col justify-between text-left">
+                  {/* Status bar */}
+                  <div className="flex items-center justify-between text-[8px] font-bold text-slate-800 px-1 pt-0.5">
+                    <span>12:01</span>
+                    <div className="flex items-center gap-1">
+                      <span className="w-2.5 h-1.5 bg-slate-800 rounded-xs"></span>
+                    </div>
+                  </div>
+
+                  {/* App header with SEVO logo & user icon */}
+                  <div className="mt-1 flex items-center justify-between px-0.5">
+                    <div className="flex items-center gap-1">
+                      <img src="/assets/sevo_emblem_transparent.png" alt="SEVO" className="h-4 w-auto object-contain" />
+                      <img src="/assets/sevo_text_logo.png" alt="SEVO" className="h-2 w-auto object-contain" />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Search className="w-3 h-3 text-slate-500" />
+                      <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center text-[7px] text-white font-bold">
+                        K
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* User greeting */}
+                  <div className="mt-0.5 px-0.5">
+                    <p className="text-[7.5px] font-bold text-slate-400">Good Morning</p>
+                    <p className="text-[9px] font-black text-slate-900 leading-tight">Karthik 👋</p>
+                    <div className="flex items-center gap-0.5 text-[7px] text-blue-600 font-semibold mt-0.5">
+                      <MapPin className="w-2.5 h-2.5 shrink-0" />
+                      <span className="truncate">Coimbatore, Tamil Nadu &gt;</span>
+                    </div>
+                  </div>
+
+                  {/* Book a Service section header */}
+                  <div className="mt-1 px-0.5">
+                    <span className="text-[8px] font-black text-slate-800">Book a Service</span>
+                  </div>
+
+                  {/* 8 Category Icons (2 rows of 4) */}
+                  <div className="grid grid-cols-4 gap-1.5 my-auto px-0.5">
+                    {[
+                      { l: "AC Service", icon: AirVent, color: "text-[#0057D9]" },
+                      { l: "Plumbing", icon: Wrench, color: "text-[#0057D9]" },
+                      { l: "Electrical", icon: Zap, color: "text-[#0057D9]" },
+                      { l: "Cleaning", icon: SprayCan, color: "text-[#0057D9]" },
+                      { l: "Appliance", icon: Boxes, color: "text-[#0057D9]" },
+                      { l: "Carpentry", icon: Hammer, color: "text-[#0057D9]" },
+                      { l: "Painting", icon: PaintRoller, color: "text-[#0057D9]" },
+                      { l: "More", icon: SlidersHorizontal, color: "text-[#0057D9]" },
+                    ].map((m, i) => (
+                      <div key={i} className="flex flex-col items-center text-center p-1 bg-slate-50 rounded-lg border border-slate-100">
+                        <m.icon className={`w-3.5 h-3.5 ${m.color}`} />
+                        <span className="text-[6.5px] text-slate-700 font-bold mt-0.5 leading-none truncate w-full">{m.l}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Mock CTA Button */}
+                  <div className="bg-[#0057D9] text-white text-[8px] font-bold py-1.5 rounded-lg text-center shadow-xs">
+                    Book a Service →
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: 2x2 Trust Statistics */}
+            <div className="lg:col-span-4 grid grid-cols-2 gap-3.5 sm:gap-4">
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-xs flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0057D9] flex items-center justify-center shrink-0">
+                  <Users className="w-5 h-5 stroke-[2]" />
+                </div>
+                <div>
+                  <span className="text-xl sm:text-2xl font-black text-[#0057D9] block leading-tight">10K+</span>
+                  <span className="text-xs text-slate-600 font-semibold block mt-0.5">Happy Customers</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-xs flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0057D9] flex items-center justify-center shrink-0">
+                  <Star className="w-5 h-5 fill-[#0057D9] text-[#0057D9]" />
+                </div>
+                <div>
+                  <span className="text-xl sm:text-2xl font-black text-[#0057D9] block leading-tight">4.8+</span>
+                  <span className="text-xs text-slate-600 font-semibold block mt-0.5">Customer Rating</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-xs flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0057D9] flex items-center justify-center shrink-0">
+                  <UserCheck className="w-5 h-5 stroke-[2]" />
+                </div>
+                <div>
+                  <span className="text-xl sm:text-2xl font-black text-[#0057D9] block leading-tight">500+</span>
+                  <span className="text-xs text-slate-600 font-semibold block mt-0.5">Expert Professionals</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-xs flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0057D9] flex items-center justify-center shrink-0">
+                  <Headphones className="w-5 h-5 stroke-[2]" />
+                </div>
+                <div>
+                  <span className="text-xl sm:text-2xl font-black text-[#0057D9] block leading-tight">24/7</span>
+                  <span className="text-xs text-slate-600 font-semibold block mt-0.5">Support Available</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Immediate Booking CTA Banner ───────────────────── */}
+        <section className="max-w-7xl mx-auto px-6 py-4">
+          <div className="bg-gradient-to-r from-[#0057D9] via-[#0284C7] to-[#16A34A] rounded-2xl sm:rounded-3xl p-5 sm:p-7 text-white shadow-xl shadow-blue-900/10 flex flex-col sm:flex-row items-center justify-between gap-5">
+            <div className="flex items-center gap-4 text-center sm:text-left">
+              <div className="w-12 h-12 rounded-full bg-white text-[#0057D9] flex items-center justify-center shrink-0 shadow-sm">
+                <CalendarDays className="w-6 h-6 stroke-[2.2]" />
+              </div>
+              <div>
+                <h3 className="text-xl sm:text-2xl font-black">Need Immediate Service?</h3>
+                <p className="text-blue-100 text-xs sm:text-sm mt-0.5 font-medium">Book now and get your problem solved quickly.</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsHomeServicesCombinedModalOpen(true)}
+              className="px-6 py-2.5 bg-white text-[#0057D9] hover:bg-blue-50 font-bold rounded-xl text-sm shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <span>Book Now</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </section>
+
+        {/* ── Footer (White Background + Deep Blue Bottom Bar) ──── */}
+        <footer className="bg-white text-slate-600 pt-12 border-t border-slate-200/80 mt-10">
+          <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 pb-10">
+            {/* Col 1: Brand Info & Socials */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 select-none shrink-0 cursor-pointer" onClick={() => navigate(routes.landing)}>
+                <img
+                  src="/assets/sevo_emblem_transparent.png"
+                  alt="SEVO Emblem"
+                  className="h-8 w-auto shrink-0 object-contain"
+                  style={{ height: '32px', width: 'auto' }}
+                />
+                <img
+                  src="/assets/sevo_text_logo.png"
+                  alt="SEVO"
+                  className="shrink-0 object-contain"
+                  style={{ height: '16px', width: 'auto', maxHeight: '16px' }}
+                />
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
+                SEVO is your trusted partner for all home services. We connect you with verified professionals for a hassle-free experience.
+              </p>
+              <div className="flex items-center gap-2.5 pt-1">
+                <a href="#" className="w-7 h-7 rounded-full bg-slate-100 hover:bg-blue-600 text-slate-600 hover:text-white flex items-center justify-center transition-colors">
+                  <FacebookMark className="w-3.5 h-3.5" />
+                </a>
+                <a href="#" className="w-7 h-7 rounded-full bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white flex items-center justify-center transition-colors">
+                  <InstagramMark className="w-3.5 h-3.5" />
+                </a>
+                <a href="#" className="w-7 h-7 rounded-full bg-slate-100 hover:bg-emerald-600 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                  <WhatsAppMark className="w-3.5 h-3.5" />
+                </a>
+                <a href="#" className="w-7 h-7 rounded-full bg-slate-100 hover:bg-red-600 text-slate-600 hover:text-white flex items-center justify-center transition-colors">
+                  <YoutubeMark className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+
+            {/* Col 2: Quick Links */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-slate-900">Quick Links</h4>
+              <ul className="space-y-2 text-xs text-slate-500">
+                <li><a href="#home" className="hover:text-[#0057D9] transition-colors">Home</a></li>
+                <li><a href="#about-us" className="hover:text-[#0057D9] transition-colors">About Us</a></li>
+                <li><a href="#why-choose-us" className="hover:text-[#0057D9] transition-colors">How It Works</a></li>
+                <li><a href="#categories" className="hover:text-[#0057D9] transition-colors">Services</a></li>
+                <li><a href="#contact-us" className="hover:text-[#0057D9] transition-colors">Contact Us</a></li>
+              </ul>
+            </div>
+
+            {/* Col 3: Services */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-slate-900">Services</h4>
+              <ul className="space-y-2 text-xs text-slate-500">
+                <li><button type="button" onClick={() => setIsAcModalOpen(true)} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">AC Service</button></li>
+                <li><button type="button" onClick={() => navigate("?category=electrical&subtab=Plumbing")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Plumbing</button></li>
+                <li><button type="button" onClick={() => navigate("?category=electrical&subtab=Electrical")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Electrical</button></li>
+                <li><button type="button" onClick={() => navigate("?category=cleaning")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Cleaning</button></li>
+                <li><button type="button" onClick={() => navigate("?category=hvac&subtab=Appliance%20Repair")} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">Appliance Repair</button></li>
+                <li><button type="button" onClick={() => setIsHomeServicesCombinedModalOpen(true)} className="hover:text-[#0057D9] transition-colors text-left cursor-pointer">More Services</button></li>
+              </ul>
+            </div>
+
+            {/* Col 4: Support */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-slate-900">Support</h4>
+              <ul className="space-y-2 text-xs text-slate-500">
+                <li><a href="/help" className="hover:text-[#0057D9] transition-colors">Help Center</a></li>
+                <li><a href="/terms" className="hover:text-[#0057D9] transition-colors">Terms &amp; Conditions</a></li>
+                <li><a href="/privacy" className="hover:text-[#0057D9] transition-colors">Privacy Policy</a></li>
+                <li><a href="/cancellation-refund" className="hover:text-[#0057D9] transition-colors">Refund Policy</a></li>
+                <li><a href="/sitemap" className="hover:text-[#0057D9] transition-colors">Sitemap</a></li>
+              </ul>
+            </div>
+
+            {/* Col 5: Contact Us */}
+            <div id="contact-us" className="space-y-3">
+              <h4 className="text-sm font-bold text-slate-900">Contact Us</h4>
+              <ul className="space-y-2.5 text-xs text-slate-600">
+                <li className="flex items-center gap-2">
+                  <Phone className="w-3.5 h-3.5 text-[#0057D9]" />
+                  <span className="font-semibold">+91 90909 90909</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Mail className="w-3.5 h-3.5 text-[#0057D9]" />
+                  <span className="font-semibold">support@sevo.com</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <MapPin className="w-3.5 h-3.5 text-[#0057D9] shrink-0 mt-0.5" />
+                  <span className="font-semibold">Coimbatore, Tamil Nadu, India</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Solid Deep Blue Bottom Copyright Strip matching screenshot */}
+          <div className="bg-[#0B3C95] text-white py-3.5 text-center text-xs font-semibold">
+            © 2025 SEVO. All Rights Reserved.
+          </div>
+        </footer>
 
         {/* ── 1. Home Services & Pest Control Modal Popup ── */}
         {isHomePestModalOpen &&
@@ -4640,186 +4951,6 @@ export function LandingPage() {
             document.body
           )}
 
-        {/* ── Trust strip ────────────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-6">
-          <div className="bg-slate-50 border border-slate-200 rounded-3xl grid sm:grid-cols-2 lg:grid-cols-5 gap-6 p-8">
-            {(homeConfig.trustBadges || []).filter(b => b.enabled !== false).map((badge, idx) => {
-              const iconColors = ["text-teal-600", "text-rose-500", "text-violet-600", "text-amber-500", "text-sky-500"]
-              return (
-                <div key={badge.id || idx} className="flex flex-col items-start gap-2">
-                  <ShieldCheck className={`w-6 h-6 ${iconColors[idx % iconColors.length]}`} strokeWidth={1.75} />
-                  <p className="text-sm font-bold text-slate-800 leading-snug">{badge.title}</p>
-                  <p className="text-xs text-slate-500 leading-relaxed">{badge.description}</p>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* ── Offers ─────────────────────────────────────────── */}
-        <section className="max-w-7xl mx-auto px-6 py-14 grid lg:grid-cols-[220px_1fr] gap-6 items-stretch">
-          <div className="bg-gradient-to-br from-teal-600 to-emerald-700 rounded-3xl p-6 flex flex-col justify-center">
-            <p className="text-lg font-extrabold text-white mb-1">{homeConfig.offers?.mainCard?.title || "Limited Time Offers!"}</p>
-            <p className="text-xs text-teal-100 mb-4">{homeConfig.offers?.mainCard?.subtitle || "Great deals on services you love."}</p>
-            <button onClick={goToBooking} className="bg-white text-teal-700 hover:bg-teal-50 text-xs font-bold px-4 py-2 rounded-full self-start transition-colors">
-              {homeConfig.offers?.mainCard?.buttonText || "Explore Offers"}
-            </button>
-          </div>
-          <div className="grid sm:grid-cols-3 gap-4">
-            {(homeConfig.offers?.items || []).filter(o => o.enabled !== false).map((offer, idx) => {
-              const bgStyles = [
-                "bg-amber-50 hover:bg-amber-100 text-amber-900",
-                "bg-rose-50 hover:bg-rose-100 text-rose-900",
-                "bg-violet-50 hover:bg-violet-100 text-violet-900"
-              ]
-              const tagColors = ["text-amber-600", "text-rose-600", "text-violet-600"]
-              const linkColors = ["text-amber-700", "text-rose-700", "text-violet-700"]
-              const currentBg = bgStyles[idx % bgStyles.length]
-              const currentTag = tagColors[idx % tagColors.length]
-              const currentLink = linkColors[idx % linkColors.length]
-              return (
-                <button
-                  key={offer.id || idx}
-                  onClick={goToBooking}
-                  className={`${currentBg} rounded-3xl p-6 text-left hover:shadow-md transition-all border border-slate-100`}
-                >
-                  <p className={`text-[11px] font-bold tracking-wide ${currentTag}`}>{offer.tag}</p>
-                  <p className="text-2xl font-extrabold text-slate-900 mb-1">{offer.discount}</p>
-                  <p className="text-sm text-slate-600 mb-4">{offer.title}</p>
-                  <span className={`text-xs font-semibold ${currentLink}`}>{offer.cta || "Book Now →"}</span>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* ── How It Works ───────────────────────────────────── */}
-        <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-10">
-          <h2 className="text-xl font-bold text-slate-900 text-center mb-10">{homeConfig.howItWorks?.heading || "How It Works"}</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-8">
-            {(homeConfig.howItWorks?.steps || []).map((step, i) => {
-              const stepColors = [
-                { bg: "bg-teal-50", icon: "text-teal-600", badge: "bg-teal-600" },
-                { bg: "bg-rose-50", icon: "text-rose-500", badge: "bg-rose-500" },
-                { bg: "bg-violet-50", icon: "text-violet-600", badge: "bg-violet-600" },
-                { bg: "bg-amber-50", icon: "text-amber-500", badge: "bg-amber-500" },
-                { bg: "bg-sky-50", icon: "text-sky-500", badge: "bg-sky-500" },
-              ]
-              const c = stepColors[i % stepColors.length]
-              return (
-                <div key={step.num || i} className="flex flex-col items-center text-center gap-3">
-                  <div className="relative">
-                    <div className={`w-16 h-16 rounded-full ${c.bg} flex items-center justify-center`}>
-                      <Repeat2 className={`w-7 h-7 ${c.icon}`} strokeWidth={1.75} />
-                    </div>
-                    <span className={`absolute -top-1 -left-1 w-5 h-5 rounded-full ${c.badge} text-white text-[10px] font-bold flex items-center justify-center`}>
-                      {step.num || i + 1}
-                    </span>
-                  </div>
-                  <p className="text-sm font-bold text-slate-800">{step.title}</p>
-                  <p className="text-xs text-slate-500 leading-relaxed">{step.description}</p>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* ── Stats ──────────────────────────────────────────── */}
-        <section className="bg-slate-800 py-10">
-          <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-5 gap-6 text-center text-white">
-            {(homeConfig.statsBar || []).map((s, idx) => (
-              <div key={s.id || idx}>
-                <p className="text-2xl font-extrabold text-amber-400">{s.number}</p>
-                <p className="text-xs text-slate-300 font-medium">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Featured Professionals ─────────────────────────── */}
-        <section id="professionals" className="max-w-7xl mx-auto px-6 py-14">
-          <h2 className="text-xl font-bold text-slate-900 text-center mb-2">{homeConfig.featuredPros?.title || "Featured Professionals"}</h2>
-          <p className="text-sm text-slate-500 text-center mb-10">{homeConfig.featuredPros?.subtitle || "Top-rated experts ready to help"}</p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-            {(homeConfig.featuredPros?.pros || []).map((p, idx) => (
-              <div key={p.id || idx} className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
-                <img
-                  src={p.image_url || p.image || "/assets/generic_avatar_placeholder.svg"}
-                  onError={(e) => { e.currentTarget.src = "/assets/generic_avatar_placeholder.svg" }}
-                  alt={p.name}
-                  className="w-full h-36 object-cover"
-                />
-                <div className="p-4">
-                  <p className="text-sm font-bold text-slate-800">{p.name}</p>
-                  <p className="text-xs text-slate-500 mb-2">{p.title}</p>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="inline-flex items-center gap-1 font-semibold text-amber-500">
-                      <Star className="w-3.5 h-3.5 fill-current" /> {p.rating}
-                    </span>
-                    <span className="text-slate-400 font-medium">{p.jobs} jobs</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Testimonials ───────────────────────────────────── */}
-        {(() => {
-          const testimonialList = (homeConfig.testimonials?.reviews && homeConfig.testimonials.reviews.length > 0)
-            ? homeConfig.testimonials.reviews
-            : TESTIMONIALS;
-          const listLength = testimonialList.length || 1;
-
-          return (
-            <section className="max-w-7xl mx-auto px-6 py-14 bg-slate-50 rounded-3xl">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-bold text-slate-900 mx-auto sm:mx-0">{homeConfig.testimonials?.title || "What Our Customers Say"}</h2>
-                <a href="#" className="hidden sm:inline text-sm font-semibold text-teal-600 hover:text-teal-700 whitespace-nowrap">{homeConfig.testimonials?.viewAllText || "View all reviews →"}</a>
-              </div>
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setTestimonialIdx((i) => (i - 1 + listLength) % listLength)}
-                  className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
-                  aria-label="Previous Testimonial"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <div className="grid sm:grid-cols-3 gap-5 flex-1">
-                  {testimonialList.map((t, i) => (
-                    <div key={t.id || i} className={`bg-white rounded-2xl border border-slate-100 p-5 ${i === testimonialIdx ? "ring-2 ring-teal-300 shadow-md" : ""}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="w-8 h-8 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                          {t.initials || (t.name ? t.name.charAt(0) : "U")}
-                        </span>
-                        <div className="flex gap-0.5 text-amber-400">
-                          {Array.from({ length: t.rating || 5 }).map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
-                        </div>
-                      </div>
-                      <p className="text-sm text-slate-600 mb-3 leading-relaxed">{t.text}</p>
-                      <p className="text-sm font-bold text-slate-800">&mdash; {t.name}</p>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  onClick={() => setTestimonialIdx((i) => (i + 1) % listLength)}
-                  className="hidden sm:flex w-9 h-9 rounded-full border border-slate-200 items-center justify-center text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
-                  aria-label="Next Testimonial"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="flex justify-center gap-1.5 mt-6">
-                {testimonialList.map((_, i) => (
-                  <span key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === testimonialIdx ? "bg-teal-600 w-3" : "bg-slate-200"}`} />
-                ))}
-              </div>
-            </section>
-          );
-        })()}
-
-        {/* ── App Download Banner & Full Footer with Legal & Support Links ── */}
-        {!activeCategory && <AppBannerAndFooter />}
       </div>
 
       <BkStyles />

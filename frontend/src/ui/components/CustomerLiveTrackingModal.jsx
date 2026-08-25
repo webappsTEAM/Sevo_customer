@@ -173,7 +173,9 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
       const host = window.location.hostname === "localhost" ? "localhost:8000" : window.location.host
       const rid = booking?.request_id || bookingId
-      const wsUrl = `${protocol}//${host}/ws/live/booking/${encodeURIComponent(rid)}/`
+      const trackingToken = booking?.tracking_token || ""
+      const tokenQuery = trackingToken ? `?token=${encodeURIComponent(trackingToken)}` : ""
+      const wsUrl = `${protocol}//${host}/ws/tracking/${encodeURIComponent(rid)}/${tokenQuery}`
 
       ws = new WebSocket(wsUrl)
       ws.onmessage = (event) => {
@@ -185,6 +187,9 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
           }
         } catch (err) {}
       }
+      ws.onerror = () => {
+        // Silently fallback to background HTTP poller
+      }
     } catch (err) {}
 
     // 3. Keep 4-second background polling active as reliable backup
@@ -192,7 +197,9 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
 
     return () => {
       isMounted = false
-      if (ws) ws.close()
+      if (ws) {
+        try { ws.close() } catch (e) {}
+      }
       if (pollTimer) clearInterval(pollTimer)
     }
   }, [bookingId, booking?.request_id, booking?.tracking_token])

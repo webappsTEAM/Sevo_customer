@@ -2595,12 +2595,59 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
               <strong>Reason:</strong> {cancellationReason}
             </div>
           )}
-          <button
-            onClick={() => window.location.href = "/"}
-            style={{ padding: "0.85rem 2rem", background: "#0f172a", color: "white", fontWeight: 800, border: "none", borderRadius: 14, cursor: "pointer" }}
-          >
-            Explore Services
-          </button>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: "1.25rem" }}>
+            <button
+              onClick={() => {
+                sessionStorage.removeItem("calservice_active_tracking_id");
+                sessionStorage.removeItem("calservice_last_booking");
+                sessionStorage.removeItem("calservices_customer_cart");
+                localStorage.removeItem("calservices_customer_cart");
+                if (typeof onBookAgain === "function") {
+                  onBookAgain();
+                } else {
+                  window.location.href = "/";
+                }
+              }}
+              style={{
+                padding: "0.85rem 1.75rem",
+                background: "linear-gradient(135deg, #10B981, #059669)",
+                color: "white",
+                fontWeight: 800,
+                border: "none",
+                borderRadius: 14,
+                cursor: "pointer",
+                boxShadow: "0 4px 14px rgba(16,185,129,0.3)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Sparkles size={16} /> Book a New Service
+            </button>
+            <button
+              onClick={() => {
+                sessionStorage.removeItem("calservice_active_tracking_id");
+                sessionStorage.removeItem("calservice_last_booking");
+                sessionStorage.removeItem("calservices_customer_cart");
+                localStorage.removeItem("calservices_customer_cart");
+                window.location.href = "/";
+              }}
+              style={{
+                padding: "0.85rem 1.75rem",
+                background: "#0f172a",
+                color: "white",
+                fontWeight: 800,
+                border: "none",
+                borderRadius: 14,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Home size={16} /> Return to Home
+            </button>
+          </div>
         </div>
       </motion.div>
     )
@@ -3680,6 +3727,8 @@ function LiveTrackingPage({ successData, category, cart, formData, selDate, selT
             graceSecondsRemaining={graceSecs}
             onClose={() => setShowCancelModal(false)}
             onCancelled={(data) => {
+              sessionStorage.removeItem("calservice_active_tracking_id")
+              sessionStorage.removeItem("calservice_last_booking")
               setLiveData((prev) => ({
                 ...(prev || {}),
                 status: "cancelled",
@@ -3948,13 +3997,7 @@ export function CustomerAccountModal({ activeTab: propActiveTab, onClose, onChan
   });
 
   const [selectedMockBooking, setSelectedMockBooking] = useState(null)
-  const [trackingBooking, setTrackingBooking] = useState(() => {
-    const savedId = sessionStorage.getItem("calservice_active_tracking_id")
-    if (savedId) {
-      return { id: savedId, request_id: savedId }
-    }
-    return null
-  })
+  const [trackingBooking, setTrackingBooking] = useState(null)
 
   const [realBookings, setRealBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
@@ -8731,7 +8774,9 @@ export function BookingPage() {
   const routerLocation = useLocation()
   const incomingCart = routerLocation.state?.cart
   const incomingCategory = routerLocation.state?.category
-  const trackParam = searchParams.get("track") || searchParams.get("booking_id") || sessionStorage.getItem("calservice_active_tracking_id")
+  const isExplicitTracking = Boolean(searchParams.get("track") || searchParams.get("booking_id") || routerLocation.state?.isTracking)
+  const hasIncomingOrder = Boolean((incomingCart && incomingCart.length > 0) || incomingCategory)
+  const trackParam = !hasIncomingOrder && (searchParams.get("track") || searchParams.get("booking_id") || (isExplicitTracking ? sessionStorage.getItem("calservice_active_tracking_id") : null))
 
   const [cart, setCart] = useState(() => {
     if (incomingCart && incomingCart.length > 0) {
@@ -8761,8 +8806,9 @@ export function BookingPage() {
   })
 
   const [step, setStep] = useState(() => {
-    if (trackParam || routerLocation.state?.isTracking) return 0;
-    return 3;
+    if (hasIncomingOrder) return 3
+    if (trackParam || isExplicitTracking) return 0
+    return 3
   })
   const [loading, setLoading] = useState(false)
   const [showCartMenu, setShowCartMenu] = useState(false)
@@ -8770,9 +8816,13 @@ export function BookingPage() {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [error, setError] = useState(null)
   const [successData, setSuccessData] = useState(() => {
+    if (hasIncomingOrder) return null
     const saved = sessionStorage.getItem("calservice_last_booking")
     if (saved) {
-      try { return JSON.parse(saved) } catch (e) { }
+      try {
+        const parsed = JSON.parse(saved)
+        if (parsed?.status !== "cancelled") return parsed
+      } catch (e) { }
     }
     return null
   })
@@ -8801,20 +8851,34 @@ export function BookingPage() {
 
   // Synchronize step and successData when active tracking ID changes
   useEffect(() => {
+    if (hasIncomingOrder) {
+      setStep(3);
+      return;
+    }
     if (trackParam || routerLocation.state?.isTracking) {
-      setStep(0);
       if (routerLocation.state?.successData) {
         setSuccessData(routerLocation.state.successData);
+        setStep(0);
       } else {
         const saved = sessionStorage.getItem("calservice_last_booking");
         if (saved) {
           try {
-            setSuccessData(JSON.parse(saved));
-          } catch (e) { }
+            const parsed = JSON.parse(saved);
+            if (parsed?.status === "cancelled") {
+              sessionStorage.removeItem("calservice_active_tracking_id");
+              sessionStorage.removeItem("calservice_last_booking");
+              setStep(3);
+            } else {
+              setSuccessData(parsed);
+              setStep(0);
+            }
+          } catch (e) {
+            setStep(3);
+          }
         }
       }
     }
-  }, [trackParam, routerLocation.state]);
+  }, [trackParam, routerLocation.state, hasIncomingOrder]);
   const [selDate, setSelDate] = useState("")
   const [selTime, setSelTime] = useState("")
   const [urgency, setUrgency] = useState("Standard")

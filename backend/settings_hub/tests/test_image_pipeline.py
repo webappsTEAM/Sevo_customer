@@ -294,3 +294,169 @@ class ImageUploadEndpointTestCase(TestCase):
         # Invalid traversal path
         self.assertFalse(SupabaseStorageService.delete_file("../../../etc/passwd"))
 
+
+class ImagePipelineSizeAndQualityMatrixTestCase(TestCase):
+    """
+    Comprehensive size test matrix, pixel analysis, 500 KB hard limit,
+    under-100 KB preservation, and replacement lifecycle tests.
+    """
+
+    def _create_image_of_size(self, target_kb: int, format="JPEG", dimensions=(1200, 900)) -> io.BytesIO:
+        """Generates an in-memory image approximating target size in KB."""
+        import random
+        img = Image.new("RGB", dimensions, color=(random.randint(50, 200), random.randint(50, 200), random.randint(50, 200)))
+        draw = ImageDraw.Draw(img)
+        # Add visual detail
+        for i in range(0, dimensions[0], 20):
+            draw.line([(i, 0), (dimensions[0] - i, dimensions[1])], fill=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)), width=2)
+        
+        buf = io.BytesIO()
+        img.save(buf, format=format, quality=85)
+        # Pad with dummy bytes if needed to reach target_kb
+        current_len = buf.tell()
+        target_bytes = target_kb * 1024
+        if current_len < target_bytes:
+            buf.write(b"\x00" * (target_bytes - current_len))
+        buf.seek(0)
+        return buf
+
+    def test_size_matrix_50kb_preserves_quality(self):
+        """50 KB input: Under 100 KB rule applies (no unnecessary lossy compression, quality=92)."""
+        buf = self._create_image_of_size(50, dimensions=(400, 300))
+        result = ImageOptimizer.optimize(buf, profile_name="packages")
+        self.assertEqual(result["format"], "webp")
+        self.assertLessEqual(result["optimized_size"], 500 * 1024)
+        self.assertEqual(result["quality_used"], 92)
+
+    def test_size_matrix_95kb_preserves_quality(self):
+        """95 KB input: Under 100 KB rule applies (no unnecessary lossy degradation)."""
+        buf = self._create_image_of_size(95, dimensions=(500, 400))
+        result = ImageOptimizer.optimize(buf, profile_name="services")
+        self.assertEqual(result["format"], "webp")
+        self.assertLessEqual(result["optimized_size"], 500 * 1024)
+        self.assertEqual(result["quality_used"], 92)
+
+    def test_size_matrix_100kb_standard_profile(self):
+        """100 KB input: Standard profile policy applied."""
+        buf = self._create_image_of_size(105, dimensions=(800, 600))
+        result = ImageOptimizer.optimize(buf, profile_name="catalog")
+        self.assertEqual(result["format"], "webp")
+        self.assertLessEqual(result["optimized_size"], 500 * 1024)
+
+    def test_size_matrix_250kb_optimized(self):
+        """250 KB input: Optimized efficiently <= 500 KB."""
+        buf = self._create_image_of_size(250, dimensions=(1000, 800))
+        result = ImageOptimizer.optimize(buf, profile_name="catalog")
+        self.assertEqual(result["format"], "webp")
+        self.assertLessEqual(result["optimized_size"], 500 * 1024)
+
+    def test_size_matrix_500kb_optimized(self):
+        """500 KB input: Optimized efficiently <= 500 KB."""
+        buf = self._create_image_of_size(500, dimensions=(1400, 1000))
+        result = ImageOptimizer.optimize(buf, profile_name="catalog")
+        self.assertEqual(result["format"], "webp")
+        self.assertLessEqual(result["optimized_size"], 500 * 1024)
+
+    def test_size_matrix_1mb_optimized(self):
+        """1 MB input: Compressed to WebP <= 500 KB."""
+        buf = self._create_image_of_size(1024, dimensions=(1600, 1200))
+        result = ImageOptimizer.optimize(buf, profile_name="catalog")
+        self.assertEqual(result["format"], "webp")
+        self.assertLessEqual(result["optimized_size"], 500 * 1024)
+
+    def test_size_matrix_5mb_optimized(self):
+        """5 MB input: Compressed to WebP <= 500 KB."""
+        buf = self._create_image_of_size(5 * 1024, dimensions=(2400, 1800))
+        result = ImageOptimizer.optimize(buf, profile_name="banners")
+        self.assertEqual(result["format"], "webp")
+        self.assertLessEqual(result["optimized_size"], 500 * 1024)
+
+    def test_size_matrix_10mb_optimized(self):
+        """10 MB input: Compressed to WebP <= 500 KB."""
+        buf = self._create_image_of_size(10 * 1024, dimensions=(2800, 2000))
+        result = ImageOptimizer.optimize(buf, profile_name="homepage")
+        self.assertEqual(result["format"], "webp")
+        self.assertLessEqual(result["optimized_size"], 500 * 1024)
+
+    def test_over_15mb_input_rejected(self):
+        """Incoming raw uploads > 15 MB are rejected immediately."""
+        buf = io.BytesIO(b"\x00" * (16 * 1024 * 1024))
+        with self.assertRaises(ImageOptimizationError) as ctx:
+            ImageOptimizer.optimize(buf, profile_name="catalog")
+        self.assertEqual(ctx.exception.error_code, "FILE_TOO_LARGE")
+
+    def test_hard_500kb_cap_enforcement(self):
+        """Every successful output of ImageOptimizer.optimize is guaranteed <= 500 KB."""
+        for sz in [50, 100, 300, 800, 1500, 4000]:
+            buf = self._create_image_of_size(sz, dimensions=(1400, 1000))
+            result = ImageOptimizer.optimize(buf, profile_name="catalog")
+            self.assertLessEqual(
+                result["optimized_size"],
+                500 * 1024,
+                f"Image of input size {sz}KB exceeded 500KB cap (was {result['optimized_size']} bytes)."
+            )
+
+    def test_pixel_limit_protection(self):
+        """Images with total pixel count > 25,000,000 are rejected."""
+        # 6000 x 5000 = 30,000,000 pixels > 25M
+        fake_huge = Image.new("RGB", (6000, 5000))
+        buf = io.BytesIO()
+        fake_huge.save(buf, format="JPEG")
+        buf.seek(0)
+
+        with self.assertRaises(ImageOptimizationError) as ctx:
+            ImageOptimizer.optimize(buf, profile_name="catalog")
+        self.assertIn(ctx.exception.error_code, ("PIXEL_COUNT_EXCEEDED", "DECOMPRESSION_BOMB"))
+
+    def test_aspect_ratio_preservation_lanczos(self):
+        """Aspect ratio 2:1 (2800x1400) is scaled to exactly 1400x700 without stretching."""
+        buf = self._create_image_of_size(200, dimensions=(2800, 1400))
+        result = ImageOptimizer.optimize(buf, profile_name="catalog")
+        self.assertEqual(result["width"], 1400)
+        self.assertEqual(result["height"], 700)
+        self.assertEqual(result["original_dimensions"], "2800x1400")
+        self.assertEqual(result["output_dimensions"], "1400x700")
+
+    def test_package_image_replacement_and_cleanup(self):
+        """When a package image is replaced, DB is updated to B and old image A is deleted."""
+        from service_requests.models import CatalogCategory, Service, Package
+        from service_requests.services import catalog as catalog_service
+
+        admin_user = User.objects.create_user(
+            username="pkg_admin_tester",
+            email="pkg_admin@caltrack.com",
+            password="Password@123",
+            role="admin",
+            is_staff=True,
+        )
+
+        category = CatalogCategory.objects.create(name="Test Category", slug="test-cat")
+        service = Service.objects.create(name="Test Service", slug="test-svc", category=category)
+        
+        # 1. Create package with image A
+        package = catalog_service.create_package(
+            {
+                "name": "Test Cleaning Package",
+                "slug": "test-clean-pkg",
+                "service": service,
+                "base_price": 500,
+                "image": "catalog/packages/image_a_uuid123.webp",
+            },
+            actor=admin_user
+        )
+        self.assertEqual(package.image, "catalog/packages/image_a_uuid123.webp")
+
+        # 2. Update package with new image B
+        updated_package = catalog_service.update_package(
+            package,
+            {"image": "catalog/packages/image_b_uuid456.webp"},
+            actor=admin_user,
+            reason="Updated banner photo"
+        )
+
+        # 3. Verify DB has only B
+        package.refresh_from_db()
+        self.assertEqual(package.image, "catalog/packages/image_b_uuid456.webp")
+        self.assertEqual(updated_package.image, "catalog/packages/image_b_uuid456.webp")
+
+

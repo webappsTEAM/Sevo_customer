@@ -63,6 +63,7 @@ export function resolveImageUrl(path, fallback = "") {
  * @param {File} file - Browser File object from input.
  * @param {Object} [options]
  * @param {string} [options.assetType="packages"] - Asset category (packages, services, addons, banners, homepage, general).
+ * @param {string} [options.oldImagePath=""] - Optional existing image path to replace/delete.
  * @param {function} [options.onProgress] - Optional progress callback (percent: number) => void.
  * @param {string} [options.endpoint="/api/settings/catalog/upload-image/"] - Upload endpoint.
  * @returns {Promise<Object>} Metadata containing { success, url, path, dimensions, original_size, file_size, compression_ratio }
@@ -70,6 +71,7 @@ export function resolveImageUrl(path, fallback = "") {
 export function uploadImageFile(file, options = {}) {
   const {
     assetType = "packages",
+    oldImagePath = "",
     onProgress = null,
     endpoint = "/api/settings/catalog/upload-image/",
   } = options
@@ -87,6 +89,9 @@ export function uploadImageFile(file, options = {}) {
     const formData = new FormData()
     formData.append("image", file)
     formData.append("asset_type", assetType)
+    if (oldImagePath) {
+      formData.append("old_image_path", oldImagePath)
+    }
 
     const xhr = new XMLHttpRequest()
     xhr.open("POST", endpoint)
@@ -119,12 +124,19 @@ export function uploadImageFile(file, options = {}) {
               width: res.width,
               height: res.height,
               dimensions: res.dimensions || `${res.width}x${res.height}`,
+              original_dimensions: res.original_dimensions,
+              output_dimensions: res.output_dimensions,
+              quality_used: res.quality_used,
+              has_alpha: res.has_alpha,
               original_size: res.original_size,
               file_size: res.file_size,
               compression_ratio: res.compression_ratio,
+              old_deleted: res.old_deleted,
             })
           } else {
-            reject(new Error(res.error || res.message || "Upload failed."))
+            const err = new Error(res.message || res.error || "Upload failed.")
+            if (res.error_code) err.code = res.error_code
+            reject(err)
           }
         } catch {
           reject(new Error("Invalid server response."))
@@ -132,7 +144,9 @@ export function uploadImageFile(file, options = {}) {
       } else {
         try {
           const res = JSON.parse(xhr.responseText)
-          reject(new Error(res.error || res.message || `Upload failed with HTTP ${xhr.status}`))
+          const err = new Error(res.message || res.error || `Upload failed with HTTP ${xhr.status}`)
+          if (res.error_code) err.code = res.error_code
+          reject(err)
         } catch {
           reject(new Error(`Server returned error HTTP ${xhr.status}`))
         }
