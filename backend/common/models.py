@@ -1,123 +1,173 @@
 """
-Reusable row-level company isolation — the ORM half of the CompanyScoped
-framework. See common/MODEL_CLASSIFICATION.md for which models this applies
-to, and common/drf.py / common/permissions.py for the DRF-facing half.
+Global Row-Level Visibility and QuerySet Architecture for CalTrack.
 
-Design note — why existing models don't all inherit CompanyScopedModel:
-Most company-owned models in this codebase already carry their own
-`company` (or, in inventory/payroll, `org`) ForeignKey, added long before
-this framework existed. Retrofitting them to inherit CompanyScopedModel
-would mean either renaming `org` -> `company` everywhere (a real, riskier
-migration touching live data) or ending up with a duplicate FK column.
-Neither is "required for company isolation" — the isolation guarantee
-comes from the manager/queryset, not from which field name is used or
-whether the field is inherited vs. declared directly. So:
-
-  - NEW models that don't have a company FK yet: inherit CompanyScopedModel.
-  - EXISTING models: keep their own field, just swap `objects` to
-    CompanyScopedManager(company_field=...) — zero schema change.
-
-Both paths get identical for_company() / visible_to() / active() methods.
+Separates authorization from data visibility:
+- is_super_admin(user) has universal global visibility across all rows.
+- Non-super-admin users have their record visibility determined strictly
+  by real domain relationships (customer ownership, technician assignment,
+  support queue, finance scope) via apply_visibility_rules(user).
+- Company exists strictly as business data (e.g. for_company(company)),
+  never as an authorization gate.
 """
 from django.db import models
+from django.db.models import Q
+from accounts.models import User
+from accounts.permissions import is_super_admin, can
 
 
-class CompanyScopedQuerySet(models.QuerySet):
+class VisibilityQuerySet(models.QuerySet):
     """
-    Queryset for any model with a FK to companies.Company. The FK's field
-    name is configurable via `company_field` (default "company") so this
-    works unmodified for the `org`-named fields in inventory/payroll.
+    Unified QuerySet providing domain-specific visibility filtering.
     """
-
     company_field = "company"
 
     def for_company(self, company):
         """
-        Rows belonging to exactly one company. `company` may be a Company
-        instance, a pk, or None — None always returns an empty queryset
-        rather than silently returning everything, since an empty/unknown
-        company is never a valid reason to see all companies' data.
+        Business-data query helper to filter records belonging to an explicit Company entity.
         """
         if company is None:
             return self.none()
         return self.filter(**{self.company_field: company})
 
-    def visible_to(self, user):
+    def visible_to(self, user, module: str = None):
         """
-        Rows visible to `user`, matching the platform's role model:
-          - superuser                       -> everything
-          - staff user with a company        -> that company's rows only
-          - anyone else (no company, e.g. a
-            customer, or an unauthenticated
-            request)                         -> nothing
-
-        Mixed models (bookings, refunds, complaints — see
-        MODEL_CLASSIFICATION.md) should NOT rely on visible_to() for their
-        customer-facing querysets; filter by the customer field directly
-        instead. visible_to() is for the admin/employee side only.
+        Filters queryset to rows visible to `user` based on authorization and domain relationships.
         """
         if user is None or not getattr(user, "is_authenticated", False):
             return self.none()
-        if getattr(user, "is_superuser", False):
+
+        # Super Admin has unrestricted global visibility
+        if is_super_admin(user):
             return self
-        company = getattr(user, "company", None)
-        if company is None:
+
+        # If module is provided, check that user has view permission
+        if module and not can(user, module, "view"):
             return self.none()
-        return self.for_company(company)
+
+        return self.apply_visibility_rules(user)
+
+    def apply_visibility_rules(self, user):
+        """
+        Enforces domain-specific row-level visibility matching actual model relations.
+        Uses centralized User.Role constants.
+        """
+        role = getattr(user, "role", User.Role.CUSTOMER)
+        model = self.model
+        model_name = model._meta.model_name
+
+        # 1. Customers see only their own data
+        if role == User.Role.CUSTOMER:
+            filters = Q()
+            matched = False
+            if hasattr(model, "customer"):
+                filters |= Q(customer=user)
+                matched = True
+            if hasattr(model, "user"):
+                filters |= Q(user=user)
+                matched = True
+            if hasattr(model, "raised_by"):
+                filters |= Q(raised_by=user)
+                matched = True
+            return self.filter(filters) if matched else self.none()
+
+        # 2. Field Employees / Technicians see assigned jobs, attendance, and operational tasks
+        if role == getattr(User.Role, "EMPLOYEE", "employee"):
+            filters = Q()
+            matched = False
+            if hasattr(model, "assigned_technician"):
+                filters |= Q(assigned_technician=user)
+                matched = True
+            if hasattr(model, "assigned_employee"):
+                filters |= Q(assigned_employee__user=user)
+                matched = True
+            if hasattr(model, "employee"):
+                filters |= Q(employee=user)
+                try:
+                    filters |= Q(employee__user=user)
+                except Exception:
+                    pass
+                matched = True
+            if hasattr(model, "technician"):
+                filters |= Q(technician=user)
+                matched = True
+            if hasattr(model, "user") and model_name in ["attendance", "employeeprofile", "employee", "customerloginevent"]:
+                filters |= Q(user=user)
+                matched = True
+            return self.filter(filters) if matched else self.none()
+
+        # 3. Support / Care Agents follow real customer care queue and customer support scopes
+        if role == User.Role.SUPPORT:
+            try:
+                from customer_care.models import CareAgentProfile
+                profile = CareAgentProfile.objects.filter(user=user).first()
+                if profile and model_name == "customercareticket":
+                    return self.filter(
+                        Q(assigned_agent=user) |
+                        Q(tier=profile.tier, assigned_agent__isnull=True)
+                    )
+            except Exception:
+                pass
+            if hasattr(model, "assigned_agent"):
+                return self.filter(Q(assigned_agent=user) | Q(assigned_agent__isnull=True))
+            return self
+
+        # 4. Catalog Managers see only catalog, pricing, services, and category domains
+        if role == getattr(User.Role, "CATALOG", "catalog"):
+            if model_name in ["catalogcategory", "service", "package", "addon", "coupon", "offer"]:
+                return self
+            return self.none()
+
+        # 5. Finance sees payments, bookings, invoices, refunds, coupons, and ledger
+        if role == getattr(User.Role, "FINANCE", "finance"):
+            if model_name in ["servicerequest", "invoice", "refundrequest", "payment", "coupon", "couponusage"]:
+                return self
+            return self.none()
+
+        # 6. Managers & Admins follow operational business visibility
+        return self
 
     def active(self):
-        """
-        Rows not marked inactive, for models that have an `is_active`
-        field. No-op passthrough for models that don't — lets callers use
-        `Model.objects.for_company(c).active()` generically without
-        needing to know whether the model supports it.
-        """
+        """Filters active records for models supporting is_active."""
         if any(f.name == "is_active" for f in self.model._meta.get_fields()):
             return self.filter(is_active=True)
         return self
 
 
-def CompanyScopedManager(company_field: str = "company"):
-    """
-    Manager factory bound to a given company FK field name.
+# Backward-compatible alias for existing imports
+CompanyScopedQuerySet = VisibilityQuerySet
 
-        class InventoryItem(models.Model):
-            org = models.ForeignKey(Company, ...)
-            objects = CompanyScopedManager(company_field="org")
 
-        InventoryItem.objects.for_company(company)
-        InventoryItem.objects.visible_to(request.user)
-        InventoryItem.objects.for_company(company).active()
-
-    A plain `CompanyScopedManager()` (default company_field="company") is
-    also what CompanyScopedModel below uses.
-    """
+def VisibilityManager(company_field: str = "company"):
+    """Manager factory bound to a VisibilityQuerySet."""
     queryset_cls = type(
-        f"CompanyScopedQuerySet_{company_field}",
-        (CompanyScopedQuerySet,),
+        f"VisibilityQuerySet_{company_field}",
+        (VisibilityQuerySet,),
         {"company_field": company_field},
     )
     return models.Manager.from_queryset(queryset_cls)()
 
 
-class CompanyScopedModel(models.Model):
-    """
-    Abstract base for NEW models directly owned by exactly one Company.
+# Backward-compatible alias
+CompanyScopedManager = VisibilityManager
 
-    Do not add this to a model that already has its own company/org FK —
-    see the module docstring. Do not add this to Global or Mixed models
-    (see MODEL_CLASSIFICATION.md) — a customer-facing or lookup model
-    inheriting this would silently make every row require a company,
-    which is wrong for those models by design.
-    """
 
+class VisibilityModel(models.Model):
+    """
+    Abstract base model carrying a business company relationship and VisibilityManager.
+    """
     company = models.ForeignKey(
         "companies.Company",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="%(app_label)s_%(class)s_set",
     )
 
-    objects = CompanyScopedManager()
+    objects = VisibilityManager()
 
     class Meta:
         abstract = True
+
+
+# Backward-compatible alias
+CompanyScopedModel = VisibilityModel

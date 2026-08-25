@@ -213,16 +213,23 @@ class WorkforceIntegrationService:
             if cached is not None:
                 return cached
 
-            try:
-                url = f"{WORKFORCE_API_BASE_URL}/tracking/{booking_id}/"
-                response = requests.get(url, headers=cls._headers(), timeout=1.5)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data and isinstance(data, dict) and data.get("technician"):
-                        cache.set(cache_key, data, timeout=2)
-                        return data
-            except Exception as e:
-                logger.debug(f"Workforce tracking query fallback: {e}")
+            candidate_urls = [
+                f"{WORKFORCE_API_BASE_URL}/jobs/{booking_id}/live-tracking/",
+                f"{WORKFORCE_API_BASE_URL}/customer/jobs/{booking_id}/tracking/",
+                f"{WORKFORCE_API_BASE_URL}/tracking/{booking_id}/",
+            ]
+            for url in candidate_urls:
+                try:
+                    response = requests.get(url, headers=cls._headers(), timeout=1.0)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if isinstance(data, dict):
+                            payload = data.get("data") if ("data" in data and isinstance(data.get("data"), dict)) else data
+                            if payload.get("technician") or payload.get("employee") or payload.get("technician_name"):
+                                cache.set(cache_key, payload, timeout=2)
+                                return payload
+                except Exception as e:
+                    logger.debug(f"Workforce tracking query fallback for {url}: {e}")
 
             return None
 

@@ -292,58 +292,74 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         return []
 
     def get_customer_id(self, obj):
-        if obj.customer and hasattr(obj.customer, "customer_id"):
-            return obj.customer.customer_id
+        try:
+            if obj.customer and hasattr(obj.customer, "customer_id"):
+                return obj.customer.customer_id
+        except Exception:
+            pass
         return None
 
+    def _is_staff(self):
+        request = self.context.get("request")
+        return bool(
+            request and request.user and request.user.is_authenticated and
+            (getattr(request.user, "is_staff", False) or getattr(request.user, "role", "") in ["admin", "staff", "manager", "employee", "vendor"])
+        )
 
     def get_technician_name(self, obj):
-        # Strictly hidden before partner accepts
-        if obj.status in ["confirmed", "new_request", "assigned"]:
+        if not self._is_staff() and obj.status in ["confirmed", "new_request", "assigned"]:
             return ""
         if obj.technician_name:
             return obj.technician_name
         assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and obj.status not in ["assigned", "confirmed"]:
+        if assigned_emp:
             return getattr(assigned_emp, "full_name", None) or (assigned_emp.user.get_full_name() if getattr(assigned_emp, "user", None) else None) or ""
+        if hasattr(obj, "assignments"):
+            assignment = obj.assignments.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id").first()
+            if assignment:
+                return assignment.technician_name or ""
         return ""
 
     def get_technician_phone(self, obj):
-        # Strictly hidden before partner accepts
-        if obj.status in ["confirmed", "new_request", "assigned"]:
+        if not self._is_staff() and obj.status in ["confirmed", "new_request", "assigned"]:
             return ""
         if obj.technician_phone:
             return obj.technician_phone
         assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and obj.status not in ["assigned", "confirmed"] and getattr(assigned_emp, "phone", None):
+        if assigned_emp and getattr(assigned_emp, "phone", None):
             return assigned_emp.phone
+        if hasattr(obj, "assignments"):
+            assignment = obj.assignments.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id").first()
+            if assignment:
+                return assignment.technician_phone or ""
         return ""
 
     def get_technician_photo(self, obj):
-        # Strictly hidden before partner accepts
-        if obj.status in ["confirmed", "new_request", "assigned"]:
+        if not self._is_staff() and obj.status in ["confirmed", "new_request", "assigned"]:
             return ""
         if obj.technician_photo:
             return obj.technician_photo
         assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and obj.status not in ["assigned", "confirmed"] and getattr(assigned_emp, "photo", None):
+        if assigned_emp and getattr(assigned_emp, "photo", None):
             return assigned_emp.photo
+        if hasattr(obj, "assignments"):
+            assignment = obj.assignments.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id").first()
+            if assignment:
+                return assignment.technician_photo or ""
         return ""
 
     def get_technician_rating(self, obj):
-        # Strictly hidden before partner accepts
-        if obj.status in ["confirmed", "new_request", "assigned"]:
+        if not self._is_staff() and obj.status in ["confirmed", "new_request", "assigned"]:
             return None
         if obj.technician_rating:
             return float(obj.technician_rating)
         assigned_emp = getattr(obj, "assigned_employee", None)
-        if assigned_emp and obj.status not in ["assigned", "confirmed"] and getattr(assigned_emp, "rating", None):
+        if assigned_emp and getattr(assigned_emp, "rating", None):
             return float(assigned_emp.rating)
         return None
 
     def get_technician(self, obj):
-        # ASSIGNED != ACCEPTED: Customer must NOT see technician profile until explicit acceptance
-        if obj.status in ["confirmed", "new_request", "assigned", "cancelled", "rejected"]:
+        if not self._is_staff() and obj.status in ["confirmed", "new_request", "assigned", "cancelled", "rejected"]:
             return None
         name = self.get_technician_name(obj)
         if name:
@@ -508,18 +524,43 @@ class ServiceRequestDetailSerializer(serializers.ModelSerializer):
         )
 
     def get_customer_id(self, obj):
-        if obj.customer and hasattr(obj.customer, "customer_id"):
-            return obj.customer.customer_id
+        try:
+            if obj.customer and hasattr(obj.customer, "customer_id"):
+                return obj.customer.customer_id
+        except Exception:
+            pass
         return None
 
     def get_technician(self, obj):
-        if obj.technician_name or obj.workforce_job_id:
+        name = obj.technician_name
+        phone = obj.technician_phone
+        photo = obj.technician_photo
+        rating = float(obj.technician_rating) if obj.technician_rating else None
+        job_id = obj.workforce_job_id or obj.external_assignment_id
+
+        if not name and getattr(obj, "assigned_employee", None):
+            emp = obj.assigned_employee
+            name = getattr(emp, "full_name", None) or (emp.user.get_full_name() if getattr(emp, "user", None) else "")
+            phone = getattr(emp, "phone", "") or phone
+            photo = getattr(emp, "photo", "") or photo
+            rating = float(getattr(emp, "rating", None)) if getattr(emp, "rating", None) is not None else rating
+
+        if not name and hasattr(obj, "assignments"):
+            assignment = obj.assignments.filter(status__in=["accepted", "on_the_way", "arrived", "in_progress", "completed", "closed"]).order_by("-id").first()
+            if assignment:
+                name = assignment.technician_name
+                phone = assignment.technician_phone or phone
+                photo = assignment.technician_photo or photo
+                rating = float(assignment.technician_rating) if assignment.technician_rating else rating
+                job_id = assignment.workforce_job_id or job_id
+
+        if name or job_id:
             return {
-                "name": obj.technician_name,
-                "phone": obj.technician_phone,
-                "photo": obj.technician_photo,
-                "rating": float(obj.technician_rating) if obj.technician_rating else None,
-                "workforce_job_id": obj.workforce_job_id,
+                "name": name,
+                "phone": phone,
+                "photo": photo,
+                "rating": rating,
+                "workforce_job_id": job_id,
             }
         return None
 

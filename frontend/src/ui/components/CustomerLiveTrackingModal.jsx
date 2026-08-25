@@ -127,16 +127,23 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
   const bookingId = booking?.id
 
   // Real-Time WebSocket Connection + Resilient 4-second Polling Backup
+  // In-flight guard: skips a cycle if previous request is still running
+  // Terminal guard: stops REST polling after booking reaches a final state
   useEffect(() => {
     if (!bookingId) return
 
     let ws = null
     let pollTimer = null
     let isMounted = true
+    let isFetching = false
+    const TERMINAL = new Set(["completed", "closed", "cancelled", "feedback_pending", "feedback_received", "rejected"])
 
+    const tokenQuery = booking?.tracking_token ? `?token=${encodeURIComponent(booking.tracking_token)}` : ""
     const fetchLiveLocation = async () => {
+      if (isFetching) return           // skip cycle if previous request still in-flight
+      isFetching = true
       try {
-        const res = await fetch(`${API_BASE_URL}/booking/${bookingId}/live-location/`, {
+        const res = await fetch(`${API_BASE_URL}/booking/${bookingId}/live-location/${tokenQuery}`, {
           credentials: "include"
         })
         if (res.ok) {
@@ -144,11 +151,16 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
           if (json?.data && isMounted) {
             setLiveData(json.data)
             setLastRefreshed(new Date())
+            // Stop polling once booking reaches a terminal state
+            if (json.data.status && TERMINAL.has(json.data.status.toLowerCase())) {
+              clearInterval(pollTimer)
+            }
           }
         }
       } catch (err) {
         console.warn("Live location fetch failed:", err)
       } finally {
+        isFetching = false
         if (isMounted) setLoading(false)
       }
     }
@@ -159,7 +171,7 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
     // 2. Open WebSocket channel
     try {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-      const host = window.location.hostname === "localhost" ? "localhost:8001" : window.location.host
+      const host = window.location.hostname === "localhost" ? "localhost:8000" : window.location.host
       const rid = booking?.request_id || bookingId
       const wsUrl = `${protocol}//${host}/ws/live/booking/${encodeURIComponent(rid)}/`
 
@@ -183,7 +195,8 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
       if (ws) ws.close()
       if (pollTimer) clearInterval(pollTimer)
     }
-  }, [bookingId, booking?.request_id])
+  }, [bookingId, booking?.request_id, booking?.tracking_token])
+
 
   // Resolve Coordinates strictly from live backend data (No synthetic offsets)
   const destLat = liveData?.destination?.latitude != null ? parseFloat(liveData.destination.latitude) : (booking?.latitude ? parseFloat(booking.latitude) : null)
@@ -195,36 +208,57 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
   const isCompleted = currentStatus === "completed" || currentStatus === "closed"
   const isCancelled = currentStatus === "cancelled"
 
-  const empLocation = liveData?.employee_live_location
-  const rawTechName = liveData?.technician?.name || empLocation?.technician_name || empLocation?.name || empLocation?.employee_name || booking?.technician_name || booking?.assigned_employee?.full_name || null
-  const rawTechPhone = liveData?.technician?.phone || empLocation?.technician_phone || empLocation?.phone || booking?.technician_phone || booking?.assigned_employee?.phone || ""
+  const empLocation = liveData?.technician_location || liveData?.employee_live_location || liveData?.technician
+  const rawTechName = liveData?.technician?.name || liveData?.technician_name || empLocation?.technician_name || empLocation?.name || empLocation?.employee_name || booking?.technician_name || booking?.assigned_employee?.full_name || null
+  const rawTechPhone = liveData?.technician?.phone || liveData?.technician_phone || empLocation?.technician_phone || empLocation?.phone || booking?.technician_phone || booking?.assigned_employee?.phone || ""
 
   // Strict Real Workflow Rule:
-  // Employee Assigned (status === "assigned"): Employee assigned BUT has NOT accepted yet.
-  // Employee Accepts (status in ["accepted", "on_the_way", "arrived", "in_progress", "completed"]): isAccepted becomes TRUE!
+  // Employee Accepts/Assigned with actual name -> isAccepted is TRUE
   const isAccepted = Boolean(
     (rawTechName || liveData?.is_accepted) &&
-    ["accepted", "on_the_way", "arrived", "in_progress", "completed"].includes(currentStatus)
+    ["accepted", "on_the_way", "arrived", "in_progress", "completed", "assigned"].includes(currentStatus) &&
+    Boolean(rawTechName)
   )
 
   const isAssignedOnly = (currentStatus === "assigned" || currentStatus === "reviewed") && !isAccepted
   const isOnTheWay = isAccepted && (currentStatus === "on_the_way" || currentStatus === "accepted")
 
-  const empLat = isAccepted && empLocation?.latitude != null && !isNaN(parseFloat(empLocation.latitude))
-    ? parseFloat(empLocation.latitude)
-    : (isAccepted && booking?.technician_latitude != null ? parseFloat(booking.technician_latitude) : null)
+  const rawEmpLat = isAccepted && (
+    (empLocation?.latitude != null && !isNaN(parseFloat(empLocation.latitude)))
+      ? parseFloat(empLocation.latitude)
+      : (liveData?.technician?.latitude != null && !isNaN(parseFloat(liveData.technician.latitude)))
+        ? parseFloat(liveData.technician.latitude)
+        : (booking?.technician_latitude != null && !isNaN(parseFloat(booking.technician_latitude)))
+          ? parseFloat(booking.technician_latitude)
+          : null
+  )
 
-  const empLng = isAccepted && empLocation?.longitude != null && !isNaN(parseFloat(empLocation.longitude))
-    ? parseFloat(empLocation.longitude)
-    : (isAccepted && booking?.technician_longitude != null ? parseFloat(booking.technician_longitude) : null)
+  const rawEmpLng = isAccepted && (
+    (empLocation?.longitude != null && !isNaN(parseFloat(empLocation.longitude)))
+      ? parseFloat(empLocation.longitude)
+      : (liveData?.technician?.longitude != null && !isNaN(parseFloat(liveData.technician.longitude)))
+        ? parseFloat(liveData.technician.longitude)
+        : (booking?.technician_longitude != null && !isNaN(parseFloat(booking.technician_longitude)))
+          ? parseFloat(booking.technician_longitude)
+          : null
+  )
+
+  const hasValidTechnicianGPS = Boolean(
+    rawEmpLat != null && !isNaN(rawEmpLat) &&
+    rawEmpLng != null && !isNaN(rawEmpLng)
+  )
+
+  const empLat = hasValidTechnicianGPS ? rawEmpLat : null
+  const empLng = hasValidTechnicianGPS ? rawEmpLng : null
 
   const hasCustomerCoords = destLat != null && !isNaN(destLat) && destLng != null && !isNaN(destLng)
-  const hasEmpCoords = isAccepted && empLat != null && !isNaN(empLat) && empLng != null && !isNaN(empLng)
+  const hasEmpCoords = isAccepted && hasValidTechnicianGPS && !isCompleted
+  const waitingForGps = isAccepted && !hasValidTechnicianGPS && !isArrived && !isInProgress && !isCompleted
 
   const techName = isAccepted ? rawTechName : null
   const techPhone = isAccepted ? rawTechPhone : ""
-  const techPhoto = isAccepted ? (liveData?.technician?.photo || booking?.technician_photo || empLocation?.technician_photo || null) : null
-  const techRating = isAccepted ? (liveData?.technician?.rating || booking?.technician_rating || empLocation?.technician_rating || null) : null
+  const techPhoto = isAccepted ? (liveData?.technician?.photo || liveData?.technician_photo || booking?.technician_photo || empLocation?.technician_photo || null) : null
+  const techRating = isAccepted ? (liveData?.technician?.rating || liveData?.technician_rating || booking?.technician_rating || empLocation?.technician_rating || null) : null
   const techJobs = isAccepted ? (empLocation?.jobs_completed || liveData?.technician?.jobs_completed || null) : null
   const startOtp = isAccepted ? (liveData?.start_otp || booking?.start_otp || booking?.otp || "") : ""
 
@@ -257,7 +291,6 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
 
   const finalDistance = roadDistanceKm || liveData?.distance_km || null
   const finalEta = roadEtaMins || liveData?.eta_minutes || null
-  const waitingForGps = isAccepted && !hasEmpCoords && !isArrived && !isInProgress && !isCompleted
 
   const mapCenter = hasEmpCoords && hasCustomerCoords
     ? [(destLat + empLat) / 2, (destLng + empLng) / 2]
@@ -630,15 +663,15 @@ export default function CustomerLiveTrackingModal({ booking, onClose }) {
                   </>
                 ) : waitingForGps ? (
                   <>
-                    <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#7C3AED", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Partner Accepted • Live GPS
+                    <div style={{ fontSize: "0.7rem", fontWeight: 900, color: "#7C3AED", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7C3AED", display: "inline-block" }} className="animate-ping" />
+                      {currentStatus === "on_the_way" ? "Partner On The Way" : "Partner Accepted"}
                     </div>
-                    <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "#0f172a", display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7C3AED", display: "inline-block", animation: "pulse 1.5s infinite" }} />
-                      Locating partner...
+                    <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#0f172a" }}>
+                      {currentStatus === "on_the_way" ? "Technician is on the way" : "Technician Accepted"}
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "#6D28D9", fontWeight: 600, marginTop: 2 }}>
-                      Waiting for live GPS signal
+                    <div style={{ fontSize: "0.74rem", color: "#6D28D9", fontWeight: 600, marginTop: 2 }}>
+                      Waiting for live location...
                     </div>
                   </>
                 ) : isAssignedOnly ? (

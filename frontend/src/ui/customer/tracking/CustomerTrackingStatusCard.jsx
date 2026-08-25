@@ -71,7 +71,7 @@ export function CustomerTrackingStatusCard({
               : hasGps
               ? "TECHNICIAN ON THE WAY"
               : isAccepted
-              ? "TECHNICIAN ASSIGNED"
+              ? "TECHNICIAN ACCEPTED"
               : "BOOKING CONFIRMED"}
           </span>
           {online && (
@@ -104,9 +104,9 @@ export function CustomerTrackingStatusCard({
                 : isCompleted
                 ? "Service Completed"
                 : hasGps
-                ? techName || "Assigned Partner"
+                ? `${techName || "Assigned Partner"} is on the way`
                 : isAccepted
-                ? techName || "Professional Assigned"
+                ? `${techName || "Service Partner"} accepted your booking`
                 : "Finding your service professional…"}
             </div>
 
@@ -130,7 +130,7 @@ export function CustomerTrackingStatusCard({
                   {cleanEta ? <strong>~{cleanEta} ETA</strong> : <span>Calculating…</span>}
                 </>
               ) : isAccepted ? (
-                "Waiting for partner live location"
+                "Waiting for live location..."
               ) : (
                 "Searching nearby verified professionals"
               )}

@@ -14,6 +14,7 @@ import { routes } from "../routes.js"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { PackageModal, CustomCleaningPackageModal, KitchenCleaningModal, PaintingPackageModal, MasonPackageModal, BkStyles, CustomerAccountModal, AddAddressSearchModal, CartDrawerModal } from "./BookingPage.jsx"
+import { VegCartDrawerModal } from "../components/VegCartDrawerModal.jsx"
 import { CATEGORIES as BOOKING_CATEGORIES } from "./categoriesData.js"
 import { SofaCleaningModal } from "./SofaCleaningModal.jsx"
 import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
@@ -25,6 +26,9 @@ import { apiRequest } from "../../api/client.js"
 import { getAddress } from "../../api/geocoding.js"
 import { motion, AnimatePresence } from "framer-motion"
 import { getHomePageConfig, fetchPublishedHomePageConfig, resolveDisplayImageUrl } from "../../config/homePageConfig.js"
+import acServiceImg from "../../assets/ac service.png"
+import imgFoamSplit from "../../assets/Foam & Power Jet AC Service — Split.png"
+import imgAntiRust from "../../assets/Anti-Rust Deep Clean AC Service.png"
 
 // lucide-react dropped brand/social icons — small inline marks instead of
 // pulling in a whole extra icon package for four footer glyphs.
@@ -1563,6 +1567,7 @@ const ALL_SEARCHABLE_SERVICES = [
 export function LandingPage() {
   const { user, refreshMe } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState("")
   const [packagesData, setPackagesData] = useState(null)
@@ -1778,8 +1783,24 @@ export function LandingPage() {
   const selectedFoodSubModule = useMemo(() => {
     return foodHealthSub.find((sub) => sub.id === selectedFoodSubModuleId) || null
   }, [foodHealthSub, selectedFoodSubModuleId])
-  const [foodCart, setFoodCart] = useState(() => location.state?.foodCart || {})
+  const [foodCart, setFoodCart] = useState(() => {
+    if (location.state?.foodCart && Object.keys(location.state.foodCart).length > 0) {
+      return location.state.foodCart
+    }
+    try {
+      const saved = localStorage.getItem("calservice_veg_food_cart")
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return {}
+  })
   const [foodOrderPlaced, setFoodOrderPlaced] = useState(false)
+
+  // Persist vegetable cart state so items remain visible when closing/reopening
+  useEffect(() => {
+    try {
+      localStorage.setItem("calservice_veg_food_cart", JSON.stringify(foodCart || {}))
+    } catch {}
+  }, [foodCart])
 
   useEffect(() => {
     if (location.state?.openVegetablesModal || location.state?.openFoodSubModuleId || location.state?.openFoodHealthModal) {
@@ -1798,6 +1819,7 @@ export function LandingPage() {
   const [vegApiItems, setVegApiItems] = useState(VEGETABLE_ITEMS)
   const [showCustomerEntryModal, setShowCustomerEntryModal] = useState(false)
   const [showCartDrawer, setShowCartDrawer] = useState(false)
+  const [showVegCartDrawer, setShowVegCartDrawer] = useState(false)
   const [showAccountPortal, setShowAccountPortal] = useState(false)
   const [activeAccountTab, setActiveAccountTab] = useState("My Profile")
   const [showLocationPickerModal, setShowLocationPickerModal] = useState(false)
@@ -2320,9 +2342,9 @@ export function LandingPage() {
     { id: "kc-3", name: "Empty Kitchen Deep Cleaning", price: 1799, categoryName: "Kitchen Cleaning", image: "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=400&q=80&fit=crop", catId: "kitchen_cleaning" },
     { id: "sc-1", name: "Sofa Deep Cleaning & Shampooing", price: 799, categoryName: "Sofa Cleaning", image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&q=80&fit=crop", catId: "sofa_cleaning" },
     { id: "bc-1", name: "Bathroom Deep Cleaning & Sanitization", price: 499, categoryName: "Bathroom Cleaning", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "bathroom_cleaning" },
-    { id: "ac-1", name: "Power Jet AC Foam Service", price: 599, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=400&q=80&fit=crop", catId: "hvac" },
-    { id: "ac-2", name: "Anti-Rust Protective Coating", price: 249, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1610486842247-7505ed272fc4?w=400&q=80&fit=crop", catId: "hvac" },
-    { id: "ac-3", name: "AC Gas Leak Audit & Refill", price: 899, categoryName: "AC & Heating", image: "https://images.unsplash.com/photo-1621905252507-b35492d04029?w=400&q=80&fit=crop", catId: "hvac" },
+    { id: "ac-1", name: "Power Jet AC Foam Service", price: 599, categoryName: "AC & Heating", image: imgFoamSplit, catId: "hvac" },
+    { id: "ac-2", name: "Anti-Rust Protective Coating", price: 249, categoryName: "AC & Heating", image: imgAntiRust, catId: "hvac" },
+    { id: "ac-3", name: "AC Gas Leak Audit & Refill", price: 899, categoryName: "AC & Heating", image: acServiceImg, catId: "hvac" },
     { id: "el-1", name: "Fan Repair & Installation", price: 149, categoryName: "Electrical", image: "https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=400&q=80&fit=crop", catId: "electrical" },
     { id: "pl-1", name: "Tap & Basin Leak Repair", price: 199, categoryName: "Plumbing", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80&fit=crop", catId: "plumbing" },
     { id: "cp-1", name: "Furniture Repair & Assembly", price: 299, categoryName: "Carpentry", image: "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=400&q=80&fit=crop", catId: "carpentry" },
@@ -2955,7 +2977,7 @@ export function LandingPage() {
                       setSelectedFoodSubModuleId(null)
                       setIsFoodHealthModalOpen(true)
                     } else if (cat.id === "cat-4" || titleLower.includes("transport") || titleLower.includes("truck") || titleLower.includes("goods") || titleLower.includes("mover") || idx === 3) {
-                      navigate("/trucks/hosur")
+                      setIsGoodsModalOpen(true)
                     } else {
                       setIsHomeServicesCombinedModalOpen(true)
                     }
@@ -3673,6 +3695,46 @@ export function LandingPage() {
                         <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
                           <span>⚡</span> Hosur Hub • ⏱ 8 Mins Delivery
                         </span>
+                        {/* Top Right Quick Commerce Cart Button matching Image 3 */}
+                        {Object.values(foodCart).reduce((a, b) => a + b, 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowVegCartDrawer(true)}
+                            className="bg-[#0B8860] hover:bg-[#097351] text-white px-3.5 py-1.5 rounded-xl font-black text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer active:scale-95 animate-in fade-in"
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                            <div className="flex items-center gap-1.5 leading-none">
+                              <span>
+                                {Object.values(foodCart).reduce((a, b) => a + b, 0)} {Object.values(foodCart).reduce((a, b) => a + b, 0) === 1 ? "item" : "items"}
+                              </span>
+                              <span>•</span>
+                              <span>
+                                ₹{Object.entries(foodCart).reduce((sum, [nameWithUnit, qty]) => {
+                                  if (qty <= 0) return sum
+                                  let matchedPrice = 0
+                                  if (selectedFoodSubModule?.items) {
+                                    for (const it of selectedFoodSubModule.items) {
+                                      if (it.options) {
+                                        for (const opt of it.options) {
+                                          if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                            matchedPrice = opt.price
+                                            break
+                                          }
+                                        }
+                                      }
+                                      if (matchedPrice) break
+                                      if (it.name === nameWithUnit) {
+                                        matchedPrice = it.price
+                                        break
+                                      }
+                                    }
+                                  }
+                                  return sum + (matchedPrice || 30) * qty
+                                }, 0)}
+                              </span>
+                            </div>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -4230,88 +4292,107 @@ export function LandingPage() {
                       )}
                     </div>
 
-                    <button
-                      type="button"
-                      disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
-                      onClick={() => {
-                        const itemsList = []
-                        Object.entries(foodCart).forEach(([nameWithUnit, qty]) => {
-                          if (qty <= 0) return
-                          let matchedItem = null
-                          let unit = "1 unit"
-                          let price = 0
-                          let mrp = 0
-                          let baseName = nameWithUnit
+                    <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                      {/* Add to Cart / View Cart Button - opens Image 4 drawer */}
+                      <button
+                        type="button"
+                        disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
+                        onClick={() => setShowVegCartDrawer(true)}
+                        className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all border flex items-center justify-center gap-2 ${
+                          Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                            ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
+                            : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                        }`}
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                        <span>Add to Cart</span>
+                      </button>
 
-                          if (selectedFoodSubModule?.items) {
-                            for (const it of selectedFoodSubModule.items) {
-                              if (it.options) {
-                                for (const opt of it.options) {
-                                  if (`${it.name} (${opt.unit})` === nameWithUnit) {
-                                    matchedItem = it
-                                    unit = opt.unit
-                                    price = opt.price
-                                    mrp = opt.mrp || Math.round(opt.price * 1.2)
-                                    baseName = it.name
-                                    break
+                      {/* Confirm & Schedule Delivery */}
+                      <button
+                        type="button"
+                        disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
+                        onClick={() => {
+                          const itemsList = []
+                          Object.entries(foodCart).forEach(([nameWithUnit, qty]) => {
+                            if (qty <= 0) return
+                            let matchedItem = null
+                            let unit = "1 unit"
+                            let price = 0
+                            let mrp = 0
+                            let baseName = nameWithUnit
+
+                            if (selectedFoodSubModule?.items) {
+                              for (const it of selectedFoodSubModule.items) {
+                                if (it.options) {
+                                  for (const opt of it.options) {
+                                    if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                      matchedItem = it
+                                      unit = opt.unit
+                                      price = opt.price
+                                      mrp = opt.mrp || Math.round(opt.price * 1.2)
+                                      baseName = it.name
+                                      break
+                                    }
                                   }
                                 }
-                              }
-                              if (matchedItem) break
-                              if (it.name === nameWithUnit) {
-                                matchedItem = it
-                                unit = it.unit
-                                price = it.price
-                                mrp = it.mrp || Math.round(it.price * 1.2)
-                                baseName = it.name
-                                break
+                                if (matchedItem) break
+                                if (it.name === nameWithUnit) {
+                                  matchedItem = it
+                                  unit = it.unit
+                                  price = it.price
+                                  mrp = it.mrp || Math.round(it.price * 1.2)
+                                  baseName = it.name
+                                  break
+                                }
                               }
                             }
-                          }
 
-                          itemsList.push({
-                            id: `veg_${nameWithUnit.replace(/[^a-zA-Z0-9]/g, "_")}`,
-                            name: baseName,
-                            displayName: nameWithUnit,
-                            unit: unit,
-                            price: price || 30,
-                            mrp: mrp || (price ? Math.round(price * 1.2) : 36),
-                            quantity: qty,
-                            image: matchedItem?.image || getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
-                            serviceType: "vegetables_quick_delivery",
-                            deliveryMins: "15-25 mins",
+                            itemsList.push({
+                              id: `veg_${nameWithUnit.replace(/[^a-zA-Z0-9]/g, "_")}`,
+                              name: baseName,
+                              displayName: nameWithUnit,
+                              unit: unit,
+                              price: price || 30,
+                              mrp: mrp || (price ? Math.round(price * 1.2) : 36),
+                              quantity: qty,
+                              image: matchedItem?.image || getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
+                              serviceType: "vegetables_quick_delivery",
+                              deliveryMins: "15-25 mins",
+                            })
                           })
-                        })
 
-                        if (itemsList.length === 0) return
+                          if (itemsList.length === 0) return
 
-                        document.body.style.overflow = ""
-                        setIsFoodHealthModalOpen(false)
-                        setSelectedFoodSubModuleId(null)
-                        navigate(routes.booking_checkout, {
-                          state: {
-                            category: {
-                              id: "vegetables_quick_delivery",
-                              name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
+                          document.body.style.overflow = ""
+                          setIsFoodHealthModalOpen(false)
+                          setSelectedFoodSubModuleId(null)
+                          navigate(routes.booking_checkout, {
+                            state: {
+                              category: {
+                                id: "vegetables_quick_delivery",
+                                name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
+                                isQuickCommerce: true,
+                                deliveryTime: "15-25 mins",
+                                foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                              },
+                              cart: itemsList,
                               isQuickCommerce: true,
-                              deliveryTime: "15-25 mins",
+                              foodCart: foodCart,
                               foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
-                            },
-                            cart: itemsList,
-                            isQuickCommerce: true,
-                            foodCart: foodCart,
-                            foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
-                          }
-                        })
-                      }}
-                      className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                        ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
-                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                            }
+                          })
+                        }}
+                        className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
+                          Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                            : "bg-slate-200 text-slate-400 cursor-not-allowed"
                         }`}
-                    >
-                      <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
+                      >
+                        <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -5056,8 +5137,8 @@ export function LandingPage() {
                   <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
                     <TruckGraphic className="w-full h-full" />
                   </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                    Truck
+                  <span className="text-xs sm:text-sm font-bold text-slate-800 mt-2 group-hover:text-emerald-700 transition-colors text-center leading-tight">
+                    Mini Truck<br /><span className="text-slate-500 font-semibold text-[11px] sm:text-xs">(Hosur)</span>
                   </span>
                 </button>
 
@@ -5074,8 +5155,8 @@ export function LandingPage() {
                   <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
                     <TwoWheelerGraphic className="w-full h-full" />
                   </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                    Two Wheeler
+                  <span className="text-xs sm:text-sm font-bold text-slate-800 mt-2 group-hover:text-emerald-700 transition-colors text-center leading-tight">
+                    2-Wheeler<br /><span className="text-slate-500 font-semibold text-[11px] sm:text-xs">(Hosur)</span>
                   </span>
                 </button>
 
@@ -5092,8 +5173,8 @@ export function LandingPage() {
                   <div className="w-full aspect-square max-w-[110px] rounded-2xl bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center p-2 group-hover:scale-105 transition-all">
                     <PackersMoversGraphic className="w-full h-full" />
                   </div>
-                  <span className="text-sm font-bold text-slate-800 mt-2.5 group-hover:text-emerald-700 transition-colors">
-                    Packers &amp; Movers
+                  <span className="text-xs sm:text-sm font-bold text-slate-800 mt-2 group-hover:text-emerald-700 transition-colors text-center leading-tight">
+                    Packers &amp;<br />Movers
                   </span>
                 </button>
 
@@ -5976,89 +6057,107 @@ export function LandingPage() {
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
-                    onClick={() => {
-                      const itemsList = []
-                      Object.entries(foodCart).forEach(([nameWithUnit, qty]) => {
-                        if (qty <= 0) return
-                        let matchedItem = null
-                        let unit = "1 unit"
-                        let price = 0
-                        let mrp = 0
-                        let baseName = nameWithUnit
+                  <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                    {/* Add to Cart / View Cart Button - opens Image 4 drawer */}
+                    <button
+                      type="button"
+                      disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
+                      onClick={() => setShowVegCartDrawer(true)}
+                      className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all border flex items-center justify-center gap-2 ${
+                        Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                          ? "border-emerald-600 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-700 cursor-pointer active:scale-98"
+                          : "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                      }`}
+                    >
+                      <ShoppingCart className="w-4 h-4" />
+                      <span>Add to Cart</span>
+                    </button>
 
-                        if (selectedFoodSubModule?.items) {
-                          for (const it of selectedFoodSubModule.items) {
-                            if (it.options) {
-                              for (const opt of it.options) {
-                                if (`${it.name} (${opt.unit})` === nameWithUnit) {
-                                  matchedItem = it
-                                  unit = opt.unit
-                                  price = opt.price
-                                  mrp = opt.mrp || Math.round(opt.price * 1.2)
-                                  baseName = it.name
-                                  break
+                    {/* Confirm & Schedule Delivery */}
+                    <button
+                      type="button"
+                      disabled={Object.values(foodCart).reduce((a, b) => a + b, 0) === 0}
+                      onClick={() => {
+                        const itemsList = []
+                        Object.entries(foodCart).forEach(([nameWithUnit, qty]) => {
+                          if (qty <= 0) return
+                          let matchedItem = null
+                          let unit = "1 unit"
+                          let price = 0
+                          let mrp = 0
+                          let baseName = nameWithUnit
+
+                          if (selectedFoodSubModule?.items) {
+                            for (const it of selectedFoodSubModule.items) {
+                              if (it.options) {
+                                for (const opt of it.options) {
+                                  if (`${it.name} (${opt.unit})` === nameWithUnit) {
+                                    matchedItem = it
+                                    unit = opt.unit
+                                    price = opt.price
+                                    mrp = opt.mrp || Math.round(opt.price * 1.2)
+                                    baseName = it.name
+                                    break
+                                  }
                                 }
                               }
-                            }
-                            if (matchedItem) break
-                            if (it.name === nameWithUnit) {
-                              matchedItem = it
-                              unit = it.unit
-                              price = it.price
-                              mrp = it.mrp || Math.round(it.price * 1.2)
-                              baseName = it.name
-                              break
+                              if (matchedItem) break
+                              if (it.name === nameWithUnit) {
+                                matchedItem = it
+                                unit = it.unit
+                                price = it.price
+                                mrp = it.mrp || Math.round(it.price * 1.2)
+                                baseName = it.name
+                                break
+                              }
                             }
                           }
-                        }
 
-                        itemsList.push({
-                          id: `veg_${nameWithUnit.replace(/[^a-zA-Z0-9]/g, "_")}`,
-                          name: baseName,
-                          displayName: nameWithUnit,
-                          unit: unit,
-                          price: price || 30,
-                          mrp: mrp || (price ? Math.round(price * 1.2) : 36),
-                          quantity: qty,
-                          image: matchedItem?.image || getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
-                          serviceType: "vegetables_quick_delivery",
-                          deliveryMins: "15-25 mins",
+                          itemsList.push({
+                            id: `veg_${nameWithUnit.replace(/[^a-zA-Z0-9]/g, "_")}`,
+                            name: baseName,
+                            displayName: nameWithUnit,
+                            unit: unit,
+                            price: price || 30,
+                            mrp: mrp || (price ? Math.round(price * 1.2) : 36),
+                            quantity: qty,
+                            image: matchedItem?.image || getFoodItemPhoto(baseName, selectedFoodSubModule?.id === "groceries"),
+                            serviceType: "vegetables_quick_delivery",
+                            deliveryMins: "15-25 mins",
+                          })
                         })
-                      })
 
-                      if (itemsList.length === 0) return
+                        if (itemsList.length === 0) return
 
-                      document.body.style.overflow = ""
-                      setIsFoodHealthModalOpen(false)
-                      setSelectedFoodSubModuleId(null)
-                      navigate(routes.booking_checkout, {
-                        state: {
-                          category: {
-                            id: "vegetables_quick_delivery",
-                            name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
+                        document.body.style.overflow = ""
+                        setIsFoodHealthModalOpen(false)
+                        setSelectedFoodSubModuleId(null)
+                        navigate(routes.booking_checkout, {
+                          state: {
+                            category: {
+                              id: "vegetables_quick_delivery",
+                              name: selectedFoodSubModule?.name || "Farm-Fresh Vegetables",
+                              isQuickCommerce: true,
+                              deliveryTime: "15-25 mins",
+                              foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
+                            },
+                            cart: itemsList,
                             isQuickCommerce: true,
-                            deliveryTime: "15-25 mins",
+                            foodCart: foodCart,
                             foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
-                          },
-                          cart: itemsList,
-                          isQuickCommerce: true,
-                          foodCart: foodCart,
-                          foodSubModuleId: selectedFoodSubModule?.id || "vegetables",
-                        }
-                      })
-                    }}
-                    className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
-                      Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
-                        ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
-                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                    }`}
-                  >
-                    <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
+                          }
+                        })
+                      }}
+                      className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 ${
+                        Object.values(foodCart).reduce((a, b) => a + b, 0) > 0
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer active:scale-98"
+                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                      }`}
+                    >
+                      <span>Confirm &amp; Schedule {selectedFoodSubModule.name} Delivery</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -6344,6 +6443,22 @@ export function LandingPage() {
               setShowCartDrawer(false)
               navigate(routes.booking_checkout, { state: { category: activeCategory, cart: modalCart } })
             }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Quick-Commerce Veg Cart Drawer Modal matching Image 4 */}
+      <AnimatePresence>
+        {showVegCartDrawer && (
+          <VegCartDrawerModal
+            isOpen={showVegCartDrawer}
+            onClose={() => setShowVegCartDrawer(false)}
+            foodCart={foodCart}
+            setFoodCart={setFoodCart}
+            selectedFoodSubModule={selectedFoodSubModule}
+            getFoodItemPhoto={getFoodItemPhoto}
+            deliveryAddress={activeLocationLabel || "Thozhi Hostel, Viswanathapuram, Hosur, Tamil Nadu"}
+            onChangeAddress={() => setShowLocationPickerModal(true)}
           />
         )}
       </AnimatePresence>

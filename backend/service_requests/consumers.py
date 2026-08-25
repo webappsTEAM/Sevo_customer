@@ -196,12 +196,15 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
         if str(self.identifier).lower() == str(self.sr.tracking_token).lower():
             return True
 
-        # 3. Authorized via authenticated customer ownership or admin role
+        # 3. Authorized via authenticated customer ownership, assigned technician, or staff RBAC
         user = self.scope.get("user")
         if user and user.is_authenticated:
-            if getattr(user, "role", "") in ["admin", "staff", "manager", "director"]:
+            from accounts.permissions import is_super_admin, can
+            if is_super_admin(user) or can(user, "live_tracking", "view") or can(user, "dispatch", "view"):
                 return True
             if self.sr.customer_id and self.sr.customer_id == user.id:
+                return True
+            if getattr(self.sr, "assigned_employee", None) and getattr(self.sr.assigned_employee, "user_id", None) == user.id:
                 return True
 
         return False
@@ -209,11 +212,12 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
     @sync_to_async
     def _get_tracking_payload(self):
         from service_requests.views import _build_tracking_payload
+        from accounts.permissions import is_super_admin, can
         # Refresh from database
         self.sr.refresh_from_db()
         user = self.scope.get("user")
         has_full_access = False
-        if user and user.is_authenticated and getattr(user, "role", "") in ["admin", "staff"]:
+        if user and user.is_authenticated and (is_super_admin(user) or can(user, "live_tracking", "view")):
             has_full_access = True
         return _build_tracking_payload(self.sr, has_full_access=has_full_access)
 

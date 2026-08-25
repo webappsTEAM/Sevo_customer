@@ -91,10 +91,14 @@ class User(AbstractBaseUser):
     date_joined = models.DateTimeField(default=timezone.now)
 
     class Role(models.TextChoices):
+        SUPER_ADMIN = "super_admin", "Super Admin"
         ADMIN = "admin", "Admin"
         MANAGER = "manager", "Manager"
-        CUSTOMER = "customer", "Customer"
         SUPPORT = "support", "Support"
+        CATALOG = "catalog", "Catalog Manager"
+        FINANCE = "finance", "Finance"
+        EMPLOYEE = "employee", "Employee"
+        CUSTOMER = "customer", "Customer"
 
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.CUSTOMER)
 
@@ -152,7 +156,10 @@ class User(AbstractBaseUser):
         return self.is_superuser
 
     def is_admin(self) -> bool:
-        return self.role == self.Role.ADMIN
+        return self.role in (self.Role.ADMIN, self.Role.SUPER_ADMIN) or self.is_superuser or self.is_staff
+
+    def is_super_admin(self) -> bool:
+        return bool(self.is_superuser or self.role in (self.Role.SUPER_ADMIN, "super_admin", "superadmin"))
 
 
 class OTPChannel(models.TextChoices):

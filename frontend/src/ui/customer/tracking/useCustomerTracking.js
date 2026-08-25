@@ -82,10 +82,13 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
   const lastCapturedAtRef = useRef(0)
   const lastKnownGpsRef = useRef(null)
   const lastKnownBearingRef = useRef(0)
+  const isFetchingRef = useRef(false) // in-flight guard: prevents overlapping REST polls
 
   /* ── Authoritative REST Fetch ── */
   const fetchLive = useCallback(async () => {
     if (!mountedRef.current) return
+    if (isFetchingRef.current) return  // skip cycle if previous request still in-flight
+    isFetchingRef.current = true
     try {
       let url
       if (trackingToken) {
@@ -179,6 +182,7 @@ export function useCustomerTracking({ bookingId, jobId, trackingToken }) {
         setConnectionState("OFFLINE")
       }
     } finally {
+      isFetchingRef.current = false
       if (mountedRef.current) setLoading(false)
     }
   }, [activeIdentifier, trackingToken])
