@@ -34,6 +34,7 @@ import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx"
 import { CustomerEntryFlowModal } from "../components/CustomerEntryFlowModal.jsx"
 import CustomerLiveTrackingModal from "../components/CustomerLiveTrackingModal.jsx"
 import { BookingCancellationModal } from "../components/BookingCancellationModal.jsx"
+import { resolveImageUrl } from "../../utils/imageUrl.js"
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import { getAddress } from "../../api/geocoding.js";
@@ -1208,7 +1209,7 @@ function StepPackage({ category, selectedPackage, onSelect, onNext, onBack, pack
 function StepSchedule({ category, selectedDate, selectedTime, onDateChange, onTimeChange, onNext, onBack, cart }) {
   const dateScrollRef = useRef()
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : 0
-  const isFreeCategory = category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))
+  const isFreeCategory = totalPrice === 0 && (category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint")))))
   const totalGst = isFreeCategory ? 0 : (cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity * ((c.gst_rate !== undefined ? Number(c.gst_rate) : 18) / 100)), 0) : 0)
   const roundedGst = Math.round(totalGst)
   const gstRate = cart && cart.length > 0 && cart[0].gst_rate !== undefined ? Number(cart[0].gst_rate) : 18
@@ -1807,7 +1808,7 @@ function StepConfirm({ category, pkg, cart, date, time, formData, photoPreview, 
   const UC_TIME_FORMATS = (t) => { if (!t) return ''; const [h] = t.split(':').map(Number); const ampm = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:00 ${ampm}` }
   const displayTime = UC_TIME_FORMATS(time)
   const totalPrice = cart && cart.length > 0 ? cart.reduce((a, c) => a + (c.price * c.quantity), 0) : (pkg?.price || 0)
-  const isFreeCategory = category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint"))))
+  const isFreeCategory = totalPrice === 0 && (category?.id === "painting" || category?.id === "mason" || (cart && cart.some(c => c.id && (String(c.id).includes("mason") || String(c.id).includes("paint")))))
   const itemsList = cart && cart.length > 0 ? cart : (pkg ? [pkg] : [])
   const totalGst = isFreeCategory ? 0 : itemsList.reduce((a, c) => a + ((c.price || 0) * (c.quantity || 1) * ((c.gst_rate !== undefined ? Number(c.gst_rate) : 18) / 100)), 0)
   const roundedGst = Math.round(totalGst)
@@ -7906,15 +7907,15 @@ function StepWorkflowCheckout({
     "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM"
   ]
 
-  const isFreeCategory = category?.id === "painting" || category?.id === "mason";
   const items = cart && cart.length > 0 ? cart : [{
     id: "def-1",
-    name: isFreeCategory ? "Free Site Inspection" : (category?.name || "Service Booking"),
-    price: isFreeCategory ? 0 : 1198,
+    name: (category?.id === "painting" || category?.id === "mason") ? "Free Site Inspection" : (category?.name || "Service Booking"),
+    price: (category?.id === "painting" || category?.id === "mason") ? 0 : 1198,
     quantity: 1
   }]
 
   const itemTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const isFreeCategory = itemTotal === 0 && (category?.id === "painting" || category?.id === "mason");
   const origTotal = Math.round(itemTotal * 1.1)
   const discount = appliedCoupon
     ? (appliedCoupon.discountAmount != null
@@ -9057,7 +9058,7 @@ export function BookingPage() {
               priceStr: BOOKING_CURRENCY_SYMBOL + s.price,
               duration: s.duration || "1 hr",
               payment_policy: s.payment_policy,
-              image: s.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+              image: s.image || "",
               includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
               excludes: Array.isArray(s.excludes) ? s.excludes : [],
               popular: !!s.popular,
@@ -9185,8 +9186,8 @@ export function BookingPage() {
         : shortName;
     }
 
-    const isFreeCategory = category?.id === "painting" || category?.id === "mason";
     const itemTotal = cart.reduce((a, c) => a + ((Number(c.price) || 0) * (Number(c.quantity) || 1)), 0);
+    const isFreeCategory = itemTotal === 0 && (category?.id === "painting" || category?.id === "mason");
     const totalGst = isFreeCategory ? 0 : cart.reduce((s, i) => s + Math.round((Number(i.price) * (Number(i.quantity) || 1)) * ((Number(i.gst_rate) || 18) / 100)), 0);
     const platformFee = (itemTotal === 0 || isFreeCategory) ? 0 : cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
     
@@ -10119,7 +10120,7 @@ const PAINTING_DETAILS_EXTRA = {
 
 export function PaintingPackageModal({ category, cart, setCart, onClose, onCheckout, onGetEstimate, packagesData, setLocation, setFormData }) {
   const [showPriceList, setShowPriceList] = React.useState(false);
-  const [selectedPaintType, setSelectedPaintType] = React.useState('premium-emulsion');
+  const [selectedPaintType, setSelectedPaintType] = React.useState(null);
   const [searchQuery, setSearchQuery] = useState("")
   const [expanded, setExpanded] = useState({})
   const [activeDetailService, setActiveDetailService] = useState(null)
@@ -10137,6 +10138,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
   React.useEffect(() => {
     setExpandedFaq(null);
+    setSelectedPaintType(null);
   }, [activeDetailService]);
 
   const getSubOptionDescription = (id, serviceName) => {
@@ -10316,7 +10318,11 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
 
     if (dbPackages && dbPackages.length > 0) {
       return staticServices.map(service => {
-        const relevantPkgs = dbPackages.filter(p => p.service_slug === service.serviceSlug);
+        const relevantPkgs = dbPackages.filter(p =>
+          p.service_slug === service.serviceSlug ||
+          (p.service_name && p.service_name.toLowerCase() === service.name.toLowerCase()) ||
+          String(p.service) === service.serviceSlug
+        );
         if (relevantPkgs.length > 0) {
           const cust = relevantPkgs[0]?.service_customization || {};
           const dynamicSubOptions = relevantPkgs.map(p => ({
@@ -10324,10 +10330,14 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
             name: p.slug === "int-full-home" ? "Full House painting" : p.name,
             price: parseFloat(p.price) || 0
           }));
+          const serviceImg = relevantPkgs.find(p => p.service_image && !p.service_image.includes("1581578731548"))?.service_image;
+          const pkgImg = relevantPkgs.find(p => p.image && !p.image.includes("1581578731548"))?.image;
+          const resolvedImg = (serviceImg && serviceImg.trim()) ? serviceImg : ((pkgImg && pkgImg.trim()) ? pkgImg : service.image);
+
           return {
             ...service,
-            name: cust.heading || service.name,
-            image: relevantPkgs[0]?.service_image || service.image || relevantPkgs[0]?.image,
+            name: cust.heading || relevantPkgs[0]?.service_name || service.name,
+            image: resolvedImg,
             rating: cust.rating || service.rating,
             reviews: cust.reviews || service.reviews,
             points: Array.isArray(cust.points) && cust.points.length > 0
@@ -10713,51 +10723,24 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
               </h2>
             </div>
             <div className="uc-paint-horizontal-nav-list" style={{ justifyContent: "flex-start", margin: 0, padding: "8px 0" }}>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-interior")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"
-                  alt="Interior Painting"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Interior Painting</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-exterior")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=150&auto=format&fit=crop&q=60"
-                  alt="Exterior Painting"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Exterior Painting</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-waterproofing")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=150&auto=format&fit=crop&q=60"
-                  alt="Waterproofing"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Waterproofing</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-wood-metal")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?w=150&auto=format&fit=crop&q=60"
-                  alt="Wood & Metal"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Wood & Metal</span>
-              </button>
-              <button className="uc-paint-tab-btn" onClick={() => scrollToCard("paint-texture")}>
-                <img
-                  className="uc-paint-tab-img"
-                  src="https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=150&auto=format&fit=crop&q=60"
-                  alt="Texture Decor"
-                  onError={e => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60"; }}
-                />
-                <span className="uc-paint-tab-label">Texture Decor</span>
-              </button>
+              {PAINTING_SERVICES.map(svc => (
+                <button
+                  key={svc.id}
+                  className="uc-paint-tab-btn"
+                  onClick={() => scrollToCard(svc.id)}
+                >
+                  <img
+                    className="uc-paint-tab-img"
+                    src={resolveImageUrl(svc.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60")}
+                    alt={svc.name}
+                    onError={e => {
+                      e.target.onerror = null;
+                      e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=150&auto=format&fit=crop&q=60";
+                    }}
+                  />
+                  <span className="uc-paint-tab-label">{svc.name}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -10790,7 +10773,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                         <div key={service.id} className="uc-paint-card" ref={el => { cardRefs.current[service.id] = el; }}>
                           <div className="uc-paint-card-img-box">
                             <img
-                              src={service.image}
+                              src={resolveImageUrl(service.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
                               alt={service.name}
                               onError={e => {
                                 e.target.onerror = null;
@@ -11295,7 +11278,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                 {/* Hero Image */}
                 <div style={{ width: '100%', height: 160, position: 'relative', flexShrink: 0 }}>
                   <img
-                    src={activeDetailService.image}
+                    src={resolveImageUrl(activeDetailService.image, "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop")}
                     alt={activeDetailService.name}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={e => { e.target.src = "https://images.unsplash.com/photo-1596162954151-cdcb4c0f70a8?w=800&q=80&fit=crop" }}
@@ -11670,7 +11653,7 @@ export function PaintingPackageModal({ category, cart, setCart, onClose, onCheck
                                     return (
                                       <div
                                         key={paint.id}
-                                        onClick={() => setSelectedPaintType(paint.id)}
+                                        onClick={() => setSelectedPaintType(prev => prev === paint.id ? null : paint.id)}
                                         style={{
                                           border: isSelected ? '2px solid #7C3AED' : '1.5px solid #e2e8f0',
                                           borderRadius: '12px',
@@ -12306,10 +12289,10 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
   };
 
   const STATIC_MASON_CATEGORIES = [
-    { id: "brick", name: "Brick & Block Work", icon: "🧱" },
-    { id: "plastering", name: "Plastering & Wall Repair", icon: "🪣" },
-    { id: "partition", name: "Wall & Partition Construction", icon: "📐" },
-    { id: "demolition", name: "Wall Breaking & Demolition", icon: "🔨" }
+    { id: "brick", name: "Brick & Block Work", icon: "🧱", image: "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop" },
+    { id: "plastering", name: "Plastering & Wall Repair", icon: "🪣", image: "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=300&q=80&fit=crop" },
+    { id: "partition", name: "Wall & Partition Construction", icon: "📐", image: "/mockups/brick_wall_construction_red.jpg" },
+    { id: "demolition", name: "Wall Breaking & Demolition", icon: "🔨", image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&q=80&fit=crop" }
   ];
 
   const STATIC_MASON_SERVICES = [
@@ -12576,17 +12559,24 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
             "construction": "🏗️",
           };
           let icon = iconMap[cId] || iconMap[rawSlug] || "🧱";
+          const sImg = pkg.service_image || pkg.image;
+          const staticMatch = STATIC_MASON_CATEGORIES.find(s => s.id === cId || s.name.toLowerCase() === sName.toLowerCase());
+          const catImg = (sImg && sImg.trim()) ? resolveImageUrl(sImg, staticMatch?.image || "") : (staticMatch?.image || "");
 
           distinct.push({
             id: cId,
             name: sName,
-            icon: icon
+            icon: icon,
+            image: catImg
           });
         }
       });
       return distinct;
     }
-    return STATIC_MASON_CATEGORIES;
+    return STATIC_MASON_CATEGORIES.map(c => ({
+      ...c,
+      image: resolveImageUrl(c.image, c.image)
+    }));
   }, [dbPackages]);
 
   React.useEffect(() => {
@@ -12627,6 +12617,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
         else if (rawSlug.startsWith("mason-")) cId = rawSlug.replace("mason-", "");
 
         const staticTemplate = STATIC_MASON_SERVICES.find(s => s.id === pkg.slug || s.name === pkg.name);
+        const resolvedImage = resolveImageUrl(pkg.service_image || pkg.image || staticTemplate?.image, staticTemplate?.image || "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop");
 
         return {
           id: pkg.slug || pkg.id.toString(),
@@ -12639,7 +12630,7 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
           duration: pkg.duration || staticTemplate?.duration || "Flexible",
           rating: pkg.service_customization?.rating || staticTemplate?.rating || "4.8",
           reviews: pkg.service_customization?.reviews || staticTemplate?.reviews || "100+",
-          image: pkg.image || staticTemplate?.image || "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop",
+          image: resolvedImage,
           includes: Array.isArray(pkg.includes) && pkg.includes.length > 0 ? pkg.includes : (staticTemplate?.includes || ["Quality masonry work", "Sevo warranty"]),
           excludes: Array.isArray(pkg.excludes) ? pkg.excludes : (staticTemplate?.excludes || []),
           inspectionHighlights: staticTemplate?.inspectionHighlights || ["Visual inspection", "Measurement scan"],
@@ -12649,7 +12640,10 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
         };
       });
     }
-    return STATIC_MASON_SERVICES;
+    return STATIC_MASON_SERVICES.map(s => ({
+      ...s,
+      image: resolveImageUrl(s.image, s.image)
+    }));
   }, [dbPackages]);
 
   const cardRefs = useRef({});
@@ -12932,9 +12926,22 @@ export function MasonPackageModal({ category, cart, setCart, onClose, onCheckout
                       color: "#059669",
                       display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem",
                       boxShadow: isActive ? "0 0 0 3px rgba(16,185,129,0.18)" : "0 2px 6px rgba(0, 0, 0, 0.04)",
+                      overflow: "hidden",
                       transition: "all 0.2s ease"
                     }}>
-                      {cat.icon}
+                      {cat.image ? (
+                        <img
+                          src={resolveImageUrl(cat.image, "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop")}
+                          alt={cat.name}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300&q=80&fit=crop";
+                          }}
+                        />
+                      ) : (
+                        cat.icon
+                      )}
                     </div>
                     <span className="uc-paint-tab-label" style={{
                       marginTop: "6px", fontSize: "0.68rem", lineHeight: "1.2",
@@ -14078,7 +14085,7 @@ function getCategoryFaqsAndReviews(pkg) {
   };
 }
 
-export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, isFullPage = false }) {
+export function CustomCleaningPackageModal({ category, cart, setCart, onClose, onCheckout, packagesData, isFullPage = false }) {
   const rawCatKey = (category?.id || category?.slug || "cleaning").toLowerCase();
   let normalizedKey = "cleaning";
   if (["hvac", "ac"].some(k => rawCatKey.includes(k))) normalizedKey = "hvac";
@@ -14552,7 +14559,77 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
     effectiveKey = "hvac";
   }
 
-  const subCategories = CATEGORY_SUBCATEGORIES[effectiveKey] || CATEGORY_SUBCATEGORIES.appliance_repair || CATEGORY_SUBCATEGORIES.cleaning;
+  const [dbCatalogPackages, setDbCatalogPackages] = useState([]);
+  const [dbServicesList, setDbServicesList] = useState([]);
+
+  useEffect(() => {
+    apiRequest("/settings/catalog/public/packages/")
+      .then((res) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setDbCatalogPackages(res.data);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch public catalog packages:", err));
+
+    apiRequest("/catalog/services/")
+      .then((res) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setDbServicesList(res.data);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch catalog services:", err));
+  }, []);
+
+  const subCategories = React.useMemo(() => {
+    const staticList = CATEGORY_SUBCATEGORIES[effectiveKey] || CATEGORY_SUBCATEGORIES.appliance_repair || CATEGORY_SUBCATEGORIES.cleaning;
+
+    const dynamicKey = Object.keys(packagesData || {}).find(k => {
+      const list = packagesData[k];
+      if (!Array.isArray(list)) return false;
+      return list.some(p =>
+        p.category_slug === effectiveKey ||
+        String(p.category) === effectiveKey ||
+        (effectiveKey === "mason" && (p.category_slug === "mason" || p.category_slug === "masons" || String(p.category) === "11" || (p.category_name && p.category_name.toLowerCase().includes("mason"))))
+      );
+    });
+
+    const pkgsList = dynamicKey ? (packagesData[dynamicKey] || []) : [];
+    const directServices = dbServicesList.filter(s =>
+      s.category_slug === effectiveKey ||
+      String(s.category) === effectiveKey ||
+      (effectiveKey === "mason" && (s.category_slug === "mason" || String(s.category) === "11"))
+    );
+    const combinedDb = [...pkgsList, ...(Array.isArray(dbCatalogPackages) ? dbCatalogPackages : []), ...directServices];
+
+    if (combinedDb.length > 0) {
+      return staticList.map(tab => {
+        const matched = combinedDb.find(p =>
+          (p.service_name && p.service_name.toLowerCase() === tab.name.toLowerCase()) ||
+          (p.name && p.name.toLowerCase() === tab.name.toLowerCase()) ||
+          (p.service_slug && tab.name.toLowerCase().includes(p.service_slug.replace(/-/g, " "))) ||
+          (p.slug && tab.name.toLowerCase().includes(p.slug.replace(/-/g, " ")))
+        );
+        if (matched) {
+          const rawImg = matched.service_image || matched.image;
+          const dynamicImg = (rawImg && rawImg.trim()) ? resolveImageUrl(rawImg, tab.image) : resolveImageUrl(tab.image, tab.image);
+          return {
+            ...tab,
+            name: matched.service_name || matched.name || tab.name,
+            image: dynamicImg
+          };
+        }
+        return {
+          ...tab,
+          image: resolveImageUrl(tab.image, tab.image)
+        };
+      });
+    }
+
+    return staticList.map(tab => ({
+      ...tab,
+      image: resolveImageUrl(tab.image, tab.image)
+    }));
+  }, [effectiveKey, packagesData, dbCatalogPackages, dbServicesList]);
 
   // Keep activeSubTab in sync if normalizedKey changes or URL subTab updates
   useEffect(() => {
@@ -14589,7 +14666,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
         setActiveSubTab(subCategories[0].name);
       }
     }
-  }, [normalizedKey, searchParams]);
+  }, [normalizedKey, searchParams, subCategories]);
 
   const [bhkSelections, setBhkSelections] = useState({
     essential: 3,
@@ -14604,17 +14681,6 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [selectedPackageDetail, setSelectedPackageDetail] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
   const [showModalTaxesDropdown, setShowModalTaxesDropdown] = useState(false);
-  const [dbCatalogPackages, setDbCatalogPackages] = useState([]);
-
-  useEffect(() => {
-    apiRequest("/settings/catalog/public/packages/")
-      .then((res) => {
-        if (res?.success && Array.isArray(res.data)) {
-          setDbCatalogPackages(res.data);
-        }
-      })
-      .catch((err) => console.error("Failed to fetch public catalog packages:", err));
-  }, []);
 
   // Disable background page scrolling when detailed modal is open
   useEffect(() => {
@@ -15711,7 +15777,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
                 className="flex flex-col items-center justify-start p-1.5 transition-all cursor-pointer text-center bg-transparent w-[85px] sm:w-[90px] shrink-0 group"
               >
                 <img
-                  src={tab.image}
+                  src={resolveImageUrl(tab.image, "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop")}
                   alt={tab.name}
                   onError={(e) => {
                     e.target.onerror = null;

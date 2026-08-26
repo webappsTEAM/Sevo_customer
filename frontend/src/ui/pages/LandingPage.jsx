@@ -2131,7 +2131,7 @@ export function LandingPage() {
               priceStr: "₹" + s.price,
               duration: s.duration || "1 hr",
               payment_policy: s.payment_policy,
-              image: s.image || "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&q=80&fit=crop",
+              image: s.image || "",
               includes: Array.isArray(s.includes) && s.includes.length > 0 ? s.includes : ["Standard inclusions"],
               excludes: Array.isArray(s.excludes) ? s.excludes : [],
               popular: !!s.popular,
@@ -2631,6 +2631,7 @@ export function LandingPage() {
                   }}
                 />
 
+
               ) : (activeCategory.id === "pest_control" || activeCategory.slug === "pest_control" || activeSubTabParam === "Cockroach & Termite Control" || activeSubTabParam === "Cockroach Control" || activeSubTabParam === "Termite Control") && (activeSubTabParam !== "Ants & Bed Bugs Control" && activeSubTabParam !== "Ants Control" && activeSubTabParam !== "Bedbugs Control" && activeSubTabParam !== "Ants and bed bugs control") ? (
                 <CockroachControlModal
                   category={{ id: "pest_control", name: "Pest Control" }}
@@ -2662,6 +2663,7 @@ export function LandingPage() {
                   category={activeCategory}
                   cart={modalCart}
                   setCart={setModalCart}
+                  packagesData={packagesData}
                   isFullPage={true}
                   onClose={handleCloseCategory}
                   onCheckout={(customCart) => {
