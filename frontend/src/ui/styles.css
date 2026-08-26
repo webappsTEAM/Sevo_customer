@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700&family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap");
+@import "./theme/tokens.css";
 
 @tailwind base;
 @tailwind components;
@@ -68,41 +69,44 @@
 
 /* ─── Design Tokens ────────────────────────────────────────── */
 :root {
-  /* Backgrounds */
-  --bg: #F6F8FA;
-  --bg2: #EAECEF;
-  --surface: #FFFFFF;
-  --surface2: #F9FAFB;
+  /* SEVO Concept 3 (Warm + Human-Centered) Light Mode Base */
+  --bg: var(--sevo-bg, #FFFDF8);
+  --bg2: var(--sevo-surface-raised, #F8F5EE);
+  --surface: var(--sevo-surface, #FFFFFF);
+  --surface2: var(--sevo-surface-raised, #F8F5EE);
+  --background: var(--sevo-bg, #FFFDF8);
+  --foreground: var(--sevo-text-primary, #0B172A);
+  --border: var(--sevo-border, #E5E7EB);
+  --input: var(--sevo-border, #E5E7EB);
+  --ring: var(--sevo-focus, #0B8F7A);
 
   /* Bauhaus Tokens */
-  --bauhaus-card-bg: #f0f4fb;
-  --bauhaus-card-separator: #d3dce8;
-  --bauhaus-card-accent: #156ef6;
-  --bauhaus-card-radius: 2em;
-  --bauhaus-card-border-width: 2px;
-  --bauhaus-card-inscription-top: #3b4252;
-  --bauhaus-card-inscription-main: #111014;
-  --bauhaus-card-inscription-sub: #5e6473;
-  --bauhaus-card-inscription-progress-label: #454f55;
-  --bauhaus-card-inscription-progress-value: #1c2541;
-  --bauhaus-card-progress-bar-bg: #e5e7eb;
-  --bauhaus-chronicle-bg: #151419;
-  --bauhaus-chronicle-fg: #fff;
-  --bauhaus-chronicle-hover-fg: #fff;
-
-  /* ... rest of your tokens ... */
+  --bauhaus-card-bg: var(--sevo-surface, #FFFFFF);
+  --bauhaus-card-separator: var(--sevo-border, #E5E7EB);
+  --bauhaus-card-accent: var(--sevo-primary, #0B8F7A);
+  --bauhaus-card-radius: 1.5em;
+  --bauhaus-card-border-width: 1px;
+  --bauhaus-card-inscription-top: var(--sevo-text-secondary, #475569);
+  --bauhaus-card-inscription-main: var(--sevo-text-primary, #0B172A);
+  --bauhaus-card-inscription-sub: var(--sevo-text-muted, #94A3B8);
+  --bauhaus-card-inscription-progress-label: var(--sevo-text-secondary, #475569);
+  --bauhaus-card-inscription-progress-value: var(--sevo-text-primary, #0B172A);
+  --bauhaus-card-progress-bar-bg: var(--sevo-surface-raised, #F8F5EE);
+  --bauhaus-chronicle-bg: var(--sevo-surface-raised, #F8F5EE);
+  --bauhaus-chronicle-fg: var(--sevo-text-primary, #0B172A);
+  --bauhaus-chronicle-hover-fg: var(--sevo-primary, #0B8F7A);
 
   /* Text */
-  --fg: #0E1116;
-  --fg2: #3A414A;
-  --muted: #7C8592;
-  --subtle: #B4BCC8;
+  --fg: var(--sevo-text-primary, #0B172A);
+  --fg2: var(--sevo-text-secondary, #475569);
+  --muted: var(--sevo-text-muted, #94A3B8);
+  --subtle: var(--sevo-border-strong, #CBD5E1);
 
-  /* Brand (Vibrant Indigo Theme) */
-  --primary: #6366F1;
-  --primary-light: #EEF2FF;
-  --primary-dark: #4F46E5;
-  --primary-glow: rgba(99, 102, 241, 0.25);
+  /* Brand (SEVO Concept 3 Green/Teal) */
+  --primary: var(--sevo-primary, #0B8F7A);
+  --primary-light: var(--sevo-primary-light, #E6F5F2);
+  --primary-dark: var(--sevo-primary-hover, #087060);
+  --primary-glow: rgba(11, 143, 122, 0.25);
 
   /* Status */
   --good: #059669;
@@ -116,8 +120,8 @@
   --bad-text: #B91C1C;
 
   /* Borders */
-  --stroke: rgba(0, 0, 0, 0.06);
-  --stroke2: rgba(0, 0, 0, 0.14);
+  --stroke: var(--sevo-border, #E5E7EB);
+  --stroke2: var(--sevo-border-strong, #CBD5E1);
 
   /* Shadow (Editorial Soft Depth) */
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.03);
@@ -144,24 +148,31 @@
   --header-height: 64px;
 }
 
-/* --- Dark Mode Tokens --- */
-:root[data-theme='dark'] {
-  --bg: #0B111D;
-  --bg2: #070B14;
-  --surface: #131B2B;
-  --surface2: #1A2436;
+/* --- SEVO Concept 2 (Bold + Immersive) Dark Mode Tokens --- */
+:root[data-theme='dark'],
+.dark {
+  --bg: var(--sevo-bg, #06122B);
+  --bg2: var(--sevo-surface-raised, #102956);
+  --surface: var(--sevo-surface, #0B1E43);
+  --surface2: var(--sevo-surface-raised, #102956);
+  --background: var(--sevo-bg, #06122B);
+  --foreground: var(--sevo-text-primary, #F8FAFC);
+  --border: var(--sevo-border, #24406D);
+  --input: var(--sevo-border, #24406D);
+  --ring: var(--sevo-focus, #23B26D);
 
-  --fg: #F1F5F9;
-  --fg2: #CBD5E1;
-  --muted: #94A3B8;
-  --subtle: #475569;
+  --fg: var(--sevo-text-primary, #F8FAFC);
+  --fg2: var(--sevo-text-secondary, #CBD5E1);
+  --muted: var(--sevo-text-muted, #64748B);
+  --subtle: var(--sevo-border-strong, #3B629B);
 
-  --primary: #F1F5F9;
-  --primary-light: #1E293B;
-  --primary-glow: rgba(241, 245, 249, 0.1);
+  --primary: var(--sevo-primary, #23B26D);
+  --primary-light: var(--sevo-primary-light, #0D3328);
+  --primary-dark: var(--sevo-primary-hover, #1E9E60);
+  --primary-glow: rgba(35, 178, 109, 0.25);
 
-  --stroke: rgba(255, 255, 255, 0.08);
-  --stroke2: rgba(255, 255, 255, 0.12);
+  --stroke: var(--sevo-border, #24406D);
+  --stroke2: var(--sevo-border-strong, #3B629B);
 
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 16px 48px rgba(0, 0, 0, 0.5);
@@ -183,8 +194,7 @@ body {
   margin: 0;
   font-family: var(--font);
   background: var(--bg);
-  background-image: radial-gradient(circle at 2px 2px, var(--stroke) 1px, transparent 0);
-  background-size: 24px 24px;
+
   color: var(--fg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

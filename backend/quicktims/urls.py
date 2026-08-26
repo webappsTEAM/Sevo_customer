@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.conf.urls.static import static
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.static import serve
 
 from accounts.views import CustomerLocationDetectView
 
@@ -18,8 +19,8 @@ urlpatterns = [
     path("api/customers/", include("customer_analytics.urls")),
     path("api/platform/", include("platform_control.urls")),
     path("api/", include("service_requests.urls")),
+    re_path(r"^assets/(?P<path>.*)$", serve, {"document_root": str(settings.BASE_DIR / "ASSET IMAGES")}),
 ]
-
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

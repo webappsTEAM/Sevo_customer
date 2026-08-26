@@ -312,6 +312,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 MEDIA_URL = os.getenv("MEDIA_URL", "/media/")
 MEDIA_ROOT = BASE_DIR / "media"
+ASSET_IMAGES_DIR = BASE_DIR / "ASSET IMAGES"
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
 

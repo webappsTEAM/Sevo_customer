@@ -1203,7 +1203,7 @@ export function MiniTruckBookingHosurPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFCFB] text-slate-800 font-sans antialiased">
+    <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] font-sans antialiased">
       {/* ── Top Header Navigation ──────────────────────────────── */}
       {/* Exit Confirmation Modal */}
       {showExitConfirm && (
@@ -1212,12 +1212,12 @@ export function MiniTruckBookingHosurPage() {
           aria-modal="true"
           className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
         >
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-200">
+          <div className="bg-[var(--sevo-surface)] rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-[var(--sevo-border)] text-center animate-in zoom-in-95 duration-200">
             <div className="w-12 h-12 rounded-full bg-amber-50 border-2 border-amber-100 flex items-center justify-center mx-auto mb-4 text-amber-600">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-black text-slate-900 mb-2">Do you want to exit?</h3>
-            <p className="text-xs text-slate-500 font-medium leading-relaxed mb-6">
+            <h3 className="text-lg font-black text-[var(--sevo-text-primary)] mb-2">Do you want to exit?</h3>
+            <p className="text-xs text-[var(--sevo-text-secondary)] font-medium leading-relaxed mb-6">
               Exiting will close the partner search screen. Your booking request will remain active in your bookings.
             </p>
             <div className="flex gap-3">
@@ -1242,14 +1242,14 @@ export function MiniTruckBookingHosurPage() {
                     }
                   })
                 }}
-                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/10"
+                className="flex-1 py-3 bg-[var(--sevo-error)] hover:opacity-90 active:scale-95 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md"
               >
                 Yes, Exit
               </button>
               <button
                 type="button"
                 onClick={() => setShowExitConfirm(false)}
-                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-extrabold text-sm rounded-xl transition-all cursor-pointer"
+                className="flex-1 py-3 bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-surface-subtle)] active:scale-95 text-[var(--sevo-text-primary)] border border-[var(--sevo-border)] font-extrabold text-sm rounded-xl transition-all cursor-pointer"
               >
                 No, Stay
               </button>
@@ -1258,7 +1258,7 @@ export function MiniTruckBookingHosurPage() {
         </div>
       )}
 
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100">
+      <header className="sticky top-0 z-40 bg-[var(--sevo-surface)]/90 backdrop-blur-md border-b border-[var(--sevo-border)] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 cursor-pointer select-none group" onClick={handleLogoClick}>
             <img
@@ -1274,88 +1274,69 @@ export function MiniTruckBookingHosurPage() {
                 className="shrink-0 object-contain"
                 style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
               />
-              <span className="text-[10px] font-semibold text-emerald-700 tracking-wide uppercase mt-0.5">
+              <span className="text-[10px] font-bold text-[var(--sevo-primary)] tracking-wide uppercase mt-0.5">
                 Logistics &amp; Trucks
               </span>
             </div>
           </div>
 
           {/* Location Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-xs font-bold text-emerald-800">
-            <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--sevo-primary-light)] border border-[var(--sevo-primary)]/20 text-xs font-bold text-[var(--sevo-primary)]">
+            <MapPin className="w-3.5 h-3.5 text-[var(--sevo-primary)]" />
             <span>Hosur</span>
           </div>
 
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={handleLogoClick}>Services</span>
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={handleLogoClick}>For Enterprise</span>
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={() => setSupportModalOpen(true)}>Support</span>
+          <div className="hidden md:flex items-center gap-6 text-sm font-bold text-[var(--sevo-text-secondary)]">
+            <span className="hover:text-[var(--sevo-primary)] transition-colors cursor-pointer" onClick={handleLogoClick}>Services</span>
+            <span className="hover:text-[var(--sevo-primary)] transition-colors cursor-pointer" onClick={handleLogoClick}>For Enterprise</span>
+            <span className="hover:text-[var(--sevo-primary)] transition-colors cursor-pointer" onClick={() => setSupportModalOpen(true)}>Support</span>
             {user ? (
               <button
                 type="button"
                 onClick={() => setShowAccountPortal(true)}
-                className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+                className="flex items-center gap-2 text-[var(--sevo-text-primary)] hover:text-[var(--sevo-primary)] font-bold text-sm transition-colors cursor-pointer group"
               >
-                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                <div className="w-7 h-7 rounded-full border border-[var(--sevo-border)] text-[var(--sevo-text-secondary)] flex items-center justify-center shrink-0 group-hover:border-[var(--sevo-primary)] transition-colors">
                   <User className="w-4 h-4 stroke-[1.75]" />
                 </div>
-                <span className="font-semibold text-slate-800">
-                  {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+                <span>{user.username || "Account"}</span>
               </button>
             ) : (
               <button
-                onClick={() => setShowCustomerEntryModal(true)}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                type="button"
+                onClick={() => setEntryFlowOpen(true)}
+                className="px-4 py-2 bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer active:scale-95"
               >
-                Sign In
+                Login / Register
               </button>
             )}
           </div>
         </div>
       </header>
 
-      {/* ── Hero Section (Page 1) ──────────────────────────────── */}
-      <section
-        className="relative pt-10 pb-8 sm:pt-14 sm:pb-12 border-b border-slate-100/60 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url('/hero_minitruck_bg.png')` }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-950/55 to-slate-950/80"></div>
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 text-center z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-bold tracking-wide mb-4 shadow-sm border border-white/25 backdrop-blur-sm">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
-            Hosur Mini Truck Service
-          </div>
-
-          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight max-w-3xl mx-auto drop-shadow-lg">
-            Affordable and Trusted Mini Truck Booking in Hosur
-          </h1>
-
-          <p className="mt-4 text-sm sm:text-base text-slate-200 max-w-2xl mx-auto leading-relaxed drop-shadow">
-            Whether you're relocating, transporting furniture, or delivering commercial goods, our mini truck booking service in Hosur offers reliable, safe, and cost-effective transportation
-          </p>
-
-          <div className="mt-5 flex items-center justify-center gap-3 text-xs font-semibold text-emerald-300">
-            <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> On-Demand in 15 mins
+      {/* Main Page Body */}
+      <main className="pb-16">
+        {/* ── Hosur Logistics Header ───────────────────────────── */}
+        <section className="relative">
+          <div className="bg-gradient-to-b from-[var(--sevo-surface)] to-[var(--sevo-surface-raised)]/40 border-b border-[var(--sevo-border)] py-8 sm:py-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black bg-[var(--sevo-primary-light)] text-[var(--sevo-primary)] border border-[var(--sevo-primary)]/20 uppercase tracking-wider mb-3">
+              <Truck size={13} /> Hosur Local &amp; Intercity Transport
             </span>
-            <span className="text-white/40">•</span>
-            <span className="flex items-center gap-1">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" /> Verified Drivers
-            </span>
-            <span className="text-white/40">•</span>
-            <span className="flex items-center gap-1">
-              <Clock className="w-4 h-4 text-emerald-400" /> Transparent Pricing
-            </span>
+            <h1 className="text-2xl sm:text-4xl font-black text-[var(--sevo-text-primary)] tracking-tight leading-tight mb-2">
+              Book Mini Trucks in Hosur
+            </h1>
+            <p className="text-xs sm:text-base text-[var(--sevo-text-secondary)] font-medium max-w-xl mx-auto">
+              Reliable doorstep pickup &amp; delivery across Hosur SIPCOT, Zuzuwadi, Bagalur, Mathigiri, and outer corridors.
+            </p>
           </div>
         </div>
 
-        {/* ── Quick Estimate Bar (Page 1) ──────────────────────── */}
+        {/* ── Quick Estimate Bar ──────────────────────── */}
         <div id="estimate-bar" className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 mt-8">
           <form
             onSubmit={handleGetEstimate}
-            className="bg-white rounded-2xl sm:rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/80 p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 sm:gap-3.5 items-start"
+            className="bg-[var(--sevo-surface)] rounded-2xl sm:rounded-3xl shadow-md border border-[var(--sevo-border)] p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 sm:gap-3.5 items-start"
           >
             {/* Pickup */}
             <div ref={pickupWrapperRef} className="flex flex-col text-left relative">
@@ -3012,8 +2993,10 @@ export function MiniTruckBookingHosurPage() {
         </div>
       )}
 
+      </main>
+
       {/* ── Footer ─────────────────────────────────────────────── */}
-      <footer className="bg-white border-t border-slate-200 pt-12 pb-8 text-xs text-slate-500">
+      <footer className="bg-[var(--sevo-surface)] border-t border-[var(--sevo-border)] pt-12 pb-8 text-xs text-[var(--sevo-text-secondary)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
             <div>

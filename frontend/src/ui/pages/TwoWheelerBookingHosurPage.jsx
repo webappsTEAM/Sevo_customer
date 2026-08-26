@@ -952,8 +952,8 @@ export function TwoWheelerBookingHosurPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFCFB] text-slate-800 font-sans antialiased">
-      {/* ── Top Header Navigation (Uniform Image 2 Style) ─────────────── */}
+    <div className="min-h-screen bg-[var(--sevo-bg)] text-[var(--sevo-text-primary)] font-sans antialiased">
+      {/* ── Top Header Navigation ─────────────── */}
       {/* Exit Confirmation Modal */}
       {showExitConfirm && (
         <div
@@ -961,12 +961,12 @@ export function TwoWheelerBookingHosurPage() {
           aria-modal="true"
           className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
         >
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-200">
+          <div className="bg-[var(--sevo-surface)] rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-[var(--sevo-border)] text-center animate-in zoom-in-95 duration-200">
             <div className="w-12 h-12 rounded-full bg-amber-50 border-2 border-amber-100 flex items-center justify-center mx-auto mb-4 text-amber-600">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-black text-slate-900 mb-2">Do you want to exit?</h3>
-            <p className="text-xs text-slate-500 font-medium leading-relaxed mb-6">
+            <h3 className="text-lg font-black text-[var(--sevo-text-primary)] mb-2">Do you want to exit?</h3>
+            <p className="text-xs text-[var(--sevo-text-secondary)] font-medium leading-relaxed mb-6">
               Exiting will close the partner search screen. Your booking request will remain active in your bookings.
             </p>
             <div className="flex gap-3">
@@ -991,14 +991,14 @@ export function TwoWheelerBookingHosurPage() {
                     }
                   })
                 }}
-                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/10"
+                className="flex-1 py-3 bg-[var(--sevo-error)] hover:opacity-90 active:scale-95 text-white font-extrabold text-sm rounded-xl transition-all cursor-pointer shadow-md"
               >
                 Yes, Exit
               </button>
               <button
                 type="button"
                 onClick={() => setShowExitConfirm(false)}
-                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-extrabold text-sm rounded-xl transition-all cursor-pointer"
+                className="flex-1 py-3 bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-surface-subtle)] active:scale-95 text-[var(--sevo-text-primary)] border border-[var(--sevo-border)] font-extrabold text-sm rounded-xl transition-all cursor-pointer"
               >
                 No, Stay
               </button>
@@ -1007,7 +1007,7 @@ export function TwoWheelerBookingHosurPage() {
         </div>
       )}
 
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100">
+      <header className="sticky top-0 z-40 bg-[var(--sevo-surface)]/90 backdrop-blur-md border-b border-[var(--sevo-border)] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 cursor-pointer select-none group" onClick={handleLogoClick}>
             <img
@@ -1023,40 +1023,40 @@ export function TwoWheelerBookingHosurPage() {
                 className="shrink-0 object-contain"
                 style={{ height: '18px', width: 'auto', maxHeight: '18px' }}
               />
-              <span className="text-[10px] font-semibold text-emerald-700 tracking-wide uppercase mt-0.5">
+              <span className="text-[10px] font-bold text-[var(--sevo-primary)] tracking-wide uppercase mt-0.5">
                 Two-Wheeler Delivery
               </span>
             </div>
           </div>
 
           {/* Location Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 text-xs font-bold text-emerald-800">
-            <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--sevo-primary-light)] border border-[var(--sevo-primary)]/20 text-xs font-bold text-[var(--sevo-primary)]">
+            <MapPin className="w-3.5 h-3.5 text-[var(--sevo-primary)]" />
             <span>Hosur</span>
           </div>
 
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={handleLogoClick}>Services</span>
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={handleLogoClick}>For Enterprise</span>
-            <span className="hover:text-emerald-600 cursor-pointer" onClick={() => setSupportModalOpen(true)}>Support</span>
+          <div className="hidden md:flex items-center gap-6 text-sm font-bold text-[var(--sevo-text-secondary)]">
+            <span className="hover:text-[var(--sevo-primary)] transition-colors cursor-pointer" onClick={handleLogoClick}>Services</span>
+            <span className="hover:text-[var(--sevo-primary)] transition-colors cursor-pointer" onClick={handleLogoClick}>For Enterprise</span>
+            <span className="hover:text-[var(--sevo-primary)] transition-colors cursor-pointer" onClick={() => setSupportModalOpen(true)}>Support</span>
             {user ? (
               <button
                 type="button"
                 onClick={() => setShowAccountPortal(true)}
-                className="flex items-center gap-2 text-slate-800 hover:text-slate-950 font-medium text-sm transition-colors cursor-pointer group"
+                className="flex items-center gap-2 text-[var(--sevo-text-primary)] hover:text-[var(--sevo-primary)] font-bold text-sm transition-colors cursor-pointer group"
               >
-                <div className="w-7 h-7 rounded-full border border-slate-400 text-slate-700 flex items-center justify-center shrink-0 group-hover:border-slate-700 transition-colors">
+                <div className="w-7 h-7 rounded-full border border-[var(--sevo-border)] text-[var(--sevo-text-secondary)] flex items-center justify-center shrink-0 group-hover:border-[var(--sevo-primary)] transition-colors">
                   <User className="w-4 h-4 stroke-[1.75]" />
                 </div>
-                <span className="font-semibold text-slate-800">
+                <span className="font-bold text-[var(--sevo-text-primary)]">
                   {user?.full_name || user?.fullName || user?.first_name || user?.firstName || user?.username || "Customer"}
                 </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-600 stroke-[2] shrink-0 group-hover:text-slate-900 transition-colors" />
+                <ChevronDown className="w-3.5 h-3.5 text-[var(--sevo-text-muted)] stroke-[2] shrink-0 group-hover:text-[var(--sevo-text-primary)] transition-colors" />
               </button>
             ) : (
               <button
                 onClick={() => setShowCustomerEntryModal(true)}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
               >
                 Sign In
               </button>

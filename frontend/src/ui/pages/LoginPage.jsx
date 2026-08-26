@@ -534,26 +534,24 @@ export function LoginPage() {
       </div>
 
       {/* ═══════════════════ RIGHT PANEL — 40 % ═══════════════════ */}
-      <div className="flex-1 flex flex-col justify-center items-center p-8 lg:p-12 bg-white overflow-y-auto relative border-l border-slate-100">
-        <div className="absolute w-[450px] h-[450px] rounded-full bg-indigo-500/5 blur-[90px] pointer-events-none" />
-
-        <div className="w-full max-w-[420px] bg-white border border-slate-200/80 p-8 sm:p-10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.04)] relative z-10 text-slate-800">
+      <div className="flex-1 flex flex-col justify-center items-center p-8 lg:p-12 bg-[var(--sevo-surface)] overflow-y-auto relative border-l border-[var(--sevo-border)]">
+        <div className="w-full max-w-[420px] bg-[var(--sevo-surface)] border border-[var(--sevo-border)] p-8 sm:p-10 rounded-3xl shadow-lg relative z-10 text-[var(--sevo-text-primary)]">
 
           {show2FA ? (
             /* ─── 2FA TOTP Entry Screen ─── */
             <div className="text-center py-2 space-y-6">
-              <div className="w-16 h-16 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-600 shadow-lg">
+              <div className="w-16 h-16 rounded-full bg-[var(--sevo-primary-light)] border border-[var(--sevo-primary)]/30 flex items-center justify-center mx-auto text-[var(--sevo-primary)] shadow-sm">
                 <ShieldCheck size={30} strokeWidth={2} />
               </div>
               <div>
-                <h2 className="text-xl font-display font-black text-slate-800 tracking-tight">Two-Factor Authentication</h2>
-                <p className="text-xs text-slate-500 mt-1">Open your authenticator app and enter the 6-digit code</p>
+                <h2 className="text-xl font-black text-[var(--sevo-text-primary)] tracking-tight">Two-Factor Authentication</h2>
+                <p className="text-xs text-[var(--sevo-text-secondary)] mt-1">Open your authenticator app and enter the 6-digit code</p>
               </div>
               <form onSubmit={onSubmit2FA} className="space-y-4 text-left">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Authenticator Code</label>
+                  <label className="block text-[11px] font-semibold text-[var(--sevo-text-secondary)] uppercase tracking-wider mb-2">Authenticator Code</label>
                   <div className="relative">
-                    <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--sevo-text-muted)]" />
                     <input
                       type="text"
                       inputMode="numeric"
@@ -568,7 +566,7 @@ export function LoginPage() {
                         }
                       }}
                       placeholder="000000"
-                      className="w-full pl-9 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-mono text-center tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
+                      className="w-full pl-10 pr-4 py-3 bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)] rounded-xl text-center text-xl font-mono tracking-[0.3em] font-bold text-[var(--sevo-text-primary)] focus:outline-none focus:border-[var(--sevo-primary)]"
                       autoFocus
                     />
                   </div>
