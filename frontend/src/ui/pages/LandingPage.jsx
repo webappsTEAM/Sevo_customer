@@ -23,7 +23,7 @@ import { BathroomCleaningModal } from "./BathroomCleaningModal.jsx"
 import { CockroachControlModal } from "./CockroachControlModal.jsx"
 import { AntsBedBugsControlModal } from "./AntsBedBugsControlModal.jsx"
 import { useAuth } from "../../state/auth/useAuth.js"
-import { apiUpdateCustomerLastLocation } from "../../api/authService.js"
+import { apiUpdateCustomerLastLocation, apiFetchCustomerBookings } from "../../api/authService.js"
 import { apiRequest } from "../../api/client.js"
 import { getAddress } from "../../api/geocoding.js"
 import { motion, AnimatePresence } from "framer-motion"
@@ -1620,6 +1620,27 @@ export function LandingPage() {
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState("")
   const [packagesData, setPackagesData] = useState(null)
+  const [notificationCount, setNotificationCount] = useState(0)
+
+  useEffect(() => {
+    if (user) {
+      apiFetchCustomerBookings()
+        .then(res => {
+          if (res?.data && Array.isArray(res.data)) {
+            const activeBookingsCount = res.data.filter(b => 
+              b.status === "PENDING" || 
+              b.status === "ASSIGNED" || 
+              b.status === "ACCEPTED" || 
+              b.status === "IN_PROGRESS"
+            ).length
+            setNotificationCount(activeBookingsCount)
+          }
+        })
+        .catch(() => {})
+    } else {
+      setNotificationCount(0)
+    }
+  }, [user])
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const searchContainerRef = useRef(null)
   const [homeConfig, setHomeConfig] = useState(() => getHomePageConfig())
@@ -2755,7 +2776,7 @@ export function LandingPage() {
                       if (locObj.label) return locObj.label
                     }
                     if (user?.address) return user.address
-                    return "Coimbatore, Tamil Nadu"
+                    return "Hosur, Tamil Nadu"
                   })()}
                 </span>
                 <ChevronDown className="w-3 h-3 text-slate-400 shrink-0 ml-auto" />
@@ -2776,9 +2797,11 @@ export function LandingPage() {
                 }}
               >
                 <Bell className="w-4.5 h-4.5 text-slate-700" />
-                <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
-                  1
-                </span>
+                {notificationCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                    {notificationCount}
+                  </span>
+                )}
               </button>
 
               {/* Cart Icon with Numeric Badge if active */}
@@ -2810,10 +2833,10 @@ export function LandingPage() {
                 className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full hover:bg-slate-100 text-slate-800 transition-colors cursor-pointer group"
               >
                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs overflow-hidden border border-slate-200">
-                  {(user?.full_name || user?.fullName || user?.first_name || "K").charAt(0).toUpperCase()}
+                  {(user?.full_name || user?.fullName || user?.first_name || "Login").charAt(0).toUpperCase()}
                 </div>
                 <span className="font-bold text-xs text-slate-800 max-w-[100px] truncate hidden sm:inline-block">
-                  {user?.full_name || user?.fullName || user?.first_name || "Karthik S"}
+                  {user?.full_name || user?.fullName || user?.first_name || "Login"}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-colors shrink-0" />
               </button>
@@ -2903,7 +2926,7 @@ export function LandingPage() {
                 )}
                 <LocationDropdown
                   className="hidden sm:flex border-0 border-l border-slate-200 rounded-none pl-3 text-xs font-bold text-slate-700"
-                  activeCity={activeLocationLabel ? (activeLocationLabel.includes("Hosur") ? "Hosur" : activeLocationLabel.split(",")[0]) : "Coimbatore"}
+                  activeCity={activeLocationLabel ? (activeLocationLabel.includes("Hosur") ? "Hosur" : activeLocationLabel.split(",")[0]) : "Hosur"}
                   onCityChange={(newCity) => {
                     setActiveLocationLabel(newCity)
                     localStorage.setItem("calservice_user_location", newCity)
@@ -3297,7 +3320,7 @@ export function LandingPage() {
                     <div className="flex items-center gap-1.5">
                       <Search className="w-3 h-3 text-slate-500" />
                       <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center text-[7px] text-white font-bold">
-                        K
+                        {(user?.full_name || user?.fullName || user?.first_name || "Guest").charAt(0).toUpperCase()}
                       </div>
                     </div>
                   </div>
@@ -3305,10 +3328,10 @@ export function LandingPage() {
                   {/* User greeting */}
                   <div className="mt-0.5 px-0.5">
                     <p className="text-[7.5px] font-bold text-slate-400">Good Morning</p>
-                    <p className="text-[9px] font-black text-slate-900 leading-tight">Karthik 👋</p>
+                    <p className="text-[9px] font-black text-slate-900 leading-tight">{user ? (user.first_name || user.fullName || user.full_name || "User").split(" ")[0] : "Guest"} 👋</p>
                     <div className="flex items-center gap-0.5 text-[7px] text-blue-600 font-semibold mt-0.5">
                       <MapPin className="w-2.5 h-2.5 shrink-0" />
-                      <span className="truncate">Coimbatore, Tamil Nadu &gt;</span>
+                      <span className="truncate">Hosur, Tamil Nadu &gt;</span>
                     </div>
                   </div>
 
@@ -3502,7 +3525,7 @@ export function LandingPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <MapPin className="w-3.5 h-3.5 text-[#0057D9] shrink-0 mt-0.5" />
-                  <span className="font-semibold">Coimbatore, Tamil Nadu, India</span>
+                  <span className="font-semibold">Hosur, Tamil Nadu, India</span>
                 </li>
               </ul>
             </div>

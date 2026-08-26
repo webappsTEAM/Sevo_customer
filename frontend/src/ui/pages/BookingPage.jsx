@@ -14601,6 +14601,7 @@ export function CustomCleaningPackageModal({ category, cart, setCart, onClose, o
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedPlans, setExpandedPlans] = useState({});
   const [selectedMasonDetail, setSelectedMasonDetail] = useState(null);
+  const [selectedPackageDetail, setSelectedPackageDetail] = useState(null);
   const [activeFaq, setActiveFaq] = useState(null);
   const [showModalTaxesDropdown, setShowModalTaxesDropdown] = useState(false);
   const [dbCatalogPackages, setDbCatalogPackages] = useState([]);
