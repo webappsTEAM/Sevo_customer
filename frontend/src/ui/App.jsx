@@ -348,6 +348,7 @@ export function App() {
           <Route path={routes.help_and_support} element={<HelpSupportPage />} />
           <Route path="/support" element={<HelpSupportPage />} />
           <Route path="/faq" element={<HelpSupportPage />} />
+          <Route path="/sitemap" element={<HelpSupportPage />} />
 
           {/* ── Authenticated Shell ── */}
           <Route

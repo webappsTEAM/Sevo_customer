@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
-import { useNavigate, useSearchParams, useLocation } from "react-router-dom"
+import { useNavigate, useSearchParams, useLocation, Link } from "react-router-dom"
 import {
   Home, PaintRoller,
   SprayCan, Building2, AirVent, Hammer, Boxes,
@@ -3503,11 +3503,11 @@ export function LandingPage() {
             <div className="space-y-3">
               <h4 className="text-sm font-bold text-slate-900">Support</h4>
               <ul className="space-y-2 text-xs text-slate-500">
-                <li><a href="/help" className="hover:text-[#0057D9] transition-colors">Help Center</a></li>
-                <li><a href="/terms" className="hover:text-[#0057D9] transition-colors">Terms &amp; Conditions</a></li>
-                <li><a href="/privacy" className="hover:text-[#0057D9] transition-colors">Privacy Policy</a></li>
-                <li><a href="/cancellation-refund" className="hover:text-[#0057D9] transition-colors">Refund Policy</a></li>
-                <li><a href="/sitemap" className="hover:text-[#0057D9] transition-colors">Sitemap</a></li>
+                <li><Link to="/help" className="hover:text-[#0057D9] transition-colors">Help Center</Link></li>
+                <li><Link to="/terms" className="hover:text-[#0057D9] transition-colors">Terms &amp; Conditions</Link></li>
+                <li><Link to="/privacy" className="hover:text-[#0057D9] transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/cancellation-refund" className="hover:text-[#0057D9] transition-colors">Refund Policy</Link></li>
+                <li><Link to="/help" className="hover:text-[#0057D9] transition-colors">Sitemap</Link></li>
               </ul>
             </div>
 
