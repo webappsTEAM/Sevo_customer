@@ -1,11 +1,26 @@
 const PREF_KEY = "quicktims.appearance"
+const THEME_KEY = "quicktims.theme"
 
 export function loadPrefs() {
-  try { return JSON.parse(localStorage.getItem(PREF_KEY) || "{}") } catch { return {} }
+  try {
+    const prefs = JSON.parse(localStorage.getItem(PREF_KEY) || "{}")
+    const directTheme = localStorage.getItem(THEME_KEY)
+    if (directTheme && !prefs.theme) {
+      prefs.theme = directTheme
+    }
+    return prefs
+  } catch {
+    return { theme: localStorage.getItem(THEME_KEY) || "light" }
+  }
 }
 
 export function savePrefs(prefs) {
-  try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)) } catch {}
+  try {
+    localStorage.setItem(PREF_KEY, JSON.stringify(prefs))
+    if (prefs?.theme) {
+      localStorage.setItem(THEME_KEY, prefs.theme)
+    }
+  } catch {}
 }
 
 export function applyTheme(theme) {
@@ -19,12 +34,13 @@ export function applyTheme(theme) {
   if (resolved === "dark") {
     root.setAttribute("data-theme", "dark")
     root.classList.add("dark")
-    // Match the established dark palette from styles.css
-    document.body.style.backgroundColor = "#0B111D"
+    document.body.style.backgroundColor = "#06122B"
+    localStorage.setItem(THEME_KEY, "dark")
   } else {
     root.setAttribute("data-theme", "light")
     root.classList.remove("dark")
-    document.body.style.backgroundColor = ""
+    document.body.style.backgroundColor = "#FFFDF8"
+    localStorage.setItem(THEME_KEY, "light")
   }
 }
 

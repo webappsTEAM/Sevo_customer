@@ -8,7 +8,7 @@ import { AppBannerAndFooter } from "../components/AppBannerAndFooter.jsx";
 const BOOKING_CURRENCY_SYMBOL = "₹";
 
 const PEST_SUB_TABS = [
-  { id: "cockroach", name: "Cockroach Control", image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=150&q=80&fit=crop" },
+  { id: "cockroach", name: "Cockroach Control", image: "/mockups/cockroach_control.png" },
   { id: "termite", name: "Termite Control", image: "/mockups/termite_control.jpg" }
 ];
 
@@ -422,22 +422,21 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
   const filteredTermiteAB = filterList(dynamicPestServices.termite_apartment_bungalow);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
   return (
-    <div className="w-full text-slate-700 bg-white min-h-screen">
+    <div className="w-full text-[var(--sevo-text-primary)] bg-[var(--sevo-bg)] min-h-screen transition-colors duration-200">
       {/* Sticky Header + Search */}
-      <div className="sticky top-16 z-20 bg-white pb-2 border-b border-slate-100 shadow-xs">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="sticky top-0 z-20 bg-[var(--sevo-surface-glass)] backdrop-blur-md pb-2 border-b border-[var(--sevo-border)] shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--sevo-surface-raised)] hover:bg-[var(--sevo-primary-light)] text-[var(--sevo-text-primary)] border border-[var(--sevo-border)] font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
             >
               <ChevronLeft size={14} /> Back to Services
             </button>
             <div>
-              <h2 className="text-xl font-black text-slate-900 tracking-tight">Cockroach & Termite Control</h2>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Pest Control Services</p>
+              <h2 className="text-xl font-black text-[var(--sevo-text-primary)] tracking-tight">Cockroach & Termite Control</h2>
+              <p className="text-[11px] text-[var(--sevo-text-muted)] font-bold uppercase tracking-wider mt-0.5">Pest Control Services</p>
             </div>
           </div>
           <div className="relative w-full sm:w-72">
@@ -446,15 +445,15 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search cockroach & termite control..."
-              className="w-full pl-10 pr-4 py-2 text-xs border border-slate-200 rounded-2xl bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all placeholder:text-slate-400"
+              className="w-full pl-10 pr-4 py-2 text-xs border border-[var(--sevo-border)] rounded-xl bg-[var(--sevo-surface-raised)] text-[var(--sevo-text-primary)] focus:bg-[var(--sevo-surface)] focus:ring-1 focus:ring-[var(--sevo-primary)] focus:border-[var(--sevo-primary)] outline-none transition-all placeholder:text-[var(--sevo-text-muted)]"
             />
           </div>
         </div>
       </div>
 
       {/* Sub Tabs */}
-      <div className="border-b border-slate-100 bg-slate-50/50 py-1">
-        <div className="max-w-7xl mx-auto px-6 flex gap-6 overflow-x-auto no-scrollbar py-1">
+      <div className="border-b border-[var(--sevo-border)] bg-[var(--sevo-surface)] py-1">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-6 overflow-x-auto no-scrollbar py-1">
           {PEST_SUB_TABS.map((tab) => {
             const isSelected = activeTab === tab.id;
             return (
@@ -467,11 +466,11 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                   src={tab.image}
                   alt={tab.name}
                   className={`w-14 h-14 object-cover rounded-xl mb-1.5 transition-all duration-200 ${
-                    isSelected ? "scale-[1.05] shadow-md border-2 border-emerald-600" : "opacity-80 hover:opacity-100"
+                    isSelected ? "scale-[1.05] shadow-md border-2 border-[var(--sevo-primary)]" : "opacity-80 hover:opacity-100 border border-[var(--sevo-border)]"
                   }`}
                 />
                 <span className={`text-[10px] block leading-tight tracking-tight mt-0.5 transition-colors ${
-                  isSelected ? "text-slate-800 font-extrabold" : "text-slate-600 font-bold"
+                  isSelected ? "text-[var(--sevo-primary)] font-extrabold" : "text-[var(--sevo-text-secondary)] font-bold"
                 }`}>
                   {tab.name}
                 </span>
@@ -482,13 +481,13 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
       </div>
 
       {/* Main Grid */}
-      <div className="flex flex-col lg:flex-row flex-1 pt-6 px-6 max-w-7xl mx-auto gap-8 pb-20">
+      <div className="flex flex-col lg:flex-row flex-1 pt-6 px-4 sm:px-6 max-w-7xl mx-auto gap-8 pb-20">
         {/* Left Column: Services list */}
         <div className="flex-1 space-y-8">
           
           {activeTab === "cockroach" && (
             <>
-              <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-100">
+              <div className="w-full h-56 sm:h-60 bg-[var(--sevo-surface-raised)] rounded-2xl overflow-hidden mb-6 shadow-xs border border-[var(--sevo-border)]">
                 <img
                   src="/mockups/pest_control_header.jpg"
                   alt="Cockroach Control Services"
@@ -499,36 +498,34 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
               {filteredKB.length > 0 && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Targeted Kitchen & Bathroom Zones</h3>
+                    <div className="w-1.5 h-4 bg-[var(--sevo-primary)] rounded-full" />
+                    <h3 className="text-sm font-black text-[var(--sevo-text-primary)] uppercase tracking-widest">Targeted Kitchen & Bathroom Zones</h3>
                   </div>
                   <div className="space-y-4">
                     {filteredKB.map((service) => (
-                      <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
+                      <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] p-5 hover:shadow-md hover:border-[var(--sevo-border-strong)] transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
-
-
+                            <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
 
                             {service.description && (
-                              <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                              <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
                             )}
 
                             <div className="flex items-center gap-3 text-xs pt-1 mb-3">
-                              <span className="text-base font-black text-slate-900">
+                              <span className="text-base font-black text-[var(--sevo-text-primary)]">
                                 ₹{service.price}
                               </span>
-                              <span className="text-slate-300">•</span>
-                              <span className="text-slate-500 font-semibold">{service.duration}</span>
+                              <span className="text-[var(--sevo-border)]">•</span>
+                              <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
                             </div>
 
                             {service.includes && service.includes.length > 0 && (
-                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                              <ul className="text-xs text-[var(--sevo-text-secondary)] space-y-1 bg-[var(--sevo-surface-raised)] p-3.5 rounded-xl border border-[var(--sevo-border)] mb-4">
                                 {service.includes.map((item, i) => (
                                   <li key={i} className="flex items-start gap-2">
-                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{item}</span>
+                                    <span className="text-[var(--sevo-primary)] font-bold mt-0.5">✓</span>
+                                    <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -536,14 +533,14 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
                             <button
                               onClick={() => handleOpenDetails(service)}
-                              className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer border-none bg-transparent"
+                              className="text-xs font-semibold text-[var(--sevo-primary)] hover:underline cursor-pointer border-none bg-transparent"
                             >
                               View details
                             </button>
                           </div>
 
                           <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
-                            <div className="w-full h-32 rounded-xl overflow-hidden bg-slate-100 shadow-sm border border-slate-100 mb-[-15px] z-0">
+                            <div className="w-full h-32 rounded-xl overflow-hidden bg-[var(--sevo-surface-raised)] shadow-xs border border-[var(--sevo-border)] mb-[-15px] z-0">
                               <img
                                 src={resolveImageUrl(service.image, "/mockups/cockroach_control.png")}
                                 alt={service.name}
@@ -554,13 +551,13 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                             </div>
                             <div className="w-24 z-10">
                               {getServiceCount(service.id) > 0 ? (
-                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                                <div className="flex items-center justify-between bg-[var(--sevo-surface)] border border-[var(--sevo-primary)] rounded-lg px-2 py-1 text-xs font-bold text-[var(--sevo-primary)] shadow-md">
                                   <button
                                     onClick={() => {
                                       const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
                                       if (matchingItem) removeItemFromCart(matchingItem.id);
                                     }}
-                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                    className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer font-bold text-xs"
                                   >
                                     -
                                   </button>
@@ -574,7 +571,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                                         handleOpenDetails(service);
                                       }
                                     }}
-                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                    className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer font-bold text-xs"
                                   >
                                     +
                                   </button>
@@ -582,7 +579,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                               ) : (
                                 <button
                                   onClick={() => handleOpenDetails(service)}
-                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                                  className="w-full bg-[var(--sevo-surface)] border border-[var(--sevo-border)] text-[var(--sevo-primary)] font-extrabold text-xs py-2 rounded-xl hover:bg-[var(--sevo-surface-raised)] transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
                                 >
                                   <ShoppingCart size={14} /> Add
                                 </button>
@@ -600,36 +597,34 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
               {filteredAB.length > 0 && (
                 <div className="space-y-4 pt-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Whole-Home Treatment Plans</h3>
+                    <div className="w-1.5 h-4 bg-[var(--sevo-primary)] rounded-full" />
+                    <h3 className="text-sm font-black text-[var(--sevo-text-primary)] uppercase tracking-widest">Whole-Home Treatment Plans</h3>
                   </div>
                   <div className="space-y-4">
                     {filteredAB.map((service) => (
-                      <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
+                      <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] p-5 hover:shadow-md hover:border-[var(--sevo-border-strong)] transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
-
-
+                            <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
 
                             {service.description && (
-                              <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                              <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
                             )}
 
                             <div className="flex items-center gap-3 text-xs pt-1 mb-3">
-                              <span className="text-base font-black text-slate-900">
+                              <span className="text-base font-black text-[var(--sevo-text-primary)]">
                                 ₹{service.price}
                               </span>
-                              <span className="text-slate-300">•</span>
-                              <span className="text-slate-500 font-semibold">{service.duration}</span>
+                              <span className="text-[var(--sevo-border)]">•</span>
+                              <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
                             </div>
 
                             {service.includes && service.includes.length > 0 && (
-                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                              <ul className="text-xs text-[var(--sevo-text-secondary)] space-y-1 bg-[var(--sevo-surface-raised)] p-3.5 rounded-xl border border-[var(--sevo-border)] mb-4">
                                 {service.includes.map((item, i) => (
                                   <li key={i} className="flex items-start gap-2">
-                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{item}</span>
+                                    <span className="text-[var(--sevo-primary)] font-bold mt-0.5">✓</span>
+                                    <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -637,14 +632,14 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
                             <button
                               onClick={() => handleOpenDetails(service)}
-                              className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer border-none bg-transparent"
+                              className="text-xs font-semibold text-[var(--sevo-primary)] hover:underline cursor-pointer border-none bg-transparent"
                             >
                               View details
                             </button>
                           </div>
 
                           <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
-                            <div className="w-full h-32 rounded-xl overflow-hidden bg-slate-100 shadow-sm border border-slate-100 mb-[-15px] z-0">
+                            <div className="w-full h-32 rounded-xl overflow-hidden bg-[var(--sevo-surface-raised)] shadow-xs border border-[var(--sevo-border)] mb-[-15px] z-0">
                               <img
                                 src={resolveImageUrl(service.image, "/mockups/cockroach_control.png")}
                                 alt={service.name}
@@ -655,13 +650,13 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                             </div>
                             <div className="w-24 z-10">
                               {getServiceCount(service.id) > 0 ? (
-                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                                <div className="flex items-center justify-between bg-[var(--sevo-surface)] border border-[var(--sevo-primary)] rounded-lg px-2 py-1 text-xs font-bold text-[var(--sevo-primary)] shadow-md">
                                   <button
                                     onClick={() => {
                                       const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
                                       if (matchingItem) removeItemFromCart(matchingItem.id);
                                     }}
-                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                    className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer font-bold text-xs"
                                   >
                                     -
                                   </button>
@@ -675,7 +670,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                                         handleOpenDetails(service);
                                       }
                                     }}
-                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                    className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer font-bold text-xs"
                                   >
                                     +
                                   </button>
@@ -683,7 +678,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                               ) : (
                                 <button
                                   onClick={() => handleOpenDetails(service)}
-                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                                  className="w-full bg-[var(--sevo-surface)] border border-[var(--sevo-border)] text-[var(--sevo-primary)] font-extrabold text-xs py-2 rounded-xl hover:bg-[var(--sevo-surface-raised)] transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
                                 >
                                   <ShoppingCart size={14} /> Add
                                 </button>
@@ -701,7 +696,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
           {activeTab === "termite" && (
             <>
-              <div className="w-full h-56 sm:h-60 bg-slate-100 rounded-2xl overflow-hidden mb-6 shadow-sm border border-slate-100">
+              <div className="w-full h-56 sm:h-60 bg-[var(--sevo-surface-raised)] rounded-2xl overflow-hidden mb-6 shadow-xs border border-[var(--sevo-border)]">
                 <img
                   src="/mockups/pest_control_header.jpg"
                   alt="Termite Control Services"
@@ -712,36 +707,34 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
               {filteredTermiteKB.length > 0 && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Targeted Kitchen & Bathroom Zones</h3>
+                    <div className="w-1.5 h-4 bg-[var(--sevo-primary)] rounded-full" />
+                    <h3 className="text-sm font-black text-[var(--sevo-text-primary)] uppercase tracking-widest">Targeted Kitchen & Bathroom Zones</h3>
                   </div>
                   <div className="space-y-4">
                     {filteredTermiteKB.map((service) => (
-                      <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
+                      <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] p-5 hover:shadow-md hover:border-[var(--sevo-border-strong)] transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
-
-
+                            <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
 
                             {service.description && (
-                              <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                              <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
                             )}
 
                             <div className="flex items-center gap-3 text-xs pt-1 mb-3">
-                              <span className="text-base font-black text-slate-900">
+                              <span className="text-base font-black text-[var(--sevo-text-primary)]">
                                 ₹{service.price}
                               </span>
-                              <span className="text-slate-300">•</span>
-                              <span className="text-slate-500 font-semibold">{service.duration}</span>
+                              <span className="text-[var(--sevo-border)]">•</span>
+                              <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
                             </div>
 
                             {service.includes && service.includes.length > 0 && (
-                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                              <ul className="text-xs text-[var(--sevo-text-secondary)] space-y-1 bg-[var(--sevo-surface-raised)] p-3.5 rounded-xl border border-[var(--sevo-border)] mb-4">
                                 {service.includes.map((item, i) => (
                                   <li key={i} className="flex items-start gap-2">
-                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{item}</span>
+                                    <span className="text-[var(--sevo-primary)] font-bold mt-0.5">✓</span>
+                                    <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -749,14 +742,14 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
                             <button
                               onClick={() => handleOpenDetails(service)}
-                              className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer border-none bg-transparent"
+                              className="text-xs font-semibold text-[var(--sevo-primary)] hover:underline cursor-pointer border-none bg-transparent"
                             >
                               View details
                             </button>
                           </div>
 
                           <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
-                            <div className="w-full h-32 rounded-xl overflow-hidden bg-slate-100 shadow-sm border border-slate-100 mb-[-15px] z-0">
+                            <div className="w-full h-32 rounded-xl overflow-hidden bg-[var(--sevo-surface-raised)] shadow-xs border border-[var(--sevo-border)] mb-[-15px] z-0">
                               <img
                                 src={resolveImageUrl(service.image, "/mockups/termite_control.jpg")}
                                 alt={service.name}
@@ -767,13 +760,13 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                             </div>
                             <div className="w-24 z-10">
                               {getServiceCount(service.id) > 0 ? (
-                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                                <div className="flex items-center justify-between bg-[var(--sevo-surface)] border border-[var(--sevo-primary)] rounded-lg px-2 py-1 text-xs font-bold text-[var(--sevo-primary)] shadow-md">
                                   <button
                                     onClick={() => {
                                       const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
                                       if (matchingItem) removeItemFromCart(matchingItem.id);
                                     }}
-                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                    className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer font-bold text-xs"
                                   >
                                     -
                                   </button>
@@ -787,7 +780,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                                         handleOpenDetails(service);
                                       }
                                     }}
-                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                    className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer font-bold text-xs"
                                   >
                                     +
                                   </button>
@@ -795,7 +788,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                               ) : (
                                 <button
                                   onClick={() => handleOpenDetails(service)}
-                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                                  className="w-full bg-[var(--sevo-surface)] border border-[var(--sevo-border)] text-[var(--sevo-primary)] font-extrabold text-xs py-2 rounded-xl hover:bg-[var(--sevo-surface-raised)] transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
                                 >
                                   <ShoppingCart size={14} /> Add
                                 </button>
@@ -813,36 +806,34 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
               {filteredTermiteAB.length > 0 && (
                 <div className="space-y-4 pt-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Whole-Home Treatment Plans</h3>
+                    <div className="w-1.5 h-4 bg-[var(--sevo-primary)] rounded-full" />
+                    <h3 className="text-sm font-black text-[var(--sevo-text-primary)] uppercase tracking-widest">Whole-Home Treatment Plans</h3>
                   </div>
                   <div className="space-y-4">
                     {filteredTermiteAB.map((service) => (
-                      <div key={service.id} className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-md transition-all">
+                      <div key={service.id} className="bg-[var(--sevo-surface)] rounded-2xl border border-[var(--sevo-border)] p-5 hover:shadow-md hover:border-[var(--sevo-border-strong)] transition-all">
                         <div className="flex flex-col sm:flex-row gap-5">
                           <div className="flex-1 order-2 sm:order-1">
-                            <h4 className="font-extrabold text-slate-900 text-sm md:text-base mb-1.5">{service.name}</h4>
-
-
+                            <h4 className="font-extrabold text-[var(--sevo-text-primary)] text-sm md:text-base mb-1.5">{service.name}</h4>
 
                             {service.description && (
-                              <p className="text-xs text-slate-500 leading-relaxed max-w-xl mb-2">{service.description}</p>
+                              <p className="text-xs text-[var(--sevo-text-secondary)] leading-relaxed max-w-xl mb-2">{service.description}</p>
                             )}
 
                             <div className="flex items-center gap-3 text-xs pt-1 mb-3">
-                              <span className="text-base font-black text-slate-900">
+                              <span className="text-base font-black text-[var(--sevo-text-primary)]">
                                 ₹{service.price}
                               </span>
-                              <span className="text-slate-300">•</span>
-                              <span className="text-slate-500 font-semibold">{service.duration}</span>
+                              <span className="text-[var(--sevo-border)]">•</span>
+                              <span className="text-[var(--sevo-text-muted)] font-semibold">{service.duration}</span>
                             </div>
 
                             {service.includes && service.includes.length > 0 && (
-                              <ul className="text-xs text-slate-600 space-y-1 bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 mb-4">
+                              <ul className="text-xs text-[var(--sevo-text-secondary)] space-y-1 bg-[var(--sevo-surface-raised)] p-3.5 rounded-xl border border-[var(--sevo-border)] mb-4">
                                 {service.includes.map((item, i) => (
                                   <li key={i} className="flex items-start gap-2">
-                                    <span className="text-emerald-600 font-bold mt-0.5">✓</span>
-                                    <span>{item}</span>
+                                    <span className="text-[var(--sevo-primary)] font-bold mt-0.5">✓</span>
+                                    <span>{typeof item === 'string' ? item : (item?.text || '')}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -850,14 +841,14 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
                             <button
                               onClick={() => handleOpenDetails(service)}
-                              className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer border-none bg-transparent"
+                              className="text-xs font-semibold text-[var(--sevo-primary)] hover:underline cursor-pointer border-none bg-transparent"
                             >
                               View details
                             </button>
                           </div>
 
                           <div className="relative shrink-0 w-full sm:w-[140px] order-1 sm:order-2 flex flex-col items-center">
-                            <div className="w-full h-32 rounded-xl overflow-hidden bg-slate-100 shadow-sm border border-slate-100 mb-[-15px] z-0">
+                            <div className="w-full h-32 rounded-xl overflow-hidden bg-[var(--sevo-surface-raised)] shadow-xs border border-[var(--sevo-border)] mb-[-15px] z-0">
                               <img
                                 src={resolveImageUrl(service.image, "/mockups/termite_control.jpg")}
                                 alt={service.name}
@@ -868,13 +859,13 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                             </div>
                             <div className="w-24 z-10">
                               {getServiceCount(service.id) > 0 ? (
-                                <div className="flex items-center justify-between bg-white border border-emerald-500 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 shadow-md">
+                                <div className="flex items-center justify-between bg-[var(--sevo-surface)] border border-[var(--sevo-primary)] rounded-lg px-2 py-1 text-xs font-bold text-[var(--sevo-primary)] shadow-md">
                                   <button
                                     onClick={() => {
                                       const matchingItem = [...cart].reverse().find(item => item.id === service.id || item.id.startsWith(`${service.id}-`));
                                       if (matchingItem) removeItemFromCart(matchingItem.id);
                                     }}
-                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                    className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer font-bold text-xs"
                                   >
                                     -
                                   </button>
@@ -888,7 +879,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                                         handleOpenDetails(service);
                                       }
                                     }}
-                                    className="hover:text-emerald-900 border-none bg-transparent cursor-pointer font-bold text-xs"
+                                    className="hover:text-[var(--sevo-primary-hover)] border-none bg-transparent cursor-pointer font-bold text-xs"
                                   >
                                     +
                                   </button>
@@ -896,7 +887,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                               ) : (
                                 <button
                                   onClick={() => handleOpenDetails(service)}
-                                  className="w-full bg-white border border-slate-200 text-emerald-600 font-extrabold text-xs py-2 rounded-lg hover:bg-slate-50 transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
+                                  className="w-full bg-[var(--sevo-surface)] border border-[var(--sevo-border)] text-[var(--sevo-primary)] font-extrabold text-xs py-2 rounded-xl hover:bg-[var(--sevo-surface-raised)] transition-all shadow-md flex items-center justify-center gap-1 uppercase cursor-pointer"
                                 >
                                   <ShoppingCart size={14} /> Add
                                 </button>
@@ -914,7 +905,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
           {((activeTab === "cockroach" && filteredKB.length === 0 && filteredAB.length === 0) ||
             (activeTab === "termite" && filteredTermiteKB.length === 0 && filteredTermiteAB.length === 0)) && (
-            <div className="py-10 text-center text-slate-400 text-sm">
+            <div className="py-10 text-center text-[var(--sevo-text-muted)] text-sm">
               No services found in this category.
             </div>
           )}
@@ -922,10 +913,10 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
 
         {/* Right Column: Order Summary */}
         <div className="w-full lg:w-[320px] shrink-0">
-          <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
-            <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-              <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">Order Summary</h5>
-              <span className="text-[10px] font-bold text-slate-400">{cart.length} items</span>
+          <div className="bg-[var(--sevo-surface)] border border-[var(--sevo-border)] rounded-2xl p-5 shadow-sm space-y-4 lg:sticky lg:top-[100px] h-fit">
+            <div className="border-b border-[var(--sevo-border-subtle)] pb-3 flex justify-between items-center">
+              <h5 className="font-extrabold text-xs text-[var(--sevo-text-primary)] uppercase tracking-wide">Order Summary</h5>
+              <span className="text-[10px] font-bold text-[var(--sevo-text-muted)]">{cart.length} items</span>
             </div>
 
             {cart.length > 0 ? (
@@ -933,22 +924,22 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
                 {cart.map(item => (
                   <div key={item.id} className="flex justify-between items-start text-xs gap-3">
                     <div className="flex-1">
-                      <span className="font-bold text-slate-800 block leading-tight">{item.name}</span>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">{item.duration}</span>
+                      <span className="font-bold text-[var(--sevo-text-primary)] block leading-tight">{item.name}</span>
+                      <span className="text-[10px] text-[var(--sevo-text-muted)] block mt-0.5">{item.duration}</span>
                     </div>
                     <div className="text-right flex items-center gap-2">
-                      <span className="font-extrabold text-slate-900">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
-                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-bold">
-                        <button onClick={() => removeItemFromCart(item.id)} className="hover:text-emerald-600 border-none bg-transparent cursor-pointer">-</button>
+                      <span className="font-extrabold text-[var(--sevo-text-primary)]">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
+                      <div className="flex items-center gap-1.5 bg-[var(--sevo-surface-raised)] border border-[var(--sevo-border)] rounded px-1.5 py-0.5 text-[10px] font-bold">
+                        <button onClick={() => removeItemFromCart(item.id)} className="hover:text-[var(--sevo-primary)] border-none bg-transparent cursor-pointer">-</button>
                         <span>{item.quantity}</span>
-                        <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration, item.gst_rate, item.platform_fee)} className="hover:text-emerald-600 border-none bg-transparent cursor-pointer">+</button>
+                        <button onClick={() => addItemToCart(item.id, item.name, item.price, item.duration, item.gst_rate, item.platform_fee)} className="hover:text-[var(--sevo-primary)] border-none bg-transparent cursor-pointer">+</button>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-slate-400 text-[11px] px-4 leading-relaxed">
+              <div className="text-center py-8 text-[var(--sevo-text-muted)] text-[11px] px-4 leading-relaxed">
                 No services added. Select from the packages on the left.
               </div>
             )}
@@ -959,28 +950,28 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
               const platformFee = cart.reduce((maxFee, i) => Math.max(maxFee, Number(i.platform_fee) || 29), 0);
               const grandTotal = itemTotal + totalGst + platformFee;
               return (
-                <div className="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
-                  <div className="flex justify-between text-slate-500 font-semibold">
+                <div className="border-t border-[var(--sevo-border-subtle)] pt-3 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
                     <span>Item Total</span>
-                    <span className="text-slate-800 font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
+                    <span className="text-[var(--sevo-text-primary)] font-bold">₹{itemTotal.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between text-slate-500 font-semibold">
+                  <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
                     <span>Taxes & GST (18%)</span>
-                    <span className="text-indigo-600 font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
+                    <span className="text-[var(--sevo-secondary)] font-bold">+₹{totalGst.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between text-slate-500 font-semibold">
+                  <div className="flex justify-between text-[var(--sevo-text-secondary)] font-semibold">
                     <span>Platform Fee</span>
-                    <span className="text-emerald-600 font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
+                    <span className="text-[var(--sevo-primary)] font-bold">+₹{platformFee.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-2 border-t border-slate-100">
+                  <div className="flex justify-between font-extrabold text-[var(--sevo-text-primary)] text-sm pt-2 border-t border-[var(--sevo-border-subtle)]">
                     <span>Total Amount</span>
-                    <span className="text-emerald-700">₹{grandTotal.toLocaleString("en-IN")}</span>
+                    <span className="text-[var(--sevo-primary)]">₹{grandTotal.toLocaleString("en-IN")}</span>
                   </div>
                 </div>
               );
             })() : (
-              <div className="border-t border-slate-100 pt-3 space-y-2 text-xs">
-                <div className="flex justify-between font-extrabold text-slate-900 text-sm pt-1">
+              <div className="border-t border-[var(--sevo-border-subtle)] pt-3 space-y-2 text-xs">
+                <div className="flex justify-between font-extrabold text-[var(--sevo-text-primary)] text-sm pt-1">
                   <span>Total Amount</span>
                   <span>₹0</span>
                 </div>
@@ -991,7 +982,7 @@ export function CockroachControlModal({ category, cart, setCart, onClose, onChec
               <button
                 disabled={cart.length === 0}
                 onClick={onCheckout}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-white/60 disabled:cursor-not-allowed text-white font-extrabold rounded-xl text-center text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer border-none"
+                className="w-full py-3.5 bg-[var(--sevo-primary)] hover:bg-[var(--sevo-primary-hover)] disabled:bg-[var(--sevo-surface-raised)] disabled:text-[var(--sevo-text-muted)] disabled:cursor-not-allowed text-white font-extrabold rounded-xl text-center text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer border-none"
               >
                 Proceed to Schedule
               </button>
